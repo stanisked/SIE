@@ -1,4 +1,7 @@
 from sie_core.depth.roi import ROIStableDepth
+from sie_core.contracts import Evidence
+from vision_core.measurement import Measurement
+from vision_core.observation import Observation
 
 
 class VisionAPI:
@@ -45,6 +48,64 @@ class VisionAPI:
         confidence = self.quality.evaluate(disparity)
 
         return depth, confidence
+
+    def process_depth_measurement(
+        self,
+        left,
+        right,
+        roi_estimator,
+        reference_frame="camera_left",
+    ):
+        disparity = self.stereo.compute(left, right)
+        depth = self.depth.compute(disparity)
+
+        if self.temporal:
+            depth = self.temporal.update(depth)
+
+        confidence = self.quality.evaluate(disparity)
+        confidence_value = float(confidence["confidence"])
+        roi_depth = roi_estimator.center_roi_depth(depth)
+        status = "VALID" if roi_depth is not None and confidence_value > 0.0 else "INVALID"
+
+        evidence = Evidence(
+            evidence_id="evidence.stereo_frame.current",
+            source="vision_core",
+            kind="stereo_depth_pipeline",
+            metadata={
+                "left_shape": getattr(left, "shape", None),
+                "right_shape": getattr(right, "shape", None),
+                "confidence_signals": confidence,
+            },
+        )
+        observation = Observation.from_depth_pipeline(
+            disparity=disparity,
+            depth=depth,
+            confidence=confidence,
+            reference_frame=reference_frame,
+            evidence_ids=(evidence.evidence_id,),
+        )
+        measurement = Measurement.from_roi_depth(
+            value=roi_depth,
+            observation=observation,
+            reference_frame=reference_frame,
+            confidence=confidence_value,
+            quality={
+                "confidence_signals": confidence,
+            },
+            status=status,
+            estimator=roi_estimator.__class__.__name__,
+        )
+
+        return {
+            "observation": observation.to_dict(),
+            "measurement": measurement.to_dict(),
+            "evidence": [evidence.to_dict()],
+            "debug": {
+                "depth": depth,
+                "disparity": disparity,
+                "confidence": confidence,
+            },
+        }
 
     def process_scene(self, left, right):
         disparity = self.stereo.compute(left, right)

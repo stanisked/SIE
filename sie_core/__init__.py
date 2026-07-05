@@ -1,4 +1,5 @@
 from .api.vision_api import VisionAPI
+from .contracts import Evidence, SpatialValue
 from .depth.roi_depth import ROIDepthEstimator
 from .depth.roi import ROIStableDepth
 from .depth.spatial_filter import SpatialDepthFilter

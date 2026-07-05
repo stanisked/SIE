@@ -32,11 +32,17 @@ while True:
     left = frame[:, :w // 2]
     right = frame[:, w // 2:]
 
-    depth, conf = sie.process(left, right)
+    result = sie.process_depth_measurement(left, right, roi)
+    measurement = result["measurement"]
+    observation = result["observation"]
+    depth = result["debug"]["depth"]
 
-    center_depth = roi.center_roi_depth(depth)
-
-    print("ROI depth:", center_depth, "confidence:", conf)
+    print(
+        "MEASUREMENT:",
+        measurement,
+        "OBSERVATION:",
+        observation,
+    )
 
     vis = np.nan_to_num(depth)
     vis = (vis - vis.min()) / (vis.max() - vis.min() + 1e-6)
