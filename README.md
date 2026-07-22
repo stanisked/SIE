@@ -151,83 +151,124 @@ The active development focus is the Vision Core and calibration infrastructure r
 
 ## Validation Results
 
-Stereo calibration
+The current Vision Core has been validated against physical reference measurements using a calibrated stereo camera system.
 
-RMS: 0.48 px
+### Stereo Calibration
 
-Baseline: 64.3 mm
+| Metric | Value |
+|---------|------:|
+| Stereo RMS | **0.479 px** |
+| Physical baseline | **65.10 mm** |
+| Solved baseline | **64.305 mm** |
+| Rectification median vertical error | **0.322 px** |
 
-500 mm target
+### Depth Measurement Validation
 
-Measured: 508.7 mm
+| Ground Truth | Measured | Absolute Error | Relative Error |
+|--------------|---------:|---------------:|---------------:|
+| 500 mm | 508.7 mm | +8.7 mm | 1.74 % |
+| 1000 mm | 1009.2 mm | +9.2 mm | 0.92 % |
 
-Absolute error: 8.7 mm
+### Validation Methodology
 
-1000 mm target
+Validation was performed using:
 
-Measured: 1009 mm
+- physically measured reference distances;
+- frozen calibration parameters;
+- ROI-based median disparity estimation;
+- repeated measurements;
+- engineering acceptance criteria;
+- cross-range validation.
 
-Absolute error: 9 mm
+### Engineering Notes
+
+Current validation focuses on:
+
+- depth measurement accuracy;
+- measurement repeatability;
+- calibration consistency;
+- geometry correctness.
+
+Validation of object dimensions, point cloud accuracy and uncertainty propagation is currently in progress.
 
 
 ## Repository Structure
+
+```text
 sie/
 
-docs/
-
-vision_core/
-
-geometry/
-
-calibration/
-
-measurements/
-
-tools/
-
-tests/
-
-examples/
+├── docs/                 # Architecture and engineering documentation
+├── vision_core/          # Stereo vision and perception pipeline
+├── calibration/          # Sensor calibration tools and datasets
+├── geometry/             # Geometry processing and 3D algorithms
+├── tools/                # Engineering utilities
+├── experiments/          # Experimental results and frozen baselines
+├── tests/                # Validation tests
+├── examples/             # Example applications
+└── README.md
+```
 
 
 ## Hardware Platform
 
-Current development platform
+Current development hardware
+
+### Computing
+
 - Raspberry Pi 5
-- OV9281 Stereo Camera
-- ESP32
+- Ubuntu 24.04
+- ROS2 Jazzy
+
+### Sensors
+
+- OV9281 global shutter stereo camera
+- Planned IMU integration
+- Planned ToF sensor integration
+
+### Robotics
+
 - LeRobot SO-101
-- VL53 ToF sensors (planned)
-- IMU integration (planned)
+- ESP32 embedded controllers
+
+### Development Tools
+
+- OpenCV
+- Python
+- C++
+- Docker
+- Git
 
 
 ## Reproducibility
 
-Development environment
-Ubuntu 24.04
-Python
-OpenCV
-ROS2 Jazzy
-Camera configuration
-MJPG
-2560×800
-60 FPS
-Auto Exposure = 3
+Current validation environment
+
+| Component | Configuration |
+|-----------|---------------|
+| Operating System | Ubuntu 24.04 |
+| Stereo Resolution | 2560×800 |
+| Frame Rate | 60 FPS |
+| Pixel Format | MJPG |
+| Camera Exposure | Auto Exposure = 3 |
+| Stereo Baseline | 64.305 mm |
+| Calibration | Frozen engineering baseline |
+| Validation | Physical ruler measurements |
 
 
 ## Roadmap
 
-| Module | Status |
-|---------|--------|
-| Calibration | ✅ |
-| Vision Core | ✅ |
-| Geometry Engine | 🚧 |
-| Point Cloud | 🚧 |
-| Tracking | Planned |
-| Sensor Fusion | Planned |
-| World Model | Planned |
-| Decision Engine | Planned |
+| Component | Status |
+|-----------|--------|
+| Calibration Framework | ✅ Completed |
+| Vision Core | ✅ Completed |
+| Measurement Validation | ✅ Completed |
+| Geometry Engine | 🚧 In Progress |
+| Calibration Registry | 🚧 In Progress |
+| World State | 📋 Planned |
+| Temporal Perception | 📋 Planned |
+| Sensor Fusion | 📋 Planned |
+| Decision Engine | 📋 Planned |
 
 ## License
 
-MIT License
+This project is released under the MIT License.
