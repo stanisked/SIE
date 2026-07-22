@@ -106,30 +106,49 @@ flowchart TD
 
 ## Current Status
 
+## Current Status
+
+SIE is currently in the engineering validation stage.
+
+The active development focus is the Vision Core and calibration infrastructure required to produce physically meaningful spatial measurements.
+
 ### Completed
 
-- Stereo camera calibration
-- ROI depth measurement
-- Confidence Engine
-- Geometry Engine
-- Cross-range validation
-- Measurement validation
+- Stereo camera calibration pipeline
+- Correct physical left/right camera mapping
+- Rectified stereo input pipeline
+- ROI-based depth measurement
+- Median-based distance estimation
+- Temporal depth stabilization
+- Confidence and measurement quality evaluation
+- Cross-range stereo validation
+- Geometry utilities for pixel-to-3D conversion
+- Plane fitting experiments
+- Measurement validation rules
+- Versioned calibration concept and calibration applicability checks
 
+### Active Development
 
-### In Progress
-
-- Point cloud generation
-- Object measurement
-- Plane fitting
+- Stereo calibration v3 validation
+- Calibration Registry
+- Structured `Observation` and `Measurement` contracts
+- Measurement uncertainty propagation
+- Target-specific ROI validation
+- Point cloud quality evaluation
+- Object dimension measurement
 - World State representation
-
 
 ### Planned
 
-- Sensor fusion
+- Temporal Perception
+- Entity lifecycle tracking
+- Multi-sensor fusion
+- IMU integration
 - Visual-Inertial Odometry
 - SLAM
+- Task Evaluator
 - Decision Engine
+- Action validation and execution contracts
 
 
 ## Validation Results
