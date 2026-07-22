@@ -102,9 +102,7 @@ flowchart TD
 - AI models are replaceable components and are not treated as authoritative sources of truth.
 - Every engineering fact, decision and action must remain traceable to supporting evidence.
 - Insufficient confidence must trigger additional observation, measurement or safe refusal.
-- 
 
-## Current Status
 
 ## Current Status
 
