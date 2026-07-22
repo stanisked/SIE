@@ -81,7 +81,28 @@ flowchart TD
     DECISION --> LOG
     ACTION --> LOG
 ```
+### Data Flow
 
+1. Information sources produce structured `Observations`.
+2. The Calibration Layer verifies sensor geometry, timing and applicability.
+3. Perception components transform observations into quantitative `Measurements`.
+4. Measurements are expressed in physical units and explicitly linked to a `reference_frame`.
+5. The Evidence Graph preserves provenance from observation to measurement, decision and action.
+6. The World State maintains the current structured representation of the physical environment.
+7. Temporal Perception evaluates changes, stability and entity lifecycle across time.
+8. The Task Evaluator assesses the World State against the active task.
+9. The Decision Engine uses only the World State and Task Evaluator output to select an action.
+10. The complete processing cycle is recorded in a deterministic log.
+
+### Architectural Constraints
+
+- Modules exchange structured Data Contracts rather than untyped internal data.
+- Spatial values without an explicit `reference_frame` are invalid.
+- Measurements produced under unknown, expired or unvalidated calibration are rejected.
+- AI models are replaceable components and are not treated as authoritative sources of truth.
+- Every engineering fact, decision and action must remain traceable to supporting evidence.
+- Insufficient confidence must trigger additional observation, measurement or safe refusal.
+- 
 
 ## Current Status
 
