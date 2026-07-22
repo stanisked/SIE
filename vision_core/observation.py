@@ -7,7 +7,7 @@ import numpy as np
 @dataclass(frozen=True)
 class Observation:
     observation_id: str
-    source: str
+    source_id: str
     timestamp: str
     cycle_id: str
     observation_type: str
@@ -41,7 +41,7 @@ class Observation:
 
         return cls(
             observation_id=f"observation.depth.{cycle_id}",
-            source="vision_core",
+            source_id="vision_core",
             timestamp=datetime.now(timezone.utc).isoformat(),
             cycle_id=cycle_id,
             observation_type="depth_observation",
@@ -54,7 +54,8 @@ class Observation:
     def to_dict(self):
         return {
             "observation_id": self.observation_id,
-            "source": self.source,
+            "source": self.source_id,
+            "source_id": self.source_id,
             "timestamp": self.timestamp,
             "cycle_id": self.cycle_id,
             "observation_type": self.observation_type,

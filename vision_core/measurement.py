@@ -1,19 +1,20 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 
 
 @dataclass(frozen=True)
 class Measurement:
     measurement_id: str
     measurement_type: str
-    value: float | None
+    value: Any
     unit: str
     reference_frame: str
     confidence: float
-    quality: dict
     source_observations: tuple[str, ...]
-    timestamp: str
-    status: str
+    quality: dict = field(default_factory=dict)
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    status: str = "VALID"
     metadata: dict = field(default_factory=dict)
 
     @classmethod
@@ -33,6 +34,34 @@ class Measurement:
             measurement_type="roi_depth",
             value=value,
             unit="m",
+            reference_frame=reference_frame,
+            confidence=float(confidence),
+            quality=quality,
+            source_observations=(observation.observation_id,),
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            status=status,
+            metadata={
+                "estimator": estimator,
+            },
+        )
+
+    @classmethod
+    def from_roi_position(
+        cls,
+        value,
+        observation,
+        reference_frame,
+        confidence,
+        quality,
+        status,
+        cycle_id="current",
+        estimator="ROIDepthEstimator",
+    ):
+        return cls(
+            measurement_id=f"measurement.roi_position.{cycle_id}",
+            measurement_type="roi_position",
+            value=value,
+            unit="px",
             reference_frame=reference_frame,
             confidence=float(confidence),
             quality=quality,
