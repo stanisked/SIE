@@ -1,0 +1,139 @@
+{
+  "schema_version": "sie_depth_validation_run_v1",
+  "created_at": "2026-08-21T10:06:05.068225+00:00",
+  "diagnostic_tool": {
+    "path": "/home/stanislav/dev_ws/src/sie/vision_core/tools/diagnose_v5_stereo_runtime.py",
+    "sha256": "58a554687b708448d3d8eefa8f04172fe2aca417aca00903bb9243c43e7f3f84"
+  },
+  "calibration": {
+    "calibration_id": "stereo_calibration_v6",
+    "path": "/home/stanislav/sie_rgb_stereo_fusion/stereo_calibration_v6/solution_joint_refine_corner_order_filtered_freeze_v2_run07/stereo_params_v6.npz",
+    "sha256": "bb8fb665c6e06e2cbb633cf4c3c61aa74933dd253c9c7950a8420591975dd5e7",
+    "capture_thermal_status": "CAPTURE_THERMAL_PROVENANCE_INCOMPLETE",
+    "activation_eligible_before_run": false,
+    "fx_rectified_px": 1041.1006418389277,
+    "baseline_mm": 63.75409211903742
+  },
+  "distance_label": "mid",
+  "reference_frames": {
+    "measurement": "rectified_left_optical_frame",
+    "ground_truth": "rectified_left_optical_frame",
+    "ground_truth_measurement": "physical_distance_from_camera_front_plane_to_target_plane",
+    "direct_absolute_comparison": false,
+    "reason": "reference_frame_origins_differ"
+  },
+  "ground_truth_mm": 1785.0,
+  "measured_optical_depth_mm": 1749.5731115341187,
+  "raw_cross_frame_signed_difference_mm": -35.42688846588135,
+  "raw_cross_frame_absolute_difference_mm": 35.42688846588135,
+  "raw_cross_frame_relative_difference_percent": 1.9846996339429328,
+  "capture": {
+    "source": "live_camera",
+    "device": "/dev/video2",
+    "requested_pixel_format": "MJPG",
+    "requested_fps": 60.0,
+    "warmup_successful_frames_required": 1800,
+    "temperature_before_frame": {
+      "captured_at": "2026-08-21T10:06:04.252435+00:00",
+      "state_file": "/tmp/sie_h05b_temperature_state.json",
+      "maximum_age_s": 5.0,
+      "temperatures_c": {
+        "ambient": 26.4375,
+        "camera_left": 32.1875,
+        "camera_right": 33.9375
+      }
+    },
+    "temperature_after_frame": {
+      "captured_at": "2026-08-21T10:06:04.344042+00:00",
+      "state_file": "/tmp/sie_h05b_temperature_state.json",
+      "maximum_age_s": 5.0,
+      "temperatures_c": {
+        "ambient": 26.4375,
+        "camera_left": 32.1875,
+        "camera_right": 33.9375
+      }
+    },
+    "temperature_change_c": {
+      "ambient": 0.0,
+      "camera_left": 0.0,
+      "camera_right": 0.0
+    },
+    "final_frame_capture_attempts": 1,
+    "actual_pixel_format": "MJPG",
+    "actual_resolution": [
+      2560,
+      800
+    ],
+    "actual_fps": 60.0,
+    "warmup_successful_frames": 1800,
+    "warmup_attempts": 1800
+  },
+  "brightness": {
+    "physical_left": {
+      "mean": 129.3476796875,
+      "median": 137.0,
+      "std": 63.08335408167732,
+      "p05": 24.0,
+      "p95": 217.0
+    },
+    "physical_right": {
+      "mean": 134.2876318359375,
+      "median": 143.0,
+      "std": 62.0503822459803,
+      "p05": 35.0,
+      "p95": 219.0
+    }
+  },
+  "stereo_sgbm": {
+    "min_disparity": 0,
+    "num_disparities": 192,
+    "block_size": 7
+  },
+  "frame_metrics": {
+    "median_positive_disparity_px": 17.0,
+    "positive_disparity_ratio": 0.72393359375,
+    "valid_pixel_ratio": 0.72393359375
+  },
+  "roi": {
+    "bounds_xyxy": [
+      611,
+      320,
+      711,
+      420
+    ],
+    "size_px": [
+      100,
+      100
+    ],
+    "area_px": 10000,
+    "valid_count": 10000,
+    "valid_ratio": 1.0,
+    "disparity_px": {
+      "count": 10000,
+      "median": 37.9375,
+      "mean": 37.86639375,
+      "std": 0.21032469977617343,
+      "mad": 0.0625
+    },
+    "depth_m": {
+      "count": 10000,
+      "median": 1.7495731115341187,
+      "mean": 1.7529131705284118,
+      "std": 0.00984839947655914,
+      "mad": 0.0028775930404663086
+    }
+  },
+  "decision": {
+    "measurement_quality_status": "PASS",
+    "quality_checks": {
+      "roi_valid_ratio_at_least_0_95": true,
+      "roi_disparity_mad_at_most_2_px": true,
+      "roi_depth_is_finite": true,
+      "temperature_evidence_present": true,
+      "maximum_temperature_change_at_most_0_125_c": true
+    },
+    "maximum_temperature_change_c": 0.0,
+    "absolute_accuracy_status": "PENDING_CROSS_FRAME_OFFSET_MODEL",
+    "activation_eligible_after_run": false
+  }
+}

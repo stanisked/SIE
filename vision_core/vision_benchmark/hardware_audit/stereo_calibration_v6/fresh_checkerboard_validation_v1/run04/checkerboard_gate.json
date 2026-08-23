@@ -1,0 +1,114 @@
+{
+  "gate": "SIE_stereo_calibration_v5_fresh_checkerboard",
+  "calibration": "/home/stanislav/sie_rgb_stereo_fusion/stereo_calibration_v6/solution_joint_refine_corner_order_filtered_freeze_v2_run07/stereo_params_v6.npz",
+  "calibration_sha256": "bb8fb665c6e06e2cbb633cf4c3c61aa74933dd253c9c7950a8420591975dd5e7",
+  "checkerboard_inner_corners": [
+    9,
+    6
+  ],
+  "expected_corner_count": 54,
+  "left_detection": {
+    "found": true,
+    "detector": "SB",
+    "corner_count": 54
+  },
+  "right_detection": {
+    "found": true,
+    "detector": "SB",
+    "corner_count": 54
+  },
+  "right_corner_order_reversed": false,
+  "metrics": {
+    "median_signed_dy_px": -0.012298583984375,
+    "mean_abs_dy_px": 0.10885506868362427,
+    "median_abs_dy_px": 0.1041259765625,
+    "p95_abs_dy_px": 0.2296035766601562,
+    "max_abs_dy_px": 0.247161865234375,
+    "within_0_25_px": 1.0,
+    "within_0_50_px": 1.0,
+    "within_1_00_px": 1.0,
+    "median_disparity_px": 132.94940185546875,
+    "positive_disparity_ratio": 1.0
+  },
+  "decision": {
+    "overall_status": "PASS",
+    "approved_rectification_gate": true,
+    "checks": {
+      "median_abs_dy": {
+        "value_px": 0.1041259765625,
+        "pass_limit_px": 0.25,
+        "warning_limit_px": 0.75,
+        "status": "PASS"
+      },
+      "p95_abs_dy": {
+        "value_px": 0.2296035766601562,
+        "pass_limit_px": 1.0,
+        "warning_limit_px": 2.0,
+        "status": "PASS"
+      },
+      "max_abs_dy": {
+        "value_px": 0.247161865234375,
+        "pass_limit_px": 1.0,
+        "warning_limit_px": 2.0,
+        "status": "PASS"
+      },
+      "positive_disparity_ratio": {
+        "value": 1.0,
+        "pass_limit": 0.95,
+        "warning_limit": 0.8,
+        "status": "PASS"
+      }
+    }
+  },
+  "capture": {
+    "source": "live_camera",
+    "device": "/dev/video2",
+    "requested_pixel_format": "MJPG",
+    "requested_fps": 60.0,
+    "warmup_successful_frames_required": 180,
+    "temperature_before_frame": {
+      "captured_at": "2026-08-20T20:54:33.486378+00:00",
+      "state_file": "/tmp/sie_h05b_temperature_state.json",
+      "maximum_age_s": 5.0,
+      "temperatures_c": {
+        "ambient": 27.1875,
+        "camera_left": 30.5,
+        "camera_right": 31.9375
+      }
+    },
+    "temperature_after_frame": {
+      "captured_at": "2026-08-20T20:54:33.584479+00:00",
+      "state_file": "/tmp/sie_h05b_temperature_state.json",
+      "maximum_age_s": 5.0,
+      "temperatures_c": {
+        "ambient": 27.1875,
+        "camera_left": 30.5,
+        "camera_right": 31.9375
+      }
+    },
+    "temperature_change_c": {
+      "ambient": 0.0,
+      "camera_left": 0.0,
+      "camera_right": 0.0
+    },
+    "final_frame_capture_attempts": 1,
+    "actual_pixel_format": "MJPG",
+    "actual_resolution": [
+      2560,
+      800
+    ],
+    "actual_fps": 60.0,
+    "warmup_successful_frames": 180,
+    "warmup_attempts": 180
+  },
+  "runtime_camera_order": {
+    "combined_left_half": "physical_right",
+    "combined_right_half": "physical_left",
+    "K1_D1_R1_P1": "physical_left",
+    "K2_D2_R2_P2": "physical_right"
+  },
+  "calibration_id": "stereo_calibration_v6",
+  "capture_thermal_status": "CAPTURE_THERMAL_PROVENANCE_INCOMPLETE",
+  "candidate_activation_eligible": false,
+  "gate_scope": "rectification_only; does_not_activate_calibration"
+}
