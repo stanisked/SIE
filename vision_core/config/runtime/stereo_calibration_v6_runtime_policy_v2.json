@@ -1,0 +1,54 @@
+{
+  "schema_version": "sie_stereo_runtime_policy_v1",
+  "policy_id": "stereo_calibration_v6_conditional_runtime_v2",
+  "policy_version": 2,
+  "status": "ENABLED",
+  "required_activation_status": "ACTIVE_CONDITIONAL",
+  "calibration_id": "stereo_calibration_v6",
+  "calibration_path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/solution_joint_refine_corner_order_filtered_freeze_v2_run07/stereo_params_v6.npz",
+  "calibration_sha256": "bb8fb665c6e06e2cbb633cf4c3c61aa74933dd253c9c7950a8420591975dd5e7",
+  "activation_record_path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_activation_conditional_v2.json",
+  "activation_record_sha256": "e38000102dd85bba56a0d256986d1ddf67d801fdb8b73d01e0d649a51333dc7d",
+  "extended_range_review_path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_extended_range_review_v1.json",
+  "extended_range_review_sha256": "8ac1edfe9b70af249a4785cabe9cff13700472077fcfc1faf4fd891965a22ce3",
+  "capture_mode": "MJPG 2560x800 @ 60 FPS",
+  "runtime_profile_id": "stereo_runtime_v2_sgbm192_roi100",
+  "measurement_reference_frame": "rectified_left_optical_frame",
+  "ground_truth_reference_frame": "physical_left_lens_front_rim_frame",
+  "expected_rom_mapping": {
+    "ambient": "289452A555A32FDA",
+    "camera_left": "28F952990F510A0C",
+    "camera_right": "28FE6BA3299C9AC4"
+  },
+  "temperature_gating_channels": [
+    "camera_left",
+    "camera_right"
+  ],
+  "temperature_observational_channels": [
+    "ambient"
+  ],
+  "maximum_temperature_state_age_s": 5.0,
+  "temperature_state_file": "/tmp/sie_h05b_temperature_state.json",
+  "outside_envelope_action": "BLOCK_DEPTH_MEASUREMENT",
+  "hidden_depth_scale_or_offset_correction_allowed": false,
+  "roi_center_xy": [
+    650,
+    350
+  ],
+  "roi_size_px": [
+    100,
+    100
+  ],
+  "num_disparities": 192,
+  "minimum_valid_pixel_ratio": 0.9,
+  "maximum_disparity_mad_px": 0.5,
+  "maximum_depth_spatial_mad_m": 0.02,
+  "validated_ground_truth_distance_range_m": [
+    0.4,
+    2.5
+  ],
+  "measured_depth_acceptance_range_m": [
+    0.38,
+    2.55
+  ]
+}

@@ -242,6 +242,25 @@ Expected hashes:
 | `run_guarded_stereo_v6.py` | `2b4a30db75c7265ec800f943f3eb68502180ce054ccd849546b26a24b997bb79` |
 | `stereo_calibration_v6_runtime_policy_v1.json` | `a26b4a9335296fe4f5584e4d6ba5a74a1eb03c795833c976db090c661e99464c` |
 
+The V1 files above remain the immutable validated and currently deployed
+operational baseline. The hardened V2 activation package is prepared but is not
+deployed in the operational SOURCE tree:
+
+| V2 candidate artifact | SHA-256 |
+| --- | --- |
+| `vision_core/stereo/guarded_runtime_v6_v2.py` | `54ac3c7a9d64cbdf6c1eb7fe5c1470a77ff88a1527be81624699b0f9230df3d9` |
+| `vision_core/tools/run_guarded_stereo_v6_v2.py` | `afc9d7a06674cd70a58082c7c1c4efe8a5ef0884a6fd39bb222c96b0cd29749f` |
+| `vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_runtime_hardening_review_v2.json` | `1d0f5ec650ab2b9a20f142380088cefa346af734b46cd31e0cf24b33eb653390` |
+| `vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_activation_conditional_v2.json` | `e38000102dd85bba56a0d256986d1ddf67d801fdb8b73d01e0d649a51333dc7d` |
+| `vision_core/config/runtime/stereo_calibration_v6_runtime_policy_v2.json` | `0027a7914d474f9a50dc325260e730a03348e363f3e61f80609a4069cc7a2d71` |
+
+V2 hardens API applicability by making `num_disparities` a required
+keyword-only argument and accepting only `192` before matcher creation. It does
+not change calibration, extended-range review, geometry, camera-half semantics,
+rectification, depth computation, ROI, quality behavior, temperature envelope,
+reference frame, or operating range. The operational SOURCE tree continues to
+use V1 until a separate controlled deployment is completed.
+
 The V6 runtime must keep the V5 SGBM profile, including `num_disparities=192`, unless a separate versioned challenge proves a replacement.
 
 ## Frozen runtime limits

@@ -434,6 +434,37 @@ V6 guard behavior was tested:
 - camera_left outside its envelope blocked depth;
 - mapping, freshness, reset, finite-value, calibration and activation integrity checks remained fail-closed.
 
+### 12.1 Hardened V2 runtime activation package candidate
+
+V1 remains the immutable validated baseline and the operational SOURCE tree
+continues to use V1. The following V2 package is prepared for review and is not
+deployed:
+
+| Artifact | SHA-256 | Status |
+| --- | --- | --- |
+| `vision_core/stereo/guarded_runtime_v6_v2.py` | `54ac3c7a9d64cbdf6c1eb7fe5c1470a77ff88a1527be81624699b0f9230df3d9` | hardened candidate |
+| `vision_core/tools/run_guarded_stereo_v6_v2.py` | `afc9d7a06674cd70a58082c7c1c4efe8a5ef0884a6fd39bb222c96b0cd29749f` | package runner |
+| `stereo_calibration_v6_runtime_hardening_review_v2.json` | `1d0f5ec650ab2b9a20f142380088cefa346af734b46cd31e0cf24b33eb653390` | PASS |
+| `stereo_calibration_v6_activation_conditional_v2.json` | `e38000102dd85bba56a0d256986d1ddf67d801fdb8b73d01e0d649a51333dc7d` | ACTIVE_CONDITIONAL package record |
+| `vision_core/config/runtime/stereo_calibration_v6_runtime_policy_v2.json` | `0027a7914d474f9a50dc325260e730a03348e363f3e61f80609a4069cc7a2d71` | ENABLED package policy, not deployed |
+
+Candidate commit:
+
+```text
+c03b64c749dce0e55ea2c73629a5ab75dec23d11
+```
+
+V2 removes the implicit `num_disparities=160` processor default, requires the
+argument explicitly, and accepts only `192` before matcher creation. Candidate
+tests passed `8` tests and the full repository suite passed `35` tests.
+
+The calibration, extended-range review, geometry, SGBM192 computation,
+camera-half split, rectification, depth formula, ROI, quality behavior,
+temperature contract, reference frame, and operating range are unchanged. The
+existing physical validation therefore remains applicable. V2 introduces no new
+distance range, accuracy, or Measurement claim and applies no scale or offset
+correction.
+
 ## 13. Protected V5 reference
 
 | File | SHA-256 |

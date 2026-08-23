@@ -1,0 +1,60 @@
+{
+  "schema_version": "sie_stereo_runtime_hardening_review_v1",
+  "review_id": "stereo_calibration_v6_runtime_hardening_2026-08-23_v2",
+  "created_at": "2026-08-23T11:00:13.137275Z",
+  "status": "PASS",
+  "candidate_commit": "c03b64c749dce0e55ea2c73629a5ab75dec23d11",
+  "evidence": {
+    "baseline_runtime_v1": {
+      "path": "vision_core/stereo/guarded_runtime_v6.py",
+      "sha256": "e9602d318021a934f61116c3b1f6f75e6277b0686eab0810cd387f1a109edee1"
+    },
+    "hardened_runtime_v2": {
+      "path": "vision_core/stereo/guarded_runtime_v6_v2.py",
+      "sha256": "54ac3c7a9d64cbdf6c1eb7fe5c1470a77ff88a1527be81624699b0f9230df3d9"
+    },
+    "candidate_tests": {
+      "path": "vision_core/tests/test_guarded_runtime_v6_v2.py",
+      "sha256": "a4b639e9a1966e76e1ba52c9ba4d30abde790ef2f090c5c4ded070c9bd2455cf"
+    }
+  },
+  "change_scope": {
+    "type": "API_APPLICABILITY_HARDENING_ONLY",
+    "removed_behavior": "implicit num_disparities default of 160",
+    "required_argument": "num_disparities",
+    "allowed_num_disparities": [
+      192
+    ],
+    "blocked_before_matcher_creation": true,
+    "unchanged_behavior": [
+      "canonical camera-half split",
+      "rectification",
+      "depth formula",
+      "ROI processing",
+      "quality gates",
+      "Measurement semantics"
+    ]
+  },
+  "validation": {
+    "candidate_tests": "8 passed",
+    "full_test_suite": "35 passed",
+    "synthetic_v1_v2_computation_equivalence_at_sgbm192": "PASS",
+    "camera_half_mapping_unchanged": true,
+    "runtime_profile_id": "stereo_runtime_v2_sgbm192_roi100"
+  },
+  "applicability": {
+    "physical_validation_remains_applicable": true,
+    "reason": "The validated SGBM192 computation, camera split, rectification, depth formula, ROI, and quality behavior are unchanged.",
+    "calibration_modified": false,
+    "extended_range_review_modified": false,
+    "geometry_modified": false,
+    "operating_range_modified": false,
+    "new_measurement_claims": false,
+    "hidden_depth_scale_or_offset_correction_applied": false
+  },
+  "decision": {
+    "status": "PASS",
+    "activation_package_eligible": true,
+    "deployed": false
+  }
+}
