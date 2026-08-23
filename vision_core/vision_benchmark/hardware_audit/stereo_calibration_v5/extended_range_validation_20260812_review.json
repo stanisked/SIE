@@ -1,0 +1,176 @@
+{
+  "calibration_modified": false,
+  "candidate_runtime_profile_id": "stereo_runtime_v2_sgbm192_roi100",
+  "created_at": "2026-08-12T10:05:58.804063+00:00",
+  "decision": {
+    "calibration_activation_modified": false,
+    "runtime_profile_activation_eligible": true
+  },
+  "evidence": {
+    "activation_record_sha256": "d8af1be57658c7a4d2919deb100f5656dae6789a24b809fbeaf27ab19e16b2e3",
+    "calibration_sha256": "dfe285f1a138412cbaacc442d1d022a5573633a3d1e97f1586bbd47f86dfae6d",
+    "extended_range_report": {
+      "original_overall_status": "FAIL",
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/extended_range_validation_20260812_retry1/extended_range_validation.json",
+      "sha256": "ed602687d5a6f684f8c92e2654618fd1d5aaea5542307d57640ecabc369b873f"
+    },
+    "source_runtime_policy_sha256": "4d3d47c64a93f78f396668c4b81d3c293f90f0326e44546ef95827551191b6b3",
+    "validator": {
+      "path": "vision_core/tools/validate_v5_extended_range.py",
+      "sha256": "4544b35d2000311ab6e22c452bcd834e2ddb9773281d4f4b9a828b2abf9036f0"
+    }
+  },
+  "hidden_depth_scale_or_offset_correction_applied": false,
+  "limitations": [
+    "Ground-truth and stereo-depth origins are distinct and have not been mechanically surveyed.",
+    "Raw cross-frame differences are evidence, not a runtime scale or offset correction.",
+    "At 2500 mm the observed raw cross-frame difference is approximately +36.8 mm.",
+    "The far-range spatial depth MAD reaches approximately 17.6 mm; millimetre-level absolute accuracy is not claimed across the full range.",
+    "This profile is validated for the frozen 100x100 ROI, SGBM192 settings, capture mode, calibration, activation envelope and evidence target conditions."
+  ],
+  "review_basis": {
+    "measured_depths_strictly_monotonic": true,
+    "point_reviews": [
+      {
+        "extended_profile_checks": {
+          "maximum_disparity_mad_at_most_0_50_px": true,
+          "maximum_spatial_depth_mad_at_most_0_020_m": true,
+          "median_valid_ratio_at_least_0_94": true,
+          "minimum_valid_ratio_at_least_0_90": true,
+          "raw_cross_frame_relative_difference_at_most_2_percent": true,
+          "sample_count_25": true,
+          "temperature_state_age_at_most_5_s": true,
+          "temperatures_inside_activation_envelope": true,
+          "temporal_depth_span_at_most_0_015_m": true
+        },
+        "extended_profile_status": "PASS",
+        "ground_truth_mm": 400,
+        "maximum_disparity_mad_px": 0.4375,
+        "maximum_spatial_depth_mad_m": 0.0010122060775756836,
+        "measured_depth_median_m": 0.39938247203826904,
+        "median_valid_ratio": 0.9996,
+        "minimum_valid_ratio": 0.9963,
+        "original_validator_quality_status": "PASS",
+        "raw_cross_frame_difference_mm": -0.6175279617309792,
+        "raw_cross_frame_relative_difference_percent": 0.1543819904327448,
+        "temporal_depth_span_m": 0.0008679032325744629
+      },
+      {
+        "extended_profile_checks": {
+          "maximum_disparity_mad_at_most_0_50_px": true,
+          "maximum_spatial_depth_mad_at_most_0_020_m": true,
+          "median_valid_ratio_at_least_0_94": true,
+          "minimum_valid_ratio_at_least_0_90": true,
+          "raw_cross_frame_relative_difference_at_most_2_percent": true,
+          "sample_count_25": true,
+          "temperature_state_age_at_most_5_s": true,
+          "temperatures_inside_activation_envelope": true,
+          "temporal_depth_span_at_most_0_015_m": true
+        },
+        "extended_profile_status": "PASS",
+        "ground_truth_mm": 1000,
+        "maximum_disparity_mad_px": 0.0625,
+        "maximum_spatial_depth_mad_m": 0.0009045600891113281,
+        "measured_depth_median_m": 0.9995414614677429,
+        "median_valid_ratio": 0.9998,
+        "minimum_valid_ratio": 0.9911,
+        "original_validator_quality_status": "PASS",
+        "raw_cross_frame_difference_mm": -0.4585385322570801,
+        "raw_cross_frame_relative_difference_percent": 0.04585385322570801,
+        "temporal_depth_span_m": 0.0
+      },
+      {
+        "extended_profile_checks": {
+          "maximum_disparity_mad_at_most_0_50_px": true,
+          "maximum_spatial_depth_mad_at_most_0_020_m": true,
+          "median_valid_ratio_at_least_0_94": true,
+          "minimum_valid_ratio_at_least_0_90": true,
+          "raw_cross_frame_relative_difference_at_most_2_percent": true,
+          "sample_count_25": true,
+          "temperature_state_age_at_most_5_s": true,
+          "temperatures_inside_activation_envelope": true,
+          "temporal_depth_span_at_most_0_015_m": true
+        },
+        "extended_profile_status": "PASS",
+        "ground_truth_mm": 1500,
+        "maximum_disparity_mad_px": 0.0625,
+        "maximum_spatial_depth_mad_m": 0.0020399093627929688,
+        "measured_depth_median_m": 1.499312162399292,
+        "median_valid_ratio": 1.0,
+        "minimum_valid_ratio": 0.9982,
+        "original_validator_quality_status": "PASS",
+        "raw_cross_frame_difference_mm": -0.6878376007080078,
+        "raw_cross_frame_relative_difference_percent": 0.045855840047200516,
+        "temporal_depth_span_m": 0.0020399093627929688
+      },
+      {
+        "extended_profile_checks": {
+          "maximum_disparity_mad_at_most_0_50_px": true,
+          "maximum_spatial_depth_mad_at_most_0_020_m": true,
+          "median_valid_ratio_at_least_0_94": true,
+          "minimum_valid_ratio_at_least_0_90": true,
+          "raw_cross_frame_relative_difference_at_most_2_percent": true,
+          "sample_count_25": true,
+          "temperature_state_age_at_most_5_s": true,
+          "temperatures_inside_activation_envelope": true,
+          "temporal_depth_span_at_most_0_015_m": true
+        },
+        "extended_profile_status": "PASS",
+        "ground_truth_mm": 2000,
+        "maximum_disparity_mad_px": 0.25,
+        "maximum_spatial_depth_mad_m": 0.014752388000488281,
+        "measured_depth_median_m": 2.010006904602051,
+        "median_valid_ratio": 0.9951,
+        "minimum_valid_ratio": 0.9858,
+        "original_validator_quality_status": "PASS",
+        "raw_cross_frame_difference_mm": 10.006904602050781,
+        "raw_cross_frame_relative_difference_percent": 0.5003452301025391,
+        "temporal_depth_span_m": 0.0036678314208984375
+      },
+      {
+        "extended_profile_checks": {
+          "maximum_disparity_mad_at_most_0_50_px": true,
+          "maximum_spatial_depth_mad_at_most_0_020_m": true,
+          "median_valid_ratio_at_least_0_94": true,
+          "minimum_valid_ratio_at_least_0_90": true,
+          "raw_cross_frame_relative_difference_at_most_2_percent": true,
+          "sample_count_25": true,
+          "temperature_state_age_at_most_5_s": true,
+          "temperatures_inside_activation_envelope": true,
+          "temporal_depth_span_at_most_0_015_m": true
+        },
+        "extended_profile_status": "PASS",
+        "ground_truth_mm": 2500,
+        "maximum_disparity_mad_px": 0.1875,
+        "maximum_spatial_depth_mad_m": 0.01761651039123535,
+        "measured_depth_median_m": 2.5367672443389893,
+        "median_valid_ratio": 0.9483,
+        "minimum_valid_ratio": 0.921,
+        "original_validator_quality_status": "FAIL",
+        "raw_cross_frame_difference_mm": 36.76724433898926,
+        "raw_cross_frame_relative_difference_percent": 1.4706897735595703,
+        "temporal_depth_span_m": 0.011663198471069336
+      }
+    ],
+    "reason": "The 2500 mm point failed only the strict 0.95 per-frame ROI coverage threshold. All 25 frames remain above 0.90 coverage, with stable disparity and depth. The extended profile therefore uses a frozen 0.90 minimum coverage threshold.",
+    "strict_validator_failure_reinterpreted": true
+  },
+  "review_status": "PASS_CONDITIONAL",
+  "schema_version": "sie_extended_depth_range_review_v1",
+  "validated_operating_claim": {
+    "ground_truth_distance_range_m": [
+      0.4,
+      2.5
+    ],
+    "ground_truth_reference_frame": "camera_front_plane_frame",
+    "maximum_depth_spatial_mad_m": 0.02,
+    "maximum_disparity_mad_px": 0.5,
+    "measured_depth_acceptance_range_m": [
+      0.38,
+      2.55
+    ],
+    "measurement_reference_frame": "rectified_left_optical_frame",
+    "minimum_valid_pixel_ratio": 0.9,
+    "observed_maximum_depth_spatial_mad_m": 0.01761651039123535
+  }
+}

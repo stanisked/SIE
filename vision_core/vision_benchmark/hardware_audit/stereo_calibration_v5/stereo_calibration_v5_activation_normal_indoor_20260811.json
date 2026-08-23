@@ -1,0 +1,297 @@
+{
+  "activation_id": "stereo_calibration_v5_conditional_normal_indoor_2026-08-11",
+  "calibration_id": "stereo_calibration_v5",
+  "calibration_sha256": "dfe285f1a138412cbaacc442d1d022a5573633a3d1e97f1586bbd47f86dfae6d",
+  "created_at": "2026-08-11T16:55:02.800370+00:00",
+  "decision": {
+    "capture_thermal_exception": "accepted only inside the independently validated runtime envelope",
+    "capture_thermal_status": "FAIL_STRICT_ENDPOINT_LIMITS",
+    "normal_indoor_far_depth_validation": "PASS",
+    "normal_indoor_strict_checkerboard_triple": "PASS",
+    "physical_near_mid_far_depth_validation": "PASS",
+    "rectification_gate": "PASS",
+    "temperature_envelope_expansion": "APPROVED_CONDITIONAL",
+    "temperature_sensor_cooldown": "PASS",
+    "temperature_sensor_hot_soak": "PASS",
+    "unconditional_activation": false
+  },
+  "evidence": {
+    "base_activation_record": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/stereo_calibration_v5_activation.json",
+      "sha256": "d135237f37122e3edf6836eef00a95900a70c3c889a2891d52523ac459cf29c3"
+    },
+    "calibration": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/solution_all_pairs_joint_refine_v1_1/stereo_params_v5.npz",
+      "sha256": "dfe285f1a138412cbaacc442d1d022a5573633a3d1e97f1586bbd47f86dfae6d"
+    },
+    "cooldown_log": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/thermal_validation/sie_v5_s03_s02_s10_cooldown_30min.log",
+      "sha256": "13f0cf31135c2fd5d94fb484e29898cfaa047b3414a7bbab3f2d6659014da947"
+    },
+    "depth_archive": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/stereo_calibration_v5_depth_validation_frozen_2026-08-10.tar.gz",
+      "sha256": "eb7f605d7b65f00a8db57b1c322c0b80831edae308cb03fe65ae9ba46d8a3e22"
+    },
+    "depth_checksums": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/depth_validation_v5/SHA256SUMS",
+      "sha256": "d38c968698056ecb88029553d935a70a8a9bde9a8006dac041a474d33f8a6314"
+    },
+    "depth_diagnostic_tool": {
+      "path": "vision_core/tools/diagnose_v5_stereo_runtime.py",
+      "sha256": "8d9442b42be0bef8c9cfc297cd51a0b04b4296b5aad99d7e3bc32febb2fdc853"
+    },
+    "depth_finalizer_tool": {
+      "path": "vision_core/tools/finalize_v5_depth_validation.py",
+      "sha256": "9d4c711b46b36cc378ec662a18d982a172f6e4556f518d2f951fabbf8494afee"
+    },
+    "depth_report": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/depth_validation_v5/depth_validation_report.json",
+      "sha256": "bb23b0f806fbcc076814c52fd63dda0275d572e0e0688609cd2fce6dd352df69"
+    },
+    "fresh_gate_archive": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/fresh_checkerboard_gate_run02_retry_20260810.tar.gz",
+      "sha256": "7c1d89cf4b13b628777e23df9d7a076e44fb9033844258744cfa46dc53e055fb"
+    },
+    "hot_log": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/thermal_validation/sie_v5_s03_s02_s10_hot_soak_30min.log",
+      "sha256": "cd4989d25b5898d937a6720584bd6c595aac965673fc38d8d4d377ebc36570ae"
+    },
+    "normal_indoor_checkerboard_run01": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/normal_indoor_validation_20260811/strict_triple/checkerboard_run01/checkerboard_gate.json",
+      "sha256": "4f87f1eeaf7cffa24e06acdac8e396bb88f11c8831391c0397c81245a03c3f31"
+    },
+    "normal_indoor_checkerboard_run02": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/normal_indoor_validation_20260811/strict_triple/checkerboard_run02/checkerboard_gate.json",
+      "sha256": "7285312863e872b9c2b3def85a81b201c53b5eb64b2b79ee14eb739823207a8d"
+    },
+    "normal_indoor_checkerboard_run03": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/normal_indoor_validation_20260811/strict_triple/checkerboard_run03/checkerboard_gate.json",
+      "sha256": "21fe354efcb5cbcc40731f81e6779ec78216dac451c1fed51dc112f68459d947"
+    },
+    "normal_indoor_far_depth": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/normal_indoor_validation_20260811/depth_far_1012mm_run02_roi_corner/depth_validation.json",
+      "sha256": "07cd9683b0c687dcfc6f12d00772c8b25b41543fdf23bfc3bc1f019395a5c36f"
+    },
+    "raw_dataset_archive": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5_raw_frozen_2026-08-09.tar.gz",
+      "sha256": "2f7233cde2b652d65146bef670e97265621c9c7db5712e240fe19b31f67abfaf"
+    },
+    "repeatability_archive": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/pre_capture_repeatability/thermal_stable_triple_20260808_004944.tar.gz",
+      "sha256": "0077375f8edda74fed322e6ab1b715831a34137aa530142c340a5a53e83e5bd1"
+    },
+    "solver_tool": {
+      "path": "vision_core/tools/stereo_calibration_v5_solver.py",
+      "sha256": "a578ce16db3dbd535ebdf1b934bd28e2f61bbaf2dda1f9209196c88bb2a5cec0"
+    },
+    "strict_diagnostic_tool": {
+      "path": "vision_core/tools/diagnose_v5_stereo_runtime.py",
+      "sha256": "58a554687b708448d3d8eefa8f04172fe2aca417aca00903bb9243c43e7f3f84"
+    }
+  },
+  "fresh_gate_archive_member": "fresh_checkerboard_gate_run02_retry_20260810/checkerboard_gate.json",
+  "fresh_gate_json_sha256": "37126c0f01e820df2644dc109cf60f30672960f0d1db15fa97c5c6c2a02d60ad",
+  "known_limitations": [
+    "Original v5 capture failed strict thermal endpoint limits.",
+    "The transform between rectified_left_optical_frame and camera_front_plane_frame has not been mechanically surveyed.",
+    "The offset-only model is diagnostic and must not be used as a runtime correction.",
+    "Activation remains invalid outside the expanded recorded temperature envelope.",
+    "Normal indoor depth scale was independently checked at the far point only; cold near/mid scale remains unverified.",
+    "The continuous temperature interval between validated cold and warm endpoints is accepted by physical continuity inference, not by pointwise depth validation."
+  ],
+  "runtime_requirements": {
+    "all_temperature_channels_must_be_valid": true,
+    "all_temperatures_must_be_inside_validated_envelope": true,
+    "camera_front_plane_conversion_approved": false,
+    "capture_mode": "MJPG 2560x800 @ 60 FPS",
+    "hidden_depth_scale_or_offset_correction_allowed": false,
+    "maximum_temperature_state_age_s": 5.0,
+    "measurement_reference_frame": "rectified_left_optical_frame",
+    "normal_indoor_roi_center_xy": [
+      650,
+      350
+    ],
+    "normal_indoor_roi_size_px": [
+      100,
+      100
+    ],
+    "outside_envelope_action": "BLOCK_DEPTH_MEASUREMENT",
+    "runtime_camera_order": {
+      "K1_D1_R1_P1": "physical_left",
+      "K2_D2_R2_P2": "physical_right",
+      "combined_left_half": "physical_right",
+      "combined_right_half": "physical_left"
+    },
+    "temperature_bridge_required": true,
+    "validated_roi_depth_range_m": [
+      0.5,
+      1.05
+    ]
+  },
+  "schema_version": "sie_calibration_activation_v1",
+  "status": "ACTIVE_CONDITIONAL",
+  "supersedes_activation_sha256": "d135237f37122e3edf6836eef00a95900a70c3c889a2891d52523ac459cf29c3",
+  "temperature_envelope_expansion_basis": {
+    "method": "validated_cold_and_warm_endpoints_with_continuity_inference",
+    "normal_indoor_temperature_samples_c": [
+      {
+        "ambient": 27.1875,
+        "camera_left": 28.4375,
+        "camera_right": 28.875
+      },
+      {
+        "ambient": 27.1875,
+        "camera_left": 28.4375,
+        "camera_right": 28.875
+      },
+      {
+        "ambient": 27.1875,
+        "camera_left": 28.5625,
+        "camera_right": 29.0625
+      },
+      {
+        "ambient": 27.1875,
+        "camera_left": 28.5625,
+        "camera_right": 29.0625
+      },
+      {
+        "ambient": 27.1875,
+        "camera_left": 28.8125,
+        "camera_right": 29.3125
+      },
+      {
+        "ambient": 27.1875,
+        "camera_left": 28.8125,
+        "camera_right": 29.3125
+      },
+      {
+        "ambient": 27.375,
+        "camera_left": 29.6875,
+        "camera_right": 30.8125
+      },
+      {
+        "ambient": 27.375,
+        "camera_left": 29.6875,
+        "camera_right": 30.8125
+      }
+    ]
+  },
+  "thermal_sensor_evidence": {
+    "cooldown": {
+      "first_timestamp": "2026-08-07T21:58:22+03:00",
+      "last_timestamp": "2026-08-07T22:28:45+03:00",
+      "sample_count": 360,
+      "status": "PASS",
+      "temperature_ranges_c": {
+        "ambient": {
+          "first": 27.3125,
+          "last": 27.625,
+          "maximum": 27.6875,
+          "minimum": 27.25
+        },
+        "camera_left": {
+          "first": 34.75,
+          "last": 28.9375,
+          "maximum": 34.75,
+          "minimum": 28.9375
+        },
+        "camera_right": {
+          "first": 36.5,
+          "last": 29.4375,
+          "maximum": 36.5,
+          "minimum": 29.4375
+        }
+      }
+    },
+    "hot_soak": {
+      "first_timestamp": "2026-08-07T21:15:15+03:00",
+      "last_timestamp": "2026-08-07T21:45:50+03:00",
+      "sample_count": 360,
+      "status": "PASS",
+      "temperature_ranges_c": {
+        "ambient": {
+          "first": 27.3125,
+          "last": 27.3125,
+          "maximum": 27.5625,
+          "minimum": 27.25
+        },
+        "camera_left": {
+          "first": 28.8125,
+          "last": 35.3125,
+          "maximum": 35.375,
+          "minimum": 28.8125
+        },
+        "camera_right": {
+          "first": 29.1875,
+          "last": 37.125,
+          "maximum": 37.1875,
+          "minimum": 29.1875
+        }
+      }
+    }
+  },
+  "validated_metrics": {
+    "depth_scale_error_percent": 0.9449519409272522,
+    "fresh_checkerboard_max_abs_dy_px": 0.36907958984375,
+    "fresh_checkerboard_p95_abs_dy_px": 0.24075927734375,
+    "fresh_checkerboard_positive_disparity_ratio": 1.0,
+    "maximum_linear_model_residual_mm": 0.9937999455353292,
+    "normal_indoor_far_ground_truth_mm": 1012.0,
+    "normal_indoor_far_measured_optical_depth_mm": 1028.4191370010376,
+    "normal_indoor_far_raw_cross_frame_relative_difference_percent": 1.6224443676914624,
+    "normal_indoor_roi_disparity_mad_px": 0.0625,
+    "normal_indoor_roi_valid_ratio": 1.0,
+    "normal_indoor_strict_checkerboard_runs": [
+      {
+        "max_abs_dy_px": 0.38189697265625,
+        "median_abs_dy_px": 0.0856475830078125,
+        "p95_abs_dy_px": 0.2976837158203125,
+        "positive_disparity_ratio": 1.0,
+        "run": "run01",
+        "temperatures_c": {
+          "ambient": 27.1875,
+          "camera_left": 28.4375,
+          "camera_right": 28.875
+        }
+      },
+      {
+        "max_abs_dy_px": 0.45343017578125,
+        "median_abs_dy_px": 0.08721923828125,
+        "p95_abs_dy_px": 0.3631835937499999,
+        "positive_disparity_ratio": 1.0,
+        "run": "run02",
+        "temperatures_c": {
+          "ambient": 27.1875,
+          "camera_left": 28.5625,
+          "camera_right": 29.0625
+        }
+      },
+      {
+        "max_abs_dy_px": 0.4085693359375,
+        "median_abs_dy_px": 0.1155242919921875,
+        "p95_abs_dy_px": 0.2821685791015624,
+        "positive_disparity_ratio": 1.0,
+        "run": "run03",
+        "temperatures_c": {
+          "ambient": 27.1875,
+          "camera_left": 28.8125,
+          "camera_right": 29.3125
+        }
+      }
+    ]
+  },
+  "validated_temperature_envelope_c": {
+    "ambient": {
+      "maximum_c": 27.6875,
+      "minimum_c": 26.6875
+    },
+    "camera_left": {
+      "maximum_c": 35.9375,
+      "minimum_c": 28.4375
+    },
+    "camera_right": {
+      "maximum_c": 37.4375,
+      "minimum_c": 28.875
+    }
+  }
+}
