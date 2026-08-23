@@ -1,0 +1,45 @@
+{
+  "activation_record_path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/stereo_calibration_v5_activation_normal_indoor_20260811.json",
+  "activation_record_sha256": "d8af1be57658c7a4d2919deb100f5656dae6789a24b809fbeaf27ab19e16b2e3",
+  "calibration_id": "stereo_calibration_v5",
+  "calibration_path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/solution_all_pairs_joint_refine_v1_1/stereo_params_v5.npz",
+  "calibration_sha256": "dfe285f1a138412cbaacc442d1d022a5573633a3d1e97f1586bbd47f86dfae6d",
+  "capture_mode": "MJPG 2560x800 @ 60 FPS",
+  "expected_rom_mapping": {
+    "ambient": "289452A555A32FDA",
+    "camera_left": "28F952990F510A0C",
+    "camera_right": "28FE6BA3299C9AC4"
+  },
+  "extended_range_review_path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v5/extended_range_validation_20260812_review.json",
+  "extended_range_review_sha256": "87c51e200827bd13f771deaa3ac7821d7e5c7138ff803b4619e0bc0601b0db44",
+  "hidden_depth_scale_or_offset_correction_allowed": false,
+  "maximum_depth_spatial_mad_m": 0.02,
+  "maximum_disparity_mad_px": 0.5,
+  "maximum_temperature_state_age_s": 5.0,
+  "measured_depth_acceptance_range_m": [
+    0.38,
+    2.55
+  ],
+  "measurement_reference_frame": "rectified_left_optical_frame",
+  "minimum_valid_pixel_ratio": 0.9,
+  "num_disparities": 192,
+  "outside_envelope_action": "BLOCK_DEPTH_MEASUREMENT",
+  "policy_id": "stereo_calibration_v5_conditional_runtime_v3",
+  "required_activation_status": "ACTIVE_CONDITIONAL",
+  "roi_center_xy": [
+    650,
+    350
+  ],
+  "roi_size_px": [
+    100,
+    100
+  ],
+  "runtime_profile_id": "stereo_runtime_v2_sgbm192_roi100",
+  "schema_version": "sie_stereo_runtime_policy_v1",
+  "status": "ENABLED",
+  "temperature_state_file": "/tmp/sie_h05b_temperature_state.json",
+  "validated_ground_truth_distance_range_m": [
+    0.4,
+    2.5
+  ]
+}
