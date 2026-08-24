@@ -81,10 +81,16 @@ Observed runtime behavior:
 - approximately `3900 mm` physical distance: raw diagnostic depth around `3876..3890 mm`;
 - distances above `2.55 m` remain outside the current policy and must not produce an approved SIE `Measurement`.
 
-Current status:
+Current calibration activation status:
 
 ```text
 ACTIVE_CONDITIONAL
+```
+
+Current runtime deployment status:
+
+```text
+DEPLOYED_CONDITIONAL
 ```
 
 ## 2. Hardware and capture contract
@@ -434,19 +440,20 @@ V6 guard behavior was tested:
 - camera_left outside its envelope blocked depth;
 - mapping, freshness, reset, finite-value, calibration and activation integrity checks remained fail-closed.
 
-### 12.1 Hardened V2 runtime activation package candidate
+### 12.1 Hardened V2 runtime activation package history
 
-V1 remains the immutable validated baseline and the operational SOURCE tree
-continues to use V1. The following V2 package is prepared for review and is not
-deployed:
+V1 remains the immutable validated baseline. The following V2 package was
+prepared and reviewed before deployment. The hardening review's
+`deployed=false` field remains an immutable statement of that predeployment
+state; it is not rewritten after deployment:
 
 | Artifact | SHA-256 | Status |
 | --- | --- | --- |
-| `vision_core/stereo/guarded_runtime_v6_v2.py` | `54ac3c7a9d64cbdf6c1eb7fe5c1470a77ff88a1527be81624699b0f9230df3d9` | hardened candidate |
-| `vision_core/tools/run_guarded_stereo_v6_v2.py` | `afc9d7a06674cd70a58082c7c1c4efe8a5ef0884a6fd39bb222c96b0cd29749f` | package runner |
-| `stereo_calibration_v6_runtime_hardening_review_v2.json` | `1d0f5ec650ab2b9a20f142380088cefa346af734b46cd31e0cf24b33eb653390` | PASS |
+| `vision_core/stereo/guarded_runtime_v6_v2.py` | `54ac3c7a9d64cbdf6c1eb7fe5c1470a77ff88a1527be81624699b0f9230df3d9` | deployed hardened runtime |
+| `vision_core/tools/run_guarded_stereo_v6_v2.py` | `afc9d7a06674cd70a58082c7c1c4efe8a5ef0884a6fd39bb222c96b0cd29749f` | active manual-launch runner |
+| `stereo_calibration_v6_runtime_hardening_review_v2.json` | `1d0f5ec650ab2b9a20f142380088cefa346af734b46cd31e0cf24b33eb653390` | PASS, immutable predeployment record |
 | `stereo_calibration_v6_activation_conditional_v2.json` | `e38000102dd85bba56a0d256986d1ddf67d801fdb8b73d01e0d649a51333dc7d` | ACTIVE_CONDITIONAL package record |
-| `vision_core/config/runtime/stereo_calibration_v6_runtime_policy_v2.json` | `0027a7914d474f9a50dc325260e730a03348e363f3e61f80609a4069cc7a2d71` | ENABLED package policy, not deployed |
+| `vision_core/config/runtime/stereo_calibration_v6_runtime_policy_v2.json` | `0027a7914d474f9a50dc325260e730a03348e363f3e61f80609a4069cc7a2d71` | active ENABLED policy |
 
 Candidate commit:
 
@@ -491,7 +498,45 @@ V2 run, the recommended console interval is `0.2 s`. This is an operational
 cadence recommendation only and does not alter the validated runtime profile,
 policy, quality gates, or Measurement range.
 
-V2 remains `deployed=false`. The operational SOURCE tree continues to use V1.
+The `deployed=false` value in the V2 hardening review and this Stage 9 challenge
+remain immutable predeployment evidence. Later deployment state is recorded
+separately below.
+
+### 12.3 Canonical-main V2 conditional deployment
+
+V2 is now `DEPLOYED_CONDITIONAL` by explicit operator approval dated
+`2026-08-24`. The canonical operational root is `/home/stanislav/dev_ws/sie` at
+commit `effa8baba2b88159fe342428442abb148126cc75`. Operation is a manual launch of
+`vision_core/tools/run_guarded_stereo_v6_v2.py` with
+`vision_core/config/runtime/stereo_calibration_v6_runtime_policy_v2.json`.
+
+Canonical-main smoke `run03` is the accepted steady-state deployment evidence:
+
+- status `PASS_RUNTIME_V2_CANONICAL_MAIN_SMOKE`;
+- one run ID, `120` processed frames and `120` contiguous Measurements at sequences `1..120`;
+- `COMPLETED=1`, `BLOCKED_RUNTIME=0`, and `ROI_DEPTH_REJECTED=0`;
+- all quality gates passed, all depths were inside `0.38..2.55 m`, and temperature violations were `0`;
+- ground truth was `997 mm` in `physical_left_lens_front_rim_frame`;
+- median depth was `990.6631112098694 mm` in `rectified_left_optical_frame`;
+- raw cross-frame difference was `-6.336888790130615 mm`, or `-0.6355956660110949%`.
+
+| Deployment evidence | SHA-256 |
+| --- | --- |
+| `runtime_v2_canonical_main_smoke_v1/run03/canonical_main_smoke_report.json` | `8c3df6d9bc70515bf33b0157a08922fc22d06a7417805a2600079c1f70a9fb7f` |
+| external `run03/console.log` | `4b0dc2f6bf97db20f8b0b2460568ef100fbea4af2bcefdd48cd35bdddbcf3fca` |
+| external `run03/measurements.jsonl` | `0a0b1a77716a10b260dad2914e388497b3276fd5abbf55b2157e77852c5f6d61` |
+| `stereo_calibration_v6_runtime_v2_deployment_record_v1.json` | `18563245d47797bd6e5a8254a30f90089e9058042ffc79ac2249e85c93941c32` |
+
+Canonical-main smoke `run01` is classified
+`NOT_ACCEPTED_MULTI_SESSION` because its `239` records combine two sessions.
+`run02` is classified `PASS_FAIL_CLOSED_RECOVERY_NOT_STEADY_STATE`; its `55`
+blocked events, one recovery, and four ROI rejections validate recovery behavior
+but do not establish steady-state deployment.
+
+The former operational root `/home/stanislav/dev_ws/src/sie` is retained
+untouched as a V1 rollback snapshot. Rollback must be explicit and manual.
+`t_z` remains pending. No temperature envelope, operating range, Measurement
+range, geometry, scale, or offset correction changed during deployment.
 
 ## 13. Protected V5 reference
 

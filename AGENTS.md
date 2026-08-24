@@ -242,9 +242,10 @@ Expected hashes:
 | `run_guarded_stereo_v6.py` | `2b4a30db75c7265ec800f943f3eb68502180ce054ccd849546b26a24b997bb79` |
 | `stereo_calibration_v6_runtime_policy_v1.json` | `a26b4a9335296fe4f5584e4d6ba5a74a1eb03c795833c976db090c661e99464c` |
 
-The V1 files above remain the immutable validated and currently deployed
-operational baseline. The hardened V2 activation package is prepared but is not
-deployed in the operational SOURCE tree:
+The V1 files above remain the immutable validated baseline. V2 is now
+`DEPLOYED_CONDITIONAL` from the canonical operational repository
+`/home/stanislav/dev_ws/sie`; V1 remains available only in the untouched rollback
+snapshot at `/home/stanislav/dev_ws/src/sie`.
 
 | V2 candidate artifact | SHA-256 |
 | --- | --- |
@@ -258,8 +259,20 @@ V2 hardens API applicability by making `num_disparities` a required
 keyword-only argument and accepting only `192` before matcher creation. It does
 not change calibration, extended-range review, geometry, camera-half semantics,
 rectification, depth computation, ROI, quality behavior, temperature envelope,
-reference frame, or operating range. The operational SOURCE tree continues to
-use V1 until a separate controlled deployment is completed.
+reference frame, or operating range. The active manual operator launch uses
+`vision_core/tools/run_guarded_stereo_v6_v2.py` with
+`vision_core/config/runtime/stereo_calibration_v6_runtime_policy_v2.json`.
+
+Accepted deployment evidence is canonical-main smoke `run03`, status
+`PASS_RUNTIME_V2_CANONICAL_MAIN_SMOKE`. Its Git report SHA-256 is
+`8c3df6d9bc70515bf33b0157a08922fc22d06a7417805a2600079c1f70a9fb7f`; the
+authoritative later deployment-state record is
+`stereo_calibration_v6_runtime_v2_deployment_record_v1.json`, SHA-256
+`18563245d47797bd6e5a8254a30f90089e9058042ffc79ac2249e85c93941c32`.
+Earlier canonical-main smoke `run01` is not accepted because it contains two
+sessions, and `run02` demonstrates fail-closed recovery rather than steady-state
+deployment. The hardening review's `deployed=false` field remains immutable and
+describes its predeployment state.
 
 The V6 runtime must keep the V5 SGBM profile, including `num_disparities=192`, unless a separate versioned challenge proves a replacement.
 
@@ -304,7 +317,9 @@ Z_rectified_left_optical = Z_lens_front_rim + t_z
 
 ## Current status and safe next steps
 
-- V6 runtime is operational.
+- V6 runtime V2 is `DEPLOYED_CONDITIONAL` from `/home/stanislav/dev_ws/sie`.
+- `/home/stanislav/dev_ws/src/sie` is retained untouched as a V1 rollback snapshot; rollback must be explicit and manual.
+- The accepted steady-state deployment evidence is canonical-main smoke `run03`; `run01` and `run02` are not steady-state deployment evidence.
 - Depth is reported as very good from approximately `390 mm` through `2000 mm`.
 - Below approximately `390 mm`, SGBM support starts to fail as disparity approaches the `192 px` search limit.
 - At approximately `3900 mm`, diagnostic depth around `3876..3890 mm` has been observed, but this is outside the approved runtime range and must remain non-emitting until an extended-range challenge passes.
