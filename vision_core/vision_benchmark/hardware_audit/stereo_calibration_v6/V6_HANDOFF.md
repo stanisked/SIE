@@ -465,6 +465,34 @@ existing physical validation therefore remains applicable. V2 introduces no new
 distance range, accuracy, or Measurement claim and applies no scale or offset
 correction.
 
+### 12.2 Stage 9 V2 live deployment challenge
+
+Stage 9 completed with status `PASS_RUNTIME_V2_LIVE_CHALLENGE`. The challenge
+processed `120` depth frames and published `13` rate-limited Measurements at
+frame sequences `9..117` with a step of `9`. All ROI quality gates passed and
+the temperature gate recorded `0` violations.
+
+The physical ground-truth datum was `997 mm` from
+`physical_left_lens_front_rim_frame`. Median runtime depth was
+`990.663111 mm` in `rectified_left_optical_frame`, giving a raw cross-frame
+difference of `-6.336889 mm`. The axial transform `t_z` remains pending, so
+this difference is evidence only and is not an approved scale or offset
+correction.
+
+| Evidence | SHA-256 |
+| --- | --- |
+| `runtime_v2_deployment_challenge_v1/run01/deployment_challenge_report.json` | `a1251dda4a3ae9eca10210585647b9f6e2d0067c02e1265002be495b4c22bbaf` |
+| external `console.log` | `47587501992ffef831c52f5b34aee64ab394730a75919c59079fa6a191d2b967` |
+| external `measurements.jsonl` | `8eeb718a68e5d48cfee708cb88fe62fc9edd71ca5b8cfcc7b521f322d3db64c1` |
+
+The runner's `console_interval_s=2.0` limited Measurement publication cadence;
+the other processed frames were not rejected Measurements. For an operational
+V2 run, the recommended console interval is `0.2 s`. This is an operational
+cadence recommendation only and does not alter the validated runtime profile,
+policy, quality gates, or Measurement range.
+
+V2 remains `deployed=false`. The operational SOURCE tree continues to use V1.
+
 ## 13. Protected V5 reference
 
 | File | SHA-256 |
