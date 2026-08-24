@@ -1,0 +1,208 @@
+{
+  "schema_version": "sie_stereo_runtime_canonical_main_smoke_report_v1",
+  "report_id": "stereo_calibration_v6_runtime_v2_canonical_main_smoke_run03",
+  "created_at": "2026-08-24T12:39:12Z",
+  "status": "PASS_RUNTIME_V2_CANONICAL_MAIN_SMOKE",
+  "git": {
+    "canonical_repository": "/home/stanislav/dev_ws/sie",
+    "branch": "main",
+    "commit": "effa8baba2b88159fe342428442abb148126cc75"
+  },
+  "software_chain": {
+    "runtime": {
+      "path": "vision_core/stereo/guarded_runtime_v6_v2.py",
+      "sha256": "54ac3c7a9d64cbdf6c1eb7fe5c1470a77ff88a1527be81624699b0f9230df3d9"
+    },
+    "runner": {
+      "path": "vision_core/tools/run_guarded_stereo_v6_v2.py",
+      "sha256": "afc9d7a06674cd70a58082c7c1c4efe8a5ef0884a6fd39bb222c96b0cd29749f"
+    },
+    "policy": {
+      "path": "vision_core/config/runtime/stereo_calibration_v6_runtime_policy_v2.json",
+      "sha256": "0027a7914d474f9a50dc325260e730a03348e363f3e61f80609a4069cc7a2d71",
+      "status": "ENABLED"
+    },
+    "activation": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_activation_conditional_v2.json",
+      "sha256": "e38000102dd85bba56a0d256986d1ddf67d801fdb8b73d01e0d649a51333dc7d",
+      "status": "ACTIVE_CONDITIONAL"
+    },
+    "guard": {
+      "path": "vision_core/stereo/stereo_calibration_guard_v6.py",
+      "sha256": "42e8eff34700030e32cc0c1419122cd8e23e1d88055fc943f604fefb1f2e0d05"
+    },
+    "calibration": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/solution_joint_refine_corner_order_filtered_freeze_v2_run07/stereo_params_v6.npz",
+      "calibration_id": "stereo_calibration_v6",
+      "sha256": "bb8fb665c6e06e2cbb633cf4c3c61aa74933dd253c9c7950a8420591975dd5e7"
+    },
+    "runtime_profile_id": "stereo_runtime_v2_sgbm192_roi100",
+    "num_disparities": 192
+  },
+  "run": {
+    "run_id": "stereo-v6-b5c7e6f7-1e39-457c-a3a4-ca93475f7424",
+    "device": "/dev/video2",
+    "capture_mode": "MJPG 2560x800 @ 60 FPS",
+    "warmup_frames": 180,
+    "console_interval_s": 0.2,
+    "processed_depth_frames": 120,
+    "jsonl_records": 120,
+    "emitted_measurements": 120,
+    "measurement_frame_sequence": {
+      "minimum": 1,
+      "maximum": 120,
+      "unique": 120,
+      "contiguous_without_gaps_or_duplicates": true
+    },
+    "measurement_schema": "sie_measurement_v1",
+    "measurement_type": "stereo_roi_depth",
+    "first_measurement_at": "2026-08-24T12:25:20.675610+00:00",
+    "last_measurement_at": "2026-08-24T12:25:51.087452+00:00",
+    "measurement_span_s": 30.411842,
+    "console_completion_status": "COMPLETED",
+    "pipeline_exit_code": null,
+    "pipeline_exit_code_reason": "not_persisted",
+    "console_status_counts": {
+      "CAMERA_OPEN": 1,
+      "CAMERA_WARMUP_FRAMES_COMPLETE": 1,
+      "ACTIVE": 1,
+      "SIE_MEASUREMENT": 120,
+      "COMPLETED": 1,
+      "BLOCKED_RUNTIME": 0,
+      "ACTIVE_RESTORED": 0,
+      "ROI_DEPTH_REJECTED": 0
+    }
+  },
+  "measurement_cadence": {
+    "console_interval_s": 0.2,
+    "measurement_interval_s": {
+      "minimum": 0.237474,
+      "median": 0.25268,
+      "maximum": 0.359682,
+      "mean": 0.2555616974789916
+    },
+    "effective_measurement_rate_hz": 3.9129494359466945,
+    "all_processed_depth_frames_emitted_measurements": true
+  },
+  "ground_truth": {
+    "value_mm": 997.0,
+    "reference_frame": "physical_left_lens_front_rim_frame",
+    "axial_transform_t_z_status": "PENDING",
+    "direct_absolute_comparison_approved": false
+  },
+  "depth_statistics": {
+    "unit": "mm",
+    "reference_frame": "rectified_left_optical_frame",
+    "minimum": 990.6631112098694,
+    "median": 990.6631112098694,
+    "maximum": 990.6631112098694,
+    "mean": 990.6631112098694,
+    "raw_cross_frame_difference_mm": -6.336888790130615,
+    "raw_cross_frame_relative_difference_percent": -0.6355956660110949,
+    "hidden_scale_or_offset_correction_applied": false
+  },
+  "quality_statistics": {
+    "measurements_with_status_pass": 120,
+    "measurements_within_validated_depth_range": 120,
+    "valid_pixel_ratio": {
+      "minimum": 1.0,
+      "median": 1.0,
+      "maximum": 1.0,
+      "mean": 1.0,
+      "threshold_minimum": 0.9
+    },
+    "disparity_median_px": {
+      "minimum": 67.0,
+      "median": 67.0,
+      "maximum": 67.0,
+      "mean": 67.0
+    },
+    "disparity_mad_px": {
+      "minimum": 0.0,
+      "median": 0.0,
+      "maximum": 0.0625,
+      "mean": 0.028645833333333332,
+      "threshold_maximum": 0.5
+    },
+    "depth_spatial_mad_m": {
+      "minimum": 0.0,
+      "median": 0.0,
+      "maximum": 0.0009232759475708008,
+      "mean": 0.000423168142636617,
+      "threshold_maximum": 0.02
+    },
+    "validated_ground_truth_distance_range_m": [
+      0.4,
+      2.5
+    ],
+    "measured_depth_acceptance_range_m": [
+      0.38,
+      2.55
+    ]
+  },
+  "temperatures": {
+    "unit": "C",
+    "ambient": {
+      "minimum": 25.9375,
+      "median": 25.9375,
+      "maximum": 25.9375,
+      "role": "OBSERVATIONAL"
+    },
+    "camera_left": {
+      "minimum": 31.25,
+      "median": 31.25,
+      "maximum": 31.25,
+      "validated_envelope": [
+        30.0,
+        32.375
+      ],
+      "role": "GATING"
+    },
+    "camera_right": {
+      "minimum": 32.0,
+      "median": 32.0,
+      "maximum": 32.0,
+      "validated_envelope": [
+        31.125,
+        33.9375
+      ],
+      "role": "GATING"
+    },
+    "state_age_s": {
+      "minimum": 0.0011932849884033203,
+      "median": 0.9941343069076538,
+      "maximum": 1.9890563488006592,
+      "mean": 0.9910202662150065,
+      "threshold_maximum": 5.0
+    },
+    "gate_violations": 0
+  },
+  "reference_frames": {
+    "measurement": "rectified_left_optical_frame",
+    "ground_truth": "physical_left_lens_front_rim_frame",
+    "axial_transform": "Z_rectified_left_optical = Z_lens_front_rim + t_z",
+    "t_z_status": "PENDING",
+    "difference_classification": "RAW_CROSS_FRAME_DIFFERENCE"
+  },
+  "evidence": {
+    "console_log": {
+      "path": "/home/stanislav/sie_rgb_stereo_fusion/stereo_calibration_v6/runtime_v2_canonical_main_smoke_v1/run03/console.log",
+      "sha256": "4b0dc2f6bf97db20f8b0b2460568ef100fbea4af2bcefdd48cd35bdddbcf3fca",
+      "line_count": 125
+    },
+    "measurements_jsonl": {
+      "path": "/home/stanislav/sie_rgb_stereo_fusion/stereo_calibration_v6/runtime_v2_canonical_main_smoke_v1/run03/measurements.jsonl",
+      "sha256": "0a0b1a77716a10b260dad2914e388497b3276fd5abbf55b2157e77852c5f6d61",
+      "line_count": 120
+    },
+    "console_measurements_match_jsonl": true
+  },
+  "conclusion": {
+    "canonical_main_runtime_smoke": "PASS",
+    "measurement_quality": "PASS",
+    "temperature_applicability": "PASS",
+    "accepted_as_deployment_evidence": true,
+    "new_operating_range_claim": false,
+    "operating_envelope_changed": false
+  }
+}
