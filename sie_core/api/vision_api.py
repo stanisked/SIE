@@ -1,7 +1,10 @@
+import numpy as np
+
 from sie_core.depth.roi import ROIStableDepth
 from sie_core.contracts import Evidence
 from vision_core.measurement import Measurement
 from vision_core.observation import Observation
+from vision_core.quality import QualityReport
 
 
 class VisionAPI:
@@ -64,8 +67,17 @@ class VisionAPI:
 
         confidence = self.quality.evaluate(disparity)
         confidence_value = float(confidence["confidence"])
+        roi = roi_estimator.center_roi(depth)
+        valid = roi[np.isfinite(roi) & (roi > 0)]
+        quality_report = QualityReport(
+            valid=len(valid) > 100,
+            confidence=min(1.0, len(valid) / (roi.size + 1e-6)),
+            valid_points=len(valid),
+            roi_size_px=(roi.shape[1], roi.shape[0]),
+            depth_std_mm=float(np.std(valid)) if len(valid) > 0 else None,
+        )
         roi_depth = roi_estimator.center_roi_depth(depth)
-        status = "VALID" if roi_depth is not None and confidence_value > 0.0 else "INVALID"
+        status = "VALID" if roi_depth is not None and quality_report.valid else "INVALID"
 
         evidence = Evidence(
             evidence_id="evidence.stereo_frame.current",
@@ -89,9 +101,7 @@ class VisionAPI:
             observation=observation,
             reference_frame=reference_frame,
             confidence=confidence_value,
-            quality={
-                "confidence_signals": confidence,
-            },
+            quality=quality_report.to_dict(),
             status=status,
             estimator=roi_estimator.__class__.__name__,
         )
@@ -104,6 +114,7 @@ class VisionAPI:
                 "depth": depth,
                 "disparity": disparity,
                 "confidence": confidence,
+                "roi": roi,
             },
         }
 

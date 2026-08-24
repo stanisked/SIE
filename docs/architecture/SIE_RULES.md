@@ -392,7 +392,7 @@ Applicable Rules:
 - DM-005
 - DM-006
 - DM-007
-
+- DM-008
 ---
 
 # 6. Spatial Rules

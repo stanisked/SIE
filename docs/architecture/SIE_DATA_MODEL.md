@@ -270,6 +270,26 @@ Every SIE module SHALL exchange information using the canonical engineering obje
 Implementation-specific structures SHALL remain internal.
 
 ---
+## DM-008
+
+### Title
+
+Measurement Quality Evidence
+
+### Status
+
+Approved
+
+### Level
+
+MUST
+
+### Requirement
+
+Every published Measurement MUST include an explicit quantitative quality assessment and explainable evidence supporting its acceptance or rejection.
+
+Measurements without traceable quality evidence MUST NOT be used for engineering decisions.
+
 
 # 16. References
 

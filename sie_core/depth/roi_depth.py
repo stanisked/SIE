@@ -7,7 +7,7 @@ class ROIDepthEstimator:
             raise ValueError("kernel_size must be >= 1")
         self.k = kernel_size
 
-    def center_roi_depth(self, depth_map):
+    def center_roi(self, depth_map):
         depth = np.asarray(depth_map, dtype=np.float32)
         h, w = depth.shape
 
@@ -16,8 +16,11 @@ class ROIDepthEstimator:
         y1 = max(0, h // 2 - self.k)
         y2 = min(h, h // 2 + self.k)
 
-        roi = depth[y1:y2, x1:x2]
-        roi = roi[np.isfinite(roi)]
+        return depth[y1:y2, x1:x2]
+
+    def center_roi_depth(self, depth_map):
+        roi = self.center_roi(depth_map)
+        roi = roi[np.isfinite(roi) & (roi > 0)]
 
         if len(roi) == 0:
             return None

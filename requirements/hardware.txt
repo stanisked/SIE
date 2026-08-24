@@ -1,0 +1,3 @@
+-r base.txt
+# Add platform-specific camera and hardware dependencies here.
+

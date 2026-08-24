@@ -1,0 +1,214 @@
+{
+  "schema_version": "sie_stereo_runtime_deployment_challenge_v1",
+  "report_id": "stereo_calibration_v6_runtime_v2_deployment_challenge_run01",
+  "created_at": "2026-08-24T09:04:14.832783Z",
+  "status": "PASS_RUNTIME_V2_LIVE_CHALLENGE",
+  "git": {
+    "branch": "consolidation/sie-v6-20260822",
+    "commit": "0f0b83fe5fef5cb8f8ef409ed2da2a1aed4d2ba1"
+  },
+  "software_chain": {
+    "runtime": {
+      "path": "vision_core/stereo/guarded_runtime_v6_v2.py",
+      "sha256": "54ac3c7a9d64cbdf6c1eb7fe5c1470a77ff88a1527be81624699b0f9230df3d9"
+    },
+    "runner": {
+      "path": "vision_core/tools/run_guarded_stereo_v6_v2.py",
+      "sha256": "afc9d7a06674cd70a58082c7c1c4efe8a5ef0884a6fd39bb222c96b0cd29749f"
+    },
+    "policy": {
+      "path": "vision_core/config/runtime/stereo_calibration_v6_runtime_policy_v2.json",
+      "sha256": "0027a7914d474f9a50dc325260e730a03348e363f3e61f80609a4069cc7a2d71",
+      "status": "ENABLED"
+    },
+    "activation": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_activation_conditional_v2.json",
+      "sha256": "e38000102dd85bba56a0d256986d1ddf67d801fdb8b73d01e0d649a51333dc7d",
+      "status": "ACTIVE_CONDITIONAL"
+    },
+    "calibration": {
+      "calibration_id": "stereo_calibration_v6",
+      "sha256": "bb8fb665c6e06e2cbb633cf4c3c61aa74933dd253c9c7950a8420591975dd5e7"
+    },
+    "runtime_profile_id": "stereo_runtime_v2_sgbm192_roi100",
+    "num_disparities": 192
+  },
+  "run": {
+    "run_id": "stereo-v6-b3586c55-bec7-4087-a8a9-189667e07f03",
+    "device": "/dev/video2",
+    "capture_mode": "MJPG 2560x800 @ 60 FPS",
+    "warmup_frames": 180,
+    "processed_depth_frames": 120,
+    "emitted_measurements": 13,
+    "measurement_frame_sequences": [
+      9,
+      18,
+      27,
+      36,
+      45,
+      54,
+      63,
+      72,
+      81,
+      90,
+      99,
+      108,
+      117
+    ],
+    "measurement_sequence_step": 9,
+    "non_emitted_processed_frames": 107,
+    "roi_depth_rejected_events": 0,
+    "first_measurement_at": "2026-08-24T08:45:14.538629+00:00",
+    "last_measurement_at": "2026-08-24T08:45:39.843818+00:00",
+    "console_status_counts": {
+      "CAMERA_OPEN": 1,
+      "CAMERA_WARMUP_FRAMES_COMPLETE": 1,
+      "ACTIVE": 1,
+      "SIE_MEASUREMENT": 13,
+      "COMPLETED": 1
+    }
+  },
+  "measurement_cadence": {
+    "console_interval_s": 2.0,
+    "stream_behavior": "INTENTIONALLY_RATE_LIMITED_BY_CONSOLE_INTERVAL",
+    "measurement_append_is_inside_console_interval_branch": true,
+    "non_emitted_frames_are_rejected": false,
+    "explanation": "ROI diagnostics are computed for every processed frame, but PASS/REJECT publication and Measurement JSONL append occur only when now - interval_started is at least console_interval_s.",
+    "processing_fps": {
+      "minimum": 3.9076675844341584,
+      "median": 4.297174040602614,
+      "maximum": 4.378820883081224,
+      "mean": 4.270440965172856
+    },
+    "observed_emission_interval_s": {
+      "minimum": 2.055339,
+      "median": 2.091938,
+      "maximum": 2.303118,
+      "mean": 2.10876575
+    }
+  },
+  "ground_truth": {
+    "value_mm": 997.0,
+    "reference_frame": "physical_left_lens_front_rim_frame",
+    "datum_description": "approximately 1000 mm physical challenge datum",
+    "axial_transform_t_z_status": "PENDING",
+    "direct_absolute_comparison_approved": false
+  },
+  "depth_statistics": {
+    "unit": "mm",
+    "reference_frame": "rectified_left_optical_frame",
+    "minimum": 989.7398352622986,
+    "median": 990.6631112098694,
+    "maximum": 990.6631112098694,
+    "mean": 990.5920899831332,
+    "raw_cross_frame_difference_mm": -6.336889,
+    "raw_cross_frame_difference_exact_mm": -6.336888790130615,
+    "raw_cross_frame_relative_difference_percent": -0.635596,
+    "raw_cross_frame_relative_difference_exact_percent": -0.6355956660110949,
+    "hidden_scale_or_offset_correction_applied": false
+  },
+  "quality_statistics": {
+    "measurements_with_status_pass": 13,
+    "measurements_within_validated_depth_range": 13,
+    "valid_pixel_ratio": {
+      "minimum": 1.0,
+      "median": 1.0,
+      "maximum": 1.0,
+      "threshold_minimum": 0.9
+    },
+    "disparity_median_px": {
+      "minimum": 67.0,
+      "median": 67.0,
+      "maximum": 67.0625,
+      "mean": 67.0048076923077
+    },
+    "disparity_mad_px": {
+      "minimum": 0.0,
+      "median": 0.0625,
+      "maximum": 0.0625,
+      "mean": 0.04326923076923077,
+      "threshold_maximum": 0.5
+    },
+    "depth_spatial_mad_m": {
+      "minimum": 0.0,
+      "median": 0.0009232759475708008,
+      "maximum": 0.0009232759475708008,
+      "mean": 0.000639191040625939,
+      "threshold_maximum": 0.02
+    },
+    "measured_depth_acceptance_range_m": [
+      0.38,
+      2.55
+    ]
+  },
+  "temperatures": {
+    "unit": "C",
+    "ambient": {
+      "minimum": 25.6875,
+      "median": 25.6875,
+      "maximum": 25.6875,
+      "role": "OBSERVATIONAL"
+    },
+    "camera_left": {
+      "minimum": 30.5,
+      "median": 30.5,
+      "maximum": 30.5,
+      "validated_envelope": [
+        30.0,
+        32.375
+      ],
+      "role": "GATING"
+    },
+    "camera_right": {
+      "minimum": 31.4375,
+      "median": 31.4375,
+      "maximum": 31.4375,
+      "validated_envelope": [
+        31.125,
+        33.9375
+      ],
+      "role": "GATING"
+    },
+    "state_age_s": {
+      "minimum": 0.7322885990142822,
+      "median": 1.4753520488739014,
+      "maximum": 1.9869968891143799,
+      "threshold_maximum": 5.0
+    },
+    "gate_violations": 0
+  },
+  "reference_frames": {
+    "measurement": "rectified_left_optical_frame",
+    "ground_truth": "physical_left_lens_front_rim_frame",
+    "axial_transform": "Z_rectified_left_optical = Z_lens_front_rim + t_z",
+    "t_z_status": "PENDING",
+    "difference_classification": "RAW_CROSS_FRAME_DIFFERENCE"
+  },
+  "evidence": {
+    "console_log": {
+      "path": "console.log",
+      "sha256": "47587501992ffef831c52f5b34aee64ab394730a75919c59079fa6a191d2b967",
+      "line_count": 17
+    },
+    "measurements_jsonl": {
+      "path": "measurements.jsonl",
+      "sha256": "8eeb718a68e5d48cfee708cb88fe62fc9edd71ca5b8cfcc7b521f322d3db64c1",
+      "line_count": 13
+    },
+    "console_measurements_match_jsonl": true
+  },
+  "deployment": {
+    "deployed": false,
+    "operational_source": "/home/stanislav/dev_ws/src/sie",
+    "operational_source_runtime": "V1",
+    "operational_source_modified": false,
+    "git_files_modified_by_analysis": false
+  },
+  "conclusion": {
+    "runtime_v2_live_challenge": "PASS",
+    "measurement_quality": "PASS",
+    "temperature_applicability": "PASS",
+    "new_operating_range_claim": false,
+    "deployment_authorized_by_this_report": false
+  }
+}

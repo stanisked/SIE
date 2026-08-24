@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "reference_side": "physical_left",
+  "corrected_side": "physical_right",
+  "method": "explicit_180_degree_full_corner_array_reversal",
+  "corrections": {
+    "pair_015.png": "reverse_right_180",
+    "pair_033.png": "reverse_right_180",
+    "pair_061.png": "reverse_right_180"
+  }
+}

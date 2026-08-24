@@ -1,0 +1,163 @@
+{
+  "schema_version": "sie_calibration_activation_v1",
+  "activation_id": "stereo_calibration_v6_conditional_runtime_2026-08-23_v2",
+  "activation_version": 2,
+  "calibration_id": "stereo_calibration_v6",
+  "calibration_sha256": "bb8fb665c6e06e2cbb633cf4c3c61aa74933dd253c9c7950a8420591975dd5e7",
+  "created_at": "2026-08-23T11:02:30.434074Z",
+  "status": "ACTIVE_CONDITIONAL",
+  "supersedes": {
+    "activation_id": "stereo_calibration_v6_conditional_runtime_2026-08-21_v1",
+    "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_activation_conditional_v1.json",
+    "sha256": "5d4c8020ed183af2fadd63bf63fff364bbf30c8849ba4b4591f0e18cb49bbb17"
+  },
+  "decision": {
+    "calibration_geometry": "PASS",
+    "fresh_checkerboard_rectification_gate": "PASS",
+    "physical_near_mid_mid_far_far_depth_validation": "PASS_CONDITIONAL",
+    "stable_warm_mid_far_repeatability": "PASS",
+    "stable_warm_far_repeatability": "PASS",
+    "strict_far_quality_consistency": "TWO_PASS_ONE_COVERAGE_FAIL",
+    "runtime_far_quality_under_frozen_0_90_coverage_threshold": "PASS",
+    "capture_thermal_status": "CAPTURE_THERMAL_PROVENANCE_INCOMPLETE",
+    "capture_thermal_exception": "accepted only inside the narrow independently observed V6 runtime envelope",
+    "camera_temperature_envelope": "APPROVED_CONDITIONAL_NARROW",
+    "ambient_temperature": "OBSERVATIONAL_ONLY",
+    "direct_absolute_cross_frame_accuracy": "NOT_APPROVED",
+    "unconditional_activation": false
+  },
+  "evidence": {
+    "calibration": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/solution_joint_refine_corner_order_filtered_freeze_v2_run07/stereo_params_v6.npz",
+      "sha256": "bb8fb665c6e06e2cbb633cf4c3c61aa74933dd253c9c7950a8420591975dd5e7"
+    },
+    "calibration_report": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/solution_joint_refine_corner_order_filtered_freeze_v2_run07/calibration_report.json",
+      "sha256": "d289e1725da3c1bb971f19114c988a88722e84db25fec40a2f0eb5f9fe769ab7"
+    },
+    "extended_range_review": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_extended_range_review_v1.json",
+      "sha256": "8ac1edfe9b70af249a4785cabe9cff13700472077fcfc1faf4fd891965a22ce3"
+    },
+    "strict_diagnostic_tool": {
+      "path": "vision_core/tools/diagnose_v5_stereo_runtime.py",
+      "sha256": "58a554687b708448d3d8eefa8f04172fe2aca417aca00903bb9243c43e7f3f84"
+    },
+    "solver_tool": {
+      "path": "vision_core/tools/stereo_calibration_v6_solver_v1_2.py",
+      "sha256": "661aadc2cdef0df7bc9d1b3a065f1464d6e24fa4b1b520323f08c768b30ce756"
+    },
+    "corner_order_corrections": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/corner_order_corrections_v1.json",
+      "sha256": "a61c2872860b044081c6bec46f336792d0ab0e99ae0fe16318b5071112c28440"
+    },
+    "stereo_calibration_guard_v6": {
+      "path": "vision_core/stereo/stereo_calibration_guard_v6.py",
+      "sha256": "42e8eff34700030e32cc0c1419122cd8e23e1d88055fc943f604fefb1f2e0d05"
+    },
+    "guarded_runtime_v6_v2": {
+      "path": "vision_core/stereo/guarded_runtime_v6_v2.py",
+      "sha256": "54ac3c7a9d64cbdf6c1eb7fe5c1470a77ff88a1527be81624699b0f9230df3d9"
+    },
+    "run_guarded_stereo_v6_v2": {
+      "path": "vision_core/tools/run_guarded_stereo_v6_v2.py",
+      "sha256": "afc9d7a06674cd70a58082c7c1c4efe8a5ef0884a6fd39bb222c96b0cd29749f"
+    },
+    "runtime_hardening_review_v2": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_runtime_hardening_review_v2.json",
+      "sha256": "1d0f5ec650ab2b9a20f142380088cefa346af734b46cd31e0cf24b33eb653390"
+    }
+  },
+  "known_limitations": [
+    "V6 capture thermal provenance is incomplete.",
+    "Activation is valid only while both camera temperatures remain inside the narrow recorded V6 envelope.",
+    "Ambient temperature is required as valid observational evidence but does not gate depth processing.",
+    "Ground-truth distances use physical_left_lens_front_rim_frame while measurements use rectified_left_optical_frame.",
+    "The axial transform between those reference-frame origins remains independently unsurveyed.",
+    "No direct absolute comparison or millimetre-level accuracy claim is approved across the full range.",
+    "No hidden depth scale or offset correction is permitted.",
+    "At the 2511 mm datum point the observed repeatable raw cross-frame difference is approximately -52.7 mm or -2.10 percent.",
+    "A small far target can occasionally reduce strict ROI coverage below 0.95 while remaining above the frozen runtime threshold of 0.90.",
+    "The broader inherited V5 temperature envelope is not activated for V6."
+  ],
+  "runtime_requirements": {
+    "temperature_bridge_required": true,
+    "all_temperature_channels_must_be_valid": true,
+    "gating_temperatures_must_be_inside_validated_envelope": true,
+    "observational_temperature_must_be_valid": true,
+    "outside_envelope_action": "BLOCK_DEPTH_MEASUREMENT",
+    "hidden_depth_scale_or_offset_correction_allowed": false,
+    "maximum_temperature_state_age_s": 5.0,
+    "capture_mode": "MJPG 2560x800 @ 60 FPS",
+    "measurement_reference_frame": "rectified_left_optical_frame",
+    "ground_truth_reference_frame": "physical_left_lens_front_rim_frame",
+    "direct_absolute_comparison_approved": false,
+    "runtime_camera_order": {
+      "K1_D1_R1_P1": "physical_left",
+      "K2_D2_R2_P2": "physical_right",
+      "combined_left_half": "physical_right",
+      "combined_right_half": "physical_left"
+    },
+    "roi_center_xy": [
+      650,
+      350
+    ],
+    "roi_size_px": [
+      100,
+      100
+    ],
+    "num_disparities": 192,
+    "validated_ground_truth_distance_range_m": [
+      0.4,
+      2.5
+    ],
+    "measured_depth_acceptance_range_m": [
+      0.38,
+      2.55
+    ],
+    "minimum_valid_pixel_ratio": 0.9,
+    "maximum_disparity_mad_px": 0.5,
+    "maximum_depth_spatial_mad_m": 0.02
+  },
+  "temperature_gating_channels": [
+    "camera_left",
+    "camera_right"
+  ],
+  "temperature_observational_channels": [
+    "ambient"
+  ],
+  "validated_temperature_envelope_c": {
+    "camera_left": {
+      "minimum_c": 30.0,
+      "maximum_c": 32.375
+    },
+    "camera_right": {
+      "minimum_c": 31.125,
+      "maximum_c": 33.9375
+    }
+  },
+  "validated_metrics": {
+    "calibration_left_rms_px": 0.32775126456189174,
+    "calibration_right_rms_px": 0.3481169091680384,
+    "calibration_stereo_rms_px": 0.35886563627583545,
+    "calibration_baseline_mm": 63.75409211903742,
+    "fresh_checkerboard_median_abs_dy_px": 0.104126,
+    "fresh_checkerboard_p95_abs_dy_px": 0.229604,
+    "fresh_checkerboard_max_abs_dy_px": 0.247162,
+    "fresh_checkerboard_positive_disparity_ratio": 1.0,
+    "near_ground_truth_datum_mm": 406.0,
+    "near_measured_optical_depth_mm": 402.26927399635315,
+    "mid_ground_truth_datum_mm": 1007.0,
+    "mid_measured_optical_depth_mm": 1004.721760749817,
+    "mid_far_ground_truth_datum_mm": 1785.0,
+    "mid_far_measured_optical_depth_mm": 1749.5731115341187,
+    "far_ground_truth_datum_mm": 2511.0,
+    "far_measured_optical_depth_mm": 2458.3120346069336,
+    "far_raw_cross_frame_relative_difference_percent": 2.0982861566334687,
+    "stable_warm_mid_far_temporal_median_span_m": 0.0,
+    "stable_warm_far_temporal_median_span_m": 0.0,
+    "observed_minimum_runtime_roi_valid_ratio": 0.9345,
+    "observed_maximum_runtime_disparity_mad_px": 0.25,
+    "observed_maximum_runtime_depth_mad_m": 0.011800050735473633
+  }
+}

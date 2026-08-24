@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sie"
+version = "0.1.0"
+description = "Spatial Intelligence Engine for robotics"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "opencv-python",
+]
+
+[tool.setuptools.packages.find]
+include = ["sie*"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"vision_core/vision_benchmark/hardware_audit/capture_raw_stereo_pairs.py" = ["F401"]

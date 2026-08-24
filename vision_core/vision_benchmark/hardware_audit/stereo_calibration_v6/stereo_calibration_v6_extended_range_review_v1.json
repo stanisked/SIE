@@ -1,0 +1,205 @@
+{
+  "schema_version": "sie_extended_depth_range_review_v1",
+  "created_at": "2026-08-21T13:49:54.599531+00:00",
+  "calibration_modified": false,
+  "candidate_runtime_profile_id": "stereo_runtime_v2_sgbm192_roi100",
+  "decision": {
+    "calibration_activation_modified": true,
+    "runtime_profile_activation_eligible": true,
+    "status": "PASS_CONDITIONAL"
+  },
+  "evidence": {
+    "calibration": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/solution_joint_refine_corner_order_filtered_freeze_v2_run07/stereo_params_v6.npz",
+      "sha256": "bb8fb665c6e06e2cbb633cf4c3c61aa74933dd253c9c7950a8420591975dd5e7"
+    },
+    "calibration_report": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/solution_joint_refine_corner_order_filtered_freeze_v2_run07/calibration_report.json",
+      "sha256": "d289e1725da3c1bb971f19114c988a88722e84db25fec40a2f0eb5f9fe769ab7"
+    },
+    "fresh_checkerboard_run04": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/fresh_checkerboard_validation_v1/run04/checkerboard_gate.json",
+      "sha256": "349ca5e827bbfd1f84e285d063b9dacc4d125d2b470cdb46257f2fc9560133f9"
+    },
+    "near_406mm_run01": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/physical_depth_validation_v1/near_406mm_run01/depth_validation.json",
+      "sha256": "26bb2752285af8d4726422a9e5b723c87562b9e2f59bbfc58b842d6c96c87143"
+    },
+    "mid_1007mm_run01": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/physical_depth_validation_v1/mid_1007mm_run01/depth_validation.json",
+      "sha256": "e457f44d0333b6959e56010466ada491c1221c4c0116c66bdc4ba0a97e2838e1"
+    },
+    "mid_far_1785mm_run04": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/physical_depth_validation_v1/mid_far_1785mm_run04/depth_validation.json",
+      "sha256": "8e3481fc7c7d5ef96a3e42e46744b998e5a38c71508aa46720f3db3edeff8c5c"
+    },
+    "mid_far_1785mm_run05": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/physical_depth_validation_v1/mid_far_1785mm_run05/depth_validation.json",
+      "sha256": "bec31501f3d74a90a5e8337c18a7a40dcd7cb6966ea56a7239c22bd6b20d3efc"
+    },
+    "mid_far_1785mm_run06": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/physical_depth_validation_v1/mid_far_1785mm_run06/depth_validation.json",
+      "sha256": "175bd25f6beaefda6d4876a47d09c7261285e10e5eb777149cf7ab1d96e88f82"
+    },
+    "far_2511mm_run02": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/physical_depth_validation_v1/far_2511mm_run02/depth_validation.json",
+      "sha256": "0fbca0eed67d202b62a46b9d5ad48c6a0103c25403c341ea9dc21a006970ad01"
+    },
+    "far_2511mm_run03": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/physical_depth_validation_v1/far_2511mm_run03/depth_validation.json",
+      "sha256": "ccfa76b22a77160b8dc442e474a4116118af66d2ba6205d9c68b7d245cf7f055"
+    },
+    "far_2511mm_run04": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/physical_depth_validation_v1/far_2511mm_run04/depth_validation.json",
+      "sha256": "c2fcb0912c1081f860b5906513e2c98dbbe04f8786158c048b5ddccb552da14b"
+    },
+    "strict_diagnostic_tool": {
+      "path": "vision_core/tools/diagnose_v5_stereo_runtime.py",
+      "sha256": "58a554687b708448d3d8eefa8f04172fe2aca417aca00903bb9243c43e7f3f84"
+    },
+    "solver_tool": {
+      "path": "vision_core/tools/stereo_calibration_v6_solver_v1_2.py",
+      "sha256": "661aadc2cdef0df7bc9d1b3a065f1464d6e24fa4b1b520323f08c768b30ce756"
+    },
+    "corner_order_corrections": {
+      "path": "vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/corner_order_corrections_v1.json",
+      "sha256": "a61c2872860b044081c6bec46f336792d0ab0e99ae0fe16318b5071112c28440"
+    }
+  },
+  "hidden_depth_scale_or_offset_correction_applied": false,
+  "limitations": [
+    "The V6 capture thermal provenance is incomplete and is accepted only inside the independently observed conditional runtime envelope.",
+    "Ground-truth distances were measured from physical_left_lens_front_rim_frame while stereo depth is expressed in rectified_left_optical_frame.",
+    "The axial transform between the lens front rim and effective optical centre remains independently unsurveyed.",
+    "Raw cross-frame differences are evidence and are not a runtime scale or offset correction.",
+    "At 2511 mm the repeatable raw cross-frame difference is approximately -52.7 mm or -2.10 percent.",
+    "One far frame failed only the strict 0.95 ROI coverage threshold; all far frames passed the frozen runtime threshold of 0.90.",
+    "The initial V6 conditional temperature envelope is intentionally narrower than the inherited V5 envelope.",
+    "Millimetre-level absolute accuracy is not claimed across the full validated range."
+  ],
+  "review_basis": {
+    "calibration_geometry": {
+      "used_pairs": 55,
+      "outliers": 19,
+      "left_rms_px": 0.32775126456189174,
+      "right_rms_px": 0.3481169091680384,
+      "stereo_rms_px": 0.35886563627583545,
+      "baseline_mm": 63.75409211903742,
+      "rectification_median_abs_dy_px": 0.12044525146484375,
+      "rectification_p95_abs_dy_px": 0.4134780883789062,
+      "positive_disparity_ratio": 1.0,
+      "status": "PASS"
+    },
+    "fresh_checkerboard_run04": {
+      "detection_left": "54/54",
+      "detection_right": "54/54",
+      "right_detector_order_reversed": false,
+      "median_signed_dy_px": -0.012299,
+      "median_abs_dy_px": 0.104126,
+      "p95_abs_dy_px": 0.229604,
+      "max_abs_dy_px": 0.247162,
+      "within_0_25_px_ratio": 1.0,
+      "within_0_50_px_ratio": 1.0,
+      "within_1_00_px_ratio": 1.0,
+      "positive_disparity_ratio": 1.0,
+      "temperatures_c": {
+        "ambient": 27.1875,
+        "camera_left": 30.5,
+        "camera_right": 31.9375
+      },
+      "status": "PASS"
+    },
+    "depth_points": [
+      {
+        "label": "near",
+        "ground_truth_datum_mm": 406.0,
+        "measured_optical_depth_mm": 402.26927399635315,
+        "raw_cross_frame_difference_mm": -3.7307260036468506,
+        "raw_cross_frame_relative_difference_percent": 0.918897,
+        "roi_valid_ratio": 1.0,
+        "disparity_mad_px": 0.0,
+        "depth_mad_m": 0.0,
+        "runtime_profile_status": "PASS"
+      },
+      {
+        "label": "mid",
+        "ground_truth_datum_mm": 1007.0,
+        "measured_optical_depth_mm": 1004.721760749817,
+        "raw_cross_frame_difference_mm": -2.2782392501831055,
+        "raw_cross_frame_relative_difference_percent": 0.226240,
+        "roi_valid_ratio": 1.0,
+        "disparity_mad_px": 0.0625,
+        "depth_mad_m": 0.0009497404098510742,
+        "runtime_profile_status": "PASS"
+      },
+      {
+        "label": "mid_far_stable_warm_triple",
+        "ground_truth_datum_mm": 1785.0,
+        "measured_optical_depth_median_mm": 1749.5731115341187,
+        "raw_cross_frame_difference_mm": -35.42688846588135,
+        "raw_cross_frame_relative_difference_percent": 1.984699,
+        "temporal_median_depth_span_m": 0.0,
+        "minimum_roi_valid_ratio": 1.0,
+        "maximum_disparity_mad_px": 0.0625,
+        "maximum_depth_mad_m": 0.0028775930404663086,
+        "sample_count": 3,
+        "runtime_profile_status": "PASS"
+      },
+      {
+        "label": "far_stable_warm_triple",
+        "ground_truth_datum_mm": 2511.0,
+        "measured_optical_depth_median_mm": 2458.3120346069336,
+        "raw_cross_frame_difference_mm": -52.687965393066406,
+        "raw_cross_frame_relative_difference_percent": 2.0982861566334687,
+        "temporal_median_depth_span_m": 0.0,
+        "minimum_roi_valid_ratio": 0.9345,
+        "maximum_disparity_mad_px": 0.0625,
+        "maximum_depth_mad_m": 0.005703926086425781,
+        "sample_count": 3,
+        "strict_diagnostic_pass_count": 2,
+        "strict_diagnostic_fail_count": 1,
+        "runtime_profile_pass_count": 3,
+        "runtime_profile_status": "PASS"
+      }
+    ],
+    "reason": "All selected depth runs pass the frozen SGBM192 ROI100 runtime thresholds. The single strict far rejection is caused only by 0.9345 ROI coverage being below the diagnostic 0.95 threshold while remaining above the runtime 0.90 threshold. Stable warm triples reproduce identical median depths without any correction."
+  },
+  "review_status": "PASS_CONDITIONAL",
+  "validated_operating_claim": {
+    "ground_truth_distance_range_m": [
+      0.4,
+      2.5
+    ],
+    "ground_truth_reference_frame": "physical_left_lens_front_rim_frame",
+    "direct_absolute_comparison_approved": false,
+    "maximum_depth_spatial_mad_m": 0.02,
+    "maximum_disparity_mad_px": 0.5,
+    "measured_depth_acceptance_range_m": [
+      0.38,
+      2.55
+    ],
+    "measurement_reference_frame": "rectified_left_optical_frame",
+    "minimum_valid_pixel_ratio": 0.9,
+    "observed_maximum_depth_spatial_mad_m": 0.011800050735473633,
+    "observed_maximum_disparity_mad_px": 0.25,
+    "observed_minimum_roi_valid_ratio": 0.9345,
+    "observed_maximum_raw_cross_frame_relative_difference_percent": 2.0982861566334687
+  },
+  "validated_temperature_envelope_c": {
+    "camera_left": {
+      "minimum_c": 30.0,
+      "maximum_c": 32.375
+    },
+    "camera_right": {
+      "minimum_c": 31.125,
+      "maximum_c": 33.9375
+    }
+  },
+  "temperature_gating_channels": [
+    "camera_left",
+    "camera_right"
+  ],
+  "temperature_observational_channels": [
+    "ambient"
+  ]
+}
