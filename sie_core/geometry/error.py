@@ -11,7 +11,7 @@ class ErrorPropagation:
         return sigma_z
 
     def point_uncertainty(self, u, v, depth, sigma_depth, fx, fy, cx, cy):
-        z = float(depth)
+        _validated_depth = float(depth)
         sigma_z = float(sigma_depth)
 
         sigma_x = abs((u - cx) / fx) * sigma_z
