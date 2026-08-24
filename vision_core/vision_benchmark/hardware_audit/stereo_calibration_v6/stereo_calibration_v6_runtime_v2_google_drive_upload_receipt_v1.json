@@ -1,0 +1,106 @@
+{
+  "schema_version": "sie_google_drive_upload_receipt_v1",
+  "stage": "Stage 14",
+  "upload_id": "sie_v6_runtime_v2_deployment_20260824",
+  "completed_at_utc": "2026-08-24T14:58:20Z",
+  "status": "COMPLETE",
+  "destination": {
+    "account": "intelenge@gmail.com",
+    "folder_id": "1LNbl2MtRgAyCH3nhnI4694QrEGrmgxTl",
+    "folder_url": "https://drive.google.com/drive/folders/1LNbl2MtRgAyCH3nhnI4694QrEGrmgxTl"
+  },
+  "package": {
+    "archive_name": "SIE_V6_RUNTIME_V2_DEPLOYMENT_20260824.tar.gz",
+    "archive_sha256": "a71b17cc7d351468ec545564b4767369b03968ffd284e5081a70559d4059eb15",
+    "package_manifest_sha256": "4a3a17fcc6003063a2c2d89ef9531c0dacb043995b48d81a62b672be7c76171e",
+    "sha256_manifest_sha256": "2ff83a04f2f3b1d579caea8bef11002d5cac804ad7723264aeaae08d167971cc",
+    "local_verification": {
+      "gzip_test": "PASS",
+      "sha256sum_check": "PASS",
+      "json_and_jsonl_parse": "PASS",
+      "git_bundle_verify": "PASS_COMPLETE_HISTORY",
+      "symlinks_present": false
+    }
+  },
+  "evidence_classification": {
+    "run01": "NOT_ACCEPTED_MULTI_SESSION",
+    "run02": "PASS_FAIL_CLOSED_RECOVERY_NOT_STEADY_STATE",
+    "run03": "PASS_RUNTIME_V2_CANONICAL_MAIN_SMOKE"
+  },
+  "uploaded_files": [
+    {
+      "path": "PACKAGE_MANIFEST.json",
+      "sha256": "4a3a17fcc6003063a2c2d89ef9531c0dacb043995b48d81a62b672be7c76171e",
+      "drive_file_id": "1cAVMZ6eH8Pb0wbiU3Spr9tA_ImmOEchb"
+    },
+    {
+      "path": "SHA256SUMS.txt",
+      "sha256": "2ff83a04f2f3b1d579caea8bef11002d5cac804ad7723264aeaae08d167971cc",
+      "drive_file_id": "1Jvsrsfrw2FW9nX5aUtEcqoThcBgAgUWU"
+    },
+    {
+      "path": "SIE_V6_RUNTIME_V2_DEPLOYMENT_20260824.tar.gz",
+      "sha256": "a71b17cc7d351468ec545564b4767369b03968ffd284e5081a70559d4059eb15",
+      "drive_file_id": "10bRmGreHCVV7Nh3tEuKsEUl7bVlzwB-z"
+    },
+    {
+      "path": "repository/AGENTS.md",
+      "sha256": "172e980b141c571a53f2b22f6bbc08af367ea9d6a70fe0e28db50144711639d5",
+      "drive_file_id": "1BbjL5InTzKpKk7oeWhD7qlJQc2qZh_tC"
+    },
+    {
+      "path": "repository/V6_HANDOFF.md",
+      "sha256": "c5a7bfac97b52cf4548560a6f22307a83a86a89feddbe01cc00d21fd19c496a8",
+      "drive_file_id": "16rSaoOIItVroAMzeFYYhQjaD_lML0-l4"
+    },
+    {
+      "path": "repository/canonical_main_smoke_report.json",
+      "sha256": "8c3df6d9bc70515bf33b0157a08922fc22d06a7417805a2600079c1f70a9fb7f",
+      "drive_file_id": "1oBrt3KI1gJNKUQwGRkFwD9tdq62gTG3J"
+    },
+    {
+      "path": "repository/stereo_calibration_v6_runtime_v2_deployment_record_v1.json",
+      "sha256": "18563245d47797bd6e5a8254a30f90089e9058042ffc79ac2249e85c93941c32",
+      "drive_file_id": "1GgrAQ_XOHuX1ibxc4SI2Re-ZvgqVa3Pt"
+    },
+    {
+      "path": "evidence/run01_NOT_ACCEPTED_MULTI_SESSION/console.log",
+      "sha256": "b708c5469401fd0d230a5e24c741360cd58f6bfda6b6181cbcb5508e5b047163",
+      "drive_file_id": "1IRqEavxQRH8vH3OUWkaH9V0VnLDvU50Q"
+    },
+    {
+      "path": "evidence/run01_NOT_ACCEPTED_MULTI_SESSION/measurements.jsonl",
+      "sha256": "a2a3e367701e50cff4982d96ed9e2f96c355e3e262ed88cd0ee090128c286c28",
+      "drive_file_id": "1AM5Wit-o0ogpc9t3KdAjVHuwDadNkKvA"
+    },
+    {
+      "path": "evidence/run02_FAIL_CLOSED_RECOVERY/console.log",
+      "sha256": "ed0248a768a6dbe3d261df81900014b1b4fab8dc47787606fbe42f75da4c8afb",
+      "drive_file_id": "1TXKzi5wSetnOOsX3Szj_TcaXwRgSQdn5"
+    },
+    {
+      "path": "evidence/run02_FAIL_CLOSED_RECOVERY/measurements.jsonl",
+      "sha256": "51117e21476b23048a55c25f329df6c1245f70fe9ec885ca1167a84f05a644f8",
+      "drive_file_id": "1KdP94SICsWb_qZOJS4YGAuMMeChKz-5F"
+    },
+    {
+      "path": "evidence/run03_ACCEPTED_CANONICAL_MAIN_SMOKE/console.log",
+      "sha256": "4b0dc2f6bf97db20f8b0b2460568ef100fbea4af2bcefdd48cd35bdddbcf3fca",
+      "drive_file_id": "1mbpEDGXznxUuYxtFJoQ2e_l1-2UfkMcQ"
+    },
+    {
+      "path": "evidence/run03_ACCEPTED_CANONICAL_MAIN_SMOKE/measurements.jsonl",
+      "sha256": "0a0b1a77716a10b260dad2914e388497b3276fd5abbf55b2157e77852c5f6d61",
+      "drive_file_id": "1wh40pRX7zbhxJORprgMMJDNXdiTMNjYf"
+    },
+    {
+      "path": "recovery/sie_all_refs_after_v6_v2_deployment_20260824.bundle",
+      "sha256": "9d8541e025ca0d457e2cf4e1f436ba776f1b9985c37f4f7692d474465258522b",
+      "drive_file_id": "1WANiA2uJmonQNGLP5YEXZ4MdxYKbpctS"
+    }
+  ],
+  "immutable_manifest_note": "PACKAGE_MANIFEST.json records google_drive_upload=PENDING because it was frozen before upload. This receipt records completion without modifying the frozen package or its checksums.",
+  "deployment_claim_changed": false,
+  "operating_envelope_changed": false,
+  "hidden_depth_scale_or_offset_correction_applied": false
+}

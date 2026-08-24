@@ -538,6 +538,38 @@ untouched as a V1 rollback snapshot. Rollback must be explicit and manual.
 `t_z` remains pending. No temperature envelope, operating range, Measurement
 range, geometry, scale, or offset correction changed during deployment.
 
+### 12.4 Stage 14 Google Drive archive
+
+```text
+google_drive_archive_status: COMPLETE
+folder_id: 1LNbl2MtRgAyCH3nhnI4694QrEGrmgxTl
+folder_url: https://drive.google.com/drive/folders/1LNbl2MtRgAyCH3nhnI4694QrEGrmgxTl
+```
+
+| Archive evidence | SHA-256 |
+| --- | --- |
+| `vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/stereo_calibration_v6_runtime_v2_google_drive_upload_receipt_v1.json` | `9110b37de533653c75c5b5e545dcb9d8c9812b7a9d6101773d1c9f6268d23b01` |
+| `SIE_V6_RUNTIME_V2_DEPLOYMENT_20260824.tar.gz` | `a71b17cc7d351468ec545564b4767369b03968ffd284e5081a70559d4059eb15` |
+| `sie_all_refs_after_v6_v2_deployment_20260824.bundle` | `9d8541e025ca0d457e2cf4e1f436ba776f1b9985c37f4f7692d474465258522b` |
+
+Stage 15A verified that all `14/14` package files are present in Google Drive
+and that their Drive byte sizes match the corresponding local files. Evidence
+classifications are preserved exactly:
+
+- `run01 = NOT_ACCEPTED_MULTI_SESSION`;
+- `run02 = PASS_FAIL_CLOSED_RECOVERY_NOT_STEADY_STATE`;
+- `run03 = PASS_RUNTIME_V2_CANONICAL_MAIN_SMOKE`.
+
+The frozen `PACKAGE_MANIFEST.json` intentionally retains its historical
+`google_drive_upload=PENDING` value. It is not rewritten after upload. The
+separate receipt above closes the actual Google Drive upload with status
+`COMPLETE` while preserving the frozen package and its checksums.
+
+Deployment remains `DEPLOYED_CONDITIONAL`. Calibration, guard, runtime,
+activation, review, and policy artifacts are unchanged. The operating envelope
+and Measurement range were not expanded, `t_z` remains `PENDING`, and no hidden
+depth scale or offset correction was applied.
+
 ## 13. Protected V5 reference
 
 | File | SHA-256 |
