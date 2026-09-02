@@ -69,11 +69,27 @@ def validate_dataset_status(status: object) -> str:
     if type(status) is not str or status not in {"PHASE_A_COMPLETE_PHASE_B_PENDING", "COMPLETE"}:
         raise ChallengeError("DATASET_NOT_PHASE_A_FINAL")
     return status
+def validate_expected_person_count(value: object) -> int:
+    if type(value) is not int or value not in {0, 1, 2}: raise ChallengeError("INVALID_EXPECTED_PERSON_COUNT")
+    return value
+def calculate_threshold_metrics(rows, thresholds):
+    if not rows: raise ChallengeError("EMPTY_DATASET_RECORDS")
+    expected=[validate_expected_person_count(x.get("expected_person_count")) for x in rows]
+    latency=np.array([float(x["inference_latency_ms"]) for x in rows])
+    result=[]
+    for threshold in thresholds:
+        outcomes=[next(x for x in row["threshold_sweep"] if x["threshold"] == threshold) for row in rows]
+        counts=[int(x["detected_count"]) for x in outcomes]
+        result.append({"threshold":threshold,"exact_count_accuracy":sum(a==b for a,b in zip(expected,counts))/len(rows),"empty_false_positives":sum(x["detected_count"]>0 for x,e in zip(outcomes,expected) if e==0),"single_person_detections":sum(x["detected_count"]==1 for x,e in zip(outcomes,expected) if e==1),"multiple_persons_on_single_expected":sum(x["detected_count"]>1 for x,e in zip(outcomes,expected) if e==1),"median_latency_ms":float(np.median(latency)),"p95_latency_ms":float(np.percentile(latency,95))})
+    return result
 def run_challenge(dataset_root: Path, model_path: Path, reference_path: Path) -> dict[str, object]:
     manifest_path=dataset_root/'dataset_manifest.json'; manifest=json.loads(manifest_path.read_text())
     validate_dataset_status(manifest.get('status'))
-    records=manifest['records']
-    if len(records)!=16: raise ChallengeError('EXPECTED_16_PHASE_A_RECORDS')
+    records=manifest.get('records')
+    if type(records) is not list or not records: raise ChallengeError('EMPTY_DATASET_RECORDS')
+    for record in records:
+        if type(record) is not dict: raise ChallengeError('INVALID_DATASET_RECORD')
+        validate_expected_person_count(record.get('expected_person_count'))
     net=load_net(model_path); net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV); net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU); priors=anchors(reference_path)
     rows=[]
     for record in records:
@@ -83,10 +99,8 @@ def run_challenge(dataset_root: Path, model_path: Path, reference_path: Path) ->
         for threshold in (0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50):
             found = decode(outputs, priors, transform, threshold); sweep.append({'threshold': threshold, 'candidates_above_threshold': int(np.count_nonzero(scores >= threshold)), 'detected_count': len(found), 'status': status_for_count(len(found))})
         found=decode(outputs,priors,transform); count=len(found); rows.append({'scenario_id':record['scenario_id'],'expected_person_count':record['expected_person_count'],'max_sigmoid_score':float(np.max(scores)),'threshold_sweep':sweep,'detected_count':count,'status':status_for_count(count),'detections':found,'inference_latency_ms':latency})
-    expected=[x['expected_person_count'] for x in rows]; detected=[x['detected_count'] for x in rows]; lat=np.array([x['inference_latency_ms'] for x in rows])
-    threshold_metrics = []
-    for threshold in (0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.40, 0.50):
-        outcomes = [next(x for x in row['threshold_sweep'] if x['threshold'] == threshold) for row in rows]
-        counts = [x['detected_count'] for x in outcomes]
-        threshold_metrics.append({'threshold': threshold, 'exact_count_accuracy': sum(a == b for a,b in zip(expected, counts))/len(rows), 'empty_false_positives': sum(x['detected_count'] > 0 for x in outcomes[:3]), 'single_person_detections': sum(x['detected_count'] == 1 for x in outcomes[3:]), 'multiple_persons_on_single_expected': sum(x['detected_count'] > 1 for x in outcomes[3:]), 'median_latency_ms': float(np.median(lat)), 'p95_latency_ms': float(np.percentile(lat,95))})
-    return {'schema_version':'sie_mp_persondet_ar0234_challenge_v1','challenge_status':'EXPERIMENTAL_THRESHOLD_DIAGNOSTIC_NOT_PRODUCTION_APPROVAL','model_sha256':MODEL_SHA256,'dataset_manifest_sha256':hashlib.sha256(manifest_path.read_bytes()).hexdigest(),'opencv_version':cv2.__version__,'numpy_version':np.__version__,'python_version':__import__('sys').version,'preprocessing':{'channels':'BGR_TO_RGB','input':'NCHW float32 224x224','normalization':'[0,255]->[0,1]->[-1,1]','padding':'centered aspect preserving'},'thresholds': [0.05,0.10,0.15,0.20,0.25,0.30,0.40,0.50], 'nms_threshold':NMS_THRESHOLD,'frames':rows,'threshold_metrics':threshold_metrics,'metrics':{'default_threshold':SCORE_THRESHOLD,'exact_count_accuracy':sum(a==b for a,b in zip(expected,detected))/len(rows),'empty_false_positives':sum(x['detected_count']>0 for x in rows if x['expected_person_count']==0),'single_person_successes':sum(x['detected_count']==1 for x in rows if x['expected_person_count']==1),'single_person_total':13,'median_latency_ms':float(np.median(lat)),'p95_latency_ms':float(np.percentile(lat,95))},'limitation':'Exploratory threshold sweep on 16 frames; do not select a production threshold. Multiple-person behavior is not tested.'}
+    expected=[validate_expected_person_count(x['expected_person_count']) for x in rows]; detected=[x['detected_count'] for x in rows]; lat=np.array([x['inference_latency_ms'] for x in rows])
+    thresholds=(0.05,0.10,0.15,0.20,0.25,0.30,0.40,0.50); threshold_metrics=calculate_threshold_metrics(rows, thresholds)
+    empty_total=sum(x==0 for x in expected); single_total=sum(x==1 for x in expected); has_multiple=any(x==2 for x in expected)
+    limitation=f'Exploratory threshold sweep on {len(rows)} frames; do not select a production threshold.' + ('' if has_multiple else ' Multiple-person behavior is not tested because no expected two-person records are present.')
+    return {'schema_version':'sie_mp_persondet_ar0234_challenge_v1','challenge_status':'EXPERIMENTAL_THRESHOLD_DIAGNOSTIC_NOT_PRODUCTION_APPROVAL','model_sha256':MODEL_SHA256,'dataset_manifest_sha256':hashlib.sha256(manifest_path.read_bytes()).hexdigest(),'opencv_version':cv2.__version__,'numpy_version':np.__version__,'python_version':__import__('sys').version,'preprocessing':{'channels':'BGR_TO_RGB','input':'NCHW float32 224x224','normalization':'[0,255]->[0,1]->[-1,1]','padding':'centered aspect preserving'},'thresholds': list(thresholds), 'nms_threshold':NMS_THRESHOLD,'frames':rows,'threshold_metrics':threshold_metrics,'metrics':{'default_threshold':SCORE_THRESHOLD,'frame_total':len(rows),'empty_total':empty_total,'exact_count_accuracy':sum(a==b for a,b in zip(expected,detected))/len(rows),'empty_false_positives':sum(x>0 and y==0 for x,y in zip(detected,expected)),'single_person_successes':sum(x==1 and y==1 for x,y in zip(detected,expected)),'single_person_total':single_total,'median_latency_ms':float(np.median(lat)),'p95_latency_ms':float(np.percentile(lat,95))},'limitation':limitation}
