@@ -10,6 +10,12 @@ from vision_core.person_localization.mp_persondet import _decode_landmarks, _ful
 def test_sha_mismatch_blocks_before_loader(tmp_path):
  p=tmp_path/'x.onnx'; p.write_bytes(b'x')
  with pytest.raises(ValueError,match='MODEL_SHA256_MISMATCH'): MPPersonDetOpenCV(p,Path('/missing'))
+def test_score_threshold_default_explicit_metadata_and_invalid_values(tmp_path):
+ assert artifact().confidence_threshold==.5
+ explicit=artifact(.4)
+ assert explicit.confidence_threshold==.4 and explicit.metadata()['inference_parameters']['score_threshold']==.4
+ for invalid in (True,False,0.,1.1,float('nan'),float('inf'),'0.4'):
+  with pytest.raises(ValueError,match='score_threshold'): MPPersonDetOpenCV(tmp_path/'missing.onnx',Path('/missing'),invalid)
 def test_pipeline_zero_one_many():
  class D:
   def __init__(self,x): self.artifact=artifact(); self.x=x
@@ -33,3 +39,12 @@ def test_full_body_roi_clips_and_rejects_invalid_radius():
  assert _full_body_roi(np.array([[5.,5.],[25.,5.],[0.,0.],[0.,0.]]),20,20).to_xyxy()==[0,0,20,20]
  with pytest.raises(ValueError): _full_body_roi(np.zeros((4,2)),20,20)
  with pytest.raises(ValueError): _full_body_roi(np.full((4,2),np.nan),20,20)
+
+def test_live_cli_allows_only_approved_thresholds():
+ import importlib.util
+ path=Path('vision_core/tools/run_person_depth_live.py')
+ spec=importlib.util.spec_from_file_location('live_runner_cli',path); module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+ common=['--model','/tmp/model.onnx','--reference','/tmp/reference.py','--project-root','/tmp','--max-cycles','1']
+ assert module.parse_args([*common,'--person-threshold','0.4']).person_threshold==.4
+ assert module.parse_args(common).person_threshold==.5
+ with pytest.raises(SystemExit): module.parse_args([*common,'--person-threshold','0.3'])

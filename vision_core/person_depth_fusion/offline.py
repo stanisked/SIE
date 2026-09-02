@@ -21,7 +21,7 @@ from typing import Any, Protocol
 import cv2
 import numpy as np
 
-from vision_core.person_localization.models import BoundingBox, PersonLocalizationStatus
+from vision_core.person_localization.models import BoundingBox, PersonLocalizationResult, PersonLocalizationStatus
 from vision_core.person_localization.pipeline import PersonLocalizationPipeline
 from vision_core.rgb_stereo_extrinsic.solve import (
     AR_INTRINSIC, AR_INTRINSIC_SHA256, ARTIFACT_PATH as EXTRINSIC_CANDIDATE_PATH,
@@ -274,11 +274,18 @@ class PersonDepthFusionOffline:
     def _p1(self) -> np.ndarray:
         return self.calibration.rectified_p1
 
-    def process(self, ar_frame_bgr: np.ndarray, combined_stereo_bgr: np.ndarray, *, captured_at_utc: datetime, cycle_id: str) -> PersonMeasurement:
+    def process_with_localization(self, ar_frame_bgr: np.ndarray, combined_stereo_bgr: np.ndarray, *, captured_at_utc: datetime, cycle_id: str) -> tuple[PersonMeasurement, PersonLocalizationResult | None]:
         timestamp=captured_at_utc.astimezone(timezone.utc).isoformat() if isinstance(captured_at_utc,datetime) and captured_at_utc.tzinfo else datetime.now(timezone.utc).isoformat()
         if type(ar_frame_bgr) is not np.ndarray or ar_frame_bgr.dtype!=np.uint8 or ar_frame_bgr.shape!=AR_SHAPE or type(combined_stereo_bgr) is not np.ndarray or combined_stereo_bgr.dtype!=np.uint8 or combined_stereo_bgr.shape!=COMBINED_SHAPE:
-            return _simple(PersonMeasurementStatus.INVALID_INPUT,"expected AR0234 1200x1920x3 and combined stereo 800x2560x3 uint8 images",timestamp)
+            return _simple(PersonMeasurementStatus.INVALID_INPUT,"expected AR0234 1200x1920x3 and combined stereo 800x2560x3 uint8 images",timestamp), None
         localization=self.person_pipeline.process(ar_frame_bgr,captured_at_utc=captured_at_utc,cycle_id=cycle_id)
+        return self.fuse_localization(localization, combined_stereo_bgr, captured_at_utc=captured_at_utc, cycle_id=cycle_id), localization
+
+    def process(self, ar_frame_bgr: np.ndarray, combined_stereo_bgr: np.ndarray, *, captured_at_utc: datetime, cycle_id: str) -> PersonMeasurement:
+        return self.process_with_localization(ar_frame_bgr, combined_stereo_bgr, captured_at_utc=captured_at_utc, cycle_id=cycle_id)[0]
+
+    def fuse_localization(self, localization: PersonLocalizationResult, combined_stereo_bgr: np.ndarray, *, captured_at_utc: datetime, cycle_id: str, measurement_mode: str = "offline") -> PersonMeasurement:
+        timestamp=captured_at_utc.astimezone(timezone.utc).isoformat() if isinstance(captured_at_utc,datetime) and captured_at_utc.tzinfo else datetime.now(timezone.utc).isoformat()
         if localization.status is PersonLocalizationStatus.PERSON_LOST: return _simple(PersonMeasurementStatus.PERSON_LOST,localization.detail or "person not found",timestamp)
         if localization.status is PersonLocalizationStatus.MULTIPLE_PERSONS: return _simple(PersonMeasurementStatus.MULTIPLE_PERSONS,"exactly one person is required; no target was selected",timestamp)
         if localization.status is not PersonLocalizationStatus.SINGLE_PERSON or localization.observation is None or localization.bounding_box is None: return _simple(PersonMeasurementStatus.INVALID_INPUT,f"person localization blocked: {localization.status.value}",timestamp)
@@ -307,7 +314,9 @@ class PersonDepthFusionOffline:
         detector=localization.observation.payload.get("detector")
         if type(detector) is not dict: return _simple(PersonMeasurementStatus.INVALID_INPUT,"person observation has no detector provenance",timestamp)
         confidence=float(min(1.,(count/len(selected))*min(1.,len(selected)/self.policy.minimum_selected_points)))
-        return PersonMeasurement(status=PersonMeasurementStatus.SUCCESS,measurement_id=f"measurement.person_depth.offline.{cycle_id}.{uuid.uuid4()}",person_observation_id=localization.observation.observation_id,person_evidence_id=localization.observation.evidence_ids[0],reference_frame=RECTIFIED_LEFT_FRAME,units="m",x_m=float(median[0]),y_m=float(median[1]),z_m=float(median[2]),range_m=float(np.linalg.norm(median)),confidence=confidence,detector_provenance=detector,calibration={"extrinsic_calibration_id":self.calibration.calibration_id,"candidate_sha256":self.calibration.candidate_sha256,"physical_validation_sha256":self.calibration.validation_sha256,"ar_intrinsic_sha256":AR_INTRINSIC_SHA256,"stereo_v6_calibration_sha256":self.calibration.stereo_calibration_sha256,"offline_temperature_eligibility_evaluated":False,"rgb_seed_semantics":"MVP_TORSO_SEED_FRACTIONAL_ROI_NOT_SEMANTIC_MASK"},stereo_policy_id=self.calibration.stereo_policy_id,**common)
+        if measurement_mode not in ("offline", "live"):
+            raise PersonDepthFusionError("unknown measurement mode")
+        return PersonMeasurement(status=PersonMeasurementStatus.SUCCESS,measurement_id=f"measurement.person_depth.{measurement_mode}.{cycle_id}.{uuid.uuid4()}",person_observation_id=localization.observation.observation_id,person_evidence_id=localization.observation.evidence_ids[0],reference_frame=RECTIFIED_LEFT_FRAME,units="m",x_m=float(median[0]),y_m=float(median[1]),z_m=float(median[2]),range_m=float(np.linalg.norm(median)),confidence=confidence,detector_provenance=detector,calibration={"extrinsic_calibration_id":self.calibration.calibration_id,"candidate_sha256":self.calibration.candidate_sha256,"physical_validation_sha256":self.calibration.validation_sha256,"ar_intrinsic_sha256":AR_INTRINSIC_SHA256,"stereo_v6_calibration_sha256":self.calibration.stereo_calibration_sha256,"offline_temperature_eligibility_evaluated":False,"rgb_seed_semantics":"MVP_TORSO_SEED_FRACTIONAL_ROI_NOT_SEMANTIC_MASK"},stereo_policy_id=self.calibration.stereo_policy_id,**common)
 
 
 def write_offline_report(path: Path, measurement: PersonMeasurement, calibration: FusionCalibration, *, ar_image_path: Path, combined_image_path: Path) -> None:
