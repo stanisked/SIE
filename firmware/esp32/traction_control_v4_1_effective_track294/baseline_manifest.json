@@ -1,0 +1,103 @@
+{
+  "schema_version": "sie_esp32_traction_control_baseline_manifest_v1",
+  "firmware_id": "traction_control_v4_1_effective_track294",
+  "original_sensitive_source": {
+    "filename": "traction_control_v4_square_test.ino",
+    "sha256": "5acb2f0878aafaa015c8edf1d677f2b668365c37593a172a46e749ce05f3bd5d",
+    "byte_size": 44867,
+    "stored_in_git": false
+  },
+  "sanitized_source": {
+    "filename": "traction_control_v4_1_effective_track294.ino",
+    "sha256": "24580db5e207c2760ce375a2e8224af05c4b55bf4bdbf58d0dacd8f55d3fca33",
+    "byte_size": 44817
+  },
+  "credential_binding": {
+    "mode": "local_ignored_header",
+    "include": "wifi_credentials.h",
+    "example": "wifi_credentials.example.h",
+    "embedded_credentials_removed": true,
+    "original_values_recorded": false
+  },
+  "behavioral_delta": {
+    "wifi_credentials_externalized_only": true,
+    "motor_control_changed": false,
+    "geometry_changed": false,
+    "routes_changed": false,
+    "safety_logic_changed": false
+  },
+  "hardware": {
+    "board": "ESP32 DevKit/WROOM-32",
+    "motor_driver": "ZK-5AD",
+    "motors": "2 x JGB37-520 with quadrature encoders"
+  },
+  "geometry": {
+    "right_wheel_diameter_m": 0.0646,
+    "left_wheel_diameter_m": 0.0652,
+    "geometric_track_width_m": 0.29,
+    "effective_turn_track_width_m": 0.2941
+  },
+  "control": {
+    "turn_sustain_pwm": 180,
+    "forward_target_distance_m": 0.5,
+    "reverse_target_distance_m": 0.2,
+    "turn_target_angle_deg": 90.0
+  },
+  "transport": {
+    "protocol": "HTTP over TCP",
+    "port": 80,
+    "hostname": "sie-base",
+    "mdns": "sie-base.local",
+    "routes": [
+      {
+        "method": "POST",
+        "path": "/start"
+      },
+      {
+        "method": "POST",
+        "path": "/reverse"
+      },
+      {
+        "method": "POST",
+        "path": "/turn-left"
+      },
+      {
+        "method": "POST",
+        "path": "/turn-right"
+      },
+      {
+        "method": "POST",
+        "path": "/square"
+      },
+      {
+        "method": "POST",
+        "path": "/stop"
+      },
+      {
+        "method": "GET",
+        "path": "/status"
+      }
+    ]
+  },
+  "physical_validation": {
+    "forward_confirmed": true,
+    "reverse_confirmed": true,
+    "turn_left_confirmed": true,
+    "turn_right_confirmed": true,
+    "stop_confirmed": true,
+    "square_confirmed": true,
+    "square_run_1": {
+      "closure": "15 mm right",
+      "heading_error": "2..3 degrees"
+    },
+    "square_run_2": {
+      "closure": "35 mm left",
+      "heading_error": "about 2 degrees"
+    },
+    "fault_stall": "none in confirmed square runs"
+  },
+  "status": {
+    "value": "PHYSICALLY_VALIDATED_LOGIC_SANITIZED_FOR_GIT",
+    "no_behavior_change": true
+  }
+}
