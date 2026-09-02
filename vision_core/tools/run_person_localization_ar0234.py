@@ -1,99 +1,29 @@
 #!/usr/bin/env python3
-
-"""Validate an AR0234 detector manifest without starting a backend.
-
-No detector is bundled with this MVP. This command validates manifest syntax
-and then refuses to open the camera until a separately approved backend adapter
-is supplied. It never starts stereo, emits a Measurement, or sends a network
-command to the mobile base.
-"""
-
+"""Explicit, headless AR0234 2D person-localization runner."""
 from __future__ import annotations
-
-import argparse
-import json
-import sys
+import argparse, json, sys
+from datetime import datetime, timezone
 from pathlib import Path
-
-from vision_core.person_localization import AR0234_BY_ID, DetectorArtifact
-
-
-_ARTIFACT_MANIFEST_KEYS = frozenset(
-    {
-        "schema_version",
-        "backend_id",
-        "backend_version",
-        "model_id",
-        "model_version",
-        "artifact_sha256",
-        "output_contract_version",
-        "person_label",
-        "confidence_semantics",
-        "confidence_threshold",
-        "inference_parameters",
-    }
-)
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--device", type=Path, default=AR0234_BY_ID)
-    parser.add_argument(
-        "--detector-artifact",
-        type=Path,
-        required=True,
-        help="JSON manifest for a separately reviewed detector artifact",
-    )
-    return parser.parse_args()
-
-
-def _load_artifact(path: Path) -> DetectorArtifact:
-    with path.open(encoding="utf-8") as handle:
-        payload = json.load(handle)
-    if not isinstance(payload, dict):
-        raise ValueError("detector artifact manifest must be a JSON object")
-    payload_keys = frozenset(payload)
-    if payload_keys != _ARTIFACT_MANIFEST_KEYS:
-        missing = sorted(_ARTIFACT_MANIFEST_KEYS - payload_keys)
-        unknown = sorted(payload_keys - _ARTIFACT_MANIFEST_KEYS)
-        raise ValueError(f"detector artifact manifest keys mismatch: missing={missing}, unknown={unknown}")
-    return DetectorArtifact(
-        schema_version=payload["schema_version"],
-        backend_id=payload["backend_id"],
-        backend_version=payload["backend_version"],
-        model_id=payload["model_id"],
-        model_version=payload["model_version"],
-        artifact_sha256=payload["artifact_sha256"],
-        output_contract_version=payload["output_contract_version"],
-        person_label=payload["person_label"],
-        confidence_semantics=payload["confidence_semantics"],
-        confidence_threshold=payload["confidence_threshold"],
-        inference_parameters=payload["inference_parameters"],
-    )
-
-
-def main() -> int:
-    args = parse_args()
-    if args.device != AR0234_BY_ID:
-        raise ValueError("only the approved AR0234 /dev/v4l/by-id/...-video-index0 path is allowed")
-    artifact = _load_artifact(args.detector_artifact)
-    print(
-        json.dumps(
-            {
-                "status": "MANIFEST_SYNTACTICALLY_VALID_BACKEND_ADAPTER_NOT_CONFIGURED",
-                "device": str(AR0234_BY_ID),
-                "detector": artifact.metadata(),
-            },
-            sort_keys=True,
-        ),
-        flush=True,
-    )
-    return 3
-
-
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as error:
-        print(f"ERROR: {error}", file=sys.stderr)
-        raise SystemExit(2) from error
+from vision_core.person_localization import AR0234_BY_ID, AR0234Capture, AR0234CaptureConfig
+from vision_core.person_localization.pipeline import PersonLocalizationPipeline
+from vision_core.person_localization.mp_persondet import MPPersonDetOpenCV
+def args():
+ p=argparse.ArgumentParser(); p.add_argument('--backend'); p.add_argument('--model',type=Path); p.add_argument('--reference',type=Path); p.add_argument('--device',type=Path,default=AR0234_BY_ID); p.add_argument('--max-frames',type=int,default=0); return p.parse_args()
+def main():
+ a=args()
+ if a.backend != 'mp-persondet-opencv' or a.model is None or a.reference is None: print(json.dumps({'status':'BACKEND_NOT_EXPLICITLY_CONFIGURED'})); return 3
+ if a.device != AR0234_BY_ID or not a.model.is_absolute() or not a.reference.is_absolute(): raise ValueError('exact stable by-id device and absolute model/reference paths are required')
+ detector=MPPersonDetOpenCV(a.model,a.reference); pipeline=PersonLocalizationPipeline(detector); capture=AR0234Capture(AR0234CaptureConfig(device=AR0234_BY_ID,width=1920,height=1200,fps=30.0,fourcc='MJPG',buffer_size=1))
+ capture.open()
+ try:
+  for _ in range(60): capture.read()
+  count=0
+  while not a.max_frames or count<a.max_frames:
+   frame=capture.read()
+   count+=1; result=pipeline.process(frame,captured_at_utc=datetime.now(timezone.utc),cycle_id=f'ar0234-live-{count}')
+   print(json.dumps({'status':result.status,'timestamp':result.captured_at_utc,'bbox':None if result.bounding_box is None else result.bounding_box.to_xyxy(),'confidence':None if result.observation is None else result.observation.confidence,'detector':detector.artifact.metadata()},sort_keys=True),flush=True)
+ finally: capture.close()
+if __name__=='__main__':
+ try: main()
+ except KeyboardInterrupt: pass
+ except Exception as e: print(f'ERROR: {e}',file=sys.stderr); raise SystemExit(2)
