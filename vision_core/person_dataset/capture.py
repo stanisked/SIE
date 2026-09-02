@@ -321,22 +321,46 @@ def capture_runtime(root: Path, *, device: Path, subject_source: str | None, cap
     if device != AR0234_BY_ID: raise DatasetCaptureError("capture requires exact approved by-id device")
     paths = _paths(root); plan = load_plan(paths["plan"]); source = validate_subject_source("NO_PERSON" if subject_source is None and not any(x.expected_person_count for x in plan.scenarios) else subject_source, plan); records = _records(paths, plan)
     camera = DatasetCamera(capture_factory=capture_factory, device_resolver=device_resolver, now_utc=now_utc, monotonic=monotonic)
+    window_name = "AR0234 Person Dataset"
     try:
         actual = camera.open(); controls = set_auto_exposure(AR0234_BY_ID, control_runner)
         for _ in range(camera.mode.warmup_valid_frames): camera.read_timed()
+        try:
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+            cv2.resizeWindow(window_name, 960, 600)
+        except cv2.error as error:
+            raise DatasetCaptureError(f"cannot create capture preview window: {error}") from error
         for sequence, scenario in enumerate(plan.scenarios, 1):
             if scenario.scenario_id in records: continue
+            print(f"SCENARIO {sequence}/{len(plan.scenarios)} {scenario.scenario_id}", flush=True)
             candidate: CapturedFrame | None = None
             while True:
-                current = camera.read_timed() if candidate is None else candidate; key = normalize_key(cv2.waitKey(1) & 0xff)
-                if key in (ord("q"), ord("Q"), 27): return
+                current = camera.read_timed() if candidate is None else candidate
+                preview = current.pixels.copy()
+                state = "LIVE" if candidate is None else "REVIEW"
+                cv2.putText(preview, f"{state}  SCENARIO {sequence}/{len(plan.scenarios)}  {scenario.scenario_id}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, .7, (0, 255, 0), 2)
+                cv2.putText(preview, f"persons={scenario.expected_person_count}  phase={scenario.phase}  [SPACE] freeze [A] save [R] live [S] skip [Q] stop", (20, 75), cv2.FONT_HERSHEY_SIMPLEX, .5, (0, 255, 0), 1)
+                try:
+                    cv2.imshow(window_name, preview)
+                    key = normalize_key(cv2.waitKey(1) & 0xff)
+                except cv2.error as error:
+                    raise DatasetCaptureError(f"capture preview UI failed: {error}") from error
+                if key in (ord("q"), ord("Q"), 27):
+                    print("CAPTURE_STOPPED", flush=True)
+                    return
                 if key == ord(" ") and candidate is None: candidate = CapturedFrame(current.pixels.copy(), current.source_frame_at_utc, current.source_frame_monotonic); continue
                 if key in (ord("r"), ord("R")): candidate = None; continue
                 if key in (ord("s"), ord("S")):
                     if scenario.required: raise DatasetCaptureError("required scenario cannot be skipped")
+                    print(f"SKIPPED {sequence} {scenario.scenario_id}", flush=True)
                     break
                 if key in (ord("a"), ord("A")) and candidate is not None:
                     try: save_accepted_frame(paths, scenario, sequence, candidate.pixels, source_frame_at=candidate.source_frame_at_utc, source_frame_monotonic=candidate.source_frame_monotonic, accepted_at=now_utc(), accepted_monotonic=monotonic(), metadata={"camera_stable_by_id": str(AR0234_BY_ID), "resolved_character_device": str(camera.target), "requested_mode": asdict(camera.mode), "actual_mode": actual, "camera_controls": controls}, subject_source="NO_PERSON" if scenario.expected_person_count == 0 else source, git_commit=git_commit)
                     except DatasetCaptureError: candidate = None; continue
+                    print(f"SAVED {sequence} {scenario.scenario_id} {frame_filename(sequence, scenario.scenario_id)}", flush=True)
                     break
-    finally: camera.close(); cv2.destroyAllWindows()
+    except DatasetCaptureError:
+        raise
+    finally:
+        camera.close()
+        cv2.destroyAllWindows()

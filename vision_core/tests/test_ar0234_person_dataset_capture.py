@@ -130,6 +130,18 @@ def test_help_does_not_do_runtime_work():
     result = subprocess.run([sys.executable, "vision_core/tools/capture_ar0234_person_dataset.py", "--help"], cwd=ROOT, capture_output=True, text=True)
     assert result.returncode == 0 and "--subject-source" in result.stdout
 
+def test_interactive_preview_contract_is_explicit_and_safe():
+    source = (ROOT / "vision_core/person_dataset/capture.py").read_text()
+    assert 'cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)' in source
+    assert 'cv2.resizeWindow(window_name, 960, 600)' in source
+    assert 'cv2.imshow(window_name, preview)' in source
+    assert source.index('cv2.imshow(window_name, preview)') < source.index('cv2.waitKey(1)')
+    assert 'preview = current.pixels.copy()' in source
+    assert 'state = "LIVE" if candidate is None else "REVIEW"' in source
+    assert 'print(f"SCENARIO' in source and 'print(f"SAVED' in source
+    assert 'print(f"SKIPPED' in source and 'print("CAPTURE_STOPPED"' in source
+    assert 'cv2.destroyAllWindows()' in source
+
 def test_static_boundary_no_forbidden_integrations():
     text = (ROOT / "vision_core/person_dataset/capture.py").read_text().lower()
     for forbidden in ("onnx", "torch", "requests", "socket", "stereo", "esp32", "motor", "person_detector_benchmark"):
