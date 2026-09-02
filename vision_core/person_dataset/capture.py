@@ -28,6 +28,7 @@ MANIFEST_SCHEMA = "sie_ar0234_person_dataset_manifest_v1"
 DATASET_ID = "ar0234_person_semantic_v1"
 FRAME_SHAPE = (1200, 1920, 3)
 STALE_FRAME_THRESHOLD_S = 1.0
+MAX_REVIEW_AGE_S = 30.0
 V4L2_TIMEOUT_S = 5.0
 SCENARIO_ID = re.compile(r"[a-z][a-z0-9_]{0,79}\Z")
 AUTO_EXPOSURE = re.compile(r"\Aauto_exposure: ([0-9]+)(?: \(([^()]*)\))?\Z")
@@ -264,7 +265,7 @@ def _record_for_scenario(record: object, scenario: Scenario, sequence: int, path
     if item["image_filename"] != filename or Path(filename).name != filename: raise DatasetCaptureError("record filename mismatch")
     if type(item["png_bytes"]) is not int or item["png_bytes"] < 1 or type(item["image_sha256"]) is not str or not re.fullmatch(r"[0-9a-f]{64}", item["image_sha256"]): raise DatasetCaptureError("record image metadata invalid")
     age = _number(item["source_frame_age_s"], "source_frame_age_s")
-    if age < 0 or age > STALE_FRAME_THRESHOLD_S: raise DatasetCaptureError("record source frame age invalid")
+    if age < 0 or age > MAX_REVIEW_AGE_S: raise DatasetCaptureError("record source frame age invalid")
     source, accepted = _utc(item["source_frame_at_utc"], "source_frame_at_utc"), _utc(item["accepted_at_utc"], "accepted_at_utc")
     if accepted < source: raise DatasetCaptureError("record accepted before source")
     for key in ("tool_git_commit", "host_platform", "evidence_id", "camera_stable_by_id", "resolved_character_device"):_text(item[key], key)
@@ -299,7 +300,7 @@ def save_accepted_frame(paths: Mapping[str, Path], scenario: Scenario, sequence:
     _subject_for(scenario, subject_source)
     if sequence < 1 or source_frame_at.tzinfo is None or accepted_at.tzinfo is None or source_frame_at.utcoffset() != dt.timedelta(0) or accepted_at.utcoffset() != dt.timedelta(0): raise DatasetCaptureError("timestamps must be aware UTC")
     age = accepted_monotonic - source_frame_monotonic
-    if not math.isfinite(age) or age < 0 or age > STALE_FRAME_THRESHOLD_S: raise DatasetCaptureError("stale or invalid source frame")
+    if not math.isfinite(age) or age < 0 or age > MAX_REVIEW_AGE_S: raise DatasetCaptureError("stale or invalid source frame")
     valid = _frame(frame); ok, encoded = cv2.imencode(".png", valid)
     if not ok: raise DatasetCaptureError("PNG encoding failed")
     payload, filename = encoded.tobytes(), frame_filename(sequence, scenario.scenario_id); target = paths["frames"] / filename; _exclusive(target, payload)
@@ -356,7 +357,10 @@ def capture_runtime(root: Path, *, device: Path, subject_source: str | None, cap
                     break
                 if key in (ord("a"), ord("A")) and candidate is not None:
                     try: save_accepted_frame(paths, scenario, sequence, candidate.pixels, source_frame_at=candidate.source_frame_at_utc, source_frame_monotonic=candidate.source_frame_monotonic, accepted_at=now_utc(), accepted_monotonic=monotonic(), metadata={"camera_stable_by_id": str(AR0234_BY_ID), "resolved_character_device": str(camera.target), "requested_mode": asdict(camera.mode), "actual_mode": actual, "camera_controls": controls}, subject_source="NO_PERSON" if scenario.expected_person_count == 0 else source, git_commit=git_commit)
-                    except DatasetCaptureError: candidate = None; continue
+                    except DatasetCaptureError as error:
+                        print(f"REJECTED {sequence} {scenario.scenario_id} {error}", flush=True)
+                        candidate = None
+                        continue
                     print(f"SAVED {sequence} {scenario.scenario_id} {frame_filename(sequence, scenario.scenario_id)}", flush=True)
                     break
     except DatasetCaptureError:

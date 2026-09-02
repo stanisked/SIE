@@ -72,8 +72,20 @@ def test_png_dimension_failure_is_rejected(tmp_path):
 
 def test_stale_monotonic_candidate_creates_no_png_or_record(tmp_path):
     plan, paths = prepare(tmp_path / "d")
-    with pytest.raises(DatasetCaptureError): save(paths, plan.scenarios[0], 1, age=1.1)
+    with pytest.raises(DatasetCaptureError): save(paths, plan.scenarios[0], 1, age=30.1)
     assert not paths["frames"].exists() and not paths["records"].exists()
+
+@pytest.mark.parametrize("age", [1.5, 30.0])
+def test_practical_review_age_is_accepted(tmp_path, age):
+    plan, paths = prepare(tmp_path / "d")
+    record = save(paths, plan.scenarios[0], 1, age=age)
+    assert record["source_frame_age_s"] == age
+
+def test_review_rejection_is_reported_and_returns_to_live():
+    source = (ROOT / "vision_core/person_dataset/capture.py").read_text()
+    assert 'print(f"REJECTED {sequence} {scenario.scenario_id} {error}"' in source
+    assert 'candidate = None' in source
+    assert 'continue' in source[source.index('print(f"REJECTED'):source.index('print(f"REJECTED') + 220]
 
 def test_interactive_key_normalisation_keeps_space_and_escape():
     assert [normalize_key(x) for x in (ord("a"), ord("A"), ord("r"), ord("R"), ord("s"), ord("S"), ord("q"), ord("Q"), ord(" "), 27)] == [ord("a"), ord("a"), ord("r"), ord("r"), ord("s"), ord("s"), ord("q"), ord("q"), ord(" "), 27]
