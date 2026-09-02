@@ -65,9 +65,13 @@ def decode(outputs: list[np.ndarray], priors: np.ndarray, transform: Transform, 
 def status_for_count(count: int) -> str: return "PERSON_LOST" if count == 0 else "SINGLE_PERSON" if count == 1 else "MULTIPLE_PERSONS"
 def load_net(model_path: Path):
     return cv2.dnn.readNetFromONNX(checked_model_buffer(model_path))
+def validate_dataset_status(status: object) -> str:
+    if type(status) is not str or status not in {"PHASE_A_COMPLETE_PHASE_B_PENDING", "COMPLETE"}:
+        raise ChallengeError("DATASET_NOT_PHASE_A_FINAL")
+    return status
 def run_challenge(dataset_root: Path, model_path: Path, reference_path: Path) -> dict[str, object]:
     manifest_path=dataset_root/'dataset_manifest.json'; manifest=json.loads(manifest_path.read_text())
-    if manifest.get('status') != 'PHASE_A_COMPLETE_PHASE_B_PENDING': raise ChallengeError('DATASET_NOT_PHASE_A_FINAL')
+    validate_dataset_status(manifest.get('status'))
     records=manifest['records']
     if len(records)!=16: raise ChallengeError('EXPECTED_16_PHASE_A_RECORDS')
     net=load_net(model_path); net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV); net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU); priors=anchors(reference_path)
