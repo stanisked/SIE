@@ -105,8 +105,23 @@ def test_v4l2_parser_rejects_bad_output(stdout):
     with pytest.raises(DatasetCaptureError): set_auto_exposure(AR0234_BY_ID, runner)
 def test_v4l2_uses_timeout_and_accepts_real_descriptor():
     seen=[]
-    def runner(argv, timeout): seen.append((argv, timeout)); return subprocess.CompletedProcess(argv, 0, "auto_exposure: 3 (Aperture Priority Mode)\n")
-    assert set_auto_exposure(AR0234_BY_ID, runner)["actual"] == 3 and all(x[1] == 5.0 for x in seen)
+    def runner(argv, timeout):
+        seen.append((argv, timeout))
+        output = "" if "set-ctrl" in " ".join(argv) else "auto_exposure: 3 (Aperture Priority Mode)\n"
+        return subprocess.CompletedProcess(argv, 0, output)
+    assert set_auto_exposure(AR0234_BY_ID, runner) == {"before": 3, "requested": 3, "actual": 3} and all(x[1] == 5.0 for x in seen)
+def test_v4l2_before_one_empty_set_after_three():
+    values = iter(["auto_exposure: 1 (Manual Mode)\n", "", "auto_exposure: 3\n"])
+    def runner(argv, timeout): return subprocess.CompletedProcess(argv, 0, next(values))
+    assert set_auto_exposure(AR0234_BY_ID, runner)["before"] == 1
+def test_v4l2_after_one_fails():
+    values = iter(["auto_exposure: 1\n", "", "auto_exposure: 1\n"])
+    def runner(argv, timeout): return subprocess.CompletedProcess(argv, 0, next(values))
+    with pytest.raises(DatasetCaptureError): set_auto_exposure(AR0234_BY_ID, runner)
+def test_v4l2_nonzero_set_fails():
+    values = iter(["auto_exposure: 1\n", "failed\n"])
+    def runner(argv, timeout): return subprocess.CompletedProcess(argv, 1 if "set-ctrl" in " ".join(argv) else 0, next(values))
+    with pytest.raises(DatasetCaptureError): set_auto_exposure(AR0234_BY_ID, runner)
 def test_v4l2_timeout_is_fail_closed():
     def runner(argv, timeout): raise subprocess.TimeoutExpired(argv, timeout)
     with pytest.raises(DatasetCaptureError): set_auto_exposure(AR0234_BY_ID, runner)

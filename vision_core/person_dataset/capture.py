@@ -30,7 +30,7 @@ FRAME_SHAPE = (1200, 1920, 3)
 STALE_FRAME_THRESHOLD_S = 1.0
 V4L2_TIMEOUT_S = 5.0
 SCENARIO_ID = re.compile(r"[a-z][a-z0-9_]{0,79}\Z")
-AUTO_EXPOSURE = re.compile(r"\Aauto_exposure: 3(?: \(Aperture Priority Mode\))?\Z")
+AUTO_EXPOSURE = re.compile(r"\Aauto_exposure: ([0-9]+)(?: \(([^()]*)\))?\Z")
 
 
 class DatasetCaptureError(RuntimeError):
@@ -195,21 +195,26 @@ class DatasetCamera:
 
 
 def default_control_runner(argv: list[str], timeout_s: float) -> subprocess.CompletedProcess[str]: return subprocess.run(argv, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False, timeout=timeout_s)
-def _control_output(text: object) -> None:
+def _control_output(text: object) -> int:
     if type(text) is not str: raise DatasetCaptureError("malformed v4l2 output")
     rows = [x for x in text.splitlines() if x.strip()]
-    if len(rows) != 1 or not AUTO_EXPOSURE.fullmatch(rows[0].strip()): raise DatasetCaptureError("cannot confirm auto_exposure=3")
+    if len(rows) != 1: raise DatasetCaptureError("cannot confirm auto_exposure")
+    match = AUTO_EXPOSURE.fullmatch(rows[0].strip())
+    if match is None or (match.group(2) is not None and not match.group(2)): raise DatasetCaptureError("cannot confirm auto_exposure")
+    return int(match.group(1))
 def set_auto_exposure(device: Path, runner: ControlRunner = default_control_runner) -> dict[str, int]:
     if device != AR0234_BY_ID: raise DatasetCaptureError("control requires exact by-id device")
-    def call(argv: list[str]) -> str:
+    def call(argv: list[str], *, parse: bool = True) -> str | int:
         try: result = runner(argv, V4L2_TIMEOUT_S)
         except subprocess.TimeoutExpired as error: raise DatasetCaptureError("v4l2 control timed out") from error
         if result.returncode != 0: raise DatasetCaptureError(f"v4l2 control failed: {result.stdout}")
-        _control_output(result.stdout); return result.stdout
-    call(["v4l2-ctl", "--device", str(device), "--get-ctrl=auto_exposure"])
-    call(["v4l2-ctl", "--device", str(device), "--set-ctrl=auto_exposure=3"])
-    call(["v4l2-ctl", "--device", str(device), "--get-ctrl=auto_exposure"])
-    return {"requested": 3, "actual": 3}
+        return _control_output(result.stdout) if parse else result.stdout
+    before = call(["v4l2-ctl", "--device", str(device), "--get-ctrl=auto_exposure"])
+    if before not in (1, 3): raise DatasetCaptureError(f"unsupported auto_exposure before set: {before}")
+    call(["v4l2-ctl", "--device", str(device), "--set-ctrl=auto_exposure=3"], parse=False)
+    actual = call(["v4l2-ctl", "--device", str(device), "--get-ctrl=auto_exposure"])
+    if actual != 3: raise DatasetCaptureError("auto_exposure confirmation failed")
+    return {"before": int(before), "requested": 3, "actual": int(actual)}
 
 
 SUBJECT_SOURCES = {"SELF_CAPTURE", "CONSENTED_VOLUNTEER", "NO_PERSON"}
