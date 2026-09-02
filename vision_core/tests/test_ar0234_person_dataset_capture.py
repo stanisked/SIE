@@ -34,6 +34,7 @@ def save(paths, scenario, sequence, *, source="NO_PERSON", age=0.0):
 
 def test_default_plan_counts_and_strict_schema():
     p = default_plan(); assert (sum(x.phase == "A" for x in p.scenarios), sum(x.phase == "B" for x in p.scenarios)) == (16, 4)
+    assert [x.scenario_id for x in p.scenarios[3:9]] == ["upper_center_1_5m", "upper_left_1_5m", "upper_right_1_5m", "full_center_3_5m", "full_left_3_5m", "full_right_3_5m"]
     assert parse_plan_payload(plan_payload()) == p
     bad = plan_payload(); bad["scenarios"][0]["expected_person_count"] = True
     with pytest.raises(DatasetCaptureError): parse_plan_payload(bad)
