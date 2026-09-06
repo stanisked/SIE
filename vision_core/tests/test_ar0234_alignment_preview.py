@@ -4,8 +4,10 @@ import importlib.util
 import json
 import subprocess
 import sys
+import types
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 
@@ -59,3 +61,47 @@ def test_runner_help_is_available_without_opening_camera():
     result = subprocess.run([sys.executable, str(SCRIPT), "--help"], check=True, capture_output=True, text=True)
     for option in ("--model", "--reference", "--ar-intrinsic", "--center-tolerance-px", "--device", "--window-size", "--max-frames"):
         assert option in result.stdout
+
+
+def test_tkinter_fallback_displays_overlay_when_highgui_is_unavailable(monkeypatch: pytest.MonkeyPatch):
+    class FakeRoot:
+        def title(self, _name: str) -> None:
+            pass
+
+        def protocol(self, _name: str, _callback) -> None:
+            pass
+
+        def bind(self, _name: str, _callback) -> None:
+            pass
+
+        def update_idletasks(self) -> None:
+            pass
+
+        def update(self) -> None:
+            pass
+
+        def destroy(self) -> None:
+            pass
+
+    class FakeLabel:
+        def __init__(self, _root: FakeRoot) -> None:
+            self.image = None
+
+        def pack(self) -> None:
+            pass
+
+        def configure(self, *, image) -> None:
+            self.image = image
+
+    class FakePhotoImage:
+        def __init__(self, *, data: str, format: str) -> None:
+            assert isinstance(data, str)
+            assert format == "PPM"
+
+    fake_tkinter = types.SimpleNamespace(Tk=FakeRoot, Label=FakeLabel, PhotoImage=FakePhotoImage, TclError=RuntimeError)
+    monkeypatch.setitem(sys.modules, "tkinter", fake_tkinter)
+    monkeypatch.setattr(preview.cv2, "namedWindow", lambda *_args: (_ for _ in ()).throw(preview.cv2.error("no highgui")))
+
+    window = preview.PreviewWindow("test")
+    assert window.show(np.zeros((2, 2, 3), dtype=np.uint8)) is False
+    window.close()

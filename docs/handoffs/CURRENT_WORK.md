@@ -166,3 +166,5 @@ principal point и resolution, рисует overlay только на копии
 frames. `IMAGE_LEFT`, `CENTER_BAND` и `IMAGE_RIGHT` описывают только положение
 в image frame, не направление поворота базы. При `PERSON_LOST` или
 `MULTIPLE_PERSONS` rolling median очищается и старый bbox не остаётся актуальным.
+Для validated OpenCV 4.14 headless runtime окно использует tkinter fallback;
+отсутствие и HighGUI, и tkinter/display даёт явную fail-closed GUI error.

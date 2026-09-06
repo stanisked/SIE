@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import math
 import sys
@@ -33,6 +34,73 @@ WINDOW_NAME = "AR0234 Alignment Preview"
 class ARIntrinsic:
     cx_px: float
     cy_px: float
+
+
+class PreviewWindow:
+    """Display OpenCV overlays through HighGUI or a tkinter fallback."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+        self._highgui = False
+        self._root: Any = None
+        self._label: Any = None
+        self._tk: Any = None
+        self._closed = False
+        try:
+            cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+            self._highgui = True
+            return
+        except cv2.error:
+            pass
+        try:
+            import tkinter as tk
+
+            self._tk = tk
+            self._root = tk.Tk()
+            self._root.title(name)
+            self._label = tk.Label(self._root)
+            self._label.pack()
+            self._root.protocol("WM_DELETE_WINDOW", self._mark_closed)
+            self._root.bind("<KeyPress>", self._on_key)
+        except Exception as error:
+            raise RuntimeError("no GUI preview backend is available: OpenCV HighGUI is unavailable and tkinter failed to start") from error
+
+    def _mark_closed(self) -> None:
+        self._closed = True
+
+    def _on_key(self, event: Any) -> None:
+        if event.keysym in {"Escape", "q", "Q"}:
+            self._mark_closed()
+
+    def show(self, image_bgr: np.ndarray) -> bool:
+        """Present one overlay frame and report whether the user requested exit."""
+        if self._highgui:
+            cv2.imshow(self._name, image_bgr)
+            return (cv2.waitKey(1) & 0xff) in (ord("q"), ord("Q"), 27)
+        if self._closed:
+            return True
+        rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+        ok, encoded = cv2.imencode(".ppm", rgb)
+        if not ok:
+            raise RuntimeError("unable to encode preview frame for tkinter")
+        photo = self._tk.PhotoImage(
+            data=base64.b64encode(encoded.tobytes()).decode("ascii"),
+            format="PPM",
+        )
+        self._label.configure(image=photo)
+        self._label.image = photo
+        self._root.update_idletasks()
+        self._root.update()
+        return self._closed
+
+    def close(self) -> None:
+        if self._highgui:
+            cv2.destroyWindow(self._name)
+        elif self._root is not None:
+            try:
+                self._root.destroy()
+            except self._tk.TclError:
+                pass
 
 
 def positive_finite(value: object, name: str) -> float:
@@ -145,13 +213,12 @@ def main(argv: list[str] | None = None) -> int:
     detector = MPPersonDetOpenCV(args.model, args.reference)
     pipeline = PersonLocalizationPipeline(detector)
     capture = AR0234Capture(AR0234CaptureConfig(device=AR0234_BY_ID, width=AR_WIDTH, height=AR_HEIGHT, fps=30.0, fourcc="MJPG", buffer_size=1))
-    window_created = False
+    preview: PreviewWindow | None = None
     try:
         capture.open()
         for _ in range(60):
             capture.read()
-        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-        window_created = True
+        preview = PreviewWindow(WINDOW_NAME)
         count = 0
         while args.max_frames == 0 or count < args.max_frames:
             frame = capture.read()
@@ -160,14 +227,13 @@ def main(argv: list[str] | None = None) -> int:
             bbox = None if result.bounding_box is None else result.bounding_box.to_xyxy()
             center, median = rolling.update(result.status.value, bbox)
             view = draw_overlay(frame, intrinsic=intrinsic, tolerance_px=tolerance, status=result.status.value, bbox_xyxy_px=bbox, center_x_px=center, median_center_x_px=median)
-            cv2.imshow(WINDOW_NAME, view)
-            if cv2.waitKey(1) & 0xff in (ord("q"), ord("Q"), 27):
+            if preview.show(view):
                 break
         return 0
     finally:
         capture.close()
-        if window_created:
-            cv2.destroyWindow(WINDOW_NAME)
+        if preview is not None:
+            preview.close()
 
 
 if __name__ == "__main__":
