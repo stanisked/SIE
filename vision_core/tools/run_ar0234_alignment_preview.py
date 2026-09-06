@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import math
 import sys
@@ -79,12 +78,11 @@ class PreviewWindow:
             return (cv2.waitKey(1) & 0xff) in (ord("q"), ord("Q"), 27)
         if self._closed:
             return True
-        rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-        ok, encoded = cv2.imencode(".ppm", rgb)
-        if not ok:
-            raise RuntimeError("unable to encode preview frame for tkinter")
+        rgb = np.ascontiguousarray(cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB))
+        height, width = rgb.shape[:2]
+        ppm = f"P6\n{width} {height}\n255\n".encode("ascii") + rgb.tobytes()
         photo = self._tk.PhotoImage(
-            data=base64.b64encode(encoded.tobytes()).decode("ascii"),
+            data=ppm,
             format="PPM",
         )
         self._label.configure(image=photo)

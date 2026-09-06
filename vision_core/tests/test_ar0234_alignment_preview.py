@@ -94,8 +94,10 @@ def test_tkinter_fallback_displays_overlay_when_highgui_is_unavailable(monkeypat
             self.image = image
 
     class FakePhotoImage:
-        def __init__(self, *, data: str, format: str) -> None:
-            assert isinstance(data, str)
+        def __init__(self, *, data: bytes, format: str) -> None:
+            assert isinstance(data, bytes)
+            assert data.startswith(b"P6\n2 2\n255\n")
+            assert len(data) == len(b"P6\n2 2\n255\n") + 2 * 2 * 3
             assert format == "PPM"
 
     fake_tkinter = types.SimpleNamespace(Tk=FakeRoot, Label=FakeLabel, PhotoImage=FakePhotoImage, TclError=RuntimeError)
