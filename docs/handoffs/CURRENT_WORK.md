@@ -137,6 +137,9 @@ perception, temporal stabilization или command planner.
 - первый planned `ADVANCE` переводит runner в
   `AWAITING_OPERATOR_CONFIRMATION`; новых plans и retries нет;
 - `network_performed=false` и `motor_command_performed=false` в каждом record;
+- каждый финальный record содержит `evidence_window_summary` ровно из пяти
+  JSON-safe entries с `cycle_id`, `cycle_status`, `person_status` и
+  `measurement_status`, без raw pixels и числовой depth-геометрии;
 - HTTP client, socket, executor и firmware changes не добавлены.
 
 Это демонстрационный supervised слой, не operational approval. Следующий gate:

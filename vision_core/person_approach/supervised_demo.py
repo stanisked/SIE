@@ -41,6 +41,20 @@ def _person_depth_summary(cycle: object) -> dict[str, Any]:
     }
 
 
+def _evidence_window_summary(window: deque[dict[str, Any]]) -> list[dict[str, Any]]:
+    summary = []
+    for cycle in window:
+        person = cycle.get("person") if type(cycle.get("person")) is dict else {}
+        measurement = cycle.get("measurement") if type(cycle.get("measurement")) is dict else {}
+        summary.append({
+            "cycle_id": cycle.get("cycle_id"),
+            "cycle_status": cycle.get("status"),
+            "person_status": person.get("status"),
+            "measurement_status": measurement.get("status"),
+        })
+    return summary
+
+
 class SupervisedPersonApproachDemo:
     """Runs perception records through decision and planning, never through execution."""
 
@@ -144,6 +158,7 @@ class SupervisedPersonApproachDemo:
             "cycle_id": cycle_object.get("cycle_id"),
             "decision_id": None if decision is None else decision.get("decision_id"),
             "person_depth_summary": _person_depth_summary(cycle),
+            "evidence_window_summary": _evidence_window_summary(self._window),
             "decision_status": None if decision is None else decision.get("status"),
             "planned_command": planned,
             "block_reason": block_reason,

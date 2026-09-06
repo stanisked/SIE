@@ -57,6 +57,8 @@ def test_target_reached_produces_no_action_record():
     assert result["decision_status"] == "HOLD_TARGET_REACHED"
     assert result["planned_command"] is None
     assert result["network_performed"] is False and result["motor_command_performed"] is False
+    assert len(result["evidence_window_summary"]) == 5
+    assert all(set(entry) == {"cycle_id", "cycle_status", "person_status", "measurement_status"} for entry in result["evidence_window_summary"])
 
 
 def test_advance_produces_one_plan_then_awaits_confirmation():
@@ -106,11 +108,27 @@ def test_partial_progress_requires_reobservation_and_blocks_plan():
     assert result["reobservation_required"] is True
 
 
+def test_blocked_depth_summary_shows_fewer_than_four_success_cycles():
+    records = [cycle(0, status="DEPTH_UNAVAILABLE"), cycle(1, status="PERSON_LOST"),
+               cycle(2, z=2.4), cycle(3, z=2.4), cycle(4, z=2.4)]
+    result = process(demo(), records)
+    assert result["decision_status"] == "BLOCKED_DEPTH_UNAVAILABLE"
+    summary = result["evidence_window_summary"]
+    assert len(summary) == 5
+    assert [entry["cycle_status"] for entry in summary] == [
+        "DEPTH_UNAVAILABLE", "PERSON_LOST", "SUCCESS", "SUCCESS", "SUCCESS",
+    ]
+    assert sum(entry["cycle_status"] == "SUCCESS" for entry in summary) == 3
+    assert all(set(entry) == {"cycle_id", "cycle_status", "person_status", "measurement_status"} for entry in summary)
+
+
 def test_boot_session_is_explicit_and_marked_unverified_and_output_is_json_safe():
     result = process(demo(), [cycle(index, z=2.4) for index in range(5)])
     assert result["boot_session_id"] == SESSION
     assert result["boot_session_freshness_verified"] is False
     assert result["reference_frame"] == FRAME and result["units"] == "m"
+    assert len(result["evidence_window_summary"]) == 5
+    assert all(set(entry) == {"cycle_id", "cycle_status", "person_status", "measurement_status"} for entry in result["evidence_window_summary"])
     json.dumps(result, allow_nan=False)
 
 
