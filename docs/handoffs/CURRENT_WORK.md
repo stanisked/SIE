@@ -169,3 +169,28 @@ frames. `IMAGE_LEFT`, `CENTER_BAND` и `IMAGE_RIGHT` описывают толь
 Для validated OpenCV 4.14 headless runtime окно использует tkinter fallback
 с raw PPM byte data;
 отсутствие и HighGUI, и tkinter/display даёт явную fail-closed GUI error.
+
+### YAW_MAPPING_RIGHT: PASS
+
+Зафиксирован один физический right-side gate:
+
+- image semantic: `IMAGE_RIGHT`;
+- firmware endpoint: `POST /turn-right`;
+- requested angle: `4°`;
+- terminal state: `PARTIAL_PROGRESS`;
+- firmware state after terminal: `READY`;
+- `bounded_fault_latched`: `false`;
+- `reobserve_required`: `true`;
+- motor PWM after terminal: `0`;
+- AR0234 optical axis: `cx=997.365537 px`;
+- BEFORE rolling median `center_x`: `1353.0 px`, offset `+355.6 px`;
+- AFTER rolling median `center_x`: `1256.5 px`, offset `+259.1 px`;
+- observed delta: `-96.5 px`.
+
+Conclusion: `IMAGE_RIGHT → firmware TURN_RIGHT` moves the detected person
+toward the optical axis.
+
+Evidence limits: this is one physical right-side gate; exact `4°` accuracy was
+not confirmed; `IMAGE_LEFT` mapping remains unconfirmed. Policy is not yet
+linked to real endpoints. Forward, HTTP executor and autonomous motion remain
+absent.
