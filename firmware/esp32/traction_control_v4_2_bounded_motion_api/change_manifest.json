@@ -1,0 +1,277 @@
+{
+  "schema_version": "sie_esp32_bounded_motion_change_manifest_v3",
+  "base_firmware_id": "traction_control_v4_1_effective_track294",
+  "base_sanitized_sha256": "24580db5e207c2760ce375a2e8224af05c4b55bf4bdbf58d0dacd8f55d3fca33",
+  "firmware_id": "traction_control_v4_2_bounded_motion_api",
+  "micro_turn_correction": {
+    "profile": "BOUNDED_MICRO_TURN_V1",
+    "max_correction_pulses": 0,
+    "correction_pulses_enabled": false,
+    "same_command_ledger_entry": true,
+    "requires_pwm_zero_brake_settle_stable_counts_session_and_wifi": true,
+    "terminal_validation_after_each_correction": true
+  },
+  "micro_turn_retry_policy": {
+    "automatic_retry_after_safe_underreach": false,
+    "automatic_correction_pulses": false,
+    "partial_progress_requires_reobserve": true,
+    "exact_requested_angle_accuracy_claimed": false
+  },
+  "changed_endpoints": {
+    "POST /move-forward": {
+      "required_query": ["boot_session_id", "command_id", "distance_m"],
+      "distance_m_bounds": [0.02, 0.1],
+      "timeout_ms": 5000
+    },
+    "POST /turn-left": {
+      "bounded_required_query": ["boot_session_id", "command_id", "angle_deg"],
+      "angle_deg_bounds": [1.0, 10.0],
+      "timeout_ms": 4000,
+      "legacy_without_query": "90 degrees"
+    },
+    "POST /turn-right": {
+      "bounded_required_query": ["boot_session_id", "command_id", "angle_deg"],
+      "angle_deg_bounds": [1.0, 10.0],
+      "timeout_ms": 4000,
+      "legacy_without_query": "90 degrees"
+    },
+    "POST /stop": {
+      "bounded_active_command_state": "STOPPED",
+      "motor_stop_before_response": true,
+      "does_not_clear_bounded_fault_latch": true
+    },
+    "POST /ack-fault": {
+      "requires_latched_fault": true,
+      "requires_no_active_motion_or_square": true,
+      "calls_stop_motors_before_precondition_check": true,
+      "requires_current_state_fault_with_nonempty_fault_reason": true,
+      "restores_state": "READY",
+      "clears_current_fault_reason": true,
+      "preserves_history_session_and_ledger": true,
+      "response_includes_previous_fault_reason": true
+    }
+  },
+  "bounded_encoder_cutoff": {
+    "per_command_requested_target_and_wheel_counts_stored": true,
+    "guard_runs_each_loop_iteration": true,
+    "covered_states": ["STARTING", "DRIVING", "BRAKING", "COASTING"],
+    "predictive_brake": "per-wheel brake-start counts are calculated before the requested target and can move earlier from current stop margin",
+    "bounded_motion_profiles": {
+      "BOUNDED_FORWARD_V1": "bounded forward retains the established predictive-brake calculation",
+      "BOUNDED_MICRO_TURN_V1": "bounded turns from 1 to 10 degrees reserve at least 6 encoder counts before the per-wheel target; dynamic stop margin may reserve more, never less"
+    },
+    "bounded_micro_turn_brake_reserve_counts": 6,
+    "micro_turn_sync": {
+      "base_sustain_pwm": 180,
+      "count_difference_threshold": 2,
+      "leading_wheel_pwm": 165,
+      "lagging_wheel_pwm": 205,
+      "symmetric_for_left_and_right_turns": true,
+      "individual_brake_before_other_wheel_continues": true
+    },
+    "requested_distance_or_angle": "upper physical boundary, not an exact encoder-count completion requirement",
+    "completion_tolerance_counts": "forward: min(6, max(1, ceil(target_counts * 0.20))); micro-turn diagnostics: min(4, max(1, ceil(target_counts * 0.30)))",
+    "success_window": "forward uses per-wheel tolerance; micro-turn requires each wheel >= ceil(target_counts * 0.50), heading magnitude 0.70..1.00 of target with expected sign, and no per-wheel overshoot",
+    "target_reached": "bounded-only ACTIVE_BRAKE hold and settle observation; SUCCESS requires both settled counts inside their independent success windows",
+    "under_target_after_settle": "PARTIAL_PROGRESS for a safe bounded micro-turn underreach after both individual brake-starts; FAULT BOUNDED_TARGET_NOT_REACHED when a brake-start or other safety gate is missing",
+    "wheel_limit_early_or_exceeded": "absolute per-wheel limit starts ACTIVE_BRAKE, settles, then FAULT BOUNDED_DISTANCE_LIMIT and fault latch",
+    "target_aware_breakaway": true,
+    "no_drive_pwm_after_brake_start": true,
+    "status_fields": [
+      "bounded_right_target_counts",
+      "bounded_left_target_counts",
+      "bounded_right_completion_tolerance_counts",
+      "bounded_left_completion_tolerance_counts",
+      "bounded_right_min_success_counts",
+      "bounded_left_min_success_counts",
+      "bounded_right_brake_start_counts",
+      "bounded_left_brake_start_counts",
+      "bounded_right_count_at_brake_start",
+      "bounded_left_count_at_brake_start",
+      "bounded_right_final_settled_counts",
+      "bounded_left_final_settled_counts",
+      "bounded_right_overshoot_counts",
+      "bounded_left_overshoot_counts",
+      "bounded_stop_mode",
+      "bounded_motion_profile",
+      "bounded_turn_brake_reserve_counts",
+      "bounded_turn_min_success_angle_rad",
+      "bounded_turn_final_angle_rad",
+      "bounded_turn_min_wheel_progress_counts",
+      "bounded_actual_progress_ratio",
+      "reobserve_required",
+      "bounded_right_individual_brake_started"
+      ,"bounded_left_individual_brake_started"
+      ,"bounded_right_count_at_individual_brake"
+      ,"bounded_left_count_at_individual_brake"
+      ,"bounded_right_last_applied_pwm"
+      ,"bounded_left_last_applied_pwm"
+      ,"bounded_sync_error_counts"
+      ,"bounded_correction_pulses_enabled"
+    ],
+    "residual_mechanical_overshoot": "must be measured in a separate raised-wheel retest"
+  },
+  "fault_latch_contract": {
+    "latched_for_any_active_bounded_fault": true,
+    "blocks_new_bounded_legacy_and_square_motion": true,
+    "status_fields": ["bounded_fault_latched", "bounded_fault_reason"],
+    "clear_only_via_post_ack_fault": true,
+    "ack_recovery": {
+      "calls_stop_motors_before_precondition_check": true,
+      "requires_no_active_bounded_motion_or_square": true,
+      "requires_current_state_fault_with_nonempty_fault_reason": true,
+      "success_state": "READY",
+      "success_fault_reason": "",
+      "preserves_command_history_diagnostics": true,
+      "preserves_boot_session_and_idempotency_ledger": true,
+      "new_bounded_command_requires_controller_not_fault": true
+    }
+  },
+  "boot_session_contract": {
+    "status_field": "boot_session_id",
+    "format": "16 uppercase ASCII hex characters from two esp_random 32-bit values",
+    "bounded_requests_require_session": true,
+    "mismatch": "HTTP 409 BOOT_SESSION_MISMATCH before ledger lookup or motor start",
+    "reboot_invalidates_prior_command_id_retries": true
+  },
+  "idempotency_contract": {
+    "command_id_required_for_bounded_commands": true,
+    "command_id_ascii_pattern": "[A-Za-z0-9._-]{1,64}",
+    "scope": "one boot_session_id",
+    "same_id_same_endpoint_and_parameters": "duplicate response, no motor restart",
+    "same_id_different_endpoint_or_parameters": "HTTP 409 COMMAND_ID_CONFLICT",
+    "new_id_while_active": "HTTP 409 BUSY",
+    "new_id_while_fault_latched": "HTTP 409 BOUNDED_FAULT_LATCHED",
+    "timeout": "motor stop, command_state FAULT and bounded fault latch",
+    "stop": "command_state STOPPED and duplicate cannot restart motion"
+  },
+  "preserved_calibration_constants": {
+    "right_wheel_diameter_m": 0.0646,
+    "left_wheel_diameter_m": 0.0652,
+    "geometric_track_width_m": 0.29,
+    "effective_turn_track_width_m": 0.2941,
+    "turn_sustain_pwm": 180
+  },
+  "hardware_validation_status": "MICRO_TURN_SINGLE_PULSE_SYNC_CHALLENGE",
+  "prior_raised_wheel_result": {
+    "distance_m": 0.02,
+    "fault": "BOUNDED_DISTANCE_LIMIT",
+    "right_count_at_cutoff": 22,
+    "left_count_at_cutoff": 20,
+    "right_final_count": 61,
+    "left_final_count": 60,
+    "interpretation": "pre-v3 cutoff used output-off coast and did not validate bounded physical behavior"
+  },
+  "floor_completion_tolerance_evidence": {
+    "requested_distance_m": 0.1,
+    "manually_measured_travel_m": 0.098,
+    "encoder_average_distance_m": 0.0972,
+    "right_target_counts": 102,
+    "left_target_counts": 101,
+    "right_final_counts": 98,
+    "left_final_counts": 98,
+    "right_overshoot_counts": -4,
+    "left_overshoot_counts": -3,
+    "heading_rad": -0.0015,
+    "stop_mode": "ACTIVE_BRAKE",
+    "interpretation": "accepted MVP mechanical evidence for the completion-window change; operational approval requires a repeat final floor test"
+  },
+  "pre_fix_raised_wheel_micro_turn_evidence": {
+    "command": "TURN_RIGHT",
+    "requested_angle_deg": 4.0,
+    "target_angle_rad": -0.0698,
+    "final_encoder_heading_rad": -0.0978,
+    "equivalent_final_heading_deg_magnitude": 5.6,
+    "right_target_counts": 11,
+    "left_target_counts": 11,
+    "right_completion_tolerance_counts": 3,
+    "left_completion_tolerance_counts": 3,
+    "right_brake_start_counts": 8,
+    "left_brake_start_counts": 8,
+    "right_count_at_brake_start": 8,
+    "left_count_at_brake_start": 6,
+    "right_final_settled_counts": 16,
+    "left_final_settled_counts": 13,
+    "right_overshoot_counts": 5,
+    "left_overshoot_counts": 2,
+    "turn_sustain_pwm": 180,
+    "right_breakaway_pwm": 185,
+    "left_breakaway_pwm": 190,
+    "stop_mode": "ACTIVE_BRAKE",
+    "terminal_result": "BOUNDED_DISTANCE_LIMIT with FAULT and latch",
+    "interpretation": "pre-fix raised-wheel result was correctly blocked by the absolute guard; it is not a physical pass for bounded micro-turn behavior"
+  },
+  "raised_wheel_reserve8_micro_turn_evidence": {
+    "command": "TURN_RIGHT",
+    "requested_angle_deg": 4.0,
+    "target_counts": {"right": 11, "left": 11},
+    "success_window": {"right": "8..11", "left": "8..11"},
+    "brake_reserve_counts": 8,
+    "brake_start_configured_counts": {"right": 3, "left": 3},
+    "counts_at_brake_start": {"right": 3, "left": 2},
+    "final_settled_counts": {"right": 8, "left": 6},
+    "overshoot_counts": {"right": -3, "left": -5},
+    "encoder_heading_deg": 2.70,
+    "stop_mode": "ACTIVE_BRAKE",
+    "terminal_result": "BOUNDED_TARGET_NOT_REACHED with FAULT and latch",
+    "positive_overshoot": false,
+    "interpretation": "safe underreach was correctly faulted because the left wheel was below its lower completion bound; this is not a physical pass"
+  },
+  "micro_turn_correction_physical_results": {
+    "raised_wheel_turn_right_4_deg": {
+      "final_counts": {"right": 11, "left": 10},
+      "result": "SUCCESS",
+      "correction_pulses": 0,
+      "encoder_heading_deg": 4.057
+    },
+    "floor_turn_right_4_deg": {
+      "measured_angle_deg": 4.0,
+      "counts_at_brake": {"right": 5, "left": 4},
+      "final_counts": {"right": 10, "left": 7},
+      "encoder_heading_deg": 3.28,
+      "correction_pulses": 2,
+      "active_brake": "PASS",
+      "result_before_tolerance_update": "BOUNDED_TARGET_NOT_REACHED",
+      "terminal_policy": "pending correction",
+      "iterative_perception_control_mvp": "acceptable bounded under-turn",
+      "positive_overshoot": false,
+      "correction_retest_required": true
+    },
+    "single_pulse_sync_floor_challenge": {
+      "command": "TURN_RIGHT",
+      "requested_angle_deg": 4.0,
+      "measured_angle_deg": 3.0,
+      "individual_brake_counts": {"right": 5, "left": 5},
+      "final_settled_counts": {"right": 6, "left": 5},
+      "sync_error_counts": 1,
+      "positive_overshoot": false,
+      "correction_pulses": 0,
+      "terminal_result": "PARTIAL_PROGRESS",
+      "controller_state": "READY",
+      "fault_latched": false,
+      "reobserve_required": true,
+      "interpretation": "single-pulse synchronized floor result measured 3 degrees for requested 4 degrees; reobserve is required before another turn and this is not production approval"
+    },
+    "final_physical_evidence": {
+      "bounded_forward_0_10m": {
+        "measured_distance_m": 0.100,
+        "terminal_result": "SUCCESS"
+      },
+      "turn_right_requested_4deg": {
+        "measured_angle_deg": 2.0,
+        "single_motor_activation": true,
+        "positive_overshoot": false,
+        "terminal_result": "PARTIAL_PROGRESS"
+      },
+      "turn_left_requested_4deg": {
+        "measured_angle_deg": 3.0,
+        "single_motor_activation": true,
+        "positive_overshoot": false,
+        "terminal_result": "PARTIAL_PROGRESS"
+      },
+      "partial_progress_requires_reobserve": true,
+      "exact_4deg_micro_turn_claimed": false
+    }
+  },
+  "baseline_unchanged": true
+}
