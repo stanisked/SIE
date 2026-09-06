@@ -144,3 +144,15 @@ perception, temporal stabilization или command planner.
 
 Это демонстрационный supervised слой, не operational approval. Следующий gate:
 review demo evidence и отдельное явное решение о любой future execution layer.
+
+## Far-field alignment v1
+
+Добавлена offline-only 2D policy для одного человека в
+`ar0234_image_frame`. Она принимает explicit `center_tolerance_px`, вычисляет
+только image-space offset относительно explicit optical axis и возвращает
+`ALIGN_TOWARD_IMAGE_LEFT`, `ALIGN_TOWARD_IMAGE_RIGHT` или
+`READY_FOR_RANGE_ACQUISITION`. Zero/multiple/invalid/non-finite/frame-unit
+cases дают явный `BLOCKED_NO_ALIGNMENT`.
+
+Policy не содержит depth, метров, base-turn mapping, HTTP, сети, ESP32 или
+моторов. Image-left/right остаются семантикой изображения.
