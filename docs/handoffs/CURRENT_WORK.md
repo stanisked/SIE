@@ -194,3 +194,29 @@ Evidence limits: this is one physical right-side gate; exact `4°` accuracy was
 not confirmed; `IMAGE_LEFT` mapping remains unconfirmed. Policy is not yet
 linked to real endpoints. Forward, HTTP executor and autonomous motion remain
 absent.
+
+### YAW_MAPPING_BILATERAL: PASS
+
+Physical calibration now confirms bilateral image-to-firmware yaw endpoint
+mapping:
+
+RIGHT:
+
+- `IMAGE_RIGHT → POST /turn-right`;
+- requested angle: `4°`;
+- rolling median `center_x`: `1353.0 → 1256.5 px`;
+- delta: `-96.5 px`, toward the optical axis;
+- terminal: `PARTIAL_PROGRESS`, then `READY`, `latch=false`, `PWM=0`.
+
+LEFT:
+
+- `IMAGE_LEFT → POST /turn-left`;
+- requested angle: `4°`;
+- rolling median `center_x`: `608.0 → 721.5 px`;
+- delta: `+113.5 px`, toward the optical axis;
+- terminal: `PARTIAL_PROGRESS`, then `READY`, `latch=false`, `PWM=0`.
+
+Interpretation: image-frame semantics now have confirmed firmware yaw endpoint
+mapping. Every turn still requires a complete stop and re-observation. Exact
+angle accuracy is not confirmed. No forward, HTTP executor or autonomous motor
+loop is approved.
