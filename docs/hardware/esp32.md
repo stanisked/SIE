@@ -208,7 +208,8 @@ reached (5/5 counts), the settled counts were 6/5 with one count of sync error,
 and there was no positive overshoot. This result is terminal
 `PARTIAL_PROGRESS`: the controller returns to `READY` without a fault latch,
 preserves the actual counts and heading, and requires a fresh perception
-re-observation before another turn. It is not production approval.
+re-observation before another turn. No automatic retry or hidden correction
+pulse is allowed after this safe underreach. It is not production approval.
 
 Final physical evidence records bounded forward 0.10 m at 0.100 m with
 `SUCCESS`, `TURN_RIGHT` requested 4 degrees at about 2 degrees with one motor

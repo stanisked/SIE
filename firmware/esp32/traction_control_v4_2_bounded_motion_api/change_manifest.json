@@ -11,6 +11,12 @@
     "requires_pwm_zero_brake_settle_stable_counts_session_and_wifi": true,
     "terminal_validation_after_each_correction": true
   },
+  "micro_turn_retry_policy": {
+    "automatic_retry_after_safe_underreach": false,
+    "automatic_correction_pulses": false,
+    "partial_progress_requires_reobserve": true,
+    "exact_requested_angle_accuracy_claimed": false
+  },
   "changed_endpoints": {
     "POST /move-forward": {
       "required_query": ["boot_session_id", "command_id", "distance_m"],
