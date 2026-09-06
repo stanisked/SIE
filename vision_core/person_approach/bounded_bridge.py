@@ -234,7 +234,7 @@ def plan_bounded_command(
 
     canonical_parameter = _canonical_number(parameter)
     identity = "\n".join((decision_id, endpoint, query_name, canonical_parameter, session))
-    command_id = "pa-" + hashlib.sha256(identity.encode("ascii")).hexdigest()[:60]
+    command_id = "pa-" + hashlib.sha256(identity.encode("ascii")).hexdigest()[:61]
     if COMMAND_ID_PATTERN.fullmatch(command_id) is None:
         return _block("INTERNAL_COMMAND_ID_INVALID", decision=decision, cycle_ids=cycle_ids, measurement_ids=measurement_ids)
     query = {"boot_session_id": session, "command_id": command_id, query_name: canonical_parameter}

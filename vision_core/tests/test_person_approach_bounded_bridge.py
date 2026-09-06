@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import subprocess
 import sys
 from copy import deepcopy
@@ -16,6 +17,7 @@ from vision_core.person_approach.bounded_bridge import plan_bounded_command
 NOW = datetime(2026, 9, 6, 12, 0, tzinfo=timezone.utc)
 FRAME = "rectified_left_optical_frame"
 SESSION = "0123456789ABCDEF"
+FIRMWARE_COMMAND_ID_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
 
 def cycle(index: int, *, status: str = "SUCCESS") -> dict:
@@ -106,6 +108,9 @@ def test_turn_direction_must_match_signed_decision_angle(status: str, parameter:
 def test_command_id_is_stable_for_retry_and_changes_with_identity_inputs():
     original = envelope()
     first = plan(original)["command_id"]
+    assert first.startswith("pa-")
+    assert len(first) == 64
+    assert FIRMWARE_COMMAND_ID_PATTERN.fullmatch(first) is not None
     assert plan(deepcopy(original))["command_id"] == first
     session = deepcopy(original)
     session["boot_session_id"] = "FEDCBA9876543210"

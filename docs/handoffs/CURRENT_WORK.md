@@ -89,13 +89,24 @@ Forward evidence относится к более раннему floor test и �
 - выход: только `PLANNED_BOUNDED_COMMAND` или `BLOCKED_NO_COMMAND`, всегда с
   `network_performed=false`;
 - `command_id` детерминирован из decision ID, endpoint, canonical parameter и
-  boot session;
+  boot session. Формат: `pa-` + первые 61 hex-символа SHA-256, ровно 64 ASCII
+  символа, что соответствует v4.2 contract `1..64`;
 - `PARTIAL_PROGRESS` с `reobserve_required=true` блокирует следующий план;
 - firmware, perception, stereo, ROS и live runtime не изменялись.
 
 Локальный Blocker/High review завершён. Найден и закрыт один High: bridge теперь
 проверяет соответствие знака `turn_angle_deg` направлению `TURN_LEFT` или
 `TURN_RIGHT` до преобразования величины в положительный API-параметр.
+
+Отдельный corrective High закрыт: generation `command_id` ограничен длиной
+ровно 64 символа, а unit test проверяет prefix, фактическую длину, ASCII charset
+и соответствие firmware pattern.
+
+Пример planned command:
+
+```json
+{"result":"PLANNED_BOUNDED_COMMAND","method":"POST","endpoint":"/move-forward","query":{"boot_session_id":"0123456789ABCDEF","command_id":"pa-5db5618d3f15a65991d8f0cc504b46f7e6beec9498a5aac7c7d42f532df6f","distance_m":"0.1"},"network_performed":false}
+```
 
 Проверено offline:
 
