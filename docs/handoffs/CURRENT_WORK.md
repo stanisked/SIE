@@ -156,3 +156,13 @@ cases дают явный `BLOCKED_NO_ALIGNMENT`.
 
 Policy не содержит depth, метров, base-turn mapping, HTTP, сети, ESP32 или
 моторов. Image-left/right остаются семантикой изображения.
+
+## AR0234 alignment preview для yaw-mapping gate
+
+`vision_core/tools/run_ar0234_alignment_preview.py` открывает только approved
+AR0234 checked capture в режиме `1920x1200`, `30 FPS`, `MJPG`, buffer `1` при
+явном запуске пользователя. Preview валидирует AR intrinsic `camera_matrix`,
+principal point и resolution, рисует overlay только на копии кадра и не пишет
+frames. `IMAGE_LEFT`, `CENTER_BAND` и `IMAGE_RIGHT` описывают только положение
+в image frame, не направление поворота базы. При `PERSON_LOST` или
+`MULTIPLE_PERSONS` rolling median очищается и старый bbox не остаётся актуальным.
