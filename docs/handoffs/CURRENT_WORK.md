@@ -120,3 +120,24 @@ Forward evidence относится к более раннему floor test и �
 
 Следующий gate: отдельный review production integration и физическое approval.
 До него bridge нельзя превращать в HTTP client или executor.
+
+## SIE MVP demo v0: supervised composition
+
+Ветка `feature/sie-supervised-person-approach-demo-v0` добавляет только
+supervised demo runner поверх существующих person-depth live runtime,
+`PersonApproachDecisionEngine` и bounded dry-run planner. Он не дублирует
+perception, temporal stabilization или command planner.
+
+- live runtime открывается только при явном пользовательском запуске CLI;
+- runner формирует один JSONL demo record без raw pixels;
+- `boot_session_id` передаётся аргументом и всегда содержит
+  `boot_session_freshness_verified=false`;
+- demo v0 допускает только `ADVANCE`; оба turn status дают
+  `TURN_NOT_ENABLED_IN_SUPERVISED_DEMO_V0`;
+- первый planned `ADVANCE` переводит runner в
+  `AWAITING_OPERATOR_CONFIRMATION`; новых plans и retries нет;
+- `network_performed=false` и `motor_command_performed=false` в каждом record;
+- HTTP client, socket, executor и firmware changes не добавлены.
+
+Это демонстрационный supervised слой, не operational approval. Следующий gate:
+review demo evidence и отдельное явное решение о любой future execution layer.
