@@ -238,3 +238,23 @@ HTTP executor, forward motion, autonomous motor loop, network or device access.
 Next physical gate: observe a person at several natural left, center and right
 positions. For each position, use only one manually confirmed turn, complete
 stop, then a new observation before any further decision.
+
+## AR0234 localization-to-yaw observation adapter
+
+`prepare_ar0234_yaw_observations.py` converts local JSONL from
+`run_person_localization_ar0234.py` into the temporal planner input. It derives
+the optical axis from AR intrinsic `K` (or the existing `camera_matrix` form),
+derives deterministic evidence IDs when absent, and emits no offset for lost,
+multiple or invalid-bbox records. Output creation is exclusive by default;
+`--overwrite` is explicit.
+
+Physical gate:
+
+1. Record five raw AR0234 frames with a person in a natural position.
+2. Run the adapter.
+3. Run the temporal yaw dry-run planner.
+4. Only for one planned turn, manually verify ESP32 status and manually issue
+   exactly that bounded turn.
+5. Confirm complete stop, `READY` and `PWM=0`.
+6. Record five new frames and repeat observation then planning.
+7. No retries, forward motion, correction loop or executor.
