@@ -266,3 +266,32 @@ Physical gate:
 5. Confirm complete stop, `READY` and `PWM=0`.
 6. Record five new frames and repeat observation then planning.
 7. No retries, forward motion, correction loop or executor.
+
+### TEMPORAL_YAW_ALIGNMENT_SUPERVISED_CYCLE_001: PASS
+
+One supervised observe-plan-turn-reobserve cycle produced this physical
+evidence:
+
+- initial normalized window: four valid `SINGLE_PERSON`, one intermediate
+  `PERSON_LOST`, latest `SINGLE_PERSON`;
+- initial robust median offset: `-364.115537 px`; MAD: `1.25 px`;
+- dry planner selected `POST /turn-left`, `angle_deg=4`,
+  `AWAIT_REOBSERVATION`;
+- manual bounded command ID: `tempyaw-left-20260907-02`;
+- terminal firmware state: `PARTIAL_PROGRESS`, then `READY`,
+  `bounded_fault_latched=false`, `PWM=0`, `reobserve_required=true`;
+- firmware heading: `+0.0304 rad`, approximately `+1.74 degrees`; exact
+  `4-degree` accuracy is not claimed;
+- after window: five valid `SINGLE_PERSON`, median offset `-343.365537 px`,
+  MAD `12.5 px`;
+- observed delta: `+20.75 px`, toward the optical axis;
+- the planner still selected `/turn-left`, correctly, because the person
+  remained left of center.
+
+`PASS` is only one supervised observe-plan-turn-reobserve sign/effect cycle.
+It is not yaw-gain calibration, operational approval, an automatic correction
+loop, forward approval or executor approval. The participant may naturally
+move, so this is evidence rather than a fixed-pose benchmark.
+
+Next gate: collect bounded evidence from several natural left/right trials
+before considering any automatic execution layer.
