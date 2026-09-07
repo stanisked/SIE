@@ -220,3 +220,21 @@ Interpretation: image-frame semantics now have confirmed firmware yaw endpoint
 mapping. Every turn still requires a complete stop and re-observation. Exact
 angle accuracy is not confirmed. No forward, HTTP executor or autonomous motor
 loop is approved.
+
+## Temporal 2D yaw-alignment dry-run v1
+
+`YAW_MAPPING_BILATERAL: PASS` is the physical sign-mapping evidence for this
+planner: `IMAGE_RIGHT → /turn-right` and `IMAGE_LEFT → /turn-left`. The new
+planner consumes only a local JSONL window of up to five AR0234 image-frame
+observations, requires at least four valid `SINGLE_PERSON` records, and uses
+the robust median image offset plus MAD. Invalid, lost, multiple, frame/unit
+mismatch or unstable windows fail closed with `BLOCKED_NO_TURN`.
+
+The planner emits only a dry-run semantic `POST` endpoint and `angle_deg=4`.
+After a planned turn it enters `AWAIT_REOBSERVATION` and refuses a repeat of
+the same evidence window. This does not claim exact `4°` accuracy and adds no
+HTTP executor, forward motion, autonomous motor loop, network or device access.
+
+Next physical gate: observe a person at several natural left, center and right
+positions. For each position, use only one manually confirmed turn, complete
+stop, then a new observation before any further decision.
