@@ -295,3 +295,33 @@ move, so this is evidence rather than a fixed-pose benchmark.
 
 Next gate: collect bounded evidence from several natural left/right trials
 before considering any automatic execution layer.
+
+### TEMPORAL_YAW_ALIGNMENT_SUPERVISED_CYCLE_002_RIGHT: PASS
+
+One supervised right-side observe-plan-single-turn-reobserve cycle produced:
+
+- before window: `5/5 SINGLE_PERSON`, median offset `+249.1344628 px`, MAD
+  `2.0 px`;
+- dry plan: `POST /turn-right`, `angle_deg=4`, `AWAIT_REOBSERVATION`;
+- manual bounded command ID: `tempyaw-right-20260907-01`;
+- terminal: `PARTIAL_PROGRESS`, then `READY`,
+  `bounded_fault_latched=false`, active command `null`, `PWM=0`,
+  `reobserve_required=true`;
+- firmware heading: `-0.0405 rad`, approximately `-2.32 degrees`;
+- after window: `5/5 SINGLE_PERSON`, median offset `+195.1344628 px`, MAD
+  `4.5 px`;
+- observed delta: `-54.0 px`, toward the optical axis.
+
+### TEMPORAL_YAW_ALIGNMENT_BILATERAL_SUPERVISED: PASS
+
+Left and right full observe-plan-single-turn-reobserve cycles both produced
+image displacement toward center. There was no `FAULT`, no latch and no
+nonzero final PWM. Exact yaw gain and `4-degree` accuracy are not calibrated.
+There is no auto-loop, forward motion, executor or operational approval. The
+current planner correctly keeps proposing a turn while the person remains
+outside the `±40 px` center band.
+
+Next software gate: a separate dry-run supervised state machine that joins
+far-field 2D alignment to `RANGE_ACQUISITION_REQUIRED` when centered, then to
+the existing stereo-depth decision. This documentation commit adds no executor,
+HTTP, ESP32 or forward behavior.
