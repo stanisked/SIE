@@ -354,3 +354,21 @@ Next physical gate: run one five-cycle person-depth-live capture, adapt it with
 `--source-kind person-depth-live-cycle`, run the temporal planner, then pass
 the latest depth record and temporal result to the coordinator. This adds no
 executor, network, hardware or forward behavior.
+
+## Unified supervised target demo dry-run v1
+
+The runner keeps one existing person-depth live runtime for a single shared
+five-cycle window, derives temporal 2D observations through the shared adapter,
+then routes only existing temporal, coordinator and approach-decision outputs.
+Core stages and records use `target`, `entity`, `observation` and
+`measurement`; the current source adapter explicitly declares
+`entity_type="person"`. It does not claim arbitrary-object recognition.
+
+Existing centered live-decision evidence is: median `z=2.23577 m`, range
+`2.24435 m`, `x=0.02854 m`, with result `ADVANCE 0.10 m`. This remains dry-run
+evidence only; no motor command was performed.
+
+Next physical gate after commit: collect one integrated runner output for each
+of off-center turn, centered range-required, centered advance and centered
+hold cases. Review a separate executor proposal before any physical forward
+command.
