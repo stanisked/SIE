@@ -4,6 +4,11 @@ from __future__ import annotations
 import argparse, json, sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+ sys.path.insert(0, str(PROJECT_ROOT))
+
 from vision_core.person_localization import AR0234_BY_ID, AR0234Capture, AR0234CaptureConfig
 from vision_core.person_localization.pipeline import PersonLocalizationPipeline
 from vision_core.person_localization.mp_persondet import MPPersonDetOpenCV
