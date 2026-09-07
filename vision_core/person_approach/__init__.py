@@ -7,6 +7,7 @@ from .far_field_alignment import FarFieldAlignmentResult, evaluate_far_field_ali
 from .temporal_yaw_alignment import TemporalYawAlignmentPlanner, TemporalYawAlignmentResult, evaluate_temporal_yaw_alignment
 from .supervised_acquire_range import SupervisedAcquireRangeResult, coordinate_supervised_acquire_range
 from .supervised_target_dry_run import SupervisedTargetDryRun, SupervisedTargetResult
+from .metric_first_target_supervisor import MetricFirstTargetResult, MetricFirstTargetSupervisor
 
 __all__ = [
     "BoundedCommandBlock",
@@ -23,5 +24,7 @@ __all__ = [
     "coordinate_supervised_acquire_range",
     "SupervisedTargetDryRun",
     "SupervisedTargetResult",
+    "MetricFirstTargetResult",
+    "MetricFirstTargetSupervisor",
     "plan_bounded_command",
 ]

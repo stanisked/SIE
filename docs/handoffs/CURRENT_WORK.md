@@ -377,3 +377,19 @@ The first integrated physical runner was safely blocked with
 `TEMPORAL_UNSTABLE_EVIDENCE_WINDOW`. This is valid safety evidence: the new
 `alignment_summary` exposes the existing temporal diagnostics without changing
 thresholds, window size, freshness, planner semantics or motion behavior.
+
+## Metric-first target supervisor dry-run v1
+
+Physical post-turn image medians of `+40.13 px`, `+53.63 px` and `+42.63 px`,
+with MAD values `6.5 px`, `6 px` and `8 px`, were all safely blocked by the
+current image-only path. This motivates metric-depth evidence priority, not a
+relaxation of the image center band, MAD gate, freshness or window rules.
+
+The new supervisor evaluates the same shared five-cycle window through both
+temporal image alignment and existing metric approach decision. A fresh,
+same-window metric decision with explicit metres and reference frame wins;
+otherwise the unchanged image alignment remains the fallback. It creates only
+dry-run handoffs, never HTTP, ESP32, executor or motor activity.
+
+Next physical gate: one unified run where valid metric depth produces a
+dry-run `ADVANCE` even when the 2D alignment is near or beyond the image band.
