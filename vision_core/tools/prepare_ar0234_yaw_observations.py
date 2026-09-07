@@ -53,13 +53,13 @@ def load_optical_axis_cx(path: Path) -> float:
     return cx
 
 
-def _evidence_id(raw: dict[str, Any], line_number: int) -> str:
+def _evidence_id(raw: dict[str, Any], line_number: int, *, prefix: str) -> str:
     provided = _text(raw.get("evidence_id"))
     if provided is not None:
         return provided
     canonical = json.dumps(raw, allow_nan=False, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
-    return f"ar0234-localization-{line_number:06d}-{digest}"
+    return f"{prefix}-{line_number:06d}-{digest}"
 
 
 def prepare_observation(
@@ -76,7 +76,7 @@ def prepare_observation(
         raise ValueError("optical axis and center tolerance must be finite; tolerance non-negative")
     person_status = _text(raw.get("status")) or "INVALID_PERSON_EVIDENCE"
     observation: dict[str, Any] = {
-        "evidence_id": _evidence_id(raw, line_number),
+        "evidence_id": _evidence_id(raw, line_number, prefix="ar0234-localization"),
         "timestamp": _timezone_aware_timestamp(raw.get("timestamp")),
         "reference_frame": IMAGE_FRAME,
         "units": IMAGE_UNITS,
@@ -94,12 +94,64 @@ def prepare_observation(
     return observation
 
 
+def _live_cycle_evidence_id(cycle: dict[str, Any], line_number: int) -> str:
+    measurement = cycle.get("measurement")
+    if type(measurement) is dict:
+        for key in ("person_evidence_id", "person_observation_id", "measurement_id"):
+            identifier = _text(measurement.get(key))
+            if identifier is not None:
+                return identifier
+    return _evidence_id(cycle, line_number, prefix="person-depth-live-cycle")
+
+
+def prepare_person_depth_live_cycle_observation(
+    cycle: object,
+    *,
+    line_number: int,
+    optical_axis_cx_px: float,
+    center_tolerance_px: float,
+) -> dict[str, Any]:
+    """Create temporal evidence from one existing person-depth live-cycle record."""
+    if type(cycle) is not dict:
+        raise ValueError("each live-cycle JSONL record must be an object")
+    if _finite(optical_axis_cx_px) is None or _finite(center_tolerance_px) is None or center_tolerance_px < 0:
+        raise ValueError("optical axis and center tolerance must be finite; tolerance non-negative")
+    person = cycle.get("person") if type(cycle.get("person")) is dict else {}
+    person_status = _text(person.get("status")) or "INVALID_PERSON_EVIDENCE"
+    if cycle.get("schema_version") != "sie.person_depth_live_cycle.v1":
+        person_status = "INVALID_PERSON_EVIDENCE"
+    if person_status == "SINGLE_PERSON" and cycle.get("status") != "SUCCESS":
+        person_status = "INVALID_PERSON_EVIDENCE"
+    observation: dict[str, Any] = {
+        "evidence_id": _live_cycle_evidence_id(cycle, line_number),
+        "timestamp": _timezone_aware_timestamp(cycle.get("captured_at_utc")),
+        "reference_frame": IMAGE_FRAME,
+        "units": IMAGE_UNITS,
+        "person_status": person_status,
+        "center_tolerance_px": float(center_tolerance_px),
+    }
+    bbox = person.get("bbox_xyxy_px")
+    if person_status != "SINGLE_PERSON" or type(bbox) is not list or len(bbox) != 4:
+        return observation
+    x1, y1, x2, y2 = (_finite(value) for value in bbox)
+    if None in (x1, y1, x2, y2) or x2 <= x1 or y2 <= y1:
+        return observation
+    observation["image_offset_px"] = (x1 + x2) / 2.0 - optical_axis_cx_px
+    return observation
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("raw_input", type=Path, help="JSONL from run_person_localization_ar0234.py")
+    parser.add_argument("raw_input", type=Path, help="local source JSONL")
     parser.add_argument("output", type=Path, help="new planner-compatible JSONL path")
     parser.add_argument("--ar-intrinsic", type=Path, required=True)
     parser.add_argument("--center-tolerance-px", type=float, required=True)
+    parser.add_argument(
+        "--source-kind",
+        choices=("ar0234-localization", "person-depth-live-cycle"),
+        default="ar0234-localization",
+        help="explicit source record contract; default preserves raw AR0234 localization input",
+    )
     parser.add_argument("--overwrite", action="store_true", help="explicitly replace an existing output file")
     return parser.parse_args()
 
@@ -115,10 +167,8 @@ def main() -> int:
     try:
         with args.raw_input.open("r", encoding="utf-8") as stream:
             raw_records = [json.loads(line) for line in stream if line.strip()]
-        observations = [
-            prepare_observation(raw, line_number=index, optical_axis_cx_px=cx, center_tolerance_px=tolerance)
-            for index, raw in enumerate(raw_records, start=1)
-        ]
+        prepare = prepare_observation if args.source_kind == "ar0234-localization" else prepare_person_depth_live_cycle_observation
+        observations = [prepare(raw, line_number=index, optical_axis_cx_px=cx, center_tolerance_px=tolerance) for index, raw in enumerate(raw_records, start=1)]
         output_mode = "w" if args.overwrite else "x"
         with args.output.open(output_mode, encoding="utf-8", newline="\n") as stream:
             for observation in observations:

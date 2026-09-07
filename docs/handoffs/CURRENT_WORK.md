@@ -340,3 +340,17 @@ device action.
 Far-field forward without valid depth provenance remains intentionally
 unsupported. Next physical gate: manually align a person to center, then
 observe whether Stereo V6 depth becomes valid before any advance planning.
+
+### Shared live-cycle yaw/depth evidence clarification
+
+A sequential depth capture followed by a separate AR capture was correctly
+blocked by the coordinator: the latest depth cycle at
+`2026-09-07T14:52:26.539039+00:00` was `6.40 s` older than the temporal result
+at `2026-09-07T14:52:32.935537+00:00`. The accepted fix is shared
+`sie.person_depth_live_cycle.v1` evidence through the yaw adapter, not a
+relaxation of freshness policy.
+
+Next physical gate: run one five-cycle person-depth-live capture, adapt it with
+`--source-kind person-depth-live-cycle`, run the temporal planner, then pass
+the latest depth record and temporal result to the coordinator. This adds no
+executor, network, hardware or forward behavior.
