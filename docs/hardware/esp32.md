@@ -184,6 +184,17 @@ This is an encoder-bounded cutoff, not a claim of mathematically zero physical
 overshoot. Residual mechanical motion still requires separate physical
 measurement before the bounded API can be operationally approved.
 
+The bounded-forward diagnostics also retain one fixed-depth `previous_guard`
+snapshot. Each non-triggering bounded-forward encoder guard evaluation overwrites
+it; the first braking or hard-limit evaluation preserves the last non-triggering
+sample. It is `null` for an initial triggering sample and for idle, legacy, or
+turn commands. This telemetry identifies guard observation latency only; it does
+not prove mechanical containment or a safe floor stopping envelope.
+
+The next experiment is one raised-wheel bounded-forward run at 0.10 m. Raised-
+wheel evidence can locate encoder/control timing, but cannot justify floor
+stopping or operational forward approval.
+
 Any active bounded-command FAULT latches `bounded_fault_latched` with
 `bounded_fault_reason`, including timeout, Wi-Fi loss, encoder/stall and
 direction faults. While latched, all new bounded, legacy and square movement

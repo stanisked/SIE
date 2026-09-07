@@ -320,6 +320,19 @@ struct CommandRecord {
   bool forwardPreBrakeLeftAtBrakeThreshold = false;
   bool forwardPreBrakeRightAtHardLimit = false;
   bool forwardPreBrakeLeftAtHardLimit = false;
+  bool forwardPreviousGuardCaptured = false;
+  uint32_t forwardPreviousGuardTimestampMs = 0;
+  MotionState forwardPreviousGuardState = MotionState::READY;
+  int32_t forwardPreviousGuardRightCount = 0;
+  int32_t forwardPreviousGuardLeftCount = 0;
+  int32_t forwardPreviousGuardRightBrakeStartCounts = 0;
+  int32_t forwardPreviousGuardLeftBrakeStartCounts = 0;
+  int32_t forwardPreviousGuardRightLimitCounts = 0;
+  int32_t forwardPreviousGuardLeftLimitCounts = 0;
+  bool forwardPreviousGuardRightAtBrakeThreshold = false;
+  bool forwardPreviousGuardLeftAtBrakeThreshold = false;
+  bool forwardPreviousGuardRightAtHardLimit = false;
+  bool forwardPreviousGuardLeftAtHardLimit = false;
   bool forwardBrakeCommandCaptured = false;
   uint32_t forwardBrakeCommandTimestampMs = 0;
   MotionState forwardBrakeCommandState = MotionState::READY;
@@ -805,6 +818,35 @@ void captureBoundedForwardPreBrakeGuard(
   command->forwardPreBrakeLeftAtBrakeThreshold = leftAtBrakeThreshold;
   command->forwardPreBrakeRightAtHardLimit = rightAtHardLimit;
   command->forwardPreBrakeLeftAtHardLimit = leftAtHardLimit;
+}
+
+void captureBoundedForwardPreviousGuard(
+    int32_t rightCount,
+    int32_t leftCount)
+{
+  CommandRecord* command = activeCommand();
+  if (!activeBoundedForwardCommand(command)) {
+    return;
+  }
+  command->forwardPreviousGuardCaptured = true;
+  command->forwardPreviousGuardTimestampMs = millis();
+  command->forwardPreviousGuardState = motionState;
+  command->forwardPreviousGuardRightCount = rightCount;
+  command->forwardPreviousGuardLeftCount = leftCount;
+  command->forwardPreviousGuardRightBrakeStartCounts =
+      activeBoundedRightBrakeStartCounts;
+  command->forwardPreviousGuardLeftBrakeStartCounts =
+      activeBoundedLeftBrakeStartCounts;
+  command->forwardPreviousGuardRightLimitCounts = activeBoundedRightLimitCounts;
+  command->forwardPreviousGuardLeftLimitCounts = activeBoundedLeftLimitCounts;
+  command->forwardPreviousGuardRightAtBrakeThreshold =
+      rightCount >= activeBoundedRightBrakeStartCounts;
+  command->forwardPreviousGuardLeftAtBrakeThreshold =
+      leftCount >= activeBoundedLeftBrakeStartCounts;
+  command->forwardPreviousGuardRightAtHardLimit =
+      rightCount >= activeBoundedRightLimitCounts;
+  command->forwardPreviousGuardLeftAtHardLimit =
+      leftCount >= activeBoundedLeftLimitCounts;
 }
 
 void captureBoundedForwardBrakeCommand(
@@ -1650,6 +1692,7 @@ bool enforceBoundedEncoderLimit()
         return true;
       }
     }
+    captureBoundedForwardPreviousGuard(rightCount, leftCount);
     return false;
   }
 
@@ -1789,6 +1832,7 @@ bool enforceBoundedEncoderLimit()
     return true;
   }
 
+  captureBoundedForwardPreviousGuard(rightCount, leftCount);
   return false;
 }
 
@@ -2707,7 +2751,38 @@ void appendBoundedForwardBrakeDiagnostics(
     return;
   }
 
-  json += "{\"pre_brake_guard\":";
+  json += "{\"previous_guard\":";
+  if (!bounded->forwardPreviousGuardCaptured) {
+    json += "null";
+  } else {
+    json += "{\"timestamp_ms\":";
+    json += String(bounded->forwardPreviousGuardTimestampMs);
+    json += ",\"controller_state\":\"";
+    json += motionStateName(bounded->forwardPreviousGuardState);
+    json += "\",\"right_count\":";
+    json += String(bounded->forwardPreviousGuardRightCount);
+    json += ",\"left_count\":";
+    json += String(bounded->forwardPreviousGuardLeftCount);
+    json += ",\"right_brake_start_count\":";
+    json += String(bounded->forwardPreviousGuardRightBrakeStartCounts);
+    json += ",\"left_brake_start_count\":";
+    json += String(bounded->forwardPreviousGuardLeftBrakeStartCounts);
+    json += ",\"right_hard_limit_count\":";
+    json += String(bounded->forwardPreviousGuardRightLimitCounts);
+    json += ",\"left_hard_limit_count\":";
+    json += String(bounded->forwardPreviousGuardLeftLimitCounts);
+    json += ",\"right_met_brake_threshold\":";
+    json += bounded->forwardPreviousGuardRightAtBrakeThreshold ? "true" : "false";
+    json += ",\"left_met_brake_threshold\":";
+    json += bounded->forwardPreviousGuardLeftAtBrakeThreshold ? "true" : "false";
+    json += ",\"right_met_hard_limit\":";
+    json += bounded->forwardPreviousGuardRightAtHardLimit ? "true" : "false";
+    json += ",\"left_met_hard_limit\":";
+    json += bounded->forwardPreviousGuardLeftAtHardLimit ? "true" : "false";
+    json += "}";
+  }
+
+  json += ",\"pre_brake_guard\":";
   if (!bounded->forwardPreBrakeGuardCaptured) {
     json += "null";
   } else {

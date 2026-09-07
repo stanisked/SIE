@@ -241,6 +241,26 @@ def test_forward_brake_snapshots_do_not_change_guard_or_brake_path(source: str) 
     )
 
 
+def test_previous_guard_field_is_present_and_nullable_idle(source: str) -> None:
+    diagnostics = function_body(source, "void appendBoundedForwardBrakeDiagnostics(")
+    assert "previous_guard" in diagnostics
+    assert "forwardPreviousGuardCaptured" in diagnostics
+    assert 'json += "null";' in diagnostics
+
+
+def test_previous_guard_is_preserved_for_triggering_forward_diagnostic(source: str) -> None:
+    guard = function_body(source, "bool enforceBoundedEncoderLimit()")
+    active_branch = guard[
+        guard.index("if (activeBoundedBrakeStarted)"):
+        guard.index("if (activeBoundedMotionProfile ==")
+    ]
+    assert "captureBoundedForwardPreviousGuard(rightCount, leftCount);" in active_branch
+    trigger_tail = guard[guard.index("if (predictiveBrake || targetReached)"):]
+    assert trigger_tail.rfind(
+        "captureBoundedForwardPreviousGuard(rightCount, leftCount);"
+    ) > trigger_tail.index("return true;")
+
+
 def test_micro_turn_profile_reserves_six_counts_before_target(source: str) -> None:
     assert "BOUNDED_MICRO_TURN_BRAKE_RESERVE_COUNTS = 6" in source
     reserve = function_body(source, "int32_t boundedMicroTurnBrakeReserveCounts(")
