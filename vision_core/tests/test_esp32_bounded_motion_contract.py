@@ -196,6 +196,51 @@ def test_short_command_brake_start_is_before_target_and_is_telemetried(source: s
         assert field in status
 
 
+def test_forward_brake_observability_fields_are_fixed_and_exposed(source: str) -> None:
+    status = function_body(source, "String buildStatusJson()")
+    diagnostics = function_body(source, "void appendBoundedForwardBrakeDiagnostics(")
+    for field in (
+        "bounded_forward_brake_diagnostics",
+        "pre_brake_guard",
+        "brake_command",
+        "first_post_brake_loop",
+        "first_hard_limit_guard",
+        "trigger_reason",
+        "already_braking_or_settling",
+    ):
+        assert field in status or field in diagnostics
+    record = source[source.index("struct CommandRecord {"):source.index("MotionState motionState")]
+    assert "String forward" not in record
+    assert "forwardPreBrakeGuardCaptured" in record
+    assert "forwardFirstHardLimitGuardCaptured" in record
+
+
+def test_forward_brake_observability_is_nullable_when_idle(source: str) -> None:
+    diagnostics = function_body(source, "void appendBoundedForwardBrakeDiagnostics(")
+    assert "if (!activeBoundedForwardCommand(bounded))" in diagnostics
+    assert 'json += "null";' in diagnostics
+    status = function_body(source, "String buildStatusJson()")
+    assert "appendBoundedForwardBrakeDiagnostics(json, bounded);" in status
+
+
+def test_forward_brake_snapshots_do_not_change_guard_or_brake_path(source: str) -> None:
+    guard = function_body(source, "bool enforceBoundedEncoderLimit()")
+    assert guard.index("captureBoundedForwardFirstHardLimitGuard(") < guard.index(
+        'beginBoundedBraking(true, "BOUNDED_DISTANCE_LIMIT")'
+    )
+    assert guard.index("captureBoundedForwardPreBrakeGuard(") < guard.index(
+        "beginBoundedTargetSettling();"
+    )
+    braking = function_body(
+        source,
+        "void beginBoundedBraking(bool faultPending, const String &reason)\n{",
+    )
+    assert braking.index("stopMotors();") < braking.index("brakeMotors();")
+    assert braking.index("brakeMotors();") < braking.index(
+        "captureBoundedForwardBrakeCommand("
+    )
+
+
 def test_micro_turn_profile_reserves_six_counts_before_target(source: str) -> None:
     assert "BOUNDED_MICRO_TURN_BRAKE_RESERVE_COUNTS = 6" in source
     reserve = function_body(source, "int32_t boundedMicroTurnBrakeReserveCounts(")

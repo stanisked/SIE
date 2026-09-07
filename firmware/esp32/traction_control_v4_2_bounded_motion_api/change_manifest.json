@@ -109,7 +109,20 @@
       ,"bounded_sync_error_counts"
       ,"bounded_correction_pulses_enabled"
     ],
-    "residual_mechanical_overshoot": "must be measured in a separate raised-wheel retest"
+    "residual_mechanical_overshoot": "must be measured in a separate raised-wheel retest",
+    "bounded_forward_brake_observability_v1": {
+      "scope": "BOUNDED_FORWARD_V1 only; fixed-size CommandRecord diagnostics preserved for active or last bounded command",
+      "status_field": "bounded_forward_brake_diagnostics",
+      "nullable_idle_or_non_forward": true,
+      "snapshots": {
+        "pre_brake_guard": ["timestamp_ms", "controller_state", "right_count", "left_count", "right_brake_start_count", "left_brake_start_count", "right_hard_limit_count", "left_hard_limit_count", "trigger_reason", "right_met_brake_threshold", "left_met_brake_threshold", "right_met_hard_limit", "left_met_hard_limit"],
+        "brake_command": ["timestamp_ms", "controller_state", "right_count", "left_count", "right_pwm", "left_pwm"],
+        "first_post_brake_loop": ["timestamp_ms", "controller_state", "right_count", "left_count", "right_pwm", "left_pwm"],
+        "first_hard_limit_guard": ["timestamp_ms", "right_count", "left_count", "right_exceeded", "left_exceeded", "already_braking_or_settling"]
+      },
+      "control_semantics_changed": false,
+      "mechanical_containment_claimed": false
+    }
   },
   "fault_latch_contract": {
     "latched_for_any_active_bounded_fault": true,
@@ -175,6 +188,17 @@
     "heading_rad": -0.0015,
     "stop_mode": "ACTIVE_BRAKE",
     "interpretation": "accepted MVP mechanical evidence for the completion-window change; operational approval requires a repeat final floor test"
+  },
+  "bounded_forward_brake_observability_incident": {
+    "requested_distance_m": 0.1,
+    "right_target_final_counts": [102, 100],
+    "left_target_final_counts": [101, 110],
+    "terminal_result": "BOUNDED_DISTANCE_LIMIT with FAULT and bounded fault latch",
+    "final_pwm": 0,
+    "brake_start_configured_counts": [66, 65],
+    "recorded_counts_at_brake_start": [75, 85],
+    "encoder_average_distance_m": 0.1042,
+    "interpretation": "safety fault was correct; existing telemetry cannot locate the first threshold crossing or prove mechanical containment"
   },
   "pre_fix_raised_wheel_micro_turn_evidence": {
     "command": "TURN_RIGHT",

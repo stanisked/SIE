@@ -123,6 +123,28 @@ must be between `target - tolerance` and `target`, inclusive. A positive count
 above target remains `BOUNDED_DISTANCE_LIMIT` with a fault latch. A count below
 its lower bound remains `BOUNDED_TARGET_NOT_REACHED` with a fault latch.
 
+### Bounded-forward brake observability v1
+
+An incident for requested `0.10 m` settled at right target/final `102/100`
+and left target/final `101/110`, with `BOUNDED_DISTANCE_LIMIT`, `FAULT`, a
+latched bounded fault and zero final PWM. The configured brake starts were
+`66/65`; the existing count-at-brake snapshot was `75/85`; encoder average
+distance was `0.1042 m`.
+
+For `BOUNDED_FORWARD_V1` only, `GET /status` now preserves a fixed-size
+`bounded_forward_brake_diagnostics` object with four nullable snapshots:
+`pre_brake_guard`, `brake_command`, `first_post_brake_loop` and
+`first_hard_limit_guard`. They record encoder/control timing, threshold and
+limit membership, brake PWM/state, and the first hard-limit observation. The
+object is `null` while idle and for non-forward commands; an individual
+snapshot remains `null` until captured. No trace arrays or diagnostic strings
+are retained in command history.
+
+This instrumentation does not prove mechanical containment. It only locates
+the encoder and controller timing of a future violation; target counts,
+target-plus-one hard limits, PWM, brake hold, completion classification, fault
+latch and routes are unchanged.
+
 Thus distance and angle are upper physical bounds, not requirements to land on
 one mathematically exact encoder count. The status also records each wheel's
 completion tolerance and lower success count. The existing 100 mm floor test
