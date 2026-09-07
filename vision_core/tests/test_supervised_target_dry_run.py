@@ -43,6 +43,20 @@ def test_off_center_shared_window_awaits_operator_turn():
     assert result["stage"] == "AWAIT_OPERATOR_TURN_AND_REOBSERVATION"
     assert result["planned_dry_run"] == {"method": "POST", "endpoint": "/turn-right", "angle_deg": 4}
     assert result["entity_type"] == "person" and result["reobserve_required"] is True
+    assert result["alignment_summary"]["planned_turn_endpoint"] == "/turn-right"
+    assert result["network_performed"] is False and result["motor_command_performed"] is False
+
+
+def test_unstable_temporal_window_exposes_summary_and_stays_blocked():
+    result = runner([cycle(index, center_x=960.0 + index * 100.0) for index in range(1, 6)]).run_live_window()
+    summary = result["alignment_summary"]
+    assert result["stage"] == result["result"] == "BLOCKED_NO_ACTION"
+    assert summary["temporal_result"] == "BLOCKED_NO_TURN"
+    assert summary["temporal_block_reason"] == "UNSTABLE_EVIDENCE_WINDOW"
+    assert summary["valid_single_person_count"] == 5
+    assert summary["mad_image_offset_px"] == 100.0
+    assert summary["planned_turn_endpoint"] is None
+    assert result["network_performed"] is False and result["motor_command_performed"] is False
 
 
 def test_centered_valid_depth_beyond_target_awaits_operator_advance():

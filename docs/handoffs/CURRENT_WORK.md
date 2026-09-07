@@ -372,3 +372,8 @@ Next physical gate after commit: collect one integrated runner output for each
 of off-center turn, centered range-required, centered advance and centered
 hold cases. Review a separate executor proposal before any physical forward
 command.
+
+The first integrated physical runner was safely blocked with
+`TEMPORAL_UNSTABLE_EVIDENCE_WINDOW`. This is valid safety evidence: the new
+`alignment_summary` exposes the existing temporal diagnostics without changing
+thresholds, window size, freshness, planner semantics or motion behavior.

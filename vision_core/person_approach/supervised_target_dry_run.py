@@ -33,6 +33,7 @@ class SupervisedTargetResult:
     measurement_units: str | None
     temporal_result: str | None
     decision_status: str | None
+    alignment_summary: dict[str, Any]
     planned_dry_run: dict[str, Any] | None
     reobserve_required: bool
     network_performed: bool = False
@@ -69,6 +70,7 @@ def _result(
     measurement_units: str | None = None,
     temporal_result: str | None = None,
     decision_status: str | None = None,
+    alignment_summary: dict[str, Any] | None = None,
     planned_dry_run: dict[str, Any] | None = None,
     reobserve_required: bool = True,
 ) -> dict[str, Any]:
@@ -87,6 +89,18 @@ def _result(
         measurement_units=measurement_units,
         temporal_result=temporal_result,
         decision_status=decision_status,
+        alignment_summary=alignment_summary or {
+            "temporal_result": None,
+            "temporal_block_reason": None,
+            "valid_single_person_count": 0,
+            "person_lost_count": 0,
+            "latest_person_status": None,
+            "robust_median_image_offset_px": None,
+            "mad_image_offset_px": None,
+            "center_tolerance_px": None,
+            "planned_turn_endpoint": None,
+            "source_window_cycle_ids": list(cycle_ids),
+        },
         planned_dry_run=planned_dry_run,
         reobserve_required=reobserve_required,
     ).to_dict()
@@ -152,12 +166,25 @@ class SupervisedTargetDryRun:
         ]
         temporal = evaluate_temporal_yaw_alignment(observations, now_utc=self.now_utc)
         temporal_result = _text(temporal.get("result"))
+        planned_command = temporal.get("planned_command")
+        alignment_summary = {
+            "temporal_result": temporal_result,
+            "temporal_block_reason": temporal.get("block_reason"),
+            "valid_single_person_count": temporal.get("valid_single_person_count"),
+            "person_lost_count": temporal.get("person_lost_count"),
+            "latest_person_status": temporal.get("latest_person_status"),
+            "robust_median_image_offset_px": temporal.get("robust_median_image_offset_px"),
+            "mad_image_offset_px": temporal.get("mad_image_offset_px"),
+            "center_tolerance_px": temporal.get("center_tolerance_px"),
+            "planned_turn_endpoint": planned_command.get("endpoint") if type(planned_command) is dict else None,
+            "source_window_cycle_ids": cycle_ids,
+        }
         if temporal_result not in {"PLANNED_TURN", "NO_TURN_CENTERED"}:
             return _result(
                 stage="BLOCKED_NO_ACTION", reason=f"TEMPORAL_{temporal.get('block_reason', 'INVALID')}", cycle_ids=cycle_ids,
                 evidence_ids=temporal.get("used_evidence_ids") if type(temporal.get("used_evidence_ids")) is list else [],
                 alignment_frame=_text(temporal.get("reference_frame")), alignment_units=_text(temporal.get("units")),
-                temporal_result=temporal_result,
+                temporal_result=temporal_result, alignment_summary=alignment_summary,
             )
 
         coordinator_envelope: dict[str, Any] = {"temporal_alignment": temporal}
@@ -170,19 +197,22 @@ class SupervisedTargetDryRun:
                 stage="AWAIT_OPERATOR_TURN_AND_REOBSERVATION", reason=None, cycle_ids=cycle_ids,
                 evidence_ids=evidence_ids, alignment_frame=coordinated["temporal_reference_frame"],
                 alignment_units=coordinated["temporal_units"], temporal_result=temporal_result,
-                planned_dry_run=coordinated["planned_turn"], reobserve_required=True,
+                planned_dry_run=coordinated["planned_turn"], alignment_summary=alignment_summary,
+                reobserve_required=True,
             )
         if coordinated["stage"] == "RANGE_ACQUISITION_REQUIRED":
             return _result(
                 stage="RANGE_ACQUISITION_REQUIRED", reason=coordinated["reason"], cycle_ids=cycle_ids,
                 evidence_ids=evidence_ids, alignment_frame=coordinated["temporal_reference_frame"],
                 alignment_units=coordinated["temporal_units"], temporal_result=temporal_result,
+                alignment_summary=alignment_summary,
             )
         if coordinated["stage"] != "DEPTH_APPROACH_DECISION_REQUIRED":
             return _result(
                 stage="BLOCKED_NO_ACTION", reason=f"COORDINATOR_{coordinated['reason']}", cycle_ids=cycle_ids,
                 evidence_ids=evidence_ids, alignment_frame=coordinated["temporal_reference_frame"],
                 alignment_units=coordinated["temporal_units"], temporal_result=temporal_result,
+                alignment_summary=alignment_summary,
             )
 
         engine = self.decision_engine_factory()
@@ -198,6 +228,7 @@ class SupervisedTargetDryRun:
             "alignment_frame": coordinated["temporal_reference_frame"], "alignment_units": coordinated["temporal_units"],
             "measurement_frame": decision.get("reference_frame"), "measurement_units": decision.get("units"),
             "temporal_result": temporal_result, "decision_status": decision.get("status"),
+            "alignment_summary": alignment_summary,
         }
         if decision.get("status") == "HOLD_TARGET_REACHED":
             return _result(stage="HOLD_TARGET_REACHED", reason=decision.get("detail"), reobserve_required=False, **common)
