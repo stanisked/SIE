@@ -122,6 +122,26 @@
       },
       "control_semantics_changed": false,
       "mechanical_containment_claimed": false
+    },
+    "bounded_forward_guard_phase_observability_v1": {
+      "scope": "BOUNDED_FORWARD_V1 only; fixed scalar snapshots, no trace arrays",
+      "guard_sample": {
+        "one_encoder_read": true,
+        "one_timestamp_ms": true,
+        "monotonic_guard_evaluation_seq_per_command": true
+      },
+      "phase_snapshots": {
+        "prior_non_triggering_before_predictive_brake": "last non-triggering DRIVING guard copied before the predictive trigger",
+        "pre_brake_guard": "predictive trigger from the same current guard sample",
+        "prior_non_triggering_before_hard_limit": "last non-hard-limit BRAKING guard copied before the hard-limit trigger",
+        "first_hard_limit_guard": "first hard-limit trigger from the same current guard sample"
+      },
+      "first_trigger_without_prior_is_null": true,
+      "idle_legacy_or_turn_diagnostics_null": true,
+      "brake_command_is_separate_post_brake_encoder_read": true,
+      "brake_command_counts_may_differ_from_trigger_sample": true,
+      "control_semantics_changed": false,
+      "mechanical_containment_claimed": false
     }
   },
   "fault_latch_contract": {

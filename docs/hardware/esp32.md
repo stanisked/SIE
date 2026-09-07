@@ -184,16 +184,24 @@ This is an encoder-bounded cutoff, not a claim of mathematically zero physical
 overshoot. Residual mechanical motion still requires separate physical
 measurement before the bounded API can be operationally approved.
 
-The bounded-forward diagnostics also retain one fixed-depth `previous_guard`
-snapshot. Each non-triggering bounded-forward encoder guard evaluation overwrites
-it; the first braking or hard-limit evaluation preserves the last non-triggering
-sample. It is `null` for an initial triggering sample and for idle, legacy, or
-turn commands. This telemetry identifies guard observation latency only; it does
-not prove mechanical containment or a safe floor stopping envelope.
+Фазовая диагностика bounded forward сохраняет отдельные nullable snapshots:
+`prior_non_triggering_before_predictive_brake`, `pre_brake_guard`,
+`prior_non_triggering_before_hard_limit` и `first_hard_limit_guard`. Каждый
+snapshot содержит `guard_evaluation_seq`; trigger и соответствующий ему prior
+sample больше не смешиваются из-за последующей перезаписи. Если первый guard
+сразу срабатывает, соответствующий `prior_*` остаётся `null`. Для idle, legacy
+и turn весь `bounded_forward_brake_diagnostics` остаётся `null`.
 
-The next experiment is one raised-wheel bounded-forward run at 0.10 m. Raised-
-wheel evidence can locate encoder/control timing, but cannot justify floor
-stopping or operational forward approval.
+Один guard evaluation использует один локальный encoder sample и один timestamp.
+`brake_command` намеренно остаётся отдельным чтением после `stopMotors()` и
+`brakeMotors()`, поэтому его counts могут отличаться от trigger sample. Эта
+telemetry показывает порядок encoder/control events, но не доказывает
+mechanical containment и не определяет безопасный stopping envelope на полу.
+
+Следующая проверка: один bounded-forward запуск на 0.10 m с поднятыми колёсами.
+После terminal state нужно сохранить полный `/status` и остановиться без retry.
+Raised-wheel evidence не даёт разрешения на floor stopping или operational
+forward motion.
 
 Any active bounded-command FAULT latches `bounded_fault_latched` with
 `bounded_fault_reason`, including timeout, Wi-Fi loss, encoder/stall and

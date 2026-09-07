@@ -219,6 +219,8 @@ def test_forward_brake_observability_is_nullable_when_idle(source: str) -> None:
     diagnostics = function_body(source, "void appendBoundedForwardBrakeDiagnostics(")
     assert "if (!activeBoundedForwardCommand(bounded))" in diagnostics
     assert 'json += "null";' in diagnostics
+    forward_only = function_body(source, "bool activeBoundedForwardCommand(")
+    assert "BoundedMotionProfile::BOUNDED_FORWARD_V1" in forward_only
     status = function_body(source, "String buildStatusJson()")
     assert "appendBoundedForwardBrakeDiagnostics(json, bounded);" in status
 
@@ -241,24 +243,45 @@ def test_forward_brake_snapshots_do_not_change_guard_or_brake_path(source: str) 
     )
 
 
-def test_previous_guard_field_is_present_and_nullable_idle(source: str) -> None:
+def test_forward_guard_phase_snapshots_and_sequence_are_exposed(source: str) -> None:
     diagnostics = function_body(source, "void appendBoundedForwardBrakeDiagnostics(")
-    assert "previous_guard" in diagnostics
-    assert "forwardPreviousGuardCaptured" in diagnostics
-    assert 'json += "null";' in diagnostics
+    for field in (
+        "prior_non_triggering_before_predictive_brake",
+        "pre_brake_guard",
+        "prior_non_triggering_before_hard_limit",
+        "first_hard_limit_guard",
+        "guard_evaluation_seq",
+    ):
+        assert field in diagnostics
+    assert diagnostics.count("guard_evaluation_seq") >= 2
+    sample_json = function_body(source, "void appendBoundedForwardGuardSample(")
+    assert "guard_evaluation_seq" in sample_json
+    sample = function_body(
+        source,
+        "BoundedForwardGuardSample readBoundedForwardGuardSample()",
+    )
+    assert sample.count("readMotionCounts(") == 1
+    assert sample.count("millis()") == 1
+    assert "++activeBoundedGuardEvaluationSeq" in sample
 
 
-def test_previous_guard_is_preserved_for_triggering_forward_diagnostic(source: str) -> None:
+def test_forward_guard_phase_preserves_separate_prior_and_trigger_samples(
+    source: str,
+) -> None:
     guard = function_body(source, "bool enforceBoundedEncoderLimit()")
-    active_branch = guard[
-        guard.index("if (activeBoundedBrakeStarted)"):
-        guard.index("if (activeBoundedMotionProfile ==")
-    ]
-    assert "captureBoundedForwardPreviousGuard(rightCount, leftCount);" in active_branch
-    trigger_tail = guard[guard.index("if (predictiveBrake || targetReached)"):]
-    assert trigger_tail.rfind(
-        "captureBoundedForwardPreviousGuard(rightCount, leftCount);"
-    ) > trigger_tail.index("return true;")
+    hard_limit = guard[guard.index("if (rightLimitReached || leftLimitReached)"):]
+    assert hard_limit.index(
+        "preserveBoundedForwardPriorBeforeHardLimit();"
+    ) < hard_limit.index("captureBoundedForwardFirstHardLimitGuard(guardSample);")
+    hard_trigger = hard_limit[:hard_limit.index("if (!activeBoundedFaultPending)")]
+    assert "captureBoundedForwardPreBrakeGuard(" not in hard_trigger
+    predictive = guard[guard.index("if (predictiveBrake || targetReached)"):]
+    assert predictive.index(
+        "preserveBoundedForwardPriorBeforePredictiveBrake();"
+    ) < predictive.index("captureBoundedForwardPreBrakeGuard(")
+    rolling = function_body(source, "void captureBoundedForwardPreviousGuard(")
+    assert "forwardLastNonTriggeringDrivingGuard = sample" in rolling
+    assert "forwardLastNonTriggeringBrakingGuard = sample" in rolling
 
 
 def test_micro_turn_profile_reserves_six_counts_before_target(source: str) -> None:

@@ -260,6 +260,23 @@ enum class BoundedForwardBrakeTrigger : uint8_t {
   HARD_LIMIT
 };
 
+struct BoundedForwardGuardSample {
+  bool captured = false;
+  uint32_t timestampMs = 0;
+  uint32_t evaluationSeq = 0;
+  MotionState state = MotionState::READY;
+  int32_t rightCount = 0;
+  int32_t leftCount = 0;
+  int32_t rightBrakeStartCounts = 0;
+  int32_t leftBrakeStartCounts = 0;
+  int32_t rightLimitCounts = 0;
+  int32_t leftLimitCounts = 0;
+  bool rightAtBrakeThreshold = false;
+  bool leftAtBrakeThreshold = false;
+  bool rightAtHardLimit = false;
+  bool leftAtHardLimit = false;
+};
+
 struct CommandRecord {
   bool used = false;
   String commandId;
@@ -308,6 +325,7 @@ struct CommandRecord {
   int32_t boundedTurnMinWheelProgressCounts = 0;
   bool forwardPreBrakeGuardCaptured = false;
   uint32_t forwardPreBrakeGuardTimestampMs = 0;
+  uint32_t forwardPreBrakeGuardEvaluationSeq = 0;
   MotionState forwardPreBrakeGuardState = MotionState::READY;
   int32_t forwardPreBrakeRightCount = 0;
   int32_t forwardPreBrakeLeftCount = 0;
@@ -333,6 +351,12 @@ struct CommandRecord {
   bool forwardPreviousGuardLeftAtBrakeThreshold = false;
   bool forwardPreviousGuardRightAtHardLimit = false;
   bool forwardPreviousGuardLeftAtHardLimit = false;
+  BoundedForwardGuardSample forwardLastNonTriggeringDrivingGuard;
+  bool forwardPriorBeforePredictiveBrakePreserved = false;
+  BoundedForwardGuardSample forwardPriorBeforePredictiveBrake;
+  BoundedForwardGuardSample forwardLastNonTriggeringBrakingGuard;
+  bool forwardPriorBeforeHardLimitPreserved = false;
+  BoundedForwardGuardSample forwardPriorBeforeHardLimit;
   bool forwardBrakeCommandCaptured = false;
   uint32_t forwardBrakeCommandTimestampMs = 0;
   MotionState forwardBrakeCommandState = MotionState::READY;
@@ -349,6 +373,7 @@ struct CommandRecord {
   int forwardFirstPostBrakeLoopLeftPwm = 0;
   bool forwardFirstHardLimitGuardCaptured = false;
   uint32_t forwardFirstHardLimitGuardTimestampMs = 0;
+  uint32_t forwardFirstHardLimitGuardEvaluationSeq = 0;
   int32_t forwardFirstHardLimitGuardRightCount = 0;
   int32_t forwardFirstHardLimitGuardLeftCount = 0;
   bool forwardFirstHardLimitGuardRightExceeded = false;
@@ -439,6 +464,7 @@ uint32_t activeBoundedCorrectionPulseStartTime = 0;
 int32_t activeBoundedStableRightCount = 0;
 int32_t activeBoundedStableLeftCount = 0;
 uint8_t activeBoundedStableSamples = 0;
+uint32_t activeBoundedGuardEvaluationSeq = 0;
 
 uint32_t motionStartTime = 0;
 uint32_t motionElapsedMs = 0;
@@ -788,14 +814,59 @@ bool activeBoundedForwardCommand(const CommandRecord* command)
              BoundedMotionProfile::BOUNDED_FORWARD_V1;
 }
 
+void refreshBoundedForwardGuardThresholds(BoundedForwardGuardSample &sample)
+{
+  sample.rightBrakeStartCounts = activeBoundedRightBrakeStartCounts;
+  sample.leftBrakeStartCounts = activeBoundedLeftBrakeStartCounts;
+  sample.rightLimitCounts = activeBoundedRightLimitCounts;
+  sample.leftLimitCounts = activeBoundedLeftLimitCounts;
+  sample.rightAtBrakeThreshold =
+      sample.rightCount >= sample.rightBrakeStartCounts;
+  sample.leftAtBrakeThreshold =
+      sample.leftCount >= sample.leftBrakeStartCounts;
+  sample.rightAtHardLimit = sample.rightCount >= sample.rightLimitCounts;
+  sample.leftAtHardLimit = sample.leftCount >= sample.leftLimitCounts;
+}
+
+BoundedForwardGuardSample readBoundedForwardGuardSample()
+{
+  BoundedForwardGuardSample sample;
+  readMotionCounts(sample.rightCount, sample.leftCount);
+  sample.captured = true;
+  sample.timestampMs = millis();
+  sample.evaluationSeq = ++activeBoundedGuardEvaluationSeq;
+  sample.state = motionState;
+  refreshBoundedForwardGuardThresholds(sample);
+  return sample;
+}
+
+void preserveBoundedForwardPriorBeforePredictiveBrake()
+{
+  CommandRecord* command = activeCommand();
+  if (!activeBoundedForwardCommand(command) ||
+      command->forwardPriorBeforePredictiveBrakePreserved) {
+    return;
+  }
+  command->forwardPriorBeforePredictiveBrakePreserved = true;
+  command->forwardPriorBeforePredictiveBrake =
+      command->forwardLastNonTriggeringDrivingGuard;
+}
+
+void preserveBoundedForwardPriorBeforeHardLimit()
+{
+  CommandRecord* command = activeCommand();
+  if (!activeBoundedForwardCommand(command) ||
+      command->forwardPriorBeforeHardLimitPreserved) {
+    return;
+  }
+  command->forwardPriorBeforeHardLimitPreserved = true;
+  command->forwardPriorBeforeHardLimit =
+      command->forwardLastNonTriggeringBrakingGuard;
+}
+
 void captureBoundedForwardPreBrakeGuard(
-    int32_t rightCount,
-    int32_t leftCount,
-    BoundedForwardBrakeTrigger trigger,
-    bool rightAtBrakeThreshold,
-    bool leftAtBrakeThreshold,
-    bool rightAtHardLimit,
-    bool leftAtHardLimit)
+    const BoundedForwardGuardSample &sample,
+    BoundedForwardBrakeTrigger trigger)
 {
   CommandRecord* command = activeCommand();
   if (!activeBoundedForwardCommand(command) ||
@@ -803,50 +874,57 @@ void captureBoundedForwardPreBrakeGuard(
     return;
   }
   command->forwardPreBrakeGuardCaptured = true;
-  command->forwardPreBrakeGuardTimestampMs = millis();
-  command->forwardPreBrakeGuardState = motionState;
-  command->forwardPreBrakeRightCount = rightCount;
-  command->forwardPreBrakeLeftCount = leftCount;
+  command->forwardPreBrakeGuardTimestampMs = sample.timestampMs;
+  command->forwardPreBrakeGuardEvaluationSeq = sample.evaluationSeq;
+  command->forwardPreBrakeGuardState = sample.state;
+  command->forwardPreBrakeRightCount = sample.rightCount;
+  command->forwardPreBrakeLeftCount = sample.leftCount;
   command->forwardPreBrakeRightBrakeStartCounts =
-      activeBoundedRightBrakeStartCounts;
+      sample.rightBrakeStartCounts;
   command->forwardPreBrakeLeftBrakeStartCounts =
-      activeBoundedLeftBrakeStartCounts;
-  command->forwardPreBrakeRightLimitCounts = activeBoundedRightLimitCounts;
-  command->forwardPreBrakeLeftLimitCounts = activeBoundedLeftLimitCounts;
+      sample.leftBrakeStartCounts;
+  command->forwardPreBrakeRightLimitCounts = sample.rightLimitCounts;
+  command->forwardPreBrakeLeftLimitCounts = sample.leftLimitCounts;
   command->forwardPreBrakeTrigger = trigger;
-  command->forwardPreBrakeRightAtBrakeThreshold = rightAtBrakeThreshold;
-  command->forwardPreBrakeLeftAtBrakeThreshold = leftAtBrakeThreshold;
-  command->forwardPreBrakeRightAtHardLimit = rightAtHardLimit;
-  command->forwardPreBrakeLeftAtHardLimit = leftAtHardLimit;
+  command->forwardPreBrakeRightAtBrakeThreshold =
+      sample.rightAtBrakeThreshold;
+  command->forwardPreBrakeLeftAtBrakeThreshold =
+      sample.leftAtBrakeThreshold;
+  command->forwardPreBrakeRightAtHardLimit = sample.rightAtHardLimit;
+  command->forwardPreBrakeLeftAtHardLimit = sample.leftAtHardLimit;
 }
 
 void captureBoundedForwardPreviousGuard(
-    int32_t rightCount,
-    int32_t leftCount)
+    const BoundedForwardGuardSample &sample)
 {
   CommandRecord* command = activeCommand();
   if (!activeBoundedForwardCommand(command)) {
     return;
   }
   command->forwardPreviousGuardCaptured = true;
-  command->forwardPreviousGuardTimestampMs = millis();
-  command->forwardPreviousGuardState = motionState;
-  command->forwardPreviousGuardRightCount = rightCount;
-  command->forwardPreviousGuardLeftCount = leftCount;
+  command->forwardPreviousGuardTimestampMs = sample.timestampMs;
+  command->forwardPreviousGuardState = sample.state;
+  command->forwardPreviousGuardRightCount = sample.rightCount;
+  command->forwardPreviousGuardLeftCount = sample.leftCount;
   command->forwardPreviousGuardRightBrakeStartCounts =
-      activeBoundedRightBrakeStartCounts;
+      sample.rightBrakeStartCounts;
   command->forwardPreviousGuardLeftBrakeStartCounts =
-      activeBoundedLeftBrakeStartCounts;
-  command->forwardPreviousGuardRightLimitCounts = activeBoundedRightLimitCounts;
-  command->forwardPreviousGuardLeftLimitCounts = activeBoundedLeftLimitCounts;
+      sample.leftBrakeStartCounts;
+  command->forwardPreviousGuardRightLimitCounts = sample.rightLimitCounts;
+  command->forwardPreviousGuardLeftLimitCounts = sample.leftLimitCounts;
   command->forwardPreviousGuardRightAtBrakeThreshold =
-      rightCount >= activeBoundedRightBrakeStartCounts;
+      sample.rightAtBrakeThreshold;
   command->forwardPreviousGuardLeftAtBrakeThreshold =
-      leftCount >= activeBoundedLeftBrakeStartCounts;
+      sample.leftAtBrakeThreshold;
   command->forwardPreviousGuardRightAtHardLimit =
-      rightCount >= activeBoundedRightLimitCounts;
+      sample.rightAtHardLimit;
   command->forwardPreviousGuardLeftAtHardLimit =
-      leftCount >= activeBoundedLeftLimitCounts;
+      sample.leftAtHardLimit;
+  if (sample.state == MotionState::DRIVING) {
+    command->forwardLastNonTriggeringDrivingGuard = sample;
+  } else if (sample.state == MotionState::BRAKING) {
+    command->forwardLastNonTriggeringBrakingGuard = sample;
+  }
 }
 
 void captureBoundedForwardBrakeCommand(
@@ -868,8 +946,7 @@ void captureBoundedForwardBrakeCommand(
 }
 
 void captureBoundedForwardFirstPostBrakeLoop(
-    int32_t rightCount,
-    int32_t leftCount)
+    const BoundedForwardGuardSample &sample)
 {
   CommandRecord* command = activeCommand();
   if (!activeBoundedForwardCommand(command) ||
@@ -878,19 +955,16 @@ void captureBoundedForwardFirstPostBrakeLoop(
     return;
   }
   command->forwardFirstPostBrakeLoopCaptured = true;
-  command->forwardFirstPostBrakeLoopTimestampMs = millis();
-  command->forwardFirstPostBrakeLoopState = motionState;
-  command->forwardFirstPostBrakeLoopRightCount = rightCount;
-  command->forwardFirstPostBrakeLoopLeftCount = leftCount;
+  command->forwardFirstPostBrakeLoopTimestampMs = sample.timestampMs;
+  command->forwardFirstPostBrakeLoopState = sample.state;
+  command->forwardFirstPostBrakeLoopRightCount = sample.rightCount;
+  command->forwardFirstPostBrakeLoopLeftCount = sample.leftCount;
   command->forwardFirstPostBrakeLoopRightPwm = rightPwm;
   command->forwardFirstPostBrakeLoopLeftPwm = leftPwm;
 }
 
 void captureBoundedForwardFirstHardLimitGuard(
-    int32_t rightCount,
-    int32_t leftCount,
-    bool rightExceeded,
-    bool leftExceeded)
+    const BoundedForwardGuardSample &sample)
 {
   CommandRecord* command = activeCommand();
   if (!activeBoundedForwardCommand(command) ||
@@ -898,13 +972,14 @@ void captureBoundedForwardFirstHardLimitGuard(
     return;
   }
   command->forwardFirstHardLimitGuardCaptured = true;
-  command->forwardFirstHardLimitGuardTimestampMs = millis();
-  command->forwardFirstHardLimitGuardRightCount = rightCount;
-  command->forwardFirstHardLimitGuardLeftCount = leftCount;
-  command->forwardFirstHardLimitGuardRightExceeded = rightExceeded;
-  command->forwardFirstHardLimitGuardLeftExceeded = leftExceeded;
+  command->forwardFirstHardLimitGuardTimestampMs = sample.timestampMs;
+  command->forwardFirstHardLimitGuardEvaluationSeq = sample.evaluationSeq;
+  command->forwardFirstHardLimitGuardRightCount = sample.rightCount;
+  command->forwardFirstHardLimitGuardLeftCount = sample.leftCount;
+  command->forwardFirstHardLimitGuardRightExceeded = sample.rightAtHardLimit;
+  command->forwardFirstHardLimitGuardLeftExceeded = sample.leftAtHardLimit;
   command->forwardFirstHardLimitGuardAlreadyBraking =
-      motionState == MotionState::BRAKING;
+      sample.state == MotionState::BRAKING;
 }
 
 void setActiveCommandState(CommandState state)
@@ -1389,6 +1464,7 @@ void configureBoundedCommand(
   activeBoundedBootSessionId = bootSessionId;
   activeBoundedCorrectionPulseStartTime = 0;
   activeBoundedStableSamples = 0;
+  activeBoundedGuardEvaluationSeq = 0;
 
   activeBoundedMaxCorrectionPulses = command.boundedMaxCorrectionPulses;
   activeBoundedTurnMinSuccessAngleRad = turn
@@ -1641,30 +1717,15 @@ bool enforceBoundedEncoderLimit()
     return false;
   }
 
-  int32_t rightCount;
-  int32_t leftCount;
-  readMotionCounts(rightCount, leftCount);
+  BoundedForwardGuardSample guardSample = readBoundedForwardGuardSample();
+  int32_t rightCount = guardSample.rightCount;
+  int32_t leftCount = guardSample.leftCount;
 
-  const bool rightLimitReached =
-      rightCount >= activeBoundedRightLimitCounts;
-  const bool leftLimitReached =
-      leftCount >= activeBoundedLeftLimitCounts;
+  const bool rightLimitReached = guardSample.rightAtHardLimit;
+  const bool leftLimitReached = guardSample.leftAtHardLimit;
   if (rightLimitReached || leftLimitReached) {
-    captureBoundedForwardFirstHardLimitGuard(
-        rightCount,
-        leftCount,
-        rightLimitReached,
-        leftLimitReached
-    );
-    captureBoundedForwardPreBrakeGuard(
-        rightCount,
-        leftCount,
-        BoundedForwardBrakeTrigger::HARD_LIMIT,
-        rightCount >= activeBoundedRightBrakeStartCounts,
-        leftCount >= activeBoundedLeftBrakeStartCounts,
-        rightLimitReached,
-        leftLimitReached
-    );
+    preserveBoundedForwardPriorBeforeHardLimit();
+    captureBoundedForwardFirstHardLimitGuard(guardSample);
     // This absolute per-wheel limit is an emergency guard, not the normal
     // stopping boundary. It is checked even while settling.
     if (!activeBoundedFaultPending) {
@@ -1675,7 +1736,7 @@ bool enforceBoundedEncoderLimit()
   }
 
   if (activeBoundedBrakeStarted) {
-    captureBoundedForwardFirstPostBrakeLoop(rightCount, leftCount);
+    captureBoundedForwardFirstPostBrakeLoop(guardSample);
     if (activeBoundedCorrectionInProgress) {
       const bool targetReached =
           rightCount >= activeBoundedRightTargetCounts ||
@@ -1692,7 +1753,7 @@ bool enforceBoundedEncoderLimit()
         return true;
       }
     }
-    captureBoundedForwardPreviousGuard(rightCount, leftCount);
+    captureBoundedForwardPreviousGuard(guardSample);
     return false;
   }
 
@@ -1810,29 +1871,30 @@ bool enforceBoundedEncoderLimit()
     command->leftBrakeStartCounts = activeBoundedLeftBrakeStartCounts;
   }
 
+  refreshBoundedForwardGuardThresholds(guardSample);
+
   const bool predictiveBrake =
-      rightCount >= activeBoundedRightBrakeStartCounts ||
-      leftCount >= activeBoundedLeftBrakeStartCounts;
+      guardSample.rightAtBrakeThreshold ||
+      guardSample.leftAtBrakeThreshold;
   const bool targetReached =
       rightCount >= activeBoundedRightTargetCounts &&
       leftCount >= activeBoundedLeftTargetCounts;
   if (predictiveBrake || targetReached) {
+    const BoundedForwardBrakeTrigger trigger = predictiveBrake
+        ? BoundedForwardBrakeTrigger::PREDICTIVE_BRAKE
+        : BoundedForwardBrakeTrigger::TARGET_REACHED;
+    if (trigger == BoundedForwardBrakeTrigger::PREDICTIVE_BRAKE) {
+      preserveBoundedForwardPriorBeforePredictiveBrake();
+    }
     captureBoundedForwardPreBrakeGuard(
-        rightCount,
-        leftCount,
-        targetReached
-            ? BoundedForwardBrakeTrigger::TARGET_REACHED
-            : BoundedForwardBrakeTrigger::PREDICTIVE_BRAKE,
-        rightCount >= activeBoundedRightBrakeStartCounts,
-        leftCount >= activeBoundedLeftBrakeStartCounts,
-        rightCount >= activeBoundedRightLimitCounts,
-        leftCount >= activeBoundedLeftLimitCounts
+        guardSample,
+        trigger
     );
     beginBoundedTargetSettling();
     return true;
   }
 
-  captureBoundedForwardPreviousGuard(rightCount, leftCount);
+  captureBoundedForwardPreviousGuard(guardSample);
   return false;
 }
 
@@ -2742,6 +2804,43 @@ void appendJsonNullableInt(String &json, bool present, int32_t value)
   json += String(value);
 }
 
+void appendBoundedForwardGuardSample(
+    String &json,
+    const BoundedForwardGuardSample &sample)
+{
+  if (!sample.captured) {
+    json += "null";
+    return;
+  }
+  json += "{\"timestamp_ms\":";
+  json += String(sample.timestampMs);
+  json += ",\"guard_evaluation_seq\":";
+  json += String(sample.evaluationSeq);
+  json += ",\"controller_state\":\"";
+  json += motionStateName(sample.state);
+  json += "\",\"right_count\":";
+  json += String(sample.rightCount);
+  json += ",\"left_count\":";
+  json += String(sample.leftCount);
+  json += ",\"right_brake_start_count\":";
+  json += String(sample.rightBrakeStartCounts);
+  json += ",\"left_brake_start_count\":";
+  json += String(sample.leftBrakeStartCounts);
+  json += ",\"right_hard_limit_count\":";
+  json += String(sample.rightLimitCounts);
+  json += ",\"left_hard_limit_count\":";
+  json += String(sample.leftLimitCounts);
+  json += ",\"right_met_brake_threshold\":";
+  json += sample.rightAtBrakeThreshold ? "true" : "false";
+  json += ",\"left_met_brake_threshold\":";
+  json += sample.leftAtBrakeThreshold ? "true" : "false";
+  json += ",\"right_met_hard_limit\":";
+  json += sample.rightAtHardLimit ? "true" : "false";
+  json += ",\"left_met_hard_limit\":";
+  json += sample.leftAtHardLimit ? "true" : "false";
+  json += "}";
+}
+
 void appendBoundedForwardBrakeDiagnostics(
     String &json,
     const CommandRecord* bounded)
@@ -2782,12 +2881,20 @@ void appendBoundedForwardBrakeDiagnostics(
     json += "}";
   }
 
+  json += ",\"prior_non_triggering_before_predictive_brake\":";
+  appendBoundedForwardGuardSample(
+      json,
+      bounded->forwardPriorBeforePredictiveBrake
+  );
+
   json += ",\"pre_brake_guard\":";
   if (!bounded->forwardPreBrakeGuardCaptured) {
     json += "null";
   } else {
     json += "{\"timestamp_ms\":";
     json += String(bounded->forwardPreBrakeGuardTimestampMs);
+    json += ",\"guard_evaluation_seq\":";
+    json += String(bounded->forwardPreBrakeGuardEvaluationSeq);
     json += ",\"controller_state\":\"";
     json += motionStateName(bounded->forwardPreBrakeGuardState);
     json += "\",\"right_count\":";
@@ -2853,12 +2960,20 @@ void appendBoundedForwardBrakeDiagnostics(
     json += "}";
   }
 
+  json += ",\"prior_non_triggering_before_hard_limit\":";
+  appendBoundedForwardGuardSample(
+      json,
+      bounded->forwardPriorBeforeHardLimit
+  );
+
   json += ",\"first_hard_limit_guard\":";
   if (!bounded->forwardFirstHardLimitGuardCaptured) {
     json += "null";
   } else {
     json += "{\"timestamp_ms\":";
     json += String(bounded->forwardFirstHardLimitGuardTimestampMs);
+    json += ",\"guard_evaluation_seq\":";
+    json += String(bounded->forwardFirstHardLimitGuardEvaluationSeq);
     json += ",\"right_count\":";
     json += String(bounded->forwardFirstHardLimitGuardRightCount);
     json += ",\"left_count\":";
