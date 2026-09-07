@@ -38,8 +38,23 @@ def test_stable_image_right_plans_only_turn_right():
 
 
 def test_stable_image_left_plans_only_turn_left():
-    result = evaluate(window([-180, -175, -185, -180]))
+    observations = window([-393.8655, -365.3655, -362.8655, -362.8655])
+    observations.insert(2, {
+        "evidence_id": "evidence-lost",
+        "timestamp": "2026-09-07T12:00:02+00:00",
+        "reference_frame": "ar0234_image_frame",
+        "units": "px",
+        "person_status": "PERSON_LOST",
+    })
+    observations[3]["timestamp"] = "2026-09-07T12:00:03+00:00"
+    observations[4]["timestamp"] = "2026-09-07T12:00:04+00:00"
+    result = evaluate(observations)
     assert result["planned_command"] == {"method": "POST", "endpoint": "/turn-left", "angle_deg": 4}
+    assert result["valid_single_person_count"] == 4
+    assert result["person_lost_count"] == 1
+    assert result["latest_person_status"] == "SINGLE_PERSON"
+    assert result["used_evidence_ids"] == ["evidence-0", "evidence-1", "evidence-2", "evidence-3"]
+    assert result["window_evidence_ids"] == ["evidence-0", "evidence-1", "evidence-lost", "evidence-2", "evidence-3"]
 
 
 def test_centered_window_has_no_turn():
@@ -60,17 +75,19 @@ def test_far_field_status_and_bbox_fields_are_accepted():
     assert result["planned_command"] == {"method": "POST", "endpoint": "/turn-right", "angle_deg": 4}
 
 
-def test_invalid_lost_multiple_and_unstable_windows_block():
-    cases = [
-        window([100, 100, 100, 100], status="PERSON_LOST"),
-        window([100, 100, 100, 100], status="MULTIPLE_PERSONS"),
-        window([100, -100, 100, -100]),
-    ]
-    for observations in cases:
-        result = evaluate(observations)
-        assert result["result"] == result["stage"] == "BLOCKED_NO_TURN"
-        assert result["planned_command"] is None
-        assert result["reobserve_required"] is True
+def test_multiple_persons_blocks_the_whole_window():
+    observations = window([100, 100, 100, 100, 100])
+    observations[2]["person_status"] = "MULTIPLE_PERSONS"
+    result = evaluate(observations)
+    assert result["result"] == result["stage"] == "BLOCKED_NO_TURN"
+    assert result["block_reason"] == "MULTIPLE_PERSONS_IN_EVIDENCE_WINDOW"
+    assert result["planned_command"] is None
+
+
+def test_latest_lost_or_fewer_than_four_single_person_observations_blocks():
+    latest_lost = window([100, 100, 100, 100])
+    latest_lost[-1]["person_status"] = "PERSON_LOST"
+    assert evaluate(latest_lost)["block_reason"] == "LATEST_PERSON_STATUS_NOT_SINGLE_PERSON"
 
     too_short = evaluate(window([100, 100, 100]))
     assert too_short["block_reason"] == "FEWER_THAN_FOUR_VALID_SINGLE_PERSON_OBSERVATIONS"

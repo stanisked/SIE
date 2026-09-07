@@ -23,6 +23,11 @@ class TemporalYawAlignmentResult:
     reference_frame: str | None
     units: str | None
     evidence_ids: list[str]
+    valid_single_person_count: int
+    person_lost_count: int
+    latest_person_status: str | None
+    used_evidence_ids: list[str]
+    window_evidence_ids: list[str]
     robust_median_image_offset_px: float | None
     mad_image_offset_px: float | None
     center_tolerance_px: float | None
@@ -86,6 +91,11 @@ class TemporalYawAlignmentPlanner:
         reobserve_required: bool,
         reference_frame: str | None = IMAGE_FRAME,
         units: str | None = IMAGE_UNITS,
+        valid_single_person_count: int = 0,
+        person_lost_count: int = 0,
+        latest_person_status: str | None = None,
+        used_evidence_ids: list[str] | None = None,
+        window_evidence_ids: list[str] | None = None,
     ) -> dict[str, Any]:
         return TemporalYawAlignmentResult(
             schema_version="sie.temporal_yaw_alignment.v1",
@@ -95,6 +105,11 @@ class TemporalYawAlignmentPlanner:
             reference_frame=reference_frame,
             units=units,
             evidence_ids=evidence_ids,
+            valid_single_person_count=valid_single_person_count,
+            person_lost_count=person_lost_count,
+            latest_person_status=latest_person_status,
+            used_evidence_ids=evidence_ids if used_evidence_ids is None else used_evidence_ids,
+            window_evidence_ids=evidence_ids if window_evidence_ids is None else window_evidence_ids,
             robust_median_image_offset_px=offset_median,
             mad_image_offset_px=offset_mad,
             center_tolerance_px=tolerance,
@@ -122,63 +137,63 @@ class TemporalYawAlignmentPlanner:
                 reference_frame=None, units=None,
             )
 
-        evidence_ids: list[str] = []
+        window_evidence_ids: list[str] = []
+        used_evidence_ids: list[str] = []
         offsets: list[float] = []
         tolerance: float | None = None
         previous_timestamp: datetime | None = None
+        person_lost_count = 0
+        latest_person_status: str | None = None
+
+        def blocked(
+            reason: str,
+            *,
+            reference_frame: str | None = IMAGE_FRAME,
+            units: str | None = IMAGE_UNITS,
+            offset_median: float | None = None,
+            offset_mad: float | None = None,
+        ) -> dict[str, Any]:
+            return self._result(
+                result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=used_evidence_ids,
+                offset_median=offset_median, offset_mad=offset_mad, tolerance=tolerance, planned_command=None,
+                block_reason=reason, reobserve_required=True, reference_frame=reference_frame, units=units,
+                valid_single_person_count=len(used_evidence_ids), person_lost_count=person_lost_count,
+                latest_person_status=latest_person_status, used_evidence_ids=used_evidence_ids,
+                window_evidence_ids=window_evidence_ids,
+            )
+
         for observation in window:
             if type(observation) is not dict:
-                return self._result(
-                    result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids,
-                    offset_median=None, offset_mad=None, tolerance=tolerance, planned_command=None,
-                    block_reason="OBSERVATION_MUST_BE_OBJECT", reobserve_required=True,
-                    reference_frame=None, units=None,
-                )
+                return blocked("OBSERVATION_MUST_BE_OBJECT", reference_frame=None, units=None)
             evidence_id = _text(observation.get("evidence_id"))
             timestamp = _parse_timestamp(observation.get("timestamp"))
             if evidence_id is None or timestamp is None:
-                return self._result(
-                    result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids,
-                    offset_median=None, offset_mad=None, tolerance=tolerance, planned_command=None,
-                    block_reason="MISSING_EVIDENCE_ID_OR_TIMESTAMP", reobserve_required=True,
-                    reference_frame=None, units=None,
-                )
+                return blocked("MISSING_EVIDENCE_ID_OR_TIMESTAMP", reference_frame=None, units=None)
+            window_evidence_ids.append(evidence_id)
+            latest_person_status = _text(observation.get("person_status", observation.get("status")))
             parsed_timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             if previous_timestamp is not None and parsed_timestamp <= previous_timestamp:
-                return self._result(
-                    result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids + [evidence_id],
-                    offset_median=None, offset_mad=None, tolerance=tolerance, planned_command=None,
-                    block_reason="TIMESTAMPS_MUST_BE_STRICTLY_INCREASING", reobserve_required=True,
-                    reference_frame=None, units=None,
-                )
+                return blocked("TIMESTAMPS_MUST_BE_STRICTLY_INCREASING", reference_frame=None, units=None)
             previous_timestamp = parsed_timestamp
             if observation.get("reference_frame") != IMAGE_FRAME or observation.get("units") != IMAGE_UNITS:
-                return self._result(
-                    result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids + [evidence_id],
-                    offset_median=None, offset_mad=None, tolerance=tolerance, planned_command=None,
-                    block_reason="REFERENCE_FRAME_OR_UNITS_MISMATCH", reobserve_required=True,
+                return blocked(
+                    "REFERENCE_FRAME_OR_UNITS_MISMATCH",
                     reference_frame=_text(observation.get("reference_frame")), units=_text(observation.get("units")),
                 )
-            person_status = observation.get("person_status", observation.get("status"))
-            if person_status != "SINGLE_PERSON":
-                return self._result(
-                    result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids + [evidence_id],
-                    offset_median=None, offset_mad=None, tolerance=tolerance, planned_command=None,
-                    block_reason="PERSON_STATUS_NOT_SINGLE_PERSON", reobserve_required=True,
-                )
+            if latest_person_status == "MULTIPLE_PERSONS":
+                return blocked("MULTIPLE_PERSONS_IN_EVIDENCE_WINDOW")
+            if latest_person_status == "PERSON_LOST":
+                person_lost_count += 1
+                if person_lost_count > 1:
+                    return blocked("MORE_THAN_ONE_PERSON_LOST_IN_EVIDENCE_WINDOW")
+                continue
+            if latest_person_status != "SINGLE_PERSON":
+                return blocked("PERSON_STATUS_NOT_SINGLE_PERSON")
             observation_tolerance = _finite(observation.get("center_tolerance_px"))
             if observation_tolerance is None or observation_tolerance < 0:
-                return self._result(
-                    result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids + [evidence_id],
-                    offset_median=None, offset_mad=None, tolerance=tolerance, planned_command=None,
-                    block_reason="CENTER_TOLERANCE_MUST_BE_EXPLICIT_FINITE_NON_NEGATIVE", reobserve_required=True,
-                )
+                return blocked("CENTER_TOLERANCE_MUST_BE_EXPLICIT_FINITE_NON_NEGATIVE")
             if tolerance is not None and observation_tolerance != tolerance:
-                return self._result(
-                    result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids + [evidence_id],
-                    offset_median=None, offset_mad=None, tolerance=None, planned_command=None,
-                    block_reason="CENTER_TOLERANCE_MISMATCH", reobserve_required=True,
-                )
+                return blocked("CENTER_TOLERANCE_MISMATCH")
             tolerance = observation_tolerance
             offset = _finite(observation.get("image_offset_px"))
             if offset is None:
@@ -191,21 +206,15 @@ class TemporalYawAlignmentPlanner:
                         x1, _y1, x2, _y2 = bbox_values
                         center_x = (x1 + x2) / 2.0
                 if center_x is None or optical_axis is None:
-                    return self._result(
-                        result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids + [evidence_id],
-                        offset_median=None, offset_mad=None, tolerance=tolerance, planned_command=None,
-                        block_reason="MISSING_FINITE_OFFSET_OR_CENTER_AXIS", reobserve_required=True,
-                    )
+                    return blocked("MISSING_FINITE_OFFSET_OR_CENTER_AXIS")
                 offset = center_x - optical_axis
-            evidence_ids.append(evidence_id)
+            used_evidence_ids.append(evidence_id)
             offsets.append(offset)
 
+        if latest_person_status != "SINGLE_PERSON":
+            return blocked("LATEST_PERSON_STATUS_NOT_SINGLE_PERSON")
         if len(offsets) < 4:
-            return self._result(
-                result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids,
-                offset_median=None, offset_mad=None, tolerance=tolerance, planned_command=None,
-                block_reason="FEWER_THAN_FOUR_VALID_SINGLE_PERSON_OBSERVATIONS", reobserve_required=True,
-            )
+            return blocked("FEWER_THAN_FOUR_VALID_SINGLE_PERSON_OBSERVATIONS")
 
         offset_median = float(median(offsets))
         offset_mad = float(median([abs(value - offset_median) for value in offsets]))
@@ -215,33 +224,38 @@ class TemporalYawAlignmentPlanner:
             for value in offsets
         ]
         if offset_mad > tolerance or len(set(classifications)) != 1:
-            return self._result(
-                result="BLOCKED_NO_TURN", stage="BLOCKED_NO_TURN", evidence_ids=evidence_ids,
-                offset_median=offset_median, offset_mad=offset_mad, tolerance=tolerance, planned_command=None,
-                block_reason="UNSTABLE_EVIDENCE_WINDOW", reobserve_required=True,
-            )
+            return blocked("UNSTABLE_EVIDENCE_WINDOW", offset_median=offset_median, offset_mad=offset_mad)
 
-        signature = tuple(evidence_ids)
+        signature = tuple(window_evidence_ids)
         if self._planned_window_signature == signature:
             return self._result(
-                result="BLOCKED_NO_TURN", stage="AWAIT_REOBSERVATION", evidence_ids=evidence_ids,
+                result="BLOCKED_NO_TURN", stage="AWAIT_REOBSERVATION", evidence_ids=used_evidence_ids,
                 offset_median=offset_median, offset_mad=offset_mad, tolerance=tolerance, planned_command=None,
                 block_reason="EVIDENCE_WINDOW_ALREADY_PLANNED", reobserve_required=True,
+                valid_single_person_count=len(used_evidence_ids), person_lost_count=person_lost_count,
+                latest_person_status=latest_person_status, used_evidence_ids=used_evidence_ids,
+                window_evidence_ids=window_evidence_ids,
             )
         if classifications[0] == "CENTER":
             return self._result(
-                result="NO_TURN_CENTERED", stage="NO_TURN_CENTERED", evidence_ids=evidence_ids,
+                result="NO_TURN_CENTERED", stage="NO_TURN_CENTERED", evidence_ids=used_evidence_ids,
                 offset_median=offset_median, offset_mad=offset_mad, tolerance=tolerance, planned_command=None,
                 block_reason=None, reobserve_required=False,
+                valid_single_person_count=len(used_evidence_ids), person_lost_count=person_lost_count,
+                latest_person_status=latest_person_status, used_evidence_ids=used_evidence_ids,
+                window_evidence_ids=window_evidence_ids,
             )
 
         endpoint = "/turn-right" if classifications[0] == "IMAGE_RIGHT" else "/turn-left"
         planned_command = {"method": "POST", "endpoint": endpoint, "angle_deg": TURN_ANGLE_DEG}
         self._planned_window_signature = signature
         return self._result(
-            result="PLANNED_TURN", stage="AWAIT_REOBSERVATION", evidence_ids=evidence_ids,
+            result="PLANNED_TURN", stage="AWAIT_REOBSERVATION", evidence_ids=used_evidence_ids,
             offset_median=offset_median, offset_mad=offset_mad, tolerance=tolerance,
             planned_command=planned_command, block_reason=None, reobserve_required=True,
+            valid_single_person_count=len(used_evidence_ids), person_lost_count=person_lost_count,
+            latest_person_status=latest_person_status, used_evidence_ids=used_evidence_ids,
+            window_evidence_ids=window_evidence_ids,
         )
 
 

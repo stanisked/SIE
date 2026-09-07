@@ -227,8 +227,16 @@ loop is approved.
 planner: `IMAGE_RIGHT → /turn-right` and `IMAGE_LEFT → /turn-left`. The new
 planner consumes only a local JSONL window of up to five AR0234 image-frame
 observations, requires at least four valid `SINGLE_PERSON` records, and uses
-the robust median image offset plus MAD. Invalid, lost, multiple, frame/unit
-mismatch or unstable windows fail closed with `BLOCKED_NO_TURN`.
+the robust median image offset plus MAD. Invalid, multiple, frame/unit mismatch
+or unstable windows fail closed with `BLOCKED_NO_TURN`.
+
+Rule clarification from physical evidence, not a threshold change: one
+intermediate `PERSON_LOST` is an allowed missing sample when the latest
+observation is `SINGLE_PERSON` and at least four valid single-person samples
+remain. More than one `PERSON_LOST`, any `MULTIPLE_PERSONS`, or latest
+`PERSON_LOST` remains `BLOCKED_NO_TURN`. Median and MAD use only valid
+single-person samples; the result exposes their counts, latest status, used
+evidence IDs and complete window evidence IDs.
 
 The planner emits only a dry-run semantic `POST` endpoint and `angle_deg=4`.
 After a planned turn it enters `AWAIT_REOBSERVATION` and refuses a repeat of
