@@ -5,6 +5,7 @@ from .bounded_bridge import BoundedCommandBlock, PlannedBoundedCommand, plan_bou
 from .supervised_demo import SupervisedPersonApproachDemo
 from .far_field_alignment import FarFieldAlignmentResult, evaluate_far_field_alignment
 from .temporal_yaw_alignment import TemporalYawAlignmentPlanner, TemporalYawAlignmentResult, evaluate_temporal_yaw_alignment
+from .supervised_acquire_range import SupervisedAcquireRangeResult, coordinate_supervised_acquire_range
 
 __all__ = [
     "BoundedCommandBlock",
@@ -17,5 +18,7 @@ __all__ = [
     "TemporalYawAlignmentPlanner",
     "TemporalYawAlignmentResult",
     "evaluate_temporal_yaw_alignment",
+    "SupervisedAcquireRangeResult",
+    "coordinate_supervised_acquire_range",
     "plan_bounded_command",
 ]

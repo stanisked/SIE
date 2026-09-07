@@ -325,3 +325,18 @@ Next software gate: a separate dry-run supervised state machine that joins
 far-field 2D alignment to `RANGE_ACQUISITION_REQUIRED` when centered, then to
 the existing stereo-depth decision. This documentation commit adds no executor,
 HTTP, ESP32 or forward behavior.
+
+## Supervised acquire-range dry-run v1
+
+`TEMPORAL_YAW_ALIGNMENT_BILATERAL_SUPERVISED: PASS` remains the physical
+alignment sign/effect evidence. The new offline-only coordinator orchestrates
+stages only: existing temporal planned turns become
+`AWAIT_OPERATOR_TURN_AND_REOBSERVATION`; centered observations become
+`RANGE_ACQUISITION_REQUIRED` until a current valid person-depth record is
+available, then `DEPTH_APPROACH_DECISION_REQUIRED` for the existing decision
+layer. It does not create a turn, forward command, executor, HTTP request or
+device action.
+
+Far-field forward without valid depth provenance remains intentionally
+unsupported. Next physical gate: manually align a person to center, then
+observe whether Stereo V6 depth becomes valid before any advance planning.
