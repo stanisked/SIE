@@ -433,6 +433,118 @@ def test_forward_crawl_phase_pwm_or_boundary_and_nullable_telemetry(
     assert "!present || !isfinite(value)" in nullable_float
 
 
+def test_forward_short_step_selection_isolation_and_nominal_envelope(source: str) -> None:
+    configure = function_body(source, "void configureBoundedCommand(")
+    selection = configure[configure.index("if (direction == MotionDirection::FORWARD)"):]
+    selection = selection[:selection.index("} else if (turn)")]
+    assert "requestedTargetM <= BOUNDED_FORWARD_MAX_DISTANCE_M" in selection
+    assert "? BoundedMotionProfile::BOUNDED_FORWARD_SHORT_STEP_MVP_V1" in selection
+    assert ": BoundedMotionProfile::BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1" in selection
+    assert "BOUNDED_FORWARD_MAX_DISTANCE_M = 0.100f" in source
+    for wheel in ("right", "left"):
+        assert f"command.{wheel}LimitCounts = command.{wheel}TargetCounts + 1" in configure
+    nominal = configure[configure.index("command.boundedForwardRightStopEnvelopeCounts ="):]
+    nominal = nominal[:nominal.index("const int32_t rightSlowdownReserveCounts")]
+    assert nominal.count("BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S") == 2
+    short_guard = function_body(source, "bool enforceBoundedForwardShortStepGuard(")
+    assert "sample.rightAtBrakeThreshold || sample.leftAtBrakeThreshold" in short_guard
+    assert "updateBoundedForwardEnvelopeFromSpeed" not in short_guard
+    base_source = subprocess.run(
+        ["git", "show", "6bbf825d45400b8fad86ead613d448cb0969f934:"
+         + str(FIRMWARE.relative_to(ROOT))],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    ).stdout
+    # Проверяем неизменность API, ledger, baseline motor mapping и BREAKAWAY.
+    for signature in (
+        "void updateStarting(uint32_t now)", "void setDrivePwm(",
+        "void stopMotors()", "void brakeMotors()", "void applyMicroTurnOutputs(",
+        "void queueLegacyMotionRequest(", "void queueBoundedMotionRequest(",
+        "void handleMoveForward()", "void handleTurnRequest(",
+        "void handleAckFault()", "void completeActiveCommand(",
+        "String generateBootSessionId()", "void startSquareSequence()",
+        "void updateSquareSequence()", "int32_t boundedCompletionToleranceCounts(",
+        "void setup()", "void loop()",
+    ):
+        assert function_body(source, signature) == function_body(base_source, signature)
+    # Старые target-aware критерии BREAKAWAY получают те же входные значения.
+    for signature in ("int boundedBreakawayPwmCeiling()", "int32_t boundedBreakawayThresholdCounts()"):
+        current = function_body(source, signature).replace(
+            "activeBoundedForwardSpeedProfile()", "activeBoundedForwardCrawlEnvelope()"
+        )
+        assert current == function_body(base_source, signature)
+
+
+def test_forward_short_step_crawl_pwm_and_no_redrive(source: str) -> None:
+    transition = function_body(source, "void transitionToDriving(")
+    short = function_body(transition, "if (activeBoundedForwardShortStep())")
+    assert "BoundedForwardPhase::LOW_SPEED_CRAWL" in short
+    assert "applyBoundedForwardShortStepCrawl();" in short
+    assert "return;" in short
+    assert transition.index(short) < transition.index("profileSpeedMps =")
+    driving = function_body(source, "void updateDriving(")
+    short_driving = function_body(driving, "if (activeBoundedForwardShortStep())")
+    assert "applyBoundedForwardShortStepCrawl();" in short_driving
+    assert "return;" in short_driving
+    assert driving.index(short_driving) < driving.index("CONTROL_PERIOD_MS")
+    output = function_body(source, "void applyBoundedForwardShortStepCrawl()")
+    for forbidden in ("rightSustainPwm", "leftSustainPwm", "calculateWheelPwm",
+                      "syncPwmBoost", "BoundedForwardPhase::APPROACH"):
+        assert forbidden not in output + short + short_driving
+    for wheel, cap in (("right", "Right"), ("left", "Left")):
+        assert f"min({wheel}Pwm, activeBoundedForward{cap}CrawlPwmCeiling)" in output
+        assert f"activeBoundedForward{cap}CrawlPwmCeiling = controlled{cap}Pwm" in output
+    assert "controlledRightPwm = min(controlledRightPwm, controlledLeftPwm)" in output
+    assert "controlledLeftPwm = min(controlledLeftPwm, controlledRightPwm)" in output
+    initial_gate = function_body(output, "if (!activeBoundedForwardShortStep()")
+    assert "activeBoundedBrakeStarted" in initial_gate
+    assert "motionState != MotionState::DRIVING" in initial_gate
+    assert "return;" in initial_gate
+    assert output.count("setDrivePwm(") == 1
+    assert "setDrivePwm(" not in function_body(source, "void updateBoundedBraking(")
+    assert "BOUNDED_MICRO_TURN_V1" in function_body(source, "bool boundedCorrectionPreconditionsClear(")
+    settle = function_body(source, "void updateBoundedBraking(")
+    assert "activeBoundedForwardShortStep();" in settle
+    assert 'faultReason = "BOUNDED_DISTANCE_LIMIT"' in settle
+    assert '"BOUNDED_TARGET_NOT_REACHED"' in settle
+
+
+def test_forward_short_step_speed_hard_limit_and_historical_telemetry(source: str) -> None:
+    guard = function_body(source, "bool enforceBoundedEncoderLimit()")
+    hard = function_body(guard, "if (rightLimitReached || leftLimitReached)")
+    assert guard.index(hard) < guard.index("enforceBoundedForwardShortStepGuard(guardSample)")
+    pending_clear = function_body(hard, "if (!activeBoundedFaultPending)")
+    # Promotion находится вне условной ветки: pending speed fault не скрывает limit.
+    promotion = hard[hard.index(pending_clear) + len(pending_clear):]
+    assert 'faultReason = "BOUNDED_DISTANCE_LIMIT";' in promotion
+    assert "boundedFaultLatched = true;" in promotion
+    assert "boundedFaultReason = faultReason;" in promotion
+    assert "beginBoundedBraking(" not in promotion
+    assert "captureBoundedForwardFirstHardLimitGuard(guardSample);" in hard
+    output = function_body(source, "void applyBoundedForwardShortStepCrawl()")
+    fresh_gate = function_body(output, "if (!boundedForwardSpeedEstimateUsable(millis()))")
+    assert 'beginBoundedBraking(true, "BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID")' in fresh_gate
+    assert "return;" in fresh_gate
+    assert output.index("enforceBoundedEncoderLimit()") < output.index(fresh_gate) < output.index("setDrivePwm(")
+    assert "enforceBoundedEncoderLimit() || activeBoundedBrakeStarted" in output
+    short_guard = function_body(source, "bool enforceBoundedForwardShortStepGuard(")
+    assert "!boundedForwardSpeedEstimateUsable(sample.timestampMs)" in short_guard
+    assert 'beginBoundedBraking(true, "BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID")' in short_guard
+    telemetry = function_body(source, "void appendBoundedForwardCrawlEnvelopeTelemetry(")
+    assert "historicalSample = !activeRecord || activeBoundedBrakeStarted" in telemetry
+    assert "speedUsable = !historicalSample" in telemetry
+    assert "sampleAgeMs <= BOUNDED_FORWARD_SPEED_MAX_AGE_MS" in telemetry
+    for field in ("speed_sample_is_historical", "speed_usable_for_active_control",
+                  "right_last_applied_crawl_pwm", "left_last_applied_crawl_pwm"):
+        assert field in telemetry
+    status = function_body(source, "String buildStatusJson()")
+    assert "const CommandRecord* timing = active == nullptr ? last : active;" in status
+    assert "nonBoundedMotionOrSquareActive ? nullptr : bounded" in status
+    for state in ("motionIsActive()", "startRequested", "squareIsActive()", "squareRequested"):
+        assert state in status
+    assert "appendBoundedForwardCrawlEnvelopeTelemetry(json, crawlEnvelopeTelemetry)" in status
+    assert 'json += "null";' in telemetry
+
+
 def test_micro_turn_profile_reserves_six_counts_before_target(source: str) -> None:
     assert "BOUNDED_MICRO_TURN_BRAKE_RESERVE_COUNTS = 6" in source
     reserve = function_body(source, "int32_t boundedMicroTurnBrakeReserveCounts(")

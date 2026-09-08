@@ -98,8 +98,47 @@ target and absolute limit, predictive brake-start counts, motion kind, and
 bounded timeout. The encoder guard runs on every firmware loop in STARTING,
 DRIVING, BRAKING and COASTING, independently of the 100 ms PI cadence.
 
-Bounded forward теперь использует экспериментальный provisional-профиль
-`BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1`. Его внутренние фазы:
+Для bounded `FORWARD` в текущем диапазоне `0.02..0.10 m` теперь выбирается
+экспериментальный `BOUNDED_FORWARD_SHORT_STEP_MVP_V1`, policy label
+`PROVISIONAL_SHORT_STEP_NOMINAL_CRAWL_MVP_V1`.
+Его путь: `BREAKAWAY -> LOW_SPEED_CRAWL -> BRAKING -> SETTLING`.
+Внешние `MotionState` сохранены; `BRAKING` в короткой telemetry соответствует
+существующей внутренней `ACTIVE_BRAKE`.
+
+Ramp и target-aware критерии `BREAKAWAY` остаются прежними. Initial slowdown
+counts старого профиля сохраняются только как вход прежних BREAKAWAY helpers;
+short-step не имеет фазы `SLOWDOWN` и не пересчитывает её границы.
+При штатном завершении BREAKAWAY отдельный путь сразу ограничивает PWM
+существующими ceilings `RIGHT_RUN_PWM_MIN`/`LEFT_RUN_PWM_MIN` (115/95).
+После перехода PWM каждого колеса может только сохраняться или уменьшаться;
+ведущее колесо не получает больше PWM, чем отстающее. Legacy sustain floor,
+lagging-wheel boost и высокоскоростной APPROACH в этот путь не входят.
+
+Brake envelope каждого колеса рассчитывается при configure прежней функцией
+`boundedForwardStopEnvelopeCounts()` на **номинальной** crawl speed `0.060 m/s`.
+Измеренная скорость не сдвигает эту границу. Для `0.10 m` текущая конверсия даёт
+targets 102/101, envelope 9/9 и brake boundaries 93/92 counts.
+Первое колесо, достигшее границы, запускает общий active brake с trigger
+`SHORT_STEP_ENVELOPE`. Hard limits остаются `target + 1`; любой наблюдённый
+hard-limit повышает pending reason до `BOUNDED_DISTANCE_LIMIT`, включая уже
+начавшееся торможение из-за invalid speed, без перезапуска brake interval.
+
+Перед каждой directed PWM записью в LOW_SPEED_CRAWL выполняется общий encoder
+guard и проверка fresh/valid sample по текущему времени. Отсутствующий, stale
+или invalid sample вызывает `BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID` через
+существующий active-brake path. Двухступенчатого подтверждения crawl здесь нет.
+После BRAKING directed PWM не возвращается. Итоговый недобор вне неизменного
+success window даёт `BOUNDED_TARGET_NOT_REACHED` с latch, превышение target
+даёт `BOUNDED_DISTANCE_LIMIT` с latch. Существующие отдельные причины отказа
+speed/sync/watchdog сохраняются; correction, retry и re-drive отсутствуют.
+
+`LOW_SPEED_CRAWL` обозначает режим ограничения PWM, а не подтверждённую
+фактическую скорость `0.060 m/s`. Свежий sample может показывать более высокую
+скорость после BREAKAWAY. Этот номинальный envelope экспериментальный:
+ни ограничение PWM, ни encoder hard-limit не доказывают mechanical containment.
+Профиль может дать недобор или overshoot и не разрешает operational floor forward.
+
+Сохранённый `BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1` имеет внутренние фазы:
 `BREAKAWAY`, `APPROACH`, `SLOWDOWN`, `CRAWL`, `ACTIVE_BRAKE` и `SETTLING`.
 Внешние `MotionState`, terminal classification и API-контракт не менялись.
 
@@ -239,12 +278,27 @@ mechanical containment и не определяет безопасный stoppin
 Raised-wheel evidence не даёт разрешения на floor stopping или operational
 forward motion.
 
-`GET /status` дополнительно отдаёт fixed-size
+`GET /status` использует существующий fixed-size
 `bounded_forward_crawl_envelope`: phase/sequence, speed status/reason,
 per-wheel speed/timestamp/age/sequence, remaining counts, slowdown/brake
 boundaries, stop-envelope counts, crawl PWM ceilings, sync error/leading wheel,
-`envelope_feasible`, `slowdown_entry` и `crawl_entry`. Для idle, legacy, turn и
-square этот объект равен `null`. Existing phase telemetry не переопределяется.
+`envelope_feasible`, `slowdown_entry` и `crawl_entry` для сохранённого старого
+профиля. Для short-step тот же объект компактнее: phase/sequence, speed sample,
+per-wheel brake boundaries/envelopes и `right_last_applied_crawl_pwm` /
+`left_last_applied_crawl_pwm`. Последние два поля хранят последний фактически
+записанный crawl PWM (0 до первой записи), после brake это история;
+текущий PWM читается из прежних top-level полей.
+
+`speed_status` относится к сохранённому sample. Его исторический характер явно
+показывает `speed_sample_is_historical`; `speed_usable_for_active_control`
+проверяет active record, управляющую фазу, valid sample и freshness и всегда
+равен false во время brake/settle и после terminal. Возраст активного sample
+вычисляется при чтении status, после terminal хранится возраст на момент
+последнего сохранения. Исторический `VALID` не означает пригодность для движения.
+Во время active/queued legacy или square объект равен `null`, history
+`CommandRecord` не стирается. В READY доступна последняя bounded history;
+для turn и при отсутствии history объект `null`. Brake/settled snapshots
+сохраняют прежний смысл, `brake_command` остаётся отдельным чтением после brake.
 
 Исходные evidence для профиля: manual encoder baseline 1032/1033 counts за
 пять оборотов, raised-wheel dynamic reserve 0.010 m с финалом 108/108 и

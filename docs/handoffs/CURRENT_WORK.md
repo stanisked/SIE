@@ -1,5 +1,67 @@
 # Current bounded-motion MVP handoff
 
+## Экспериментальный короткий bounded forward
+
+- Ветка: `feature/esp32-forward-short-step-mvp-v1`.
+- Worktree: `/home/stanislav/dev_ws/sie_esp32_forward_short_step_mvp`.
+- Base: `6bbf825d45400b8fad86ead613d448cb0969f934`.
+- Профиль: `BOUNDED_FORWARD_SHORT_STEP_MVP_V1`; выбирается только для bounded
+  FORWARD в текущем API диапазоне `0.02..0.10 m`.
+- Путь: `BREAKAWAY -> LOW_SPEED_CRAWL -> BRAKING -> SETTLING`.
+- BREAKAWAY сохраняет прежние ramp/критерии без новых чисел. После него
+  PWM сразу ограничен прежними ceilings 115/95, далее не повышается.
+  Ведущее колесо не получает больше PWM отстающего; APPROACH, legacy floor
+  и lagging-wheel boost для нового профиля обходятся.
+- Envelope берётся из прежней модели на номинальной crawl speed `0.060 m/s`.
+  Для `0.10 m`: targets 102/101, envelope 9/9, brake boundaries 93/92 counts.
+  Измеренная скорость не пересчитывает границу. Fresh/valid sample обязателен
+  перед каждой crawl PWM записью; иначе active brake с
+  `BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID`.
+- Существующий `bounded_forward_crawl_envelope` содержит компактные phase,
+  last applied crawl PWM, speed sample, boundaries/envelopes. Поля
+  `speed_sample_is_historical` и `speed_usable_for_active_control` отличают
+  историю от текущей пригодности; во время brake/settle и после terminal
+  active usability всегда false. Нового status-блока нет.
+- Исправления `6bbf825` сохранены: hard-limit повышает любой pending reason
+  до `BOUNDED_DISTANCE_LIMIT`; active legacy/square не показывает старую crawl
+  telemetry. History CommandRecord сохраняется.
+- Targets, hard limits `target + 1`, tolerance, brake/settle timing, latches,
+  API, boot session, ledger, turns, square и legacy не ослаблены.
+  Недобор после settle остаётся `BOUNDED_TARGET_NOT_REACHED`; превышение
+  target остаётся `BOUNDED_DISTANCE_LIMIT`. Correction/retry/re-drive нет.
+
+Основание отдельного эксперимента: предыдущий raised-wheel crawl-envelope
+при sample 0.2970/0.2734 m/s перешёл из SLOWDOWN в brake до нового speed sample,
+завершился 45/45 counts и `BOUNDED_TARGET_NOT_REACHED`, crawl не подтвердился.
+Новая ветка меняет профиль короткого движения; пороги slowdown не подгонялись.
+
+Проверки этой ветки:
+
+- `.ino` SHA-256:
+  `cd19455d1982bc7207fa6117f853d54047da4cb3b8a4c3723cf189e77efec46d`.
+- Ровно три focused source-contract tests: `3 passed, 52 deselected`.
+  Команда: `python3 -m pytest -q -p no:cacheprovider vision_core/tests/test_esp32_bounded_motion_contract.py -k forward_short_step`.
+- Manifest JSON parse, credential scan и `git diff --check`: PASS.
+- v4.1 baseline не изменён относительно base commit.
+- Короткий Blocker/High self-review исходников не выявил новых нарушений
+  проверенных условий. Проверки не исполняют прошивку.
+- Arduino compile/upload, подключения к ESP32 и motor run не выполнялись.
+
+Ограничение: LOW_SPEED_CRAWL означает ограниченный PWM, а не измеренную низкую
+скорость. Номинальный envelope не является доказанным stopping envelope для
+фактической скорости после BREAKAWAY. Это provisional MVP, возможны underreach
+и overshoot; mechanical containment и operational floor forward не утверждаются.
+
+Следующий gate после отдельной проверки сборки и прошивки оператором: ровно
+один raised-wheel запуск `POST /move-forward`, `distance_m=0.10`, с новым
+command_id и вручную проверенным текущим boot_session_id. До команды проверить
+READY, latch=false и PWM 0/0; колёса вывешены, внешний stop доступен.
+Сохранить terminal status: профиль, фазы, applied crawl PWM, speed sample и
+active usability, brake/settled snapshots, target/limit/final counts, reason,
+latch и финальный PWM. После единственного запуска остановиться, без retry,
+correction, ack-fault и floor-команды. При неожиданном движении использовать
+внешний stop. Проверки исходников не заменяют проверку сборки и физический gate.
+
 ## Experimental forward crawl envelope MVP
 
 - branch: `feature/esp32-forward-crawl-envelope-mvp-v1`;

@@ -55,11 +55,12 @@
     "per_command_requested_target_and_wheel_counts_stored": true,
     "guard_runs_each_loop_iteration": true,
     "covered_states": ["STARTING", "DRIVING", "BRAKING", "COASTING"],
-    "predictive_brake": "profile-specific per-wheel brake-start или projected-final boundary рассчитывается до requested target; crawl envelope использует fresh speed evidence",
+    "predictive_brake": "short-step использует per-wheel envelope на номинальной crawl speed; сохранённый crawl-envelope использует измеренную fresh speed",
     "bounded_motion_profiles": {
       "BOUNDED_FORWARD_V1": "retained enum value for the prior bounded-forward profile",
       "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1": "bounded forward configures its initial per-wheel brake start from FORWARD_MAX_STOP_MARGIN_M; dynamic evaluation may move it earlier but never later",
-      "BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1": "новый experimental bounded-forward profile с фазами APPROACH, SLOWDOWN и CRAWL, свежей per-wheel speed evidence и projected-final brake boundary",
+      "BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1": "сохранённый experimental profile; в текущем API диапазон bounded forward выбирает SHORT_STEP",
+      "BOUNDED_FORWARD_SHORT_STEP_MVP_V1": "выбирается для bounded FORWARD distance_m <= 0.10; BREAKAWAY сразу переходит в LOW_SPEED_CRAWL с неизменным номинальным brake envelope",
       "BOUNDED_MICRO_TURN_V1": "bounded turns from 1 to 10 degrees reserve at least 6 encoder counts before the per-wheel target; dynamic stop margin may reserve more, never less"
     },
     "bounded_micro_turn_brake_reserve_counts": 6,
@@ -116,7 +117,7 @@
     ],
     "residual_mechanical_overshoot": "must be measured in a separate raised-wheel retest",
     "bounded_forward_brake_observability_v1": {
-      "scope": "только bounded forward profiles, включая BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1; fixed-size CommandRecord diagnostics сохраняются для active или last bounded command",
+      "scope": "bounded forward profiles, включая SHORT_STEP; существующие fixed-size CommandRecord brake snapshots сохраняются",
       "status_field": "bounded_forward_brake_diagnostics",
       "nullable_idle_or_non_forward": true,
       "snapshots": {
@@ -129,7 +130,7 @@
       "mechanical_containment_claimed": false
     },
     "bounded_forward_guard_phase_observability_v1": {
-      "scope": "только bounded forward profiles, включая BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1; fixed scalar snapshots без trace arrays",
+      "scope": "bounded forward profiles, включая SHORT_STEP; fixed scalar snapshots без trace arrays",
       "guard_sample": {
         "one_encoder_read": true,
         "one_timestamp_ms": true,
@@ -162,6 +163,54 @@
       "fault_latch_or_api_semantics_changed": false,
       "safe_underreach_may_end_as": "BOUNDED_TARGET_NOT_REACHED",
       "experimental_mvp": true,
+      "mechanical_containment_claimed": false,
+      "floor_forward_operationally_approved": false
+    },
+    "bounded_forward_short_step_mvp_v1": {
+      "profile": "BOUNDED_FORWARD_SHORT_STEP_MVP_V1",
+      "policy_label": "PROVISIONAL_SHORT_STEP_NOMINAL_CRAWL_MVP_V1",
+      "policy_status": "provisional_not_calibrated",
+      "selected_for": "bounded FORWARD в существующем API диапазоне 0.02..0.10 m",
+      "phases": ["BREAKAWAY", "LOW_SPEED_CRAWL", "BRAKING", "SETTLING"],
+      "breakaway": "существующие ramp, ceilings и target-aware критерии сохранены; прежние initial slowdown counts используются только как вход прежнего BREAKAWAY helper",
+      "crawl_pwm": {
+        "right_ceiling_source": "RIGHT_RUN_PWM_MIN",
+        "left_ceiling_source": "LEFT_RUN_PWM_MIN",
+        "applied_pwm_monotonic_non_increasing": true,
+        "leading_pwm_not_above_lagging": true,
+        "legacy_sustain_floor_or_sync_boost": false,
+        "high_speed_approach": false
+      },
+      "brake_envelope": {
+        "speed_source": "BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S",
+        "model": "reaction interval * nominal speed + BRAKE_DISTANCE_GAIN_S2_PER_M * nominal speed squared + encoder uncertainty",
+        "updated_from_measured_speed": false,
+        "per_wheel_or_semantics": true,
+        "trigger_reason": "SHORT_STEP_ENVELOPE"
+      },
+      "speed": {
+        "existing_estimator_reused": true,
+        "fresh_sample_before_every_crawl_pwm_write": true,
+        "invalid_reason": "BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID",
+        "hard_limit_promotes_pending_fault": true,
+        "nominal_speed_is_not_measured_speed_guarantee": true
+      },
+      "telemetry": {
+        "status_field": "bounded_forward_crawl_envelope",
+        "no_extra_status_block": true,
+        "applied_pwm_fields": ["right_last_applied_crawl_pwm", "left_last_applied_crawl_pwm"],
+        "historical_sample_flag": "speed_sample_is_historical",
+        "active_usability_flag": "speed_usable_for_active_control",
+        "usability_false_during_brake_settle_and_terminal": true,
+        "active_legacy_square_null": true,
+        "ready_history_preserved": true
+      },
+      "target_conversion_hard_limits_completion_tolerance_changed": false,
+      "brake_hold_settle_latch_routes_idempotency_changed": false,
+      "directed_pwm_after_braking": false,
+      "settled_underreach_reason": "BOUNDED_TARGET_NOT_REACHED",
+      "settled_overshoot_reason": "BOUNDED_DISTANCE_LIMIT",
+      "automatic_retry_correction_redrive": false,
       "mechanical_containment_claimed": false,
       "floor_forward_operationally_approved": false
     },
