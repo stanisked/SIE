@@ -1,5 +1,42 @@
 # Current bounded-motion MVP handoff
 
+## Actuator Capability Gate dry-run
+
+Ветка `feature/sie-actuator-capability-gate-dry-run-v1` добавляет универсальный
+JSON-safe contract `sie.actuator_capability.v1` и детерминированный dry-run
+gate между Decision/Planner и любым будущим execution layer. Contract содержит
+только `adapter_id`, `capability_id`, `qualification_status`, `reason`,
+`evidence_ids`, timestamp и schema version. Он не содержит control constants,
+encoder/PWM, firmware path, IP или свойства человека и цели.
+
+Gate сохраняет planned action, source decision и source evidence. Он никогда
+не выполняет сеть или motor command. `QUALIFIED` возвращает
+`DRY_RUN_ACTION_ALLOWED`; `NOT_QUALIFIED` возвращает
+`BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED`; `UNKNOWN`, некорректный или
+несовместимый capability record fail-closed как
+`BLOCKED_ACTUATOR_CAPABILITY_UNKNOWN`.
+
+Версионированный профиль текущей платформы:
+
+- `adapter_id`: `esp32_zk5ad_sgm37_520`;
+- `capability_id`: `bounded_forward_0.10_m`;
+- `qualification_status`: `NOT_QUALIFIED`;
+- reason: repeatable underreach/overshoot trade-off and asymmetric low-speed
+  response;
+- evidence: `git_commit:77dd01bfe2e0256b6f03029f0cec01576b42f9da`.
+
+Metric-first supervisor применяет gate только к metric `ADVANCE` плану
+`POST /move-forward`. Decision `ADVANCE` и measurement provenance остаются
+доступными, однако current profile переводит final result в
+`BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED`. Turn semantics не расширялись.
+
+Это qualification конкретного actuator adapter, не правило SIE и не свойство
+perception, человека или цели. Текущая база не квалифицирована для
+автоматического короткого движения вперёд; это не блокирует perception или
+metric decision SIE. HTTP,
+executor, ESP32 client, camera, depth capture, retries и motor actions не
+добавлены.
+
 ## Следующий этап: dry-run bridge
 
 Эта branch-local рабочая копия содержит dry-run bridge между `person_approach`

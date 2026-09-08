@@ -7,6 +7,13 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
 
+from sie_core.actuator_capability_gate import (
+    RESULT_ALLOWED,
+    evaluate_actuator_capability_gate,
+)
+from sie_core.current_platform_capabilities import (
+    CURRENT_PLATFORM_CAPABILITY_PROFILE_V1,
+)
 from vision_core.person_approach.bounded_bridge import MOTION_SPECS
 from vision_core.person_approach.decision import PersonApproachDecisionEngine
 from vision_core.person_approach.temporal_yaw_alignment import evaluate_temporal_yaw_alignment
@@ -37,6 +44,7 @@ class MetricFirstTargetResult:
     metric_decision: dict[str, Any] | None
     metric_measurement_provenance: dict[str, Any] | None
     planned_dry_run: dict[str, Any] | None
+    actuator_capability_gate: dict[str, Any] | None
     reobserve_required: bool
     network_performed: bool = False
     motor_command_performed: bool = False
@@ -86,6 +94,7 @@ def _result(
     measurement_frame: str | None = None, measurement_units: str | None = None,
     alignment_summary: dict[str, Any] | None = None, metric_decision: dict[str, Any] | None = None,
     metric_provenance: dict[str, Any] | None = None, planned_dry_run: dict[str, Any] | None = None,
+    actuator_capability_gate: dict[str, Any] | None = None,
     reobserve_required: bool = True,
 ) -> dict[str, Any]:
     return MetricFirstTargetResult(
@@ -97,7 +106,9 @@ def _result(
         measurement_units=measurement_units,
         alignment_summary=alignment_summary or _empty_alignment_summary(cycle_ids),
         metric_decision=metric_decision, metric_measurement_provenance=metric_provenance,
-        planned_dry_run=planned_dry_run, reobserve_required=reobserve_required,
+        planned_dry_run=planned_dry_run,
+        actuator_capability_gate=actuator_capability_gate,
+        reobserve_required=reobserve_required,
     ).to_dict()
 
 
@@ -201,6 +212,7 @@ class MetricFirstTargetSupervisor:
         self, *, live_runtime: Any, optical_axis_cx_px: float, center_tolerance_px: float,
         now_utc: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
         decision_engine_factory: Callable[[], PersonApproachDecisionEngine] | None = None,
+        forward_capability_profile: dict[str, Any] | None = None,
     ) -> None:
         if _finite(optical_axis_cx_px) is None or _finite(center_tolerance_px) is None or center_tolerance_px < 0:
             raise ValueError("optical axis and center tolerance must be finite; tolerance non-negative")
@@ -209,6 +221,10 @@ class MetricFirstTargetSupervisor:
         self.center_tolerance_px = float(center_tolerance_px)
         self.now_utc = now_utc
         self.decision_engine_factory = decision_engine_factory or (lambda: PersonApproachDecisionEngine(now_utc=self.now_utc))
+        self.forward_capability_profile = _json_safe(
+            CURRENT_PLATFORM_CAPABILITY_PROFILE_V1
+            if forward_capability_profile is None else forward_capability_profile
+        )
 
     def run_live_window(self) -> dict[str, Any]:
         window = [self.live_runtime.cycle(f"metric-first-target-{index:06d}") for index in range(1, WINDOW_SIZE + 1)]
@@ -243,6 +259,31 @@ class MetricFirstTargetSupervisor:
             metric_plan = _metric_plan(decision)
             if metric_plan is not None:
                 stage, planned, reobserve = metric_plan
+                capability_gate = None
+                if decision.get("status") == "ADVANCE" and type(planned) is dict:
+                    capability_gate = evaluate_actuator_capability_gate(
+                        planned_action=planned,
+                        source_decision=decision,
+                        source_evidence_ids=evidence_ids,
+                        required_adapter_id="esp32_zk5ad_sgm37_520",
+                        required_capability_id="bounded_forward_0.10_m",
+                        capability_record=self.forward_capability_profile,
+                    )
+                    if capability_gate["result"] != RESULT_ALLOWED:
+                        return _result(
+                            stage=capability_gate["result"], reason=capability_gate["reason"],
+                            winning_path="metric_depth", cycle_ids=cycle_ids,
+                            evidence_ids=evidence_ids,
+                            measurement_ids=provenance["source_measurement_ids"],
+                            alignment_frame=_text(temporal.get("reference_frame")),
+                            alignment_units=_text(temporal.get("units")),
+                            measurement_frame=provenance["reference_frame"],
+                            measurement_units=provenance["units"],
+                            alignment_summary=alignment, metric_decision=decision,
+                            metric_provenance=provenance, planned_dry_run=planned,
+                            actuator_capability_gate=capability_gate,
+                            reobserve_required=True,
+                        )
                 return _result(
                     stage=stage, reason=decision.get("detail"), winning_path="metric_depth",
                     cycle_ids=cycle_ids, evidence_ids=evidence_ids,
@@ -250,7 +291,8 @@ class MetricFirstTargetSupervisor:
                     alignment_frame=_text(temporal.get("reference_frame")), alignment_units=_text(temporal.get("units")),
                     measurement_frame=provenance["reference_frame"], measurement_units=provenance["units"],
                     alignment_summary=alignment, metric_decision=decision, metric_provenance=provenance,
-                    planned_dry_run=planned, reobserve_required=reobserve,
+                    planned_dry_run=planned, actuator_capability_gate=capability_gate,
+                    reobserve_required=reobserve,
                 )
 
         temporal_result = temporal.get("result")

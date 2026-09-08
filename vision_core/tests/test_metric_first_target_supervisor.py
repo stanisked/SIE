@@ -27,11 +27,15 @@ def supervisor() -> MetricFirstTargetSupervisor:
     return MetricFirstTargetSupervisor(live_runtime=None, optical_axis_cx_px=960.0, center_tolerance_px=40.0, now_utc=lambda: NOW)
 
 
-def test_metric_advance_wins_over_off_center_alignment():
+def test_current_capability_profile_blocks_metric_advance_but_preserves_decision():
     result = supervisor().process_shared_window([cycle(index, center_x=1250) for index in range(1, 6)])
-    assert result["stage"] == "AWAIT_OPERATOR_ADVANCE_AND_REOBSERVATION"
+    assert result["stage"] == result["result"] == "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED"
     assert result["winning_evidence_path"] == "metric_depth"
     assert result["planned_dry_run"] == {"method": "POST", "endpoint": "/move-forward", "distance_m": .1}
+    assert result["metric_decision"]["status"] == "ADVANCE"
+    assert result["actuator_capability_gate"]["capability_record"]["adapter_id"] == "esp32_zk5ad_sgm37_520"
+    assert result["actuator_capability_gate"]["capability_record"]["qualification_status"] == "NOT_QUALIFIED"
+    assert result["network_performed"] is False and result["motor_command_performed"] is False
     assert result["alignment_summary"]["temporal_result"] == "PLANNED_TURN"
 
 
