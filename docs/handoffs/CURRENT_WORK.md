@@ -1,5 +1,24 @@
 # Current bounded-motion MVP handoff
 
+## Experimental forward conservative brake MVP
+
+- branch: `feature/esp32-forward-conservative-brake-mvp-v1`;
+- профиль: `BOUNDED_FORWARD_CONSERVATIVE_MVP_V1`;
+- только bounded forward получает initial per-wheel brake-start от
+  `FORWARD_MAX_STOP_MARGIN_M = 0.035 m`;
+- dynamic brake-start может сдвинуться раньше, но не позже этой границы;
+- targets, hard limits, PWM, brake/settle timing, completion window,
+  FAULT/latch, HTTP routes, boot session, idempotency, legacy motion и turns не
+  менялись;
+- ранний brake может закончиться fail-closed
+  `BOUNDED_TARGET_NOT_REACHED`;
+- профиль экспериментальный: mechanical containment и operational approval
+  floor forward не заявляются.
+
+Следующий gate после offline review и отдельного compile/flash пользователем:
+ровно один raised-wheel bounded-forward запуск на `0.10 m`, полный terminal
+`/status`, затем stop без retry. Этот change set сам hardware не запускает.
+
 ## Цель
 
 Зафиксировать экспериментальный безопасный MVP bounded ESP32 motion API v4.2

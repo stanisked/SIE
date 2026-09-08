@@ -57,7 +57,8 @@
     "covered_states": ["STARTING", "DRIVING", "BRAKING", "COASTING"],
     "predictive_brake": "per-wheel brake-start counts are calculated before the requested target and can move earlier from current stop margin",
     "bounded_motion_profiles": {
-      "BOUNDED_FORWARD_V1": "bounded forward retains the established predictive-brake calculation",
+      "BOUNDED_FORWARD_V1": "retained enum value for the prior bounded-forward profile",
+      "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1": "bounded forward configures its initial per-wheel brake start from FORWARD_MAX_STOP_MARGIN_M; dynamic evaluation may move it earlier but never later",
       "BOUNDED_MICRO_TURN_V1": "bounded turns from 1 to 10 degrees reserve at least 6 encoder counts before the per-wheel target; dynamic stop margin may reserve more, never less"
     },
     "bounded_micro_turn_brake_reserve_counts": 6,
@@ -94,6 +95,8 @@
       "bounded_left_overshoot_counts",
       "bounded_stop_mode",
       "bounded_motion_profile",
+      "bounded_forward_brake_policy",
+      "bounded_forward_configured_stop_margin_m",
       "bounded_turn_brake_reserve_counts",
       "bounded_turn_min_success_angle_rad",
       "bounded_turn_final_angle_rad",
@@ -111,7 +114,7 @@
     ],
     "residual_mechanical_overshoot": "must be measured in a separate raised-wheel retest",
     "bounded_forward_brake_observability_v1": {
-      "scope": "BOUNDED_FORWARD_V1 only; fixed-size CommandRecord diagnostics preserved for active or last bounded command",
+      "scope": "bounded forward profiles only, including BOUNDED_FORWARD_CONSERVATIVE_MVP_V1; fixed-size CommandRecord diagnostics preserved for active or last bounded command",
       "status_field": "bounded_forward_brake_diagnostics",
       "nullable_idle_or_non_forward": true,
       "snapshots": {
@@ -124,7 +127,7 @@
       "mechanical_containment_claimed": false
     },
     "bounded_forward_guard_phase_observability_v1": {
-      "scope": "BOUNDED_FORWARD_V1 only; fixed scalar snapshots, no trace arrays",
+      "scope": "bounded forward profiles only, including BOUNDED_FORWARD_CONSERVATIVE_MVP_V1; fixed scalar snapshots, no trace arrays",
       "guard_sample": {
         "one_encoder_read": true,
         "one_timestamp_ms": true,
@@ -142,6 +145,23 @@
       "brake_command_counts_may_differ_from_trigger_sample": true,
       "control_semantics_changed": false,
       "mechanical_containment_claimed": false
+    },
+    "bounded_forward_conservative_brake_mvp_v1": {
+      "scope": "bounded forward only",
+      "profile": "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1",
+      "initial_stop_margin_m": 0.035,
+      "initial_stop_margin_source": "FORWARD_MAX_STOP_MARGIN_M",
+      "dynamic_brake_start_may_move_earlier": true,
+      "dynamic_brake_start_may_move_later": false,
+      "target_counts_changed": false,
+      "target_plus_one_hard_limits_changed": false,
+      "completion_window_changed": false,
+      "pwm_or_brake_timing_changed": false,
+      "fault_latch_or_api_semantics_changed": false,
+      "safe_underreach_may_end_as": "BOUNDED_TARGET_NOT_REACHED",
+      "experimental_mvp": true,
+      "mechanical_containment_claimed": false,
+      "floor_forward_operationally_approved": false
     }
   },
   "fault_latch_contract": {

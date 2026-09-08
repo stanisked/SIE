@@ -284,6 +284,51 @@ def test_forward_guard_phase_preserves_separate_prior_and_trigger_samples(
     assert "forwardLastNonTriggeringBrakingGuard = sample" in rolling
 
 
+def test_forward_conservative_profile_uses_max_initial_stop_margin(
+    source: str,
+) -> None:
+    assert "FORWARD_MAX_STOP_MARGIN_M = 0.035f" in source
+    configure = function_body(source, "void configureBoundedCommand(")
+    assert "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1" in configure
+    assert "command.boundedForwardConfiguredStopMarginM" in configure
+    assert "FORWARD_MAX_STOP_MARGIN_M" in configure
+    assert "initialStopMarginM" in configure
+    assert "boundedBrakeStartCounts(" in configure
+
+
+def test_forward_conservative_dynamic_update_cannot_move_brake_later(
+    source: str,
+) -> None:
+    guard = function_body(source, "bool enforceBoundedEncoderLimit()")
+    dynamic = guard[guard.index("const float dynamicStopMarginM"):]
+    assert "activeBoundedRightBrakeStartCounts = min(" in dynamic
+    assert "activeBoundedLeftBrakeStartCounts = min(" in dynamic
+    assert "boundedBrakeStartCounts(" in dynamic
+    assert "activeBoundedRightBrakeStartCounts = max(" not in dynamic
+    assert "activeBoundedLeftBrakeStartCounts = max(" not in dynamic
+
+
+def test_forward_conservative_status_is_scalar_nullable_and_keeps_phase_telemetry(
+    source: str,
+) -> None:
+    status = function_body(source, "String buildStatusJson()")
+    assert "bounded_forward_brake_policy" in status
+    assert "bounded_forward_configured_stop_margin_m" in status
+    assert "boundedForwardBrakePolicy == nullptr" in status
+    assert 'json += "null";' in status
+    policy = function_body(source, "const char* boundedForwardBrakePolicyName(")
+    assert "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1" in policy
+    assert "nullptr" in policy
+    diagnostics = function_body(source, "void appendBoundedForwardBrakeDiagnostics(")
+    for field in (
+        "prior_non_triggering_before_predictive_brake",
+        "pre_brake_guard",
+        "prior_non_triggering_before_hard_limit",
+        "first_hard_limit_guard",
+    ):
+        assert field in diagnostics
+
+
 def test_micro_turn_profile_reserves_six_counts_before_target(source: str) -> None:
     assert "BOUNDED_MICRO_TURN_BRAKE_RESERVE_COUNTS = 6" in source
     reserve = function_body(source, "int32_t boundedMicroTurnBrakeReserveCounts(")
@@ -293,7 +338,7 @@ def test_micro_turn_profile_reserves_six_counts_before_target(source: str) -> No
     assert "targetCounts - reserveCounts" in start
     configure = function_body(source, "void configureBoundedCommand(")
     assert "BoundedMotionProfile::BOUNDED_MICRO_TURN_V1" in configure
-    assert "BoundedMotionProfile::BOUNDED_FORWARD_V1" in configure
+    assert "BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1" in configure
     assert "boundedMicroTurnBrakeStartCounts(" in configure
     assert "boundedBrakeStartCounts(" in configure
     guard = function_body(source, "bool enforceBoundedEncoderLimit()")

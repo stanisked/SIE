@@ -96,8 +96,8 @@ constexpr float DECEL_M_S2 = 0.120f;
 
 // Loaded tests fit a constant-deceleration model: d_stop = K * speed^2.
 constexpr float BRAKE_DISTANCE_GAIN_S2_PER_M = 0.460f;
-constexpr float MIN_STOP_MARGIN_M = 0.010f;
-constexpr float MAX_STOP_MARGIN_M = 0.035f;
+constexpr float FORWARD_MIN_STOP_MARGIN_M = 0.010f;
+constexpr float FORWARD_MAX_STOP_MARGIN_M = 0.035f;
 constexpr float TURN_MIN_STOP_MARGIN_M = 0.002f;
 constexpr float TURN_MAX_STOP_MARGIN_M = 0.025f;
 
@@ -244,6 +244,7 @@ enum class BoundedMotionKind : uint8_t {
 enum class BoundedMotionProfile : uint8_t {
   NONE,
   BOUNDED_FORWARD_V1,
+  BOUNDED_FORWARD_CONSERVATIVE_MVP_V1,
   BOUNDED_MICRO_TURN_V1
 };
 
@@ -287,6 +288,7 @@ struct CommandRecord {
   float angleDeg = 0.0f;
   BoundedMotionKind boundedKind = BoundedMotionKind::NONE;
   BoundedMotionProfile boundedMotionProfile = BoundedMotionProfile::NONE;
+  float boundedForwardConfiguredStopMarginM = 0.0f;
   int32_t turnBrakeReserveCounts = 0;
   bool rightIndividualBrakeStarted = false;
   bool leftIndividualBrakeStarted = false;
@@ -792,9 +794,19 @@ const char* boundedMotionProfileName(BoundedMotionProfile profile)
   switch (profile) {
     case BoundedMotionProfile::NONE:                   return "NONE";
     case BoundedMotionProfile::BOUNDED_FORWARD_V1:     return "BOUNDED_FORWARD_V1";
+    case BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1:
+      return "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1";
     case BoundedMotionProfile::BOUNDED_MICRO_TURN_V1:  return "BOUNDED_MICRO_TURN_V1";
   }
   return "NONE";
+}
+
+const char* boundedForwardBrakePolicyName(BoundedMotionProfile profile)
+{
+  return profile ==
+             BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1
+      ? "CONSERVATIVE_MAX_STOP_MARGIN_MVP_V1"
+      : nullptr;
 }
 
 CommandRecord* activeCommand()
@@ -810,8 +822,10 @@ CommandRecord* lastCommand()
 bool activeBoundedForwardCommand(const CommandRecord* command)
 {
   return command != nullptr &&
-         command->boundedMotionProfile ==
-             BoundedMotionProfile::BOUNDED_FORWARD_V1;
+         (command->boundedMotionProfile ==
+              BoundedMotionProfile::BOUNDED_FORWARD_V1 ||
+          command->boundedMotionProfile ==
+              BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1);
 }
 
 void refreshBoundedForwardGuardThresholds(BoundedForwardGuardSample &sample)
@@ -1234,8 +1248,8 @@ float currentStopMarginM()
   return constrain(
       BRAKE_DISTANCE_GAIN_S2_PER_M *
           averageSpeedMps * averageSpeedMps,
-      isTurnCommand() ? TURN_MIN_STOP_MARGIN_M : MIN_STOP_MARGIN_M,
-      isTurnCommand() ? TURN_MAX_STOP_MARGIN_M : MAX_STOP_MARGIN_M
+      isTurnCommand() ? TURN_MIN_STOP_MARGIN_M : FORWARD_MIN_STOP_MARGIN_M,
+      isTurnCommand() ? TURN_MAX_STOP_MARGIN_M : FORWARD_MAX_STOP_MARGIN_M
   );
 }
 
@@ -1378,7 +1392,10 @@ void configureBoundedCommand(
       command.leftCompletionToleranceCounts;
   command.boundedMotionProfile = turn
       ? BoundedMotionProfile::BOUNDED_MICRO_TURN_V1
-      : BoundedMotionProfile::BOUNDED_FORWARD_V1;
+      : BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1;
+  command.boundedForwardConfiguredStopMarginM = turn
+      ? 0.0f
+      : FORWARD_MAX_STOP_MARGIN_M;
   command.turnBrakeReserveCounts = turn
       ? BOUNDED_MICRO_TURN_BRAKE_RESERVE_COUNTS
       : 0;
@@ -1393,7 +1410,7 @@ void configureBoundedCommand(
   command.reobserveRequired = false;
   const float initialStopMarginM = turn
       ? TURN_MIN_STOP_MARGIN_M
-      : MIN_STOP_MARGIN_M;
+      : command.boundedForwardConfiguredStopMarginM;
   if (turn) {
     command.rightBrakeStartCounts = boundedMicroTurnBrakeStartCounts(
         command.rightTargetCounts,
@@ -1848,6 +1865,8 @@ bool enforceBoundedEncoderLimit()
         )
     );
   } else {
+    // The conservative forward profile starts from the maximum configured
+    // margin. min() permits only an earlier brake boundary, never a later one.
     activeBoundedRightBrakeStartCounts = min(
         activeBoundedRightBrakeStartCounts,
         boundedBrakeStartCounts(
@@ -3113,6 +3132,25 @@ String buildStatusJson()
     json += boundedMotionProfileName(bounded->boundedMotionProfile);
     json += "\"";
   }
+  json += ",";
+  const char* boundedForwardBrakePolicy = bounded == nullptr
+      ? nullptr
+      : boundedForwardBrakePolicyName(bounded->boundedMotionProfile);
+  json += "\"bounded_forward_brake_policy\":";
+  if (boundedForwardBrakePolicy == nullptr) {
+    json += "null";
+  } else {
+    json += "\"";
+    json += boundedForwardBrakePolicy;
+    json += "\"";
+  }
+  json += ",";
+  json += "\"bounded_forward_configured_stop_margin_m\":";
+  appendJsonNullableFloat(
+      json,
+      boundedForwardBrakePolicy != nullptr,
+      bounded == nullptr ? 0.0f : bounded->boundedForwardConfiguredStopMarginM
+  );
   json += ",";
   json += "\"bounded_turn_brake_reserve_counts\":";
   appendJsonNullableInt(

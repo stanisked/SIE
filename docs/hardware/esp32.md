@@ -98,14 +98,31 @@ target and absolute limit, predictive brake-start counts, motion kind, and
 bounded timeout. The encoder guard runs on every firmware loop in STARTING,
 DRIVING, BRAKING and COASTING, independently of the 100 ms PI cadence.
 
-Bounded forward keeps its established `BOUNDED_FORWARD_V1` predictive-brake
-profile. Bounded turns from 1 to 10 degrees use the separate
+Bounded forward now uses the experimental
+`BOUNDED_FORWARD_CONSERVATIVE_MVP_V1` profile. Its initial per-wheel
+brake-start is calculated from the existing maximum forward stop margin
+`FORWARD_MAX_STOP_MARGIN_M = 0.035 m`, rather than from the current dynamic
+speed estimate. A later dynamic calculation may move either brake-start
+earlier, but never later than this configured conservative boundary. Status
+exposes `bounded_forward_brake_policy` and
+`bounded_forward_configured_stop_margin_m`; both are `null` for idle, legacy
+and turn commands.
+
+This profile reduces the risk of a late predictive brake by starting the
+active brake earlier. It can stop below the existing success window and finish
+with fail-closed `BOUNDED_TARGET_NOT_REACHED`. Targets, target-plus-one hard
+limits, PWM, active-brake hold, settle timing, completion classification,
+FAULT/latch behavior, routes, boot session and idempotency are unchanged. This
+is an experimental MVP profile. It does not prove physical containment and
+does not give operational approval for bounded forward on the floor.
+
+Bounded turns from 1 to 10 degrees use the separate
 `BOUNDED_MICRO_TURN_V1` profile: each wheel reserves at least 6 counts before
 its target, so a target of 11 counts has an initial brake-start at 5 counts.
 A dynamic stop margin may increase this reserve and start braking earlier, but
 may never reduce it below 6 counts. This profile applies only to bounded turns;
-the legacy 90-degree turn and bounded forward profile are unchanged. Status
-adds `bounded_motion_profile` and `bounded_turn_brake_reserve_counts`.
+the legacy 90-degree turn is unchanged. Status adds `bounded_motion_profile`
+and `bounded_turn_brake_reserve_counts`.
 
 For bounded commands only, the normal stopping boundary is predictive: the
 firmware starts the already documented TA6586 electrical brake before either
@@ -131,7 +148,8 @@ latched bounded fault and zero final PWM. The configured brake starts were
 `66/65`; the existing count-at-brake snapshot was `75/85`; encoder average
 distance was `0.1042 m`.
 
-For `BOUNDED_FORWARD_V1` only, `GET /status` now preserves a fixed-size
+For bounded-forward profiles, including
+`BOUNDED_FORWARD_CONSERVATIVE_MVP_V1`, `GET /status` preserves a fixed-size
 `bounded_forward_brake_diagnostics` object with four nullable snapshots:
 `pre_brake_guard`, `brake_command`, `first_post_brake_loop` and
 `first_hard_limit_guard`. They record encoder/control timing, threshold and
@@ -202,6 +220,13 @@ mechanical containment и не определяет безопасный stoppin
 После terminal state нужно сохранить полный `/status` и остановиться без retry.
 Raised-wheel evidence не даёт разрешения на floor stopping или operational
 forward motion.
+
+Для experimental conservative profile следующий gate остаётся ровно таким же:
+один raised-wheel bounded-forward запуск на `0.10 m`. Перед командой оператор
+проверяет `READY`, отсутствие latch, нулевой PWM и новый `boot_session_id`.
+После единственной команды он сохраняет полный terminal `/status`, включая
+profile, configured margin, phase diagnostics, targets, brake-start и settled
+counts, после чего останавливается без retry и без floor-команды.
 
 Any active bounded-command FAULT latches `bounded_fault_latched` with
 `bounded_fault_reason`, including timeout, Wi-Fi loss, encoder/stall and
