@@ -430,3 +430,23 @@ dry-run handoffs, never HTTP, ESP32, executor or motor activity.
 
 Next physical gate: one unified run where valid metric depth produces a
 dry-run `ADVANCE` even when the 2D alignment is near or beyond the image band.
+
+## Live end-to-end SIE evidence run 2026-09-08
+
+Пять стабильных metric measurements от текущего person adapter прошли через
+generic core gate. `metric_decision.status=ADVANCE`; медианы составили
+`median_z_m=2.4246366024017334`, `median_range_m=2.42767376321023` и
+`median_x_m=0.012261714243294601` при `target_z_m=2.0`.
+
+Планируемое действие: `POST /move-forward`, `distance_m=0.1`. Temporal image
+alignment одновременно дал `PLANNED_TURN` с endpoint `/turn-left`, но
+победивший путь был `metric_depth`.
+
+Actuator capability: `adapter_id=esp32_zk5ad_sgm37_520`,
+`capability_id=bounded_forward_0.10_m`, `qualification_status=NOT_QUALIFIED`.
+Итог: `BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED`,
+`network_performed=false`, `motor_command_performed=false`.
+
+Текущая платформа заблокировала выполнение из-за qualification конкретного
+actuator adapter. Это не блокирует perception, measurement или decision.
+Run не является доказательством qualified execution или физического движения.
