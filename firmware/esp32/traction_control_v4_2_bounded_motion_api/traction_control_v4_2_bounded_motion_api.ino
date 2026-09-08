@@ -101,6 +101,18 @@ constexpr float FORWARD_MAX_STOP_MARGIN_M = 0.035f;
 constexpr float TURN_MIN_STOP_MARGIN_M = 0.002f;
 constexpr float TURN_MAX_STOP_MARGIN_M = 0.025f;
 
+// Experimental bounded-forward crawl envelope. These policy values are
+// provisional and are not a calibrated stopping-containment claim.
+constexpr uint32_t BOUNDED_FORWARD_SPEED_SAMPLE_PERIOD_MS = 40;
+constexpr uint32_t BOUNDED_FORWARD_SPEED_MAX_AGE_MS = 80;
+constexpr float BOUNDED_FORWARD_SPEED_PLAUSIBLE_MAX_M_S = 0.400f;
+constexpr float BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S = 0.060f;
+constexpr uint8_t BOUNDED_FORWARD_CRAWL_STABLE_SAMPLES = 2;
+constexpr float BOUNDED_FORWARD_REACTION_TIME_S = 0.080f;
+constexpr float BOUNDED_FORWARD_PROVISIONAL_DECEL_M_S2 = 0.120f;
+constexpr int32_t BOUNDED_FORWARD_ENCODER_UNCERTAINTY_COUNTS = 2;
+constexpr int32_t BOUNDED_FORWARD_SYNC_ERROR_LIMIT_COUNTS = 12;
+
 constexpr uint32_t CONTROL_PERIOD_MS = 100;
 constexpr uint32_t FORWARD_TIMEOUT_MS = 12000;
 constexpr uint32_t REVERSE_TIMEOUT_MS = 6000;
@@ -245,7 +257,34 @@ enum class BoundedMotionProfile : uint8_t {
   NONE,
   BOUNDED_FORWARD_V1,
   BOUNDED_FORWARD_CONSERVATIVE_MVP_V1,
+  BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1,
   BOUNDED_MICRO_TURN_V1
+};
+
+enum class BoundedForwardPhase : uint8_t {
+  NONE,
+  BREAKAWAY,
+  APPROACH,
+  SLOWDOWN,
+  CRAWL,
+  ACTIVE_BRAKE,
+  SETTLING
+};
+
+enum class BoundedForwardSpeedStatus : uint8_t {
+  MISSING,
+  VALID,
+  INVALID
+};
+
+enum class BoundedForwardSpeedFailureReason : uint8_t {
+  NONE,
+  MISSING,
+  STALE,
+  NON_FINITE,
+  NEGATIVE_SPEED,
+  SPEED_OUT_OF_RANGE,
+  SAMPLE_INTERVAL_OUT_OF_RANGE
 };
 
 enum class BoundedStopMode : uint8_t {
@@ -257,6 +296,9 @@ enum class BoundedStopMode : uint8_t {
 enum class BoundedForwardBrakeTrigger : uint8_t {
   NONE,
   PREDICTIVE_BRAKE,
+  CRAWL_ENVELOPE,
+  SPEED_ESTIMATE_INVALID,
+  SYNC_LIMIT,
   TARGET_REACHED,
   HARD_LIMIT
 };
@@ -278,6 +320,42 @@ struct BoundedForwardGuardSample {
   bool leftAtHardLimit = false;
 };
 
+struct BoundedForwardSpeedSample {
+  bool captured = false;
+  uint32_t timestampMs = 0;
+  uint32_t sampleSeq = 0;
+  int32_t rightCount = 0;
+  int32_t leftCount = 0;
+  float rightSpeedMps = 0.0f;
+  float leftSpeedMps = 0.0f;
+  BoundedForwardSpeedStatus status = BoundedForwardSpeedStatus::MISSING;
+  BoundedForwardSpeedFailureReason failureReason =
+      BoundedForwardSpeedFailureReason::MISSING;
+};
+
+struct BoundedForwardPhaseSnapshot {
+  bool captured = false;
+  uint32_t timestampMs = 0;
+  uint32_t phaseSeq = 0;
+  int32_t rightCount = 0;
+  int32_t leftCount = 0;
+  float rightSpeedMps = 0.0f;
+  float leftSpeedMps = 0.0f;
+  uint32_t speedSampleTimestampMs = 0;
+  uint32_t speedSampleAgeMs = 0;
+  uint32_t speedSampleSeq = 0;
+  int32_t rightRemainingCounts = 0;
+  int32_t leftRemainingCounts = 0;
+  int32_t rightSlowdownBoundaryCounts = 0;
+  int32_t leftSlowdownBoundaryCounts = 0;
+  int32_t rightBrakeBoundaryCounts = 0;
+  int32_t leftBrakeBoundaryCounts = 0;
+  int32_t rightStopEnvelopeCounts = 0;
+  int32_t leftStopEnvelopeCounts = 0;
+  int rightPwm = 0;
+  int leftPwm = 0;
+};
+
 struct CommandRecord {
   bool used = false;
   String commandId;
@@ -289,6 +367,27 @@ struct CommandRecord {
   BoundedMotionKind boundedKind = BoundedMotionKind::NONE;
   BoundedMotionProfile boundedMotionProfile = BoundedMotionProfile::NONE;
   float boundedForwardConfiguredStopMarginM = 0.0f;
+  BoundedForwardPhase boundedForwardPhase = BoundedForwardPhase::NONE;
+  uint32_t boundedForwardPhaseSeq = 0;
+  BoundedForwardSpeedSample boundedForwardSpeedSample;
+  uint32_t boundedForwardSpeedSampleAgeMs = 0;
+  int32_t boundedForwardRightRemainingCounts = 0;
+  int32_t boundedForwardLeftRemainingCounts = 0;
+  int32_t boundedForwardRightSlowdownBoundaryCounts = 0;
+  int32_t boundedForwardLeftSlowdownBoundaryCounts = 0;
+  int32_t boundedForwardRightBrakeBoundaryCounts = 0;
+  int32_t boundedForwardLeftBrakeBoundaryCounts = 0;
+  int32_t boundedForwardRightStopEnvelopeCounts = 0;
+  int32_t boundedForwardLeftStopEnvelopeCounts = 0;
+  int boundedForwardRightCrawlPwmCeiling = 0;
+  int boundedForwardLeftCrawlPwmCeiling = 0;
+  int32_t boundedForwardSyncErrorCounts = 0;
+  int8_t boundedForwardLeadingWheel = 0;
+  bool boundedForwardEnvelopeFeasible = false;
+  uint8_t boundedForwardCrawlStableSamples = 0;
+  bool boundedForwardCrawlSpeedQualified = false;
+  BoundedForwardPhaseSnapshot boundedForwardSlowdownEntry;
+  BoundedForwardPhaseSnapshot boundedForwardCrawlEntry;
   int32_t turnBrakeReserveCounts = 0;
   bool rightIndividualBrakeStarted = false;
   bool leftIndividualBrakeStarted = false;
@@ -467,6 +566,27 @@ int32_t activeBoundedStableRightCount = 0;
 int32_t activeBoundedStableLeftCount = 0;
 uint8_t activeBoundedStableSamples = 0;
 uint32_t activeBoundedGuardEvaluationSeq = 0;
+BoundedForwardPhase activeBoundedForwardPhase = BoundedForwardPhase::NONE;
+uint32_t activeBoundedForwardPhaseSeq = 0;
+BoundedForwardSpeedSample activeBoundedForwardSpeedSample;
+uint32_t activeBoundedForwardSpeedBaselineTimestampMs = 0;
+int32_t activeBoundedForwardSpeedBaselineRightCount = 0;
+int32_t activeBoundedForwardSpeedBaselineLeftCount = 0;
+uint32_t activeBoundedForwardSpeedSampleSeq = 0;
+uint32_t activeBoundedForwardLastQualifiedSpeedSeq = 0;
+int32_t activeBoundedForwardRightSlowdownBoundaryCounts = 0;
+int32_t activeBoundedForwardLeftSlowdownBoundaryCounts = 0;
+int32_t activeBoundedForwardRightBrakeBoundaryCounts = 0;
+int32_t activeBoundedForwardLeftBrakeBoundaryCounts = 0;
+int32_t activeBoundedForwardRightStopEnvelopeCounts = 0;
+int32_t activeBoundedForwardLeftStopEnvelopeCounts = 0;
+int activeBoundedForwardRightCrawlPwmCeiling = 0;
+int activeBoundedForwardLeftCrawlPwmCeiling = 0;
+int32_t activeBoundedForwardSyncErrorCounts = 0;
+int8_t activeBoundedForwardLeadingWheel = 0;
+bool activeBoundedForwardEnvelopeFeasible = false;
+uint8_t activeBoundedForwardCrawlStableSamples = 0;
+bool activeBoundedForwardCrawlSpeedQualified = false;
 
 uint32_t motionStartTime = 0;
 uint32_t motionElapsedMs = 0;
@@ -783,6 +903,10 @@ const char* boundedForwardBrakeTriggerName(BoundedForwardBrakeTrigger trigger)
   switch (trigger) {
     case BoundedForwardBrakeTrigger::NONE:             return "NONE";
     case BoundedForwardBrakeTrigger::PREDICTIVE_BRAKE: return "PREDICTIVE_BRAKE";
+    case BoundedForwardBrakeTrigger::CRAWL_ENVELOPE:   return "CRAWL_ENVELOPE";
+    case BoundedForwardBrakeTrigger::SPEED_ESTIMATE_INVALID:
+      return "SPEED_ESTIMATE_INVALID";
+    case BoundedForwardBrakeTrigger::SYNC_LIMIT:       return "SYNC_LIMIT";
     case BoundedForwardBrakeTrigger::TARGET_REACHED:   return "TARGET_REACHED";
     case BoundedForwardBrakeTrigger::HARD_LIMIT:       return "HARD_LIMIT";
   }
@@ -796,6 +920,8 @@ const char* boundedMotionProfileName(BoundedMotionProfile profile)
     case BoundedMotionProfile::BOUNDED_FORWARD_V1:     return "BOUNDED_FORWARD_V1";
     case BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1:
       return "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1";
+    case BoundedMotionProfile::BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1:
+      return "BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1";
     case BoundedMotionProfile::BOUNDED_MICRO_TURN_V1:  return "BOUNDED_MICRO_TURN_V1";
   }
   return "NONE";
@@ -803,10 +929,55 @@ const char* boundedMotionProfileName(BoundedMotionProfile profile)
 
 const char* boundedForwardBrakePolicyName(BoundedMotionProfile profile)
 {
-  return profile ==
-             BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1
-      ? "CONSERVATIVE_MAX_STOP_MARGIN_MVP_V1"
-      : nullptr;
+  if (profile == BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1) {
+    return "CONSERVATIVE_MAX_STOP_MARGIN_MVP_V1";
+  }
+  if (profile == BoundedMotionProfile::BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1) {
+    return "PROVISIONAL_CRAWL_ENVELOPE_MVP_V1";
+  }
+  return nullptr;
+}
+
+const char* boundedForwardPhaseName(BoundedForwardPhase phase)
+{
+  switch (phase) {
+    case BoundedForwardPhase::NONE:         return "NONE";
+    case BoundedForwardPhase::BREAKAWAY:    return "BREAKAWAY";
+    case BoundedForwardPhase::APPROACH:     return "APPROACH";
+    case BoundedForwardPhase::SLOWDOWN:     return "SLOWDOWN";
+    case BoundedForwardPhase::CRAWL:        return "CRAWL";
+    case BoundedForwardPhase::ACTIVE_BRAKE: return "ACTIVE_BRAKE";
+    case BoundedForwardPhase::SETTLING:     return "SETTLING";
+  }
+  return "NONE";
+}
+
+const char* boundedForwardSpeedStatusName(BoundedForwardSpeedStatus status)
+{
+  switch (status) {
+    case BoundedForwardSpeedStatus::MISSING: return "MISSING";
+    case BoundedForwardSpeedStatus::VALID:   return "VALID";
+    case BoundedForwardSpeedStatus::INVALID: return "INVALID";
+  }
+  return "INVALID";
+}
+
+const char* boundedForwardSpeedFailureReasonName(
+    BoundedForwardSpeedFailureReason reason)
+{
+  switch (reason) {
+    case BoundedForwardSpeedFailureReason::NONE: return "NONE";
+    case BoundedForwardSpeedFailureReason::MISSING: return "MISSING";
+    case BoundedForwardSpeedFailureReason::STALE: return "STALE";
+    case BoundedForwardSpeedFailureReason::NON_FINITE: return "NON_FINITE";
+    case BoundedForwardSpeedFailureReason::NEGATIVE_SPEED:
+      return "NEGATIVE_SPEED";
+    case BoundedForwardSpeedFailureReason::SPEED_OUT_OF_RANGE:
+      return "SPEED_OUT_OF_RANGE";
+    case BoundedForwardSpeedFailureReason::SAMPLE_INTERVAL_OUT_OF_RANGE:
+      return "SAMPLE_INTERVAL_OUT_OF_RANGE";
+  }
+  return "INVALID";
 }
 
 CommandRecord* activeCommand()
@@ -825,7 +996,16 @@ bool activeBoundedForwardCommand(const CommandRecord* command)
          (command->boundedMotionProfile ==
               BoundedMotionProfile::BOUNDED_FORWARD_V1 ||
           command->boundedMotionProfile ==
-              BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1);
+              BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1 ||
+          command->boundedMotionProfile ==
+              BoundedMotionProfile::BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1);
+}
+
+bool activeBoundedForwardCrawlEnvelope()
+{
+  return activeBoundedMotion &&
+         activeBoundedMotionProfile ==
+             BoundedMotionProfile::BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1;
 }
 
 void refreshBoundedForwardGuardThresholds(BoundedForwardGuardSample &sample)
@@ -1059,6 +1239,27 @@ void completeActiveCommand(CommandState state)
   activeBoundedTurnMinSuccessAngleRad = 0.0f;
   activeBoundedTurnFinalAngleRad = 0.0f;
   activeBoundedTurnMinWheelProgressCounts = 0;
+  activeBoundedForwardPhase = BoundedForwardPhase::NONE;
+  activeBoundedForwardPhaseSeq = 0;
+  activeBoundedForwardSpeedSample = BoundedForwardSpeedSample();
+  activeBoundedForwardSpeedBaselineTimestampMs = 0;
+  activeBoundedForwardSpeedBaselineRightCount = 0;
+  activeBoundedForwardSpeedBaselineLeftCount = 0;
+  activeBoundedForwardSpeedSampleSeq = 0;
+  activeBoundedForwardLastQualifiedSpeedSeq = 0;
+  activeBoundedForwardRightSlowdownBoundaryCounts = 0;
+  activeBoundedForwardLeftSlowdownBoundaryCounts = 0;
+  activeBoundedForwardRightBrakeBoundaryCounts = 0;
+  activeBoundedForwardLeftBrakeBoundaryCounts = 0;
+  activeBoundedForwardRightStopEnvelopeCounts = 0;
+  activeBoundedForwardLeftStopEnvelopeCounts = 0;
+  activeBoundedForwardRightCrawlPwmCeiling = 0;
+  activeBoundedForwardLeftCrawlPwmCeiling = 0;
+  activeBoundedForwardSyncErrorCounts = 0;
+  activeBoundedForwardLeadingWheel = 0;
+  activeBoundedForwardEnvelopeFeasible = false;
+  activeBoundedForwardCrawlStableSamples = 0;
+  activeBoundedForwardCrawlSpeedQualified = false;
 }
 
 bool commandIdIsValid(const String &commandId)
@@ -1261,6 +1462,311 @@ int32_t encoderCountsForTravelM(float travelM, float metersPerCount)
   );
 }
 
+float boundedForwardStopEnvelopeM(float speedMps, float metersPerCount)
+{
+  const float boundedSpeed = constrain(
+      fabsf(speedMps),
+      0.0f,
+      BOUNDED_FORWARD_SPEED_PLAUSIBLE_MAX_M_S
+  );
+  const float reactionDistance =
+      boundedSpeed * BOUNDED_FORWARD_REACTION_TIME_S;
+  const float speedDependentBrakeDistance =
+      BRAKE_DISTANCE_GAIN_S2_PER_M * boundedSpeed * boundedSpeed;
+  const float encoderUncertaintyDistance =
+      BOUNDED_FORWARD_ENCODER_UNCERTAINTY_COUNTS * metersPerCount;
+  return reactionDistance + speedDependentBrakeDistance +
+         encoderUncertaintyDistance;
+}
+
+int32_t boundedForwardStopEnvelopeCounts(
+    float speedMps,
+    float metersPerCount)
+{
+  return encoderCountsForTravelM(
+      boundedForwardStopEnvelopeM(speedMps, metersPerCount),
+      metersPerCount
+  );
+}
+
+int32_t boundedForwardSlowdownReserveCounts(
+    float speedMps,
+    float metersPerCount)
+{
+  const float boundedSpeed = constrain(
+      fabsf(speedMps),
+      BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S,
+      BOUNDED_FORWARD_SPEED_PLAUSIBLE_MAX_M_S
+  );
+  const float speedSquaredDelta = max(
+      0.0f,
+      boundedSpeed * boundedSpeed -
+          BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S *
+              BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S
+  );
+  const float slowdownDistance = speedSquaredDelta /
+      (2.0f * BOUNDED_FORWARD_PROVISIONAL_DECEL_M_S2);
+  const float crawlStopDistance = boundedForwardStopEnvelopeM(
+      BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S,
+      metersPerCount
+  );
+  return encoderCountsForTravelM(
+      slowdownDistance + crawlStopDistance,
+      metersPerCount
+  );
+}
+
+int32_t boundedForwardBoundaryCounts(
+    int32_t targetCounts,
+    int32_t reserveCounts)
+{
+  return max(static_cast<int32_t>(1), targetCounts - reserveCounts);
+}
+
+uint32_t boundedForwardSpeedSampleAgeMs(uint32_t now)
+{
+  return activeBoundedForwardSpeedSample.captured
+      ? now - activeBoundedForwardSpeedSample.timestampMs
+      : 0;
+}
+
+void syncBoundedForwardCrawlTelemetry(
+    uint32_t now,
+    int32_t rightCount,
+    int32_t leftCount)
+{
+  CommandRecord* command = activeCommand();
+  if (command == nullptr || !activeBoundedForwardCrawlEnvelope()) {
+    return;
+  }
+  command->boundedForwardPhase = activeBoundedForwardPhase;
+  command->boundedForwardPhaseSeq = activeBoundedForwardPhaseSeq;
+  command->boundedForwardSpeedSample = activeBoundedForwardSpeedSample;
+  command->boundedForwardSpeedSampleAgeMs =
+      boundedForwardSpeedSampleAgeMs(now);
+  command->boundedForwardRightRemainingCounts =
+      max(static_cast<int32_t>(0), activeBoundedRightTargetCounts - rightCount);
+  command->boundedForwardLeftRemainingCounts =
+      max(static_cast<int32_t>(0), activeBoundedLeftTargetCounts - leftCount);
+  command->boundedForwardRightSlowdownBoundaryCounts =
+      activeBoundedForwardRightSlowdownBoundaryCounts;
+  command->boundedForwardLeftSlowdownBoundaryCounts =
+      activeBoundedForwardLeftSlowdownBoundaryCounts;
+  command->boundedForwardRightBrakeBoundaryCounts =
+      activeBoundedForwardRightBrakeBoundaryCounts;
+  command->boundedForwardLeftBrakeBoundaryCounts =
+      activeBoundedForwardLeftBrakeBoundaryCounts;
+  command->boundedForwardRightStopEnvelopeCounts =
+      activeBoundedForwardRightStopEnvelopeCounts;
+  command->boundedForwardLeftStopEnvelopeCounts =
+      activeBoundedForwardLeftStopEnvelopeCounts;
+  command->boundedForwardRightCrawlPwmCeiling =
+      activeBoundedForwardRightCrawlPwmCeiling;
+  command->boundedForwardLeftCrawlPwmCeiling =
+      activeBoundedForwardLeftCrawlPwmCeiling;
+  command->boundedForwardSyncErrorCounts =
+      activeBoundedForwardSyncErrorCounts;
+  command->boundedForwardLeadingWheel = activeBoundedForwardLeadingWheel;
+  command->boundedForwardEnvelopeFeasible =
+      activeBoundedForwardEnvelopeFeasible;
+  command->boundedForwardCrawlStableSamples =
+      activeBoundedForwardCrawlStableSamples;
+  command->boundedForwardCrawlSpeedQualified =
+      activeBoundedForwardCrawlSpeedQualified;
+  (void)now;
+}
+
+void captureBoundedForwardPhaseSnapshot(
+    BoundedForwardPhaseSnapshot &snapshot,
+    uint32_t now,
+    int32_t rightCount,
+    int32_t leftCount)
+{
+  if (snapshot.captured) {
+    return;
+  }
+  snapshot.captured = true;
+  snapshot.timestampMs = now;
+  snapshot.phaseSeq = activeBoundedForwardPhaseSeq;
+  snapshot.rightCount = rightCount;
+  snapshot.leftCount = leftCount;
+  snapshot.rightSpeedMps = activeBoundedForwardSpeedSample.rightSpeedMps;
+  snapshot.leftSpeedMps = activeBoundedForwardSpeedSample.leftSpeedMps;
+  snapshot.speedSampleTimestampMs =
+      activeBoundedForwardSpeedSample.timestampMs;
+  snapshot.speedSampleAgeMs = boundedForwardSpeedSampleAgeMs(now);
+  snapshot.speedSampleSeq = activeBoundedForwardSpeedSample.sampleSeq;
+  snapshot.rightRemainingCounts = max(
+      static_cast<int32_t>(0), activeBoundedRightTargetCounts - rightCount
+  );
+  snapshot.leftRemainingCounts = max(
+      static_cast<int32_t>(0), activeBoundedLeftTargetCounts - leftCount
+  );
+  snapshot.rightSlowdownBoundaryCounts =
+      activeBoundedForwardRightSlowdownBoundaryCounts;
+  snapshot.leftSlowdownBoundaryCounts =
+      activeBoundedForwardLeftSlowdownBoundaryCounts;
+  snapshot.rightBrakeBoundaryCounts =
+      activeBoundedForwardRightBrakeBoundaryCounts;
+  snapshot.leftBrakeBoundaryCounts =
+      activeBoundedForwardLeftBrakeBoundaryCounts;
+  snapshot.rightStopEnvelopeCounts =
+      activeBoundedForwardRightStopEnvelopeCounts;
+  snapshot.leftStopEnvelopeCounts =
+      activeBoundedForwardLeftStopEnvelopeCounts;
+  snapshot.rightPwm = rightPwm;
+  snapshot.leftPwm = leftPwm;
+}
+
+void setBoundedForwardPhase(
+    BoundedForwardPhase phase,
+    uint32_t now,
+    int32_t rightCount,
+    int32_t leftCount)
+{
+  if (!activeBoundedForwardCrawlEnvelope() ||
+      activeBoundedForwardPhase == phase) {
+    return;
+  }
+  activeBoundedForwardPhase = phase;
+  activeBoundedForwardPhaseSeq++;
+  CommandRecord* command = activeCommand();
+  if (command != nullptr) {
+    command->boundedForwardPhase = phase;
+    command->boundedForwardPhaseSeq = activeBoundedForwardPhaseSeq;
+    if (phase == BoundedForwardPhase::SLOWDOWN) {
+      captureBoundedForwardPhaseSnapshot(
+          command->boundedForwardSlowdownEntry, now, rightCount, leftCount
+      );
+    } else if (phase == BoundedForwardPhase::CRAWL) {
+      captureBoundedForwardPhaseSnapshot(
+          command->boundedForwardCrawlEntry, now, rightCount, leftCount
+      );
+    }
+  }
+  syncBoundedForwardCrawlTelemetry(now, rightCount, leftCount);
+}
+
+void initializeBoundedForwardSpeedEstimator(
+    uint32_t now,
+    int32_t rightCount,
+    int32_t leftCount)
+{
+  activeBoundedForwardSpeedSample = BoundedForwardSpeedSample();
+  activeBoundedForwardSpeedBaselineTimestampMs = now;
+  activeBoundedForwardSpeedBaselineRightCount = rightCount;
+  activeBoundedForwardSpeedBaselineLeftCount = leftCount;
+  activeBoundedForwardSpeedSampleSeq = 0;
+  activeBoundedForwardLastQualifiedSpeedSeq = 0;
+}
+
+void updateBoundedForwardSpeedEstimator(
+    uint32_t now,
+    int32_t rightCount,
+    int32_t leftCount)
+{
+  if (!activeBoundedForwardCrawlEnvelope()) {
+    return;
+  }
+  if (activeBoundedForwardSpeedBaselineTimestampMs == 0) {
+    initializeBoundedForwardSpeedEstimator(now, rightCount, leftCount);
+    return;
+  }
+  const uint32_t elapsedMs =
+      now - activeBoundedForwardSpeedBaselineTimestampMs;
+  if (elapsedMs < BOUNDED_FORWARD_SPEED_SAMPLE_PERIOD_MS) {
+    return;
+  }
+
+  BoundedForwardSpeedSample sample;
+  sample.captured = true;
+  sample.timestampMs = now;
+  sample.sampleSeq = ++activeBoundedForwardSpeedSampleSeq;
+  sample.rightCount = rightCount;
+  sample.leftCount = leftCount;
+  const int32_t rightDelta =
+      rightCount - activeBoundedForwardSpeedBaselineRightCount;
+  const int32_t leftDelta =
+      leftCount - activeBoundedForwardSpeedBaselineLeftCount;
+  const float elapsedS = elapsedMs / 1000.0f;
+  sample.rightSpeedMps = rightDelta * RIGHT_M_PER_COUNT / elapsedS;
+  sample.leftSpeedMps = leftDelta * LEFT_M_PER_COUNT / elapsedS;
+  sample.status = BoundedForwardSpeedStatus::VALID;
+  sample.failureReason = BoundedForwardSpeedFailureReason::NONE;
+  if (elapsedMs > BOUNDED_FORWARD_SPEED_MAX_AGE_MS) {
+    sample.status = BoundedForwardSpeedStatus::INVALID;
+    sample.failureReason =
+        BoundedForwardSpeedFailureReason::SAMPLE_INTERVAL_OUT_OF_RANGE;
+  } else if (!isfinite(sample.rightSpeedMps) ||
+             !isfinite(sample.leftSpeedMps)) {
+    sample.status = BoundedForwardSpeedStatus::INVALID;
+    sample.failureReason = BoundedForwardSpeedFailureReason::NON_FINITE;
+  } else if (rightDelta < 0 || leftDelta < 0) {
+    sample.status = BoundedForwardSpeedStatus::INVALID;
+    sample.failureReason = BoundedForwardSpeedFailureReason::NEGATIVE_SPEED;
+  } else if (sample.rightSpeedMps >
+                 BOUNDED_FORWARD_SPEED_PLAUSIBLE_MAX_M_S ||
+             sample.leftSpeedMps >
+                 BOUNDED_FORWARD_SPEED_PLAUSIBLE_MAX_M_S) {
+    sample.status = BoundedForwardSpeedStatus::INVALID;
+    sample.failureReason =
+        BoundedForwardSpeedFailureReason::SPEED_OUT_OF_RANGE;
+  }
+  activeBoundedForwardSpeedSample = sample;
+  activeBoundedForwardSpeedBaselineTimestampMs = now;
+  activeBoundedForwardSpeedBaselineRightCount = rightCount;
+  activeBoundedForwardSpeedBaselineLeftCount = leftCount;
+}
+
+bool boundedForwardSpeedEstimateUsable(uint32_t now)
+{
+  if (!activeBoundedForwardSpeedSample.captured) {
+    activeBoundedForwardSpeedSample.status =
+        BoundedForwardSpeedStatus::MISSING;
+    activeBoundedForwardSpeedSample.failureReason =
+        BoundedForwardSpeedFailureReason::MISSING;
+    return false;
+  }
+  if (boundedForwardSpeedSampleAgeMs(now) >
+      BOUNDED_FORWARD_SPEED_MAX_AGE_MS) {
+    activeBoundedForwardSpeedSample.status =
+        BoundedForwardSpeedStatus::INVALID;
+    activeBoundedForwardSpeedSample.failureReason =
+        BoundedForwardSpeedFailureReason::STALE;
+    return false;
+  }
+  return activeBoundedForwardSpeedSample.status ==
+         BoundedForwardSpeedStatus::VALID;
+}
+
+void updateBoundedForwardEnvelopeFromSpeed()
+{
+  activeBoundedForwardRightStopEnvelopeCounts =
+      boundedForwardStopEnvelopeCounts(
+          activeBoundedForwardSpeedSample.rightSpeedMps,
+          RIGHT_M_PER_COUNT
+      );
+  activeBoundedForwardLeftStopEnvelopeCounts =
+      boundedForwardStopEnvelopeCounts(
+          activeBoundedForwardSpeedSample.leftSpeedMps,
+          LEFT_M_PER_COUNT
+      );
+  activeBoundedForwardRightBrakeBoundaryCounts =
+      boundedForwardBoundaryCounts(
+          activeBoundedRightTargetCounts,
+          activeBoundedForwardRightStopEnvelopeCounts
+      );
+  activeBoundedForwardLeftBrakeBoundaryCounts =
+      boundedForwardBoundaryCounts(
+          activeBoundedLeftTargetCounts,
+          activeBoundedForwardLeftStopEnvelopeCounts
+      );
+  activeBoundedRightBrakeStartCounts =
+      activeBoundedForwardRightBrakeBoundaryCounts;
+  activeBoundedLeftBrakeStartCounts =
+      activeBoundedForwardLeftBrakeBoundaryCounts;
+}
+
 int32_t boundedBrakeStartCounts(
     int32_t targetCounts,
     float metersPerCount,
@@ -1327,10 +1833,15 @@ int boundedBreakawayPwmCeiling()
     return BREAKAWAY_MAX_PWM;
   }
 
-  const int32_t smallestBrakeStart = min(
-      activeBoundedRightBrakeStartCounts,
-      activeBoundedLeftBrakeStartCounts
-  );
+  const int32_t smallestBrakeStart = activeBoundedForwardCrawlEnvelope()
+      ? min(
+            activeBoundedForwardRightSlowdownBoundaryCounts,
+            activeBoundedForwardLeftSlowdownBoundaryCounts
+        )
+      : min(
+            activeBoundedRightBrakeStartCounts,
+            activeBoundedLeftBrakeStartCounts
+        );
   return constrain(
       BREAKAWAY_START_PWM +
           static_cast<int>(smallestBrakeStart) * BREAKAWAY_PWM_STEP,
@@ -1349,10 +1860,15 @@ int32_t boundedBreakawayThresholdCounts()
       activeBoundedRightTargetCounts,
       activeBoundedLeftTargetCounts
   );
-  const int32_t smallestBrakeStart = min(
-      activeBoundedRightBrakeStartCounts,
-      activeBoundedLeftBrakeStartCounts
-  );
+  const int32_t smallestBrakeStart = activeBoundedForwardCrawlEnvelope()
+      ? min(
+            activeBoundedForwardRightSlowdownBoundaryCounts,
+            activeBoundedForwardLeftSlowdownBoundaryCounts
+        )
+      : min(
+            activeBoundedRightBrakeStartCounts,
+            activeBoundedLeftBrakeStartCounts
+        );
   // A short bounded request must leave enough encoder room for predictive
   // braking. Do not wait for the legacy 15-count breakaway threshold.
   return max(
@@ -1390,12 +1906,16 @@ void configureBoundedCommand(
       command.rightCompletionToleranceCounts;
   command.leftMinSuccessCounts = command.leftTargetCounts -
       command.leftCompletionToleranceCounts;
-  command.boundedMotionProfile = turn
-      ? BoundedMotionProfile::BOUNDED_MICRO_TURN_V1
-      : BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1;
-  command.boundedForwardConfiguredStopMarginM = turn
-      ? 0.0f
-      : FORWARD_MAX_STOP_MARGIN_M;
+  if (direction == MotionDirection::FORWARD) {
+    command.boundedMotionProfile =
+        BoundedMotionProfile::BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1;
+  } else if (turn) {
+    command.boundedMotionProfile =
+        BoundedMotionProfile::BOUNDED_MICRO_TURN_V1;
+  } else {
+    command.boundedMotionProfile = BoundedMotionProfile::NONE;
+  }
+  command.boundedForwardConfiguredStopMarginM = 0.0f;
   command.turnBrakeReserveCounts = turn
       ? BOUNDED_MICRO_TURN_BRAKE_RESERVE_COUNTS
       : 0;
@@ -1408,10 +1928,8 @@ void configureBoundedCommand(
   command.syncErrorCounts = 0;
   command.boundedActualProgressRatio = 0.0f;
   command.reobserveRequired = false;
-  const float initialStopMarginM = turn
-      ? TURN_MIN_STOP_MARGIN_M
-      : command.boundedForwardConfiguredStopMarginM;
   if (turn) {
+    const float initialStopMarginM = TURN_MIN_STOP_MARGIN_M;
     command.rightBrakeStartCounts = boundedMicroTurnBrakeStartCounts(
         command.rightTargetCounts,
         RIGHT_M_PER_COUNT,
@@ -1422,17 +1940,66 @@ void configureBoundedCommand(
         LEFT_M_PER_COUNT,
         initialStopMarginM
     );
+  } else if (direction == MotionDirection::FORWARD) {
+    command.boundedForwardRightStopEnvelopeCounts =
+        boundedForwardStopEnvelopeCounts(
+            BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S,
+            RIGHT_M_PER_COUNT
+        );
+    command.boundedForwardLeftStopEnvelopeCounts =
+        boundedForwardStopEnvelopeCounts(
+            BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S,
+            LEFT_M_PER_COUNT
+        );
+    const int32_t rightSlowdownReserveCounts =
+        boundedForwardSlowdownReserveCounts(
+            MAX_PROFILE_SPEED_M_S,
+            RIGHT_M_PER_COUNT
+        );
+    const int32_t leftSlowdownReserveCounts =
+        boundedForwardSlowdownReserveCounts(
+            MAX_PROFILE_SPEED_M_S,
+            LEFT_M_PER_COUNT
+        );
+    command.boundedForwardRightSlowdownBoundaryCounts =
+        boundedForwardBoundaryCounts(
+            command.rightTargetCounts,
+            rightSlowdownReserveCounts
+        );
+    command.boundedForwardLeftSlowdownBoundaryCounts =
+        boundedForwardBoundaryCounts(
+            command.leftTargetCounts,
+            leftSlowdownReserveCounts
+        );
+    command.boundedForwardRightBrakeBoundaryCounts =
+        boundedForwardBoundaryCounts(
+            command.rightTargetCounts,
+            command.boundedForwardRightStopEnvelopeCounts
+        );
+    command.boundedForwardLeftBrakeBoundaryCounts =
+        boundedForwardBoundaryCounts(
+            command.leftTargetCounts,
+            command.boundedForwardLeftStopEnvelopeCounts
+        );
+    command.rightBrakeStartCounts =
+        command.boundedForwardRightBrakeBoundaryCounts;
+    command.leftBrakeStartCounts =
+        command.boundedForwardLeftBrakeBoundaryCounts;
+    command.boundedForwardRightCrawlPwmCeiling = RIGHT_RUN_PWM_MIN;
+    command.boundedForwardLeftCrawlPwmCeiling = LEFT_RUN_PWM_MIN;
+    command.boundedForwardEnvelopeFeasible =
+        rightSlowdownReserveCounts < command.rightTargetCounts &&
+        leftSlowdownReserveCounts < command.leftTargetCounts &&
+        command.boundedForwardRightStopEnvelopeCounts <
+            command.rightTargetCounts &&
+        command.boundedForwardLeftStopEnvelopeCounts <
+            command.leftTargetCounts;
+    command.boundedForwardRightRemainingCounts = command.rightTargetCounts;
+    command.boundedForwardLeftRemainingCounts = command.leftTargetCounts;
   } else {
-    command.rightBrakeStartCounts = boundedBrakeStartCounts(
-        command.rightTargetCounts,
-        RIGHT_M_PER_COUNT,
-        initialStopMarginM
-    );
-    command.leftBrakeStartCounts = boundedBrakeStartCounts(
-        command.leftTargetCounts,
-        LEFT_M_PER_COUNT,
-        initialStopMarginM
-    );
+    command.rightBrakeStartCounts = 0;
+    command.leftBrakeStartCounts = 0;
+    command.boundedForwardEnvelopeFeasible = false;
   }
   command.boundedTimeoutMs = timeoutMs;
   command.boundedInitialPulseCompleted = false;
@@ -1482,6 +2049,36 @@ void configureBoundedCommand(
   activeBoundedCorrectionPulseStartTime = 0;
   activeBoundedStableSamples = 0;
   activeBoundedGuardEvaluationSeq = 0;
+  activeBoundedForwardPhase = BoundedForwardPhase::NONE;
+  activeBoundedForwardPhaseSeq = 0;
+  activeBoundedForwardSpeedSample = BoundedForwardSpeedSample();
+  activeBoundedForwardSpeedBaselineTimestampMs = 0;
+  activeBoundedForwardSpeedBaselineRightCount = 0;
+  activeBoundedForwardSpeedBaselineLeftCount = 0;
+  activeBoundedForwardSpeedSampleSeq = 0;
+  activeBoundedForwardLastQualifiedSpeedSeq = 0;
+  activeBoundedForwardRightSlowdownBoundaryCounts =
+      command.boundedForwardRightSlowdownBoundaryCounts;
+  activeBoundedForwardLeftSlowdownBoundaryCounts =
+      command.boundedForwardLeftSlowdownBoundaryCounts;
+  activeBoundedForwardRightBrakeBoundaryCounts =
+      command.boundedForwardRightBrakeBoundaryCounts;
+  activeBoundedForwardLeftBrakeBoundaryCounts =
+      command.boundedForwardLeftBrakeBoundaryCounts;
+  activeBoundedForwardRightStopEnvelopeCounts =
+      command.boundedForwardRightStopEnvelopeCounts;
+  activeBoundedForwardLeftStopEnvelopeCounts =
+      command.boundedForwardLeftStopEnvelopeCounts;
+  activeBoundedForwardRightCrawlPwmCeiling =
+      command.boundedForwardRightCrawlPwmCeiling;
+  activeBoundedForwardLeftCrawlPwmCeiling =
+      command.boundedForwardLeftCrawlPwmCeiling;
+  activeBoundedForwardSyncErrorCounts = 0;
+  activeBoundedForwardLeadingWheel = 0;
+  activeBoundedForwardEnvelopeFeasible =
+      command.boundedForwardEnvelopeFeasible;
+  activeBoundedForwardCrawlStableSamples = 0;
+  activeBoundedForwardCrawlSpeedQualified = false;
 
   activeBoundedMaxCorrectionPulses = command.boundedMaxCorrectionPulses;
   activeBoundedTurnMinSuccessAngleRad = turn
@@ -1605,6 +2202,35 @@ void startMotion(
   phaseStartTime = motionStartTime;
   previousControlTime = motionStartTime;
 
+  if (activeBoundedForwardCrawlEnvelope()) {
+    initializeBoundedForwardSpeedEstimator(motionStartTime, 0, 0);
+    setBoundedForwardPhase(
+        BoundedForwardPhase::BREAKAWAY,
+        motionStartTime,
+        0,
+        0
+    );
+    if (!activeBoundedForwardEnvelopeFeasible) {
+      CommandRecord* infeasible = activeCommand();
+      if (infeasible != nullptr) {
+        infeasible->startedAtMs = motionStartTime;
+        infeasible->rightFinalCount = 0;
+        infeasible->leftFinalCount = 0;
+        infeasible->rightOvershootCounts =
+            -infeasible->rightTargetCounts;
+        infeasible->leftOvershootCounts =
+            -infeasible->leftTargetCounts;
+      }
+      faultReason = "BOUNDED_TARGET_NOT_REACHED";
+      boundedFaultLatched = true;
+      boundedFaultReason = faultReason;
+      motionState = MotionState::FAULT;
+      completeActiveCommand(CommandState::FAULT);
+      Serial.println("BOUNDED_FORWARD_ENVELOPE_NOT_FEASIBLE");
+      return;
+    }
+  }
+
   motionState = MotionState::STARTING;
   CommandRecord* command = activeCommand();
   if (command != nullptr) {
@@ -1628,6 +2254,20 @@ void transitionToDriving(uint32_t now)
   previousControlTime = now;
   phaseStartTime = now;
 
+  if (activeBoundedForwardCrawlEnvelope()) {
+    const bool slowdownReached =
+        rightCount >= activeBoundedForwardRightSlowdownBoundaryCounts ||
+        leftCount >= activeBoundedForwardLeftSlowdownBoundaryCounts;
+    setBoundedForwardPhase(
+        slowdownReached
+            ? BoundedForwardPhase::SLOWDOWN
+            : BoundedForwardPhase::APPROACH,
+        now,
+        rightCount,
+        leftCount
+    );
+  }
+
   // The adaptive launch has already accelerated the drivetrain. Begin close
   // to the loaded cruise region instead of restarting the ramp from zero.
   profileSpeedMps = isTurnCommand() ? 0.065f : 0.100f;
@@ -1638,7 +2278,36 @@ void transitionToDriving(uint32_t now)
   rightStallCycles = 0;
   leftStallCycles = 0;
 
-  setDrivePwm(rightSustainPwm(), leftSustainPwm());
+  if (activeBoundedForwardCrawlEnvelope() &&
+      activeBoundedForwardPhase == BoundedForwardPhase::SLOWDOWN) {
+    if (rightCount >= activeBoundedRightLimitCounts ||
+        leftCount >= activeBoundedLeftLimitCounts) {
+      beginBoundedBraking(true, "BOUNDED_DISTANCE_LIMIT");
+      return;
+    }
+    if (!boundedForwardSpeedEstimateUsable(now)) {
+      syncBoundedForwardCrawlTelemetry(now, rightCount, leftCount);
+      beginBoundedBraking(
+          true,
+          "BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID"
+      );
+      return;
+    }
+    int controlledRightPwm = min(
+        rightSustainPwm(), activeBoundedForwardRightCrawlPwmCeiling
+    );
+    int controlledLeftPwm = min(
+        leftSustainPwm(), activeBoundedForwardLeftCrawlPwmCeiling
+    );
+    if (rightCount > leftCount) {
+      controlledRightPwm = min(controlledRightPwm, controlledLeftPwm);
+    } else if (leftCount > rightCount) {
+      controlledLeftPwm = min(controlledLeftPwm, controlledRightPwm);
+    }
+    setDrivePwm(controlledRightPwm, controlledLeftPwm);
+  } else {
+    setDrivePwm(rightSustainPwm(), leftSustainPwm());
+  }
 
   motionState = MotionState::DRIVING;
   setActiveCommandState(CommandState::DRIVING);
@@ -1691,6 +2360,12 @@ void beginBoundedBraking(bool faultPending, const String &reason)
         activeBoundedLeftCountAtBrakeStart
     );
     captureBoundedForwardBrakeCommand(
+        activeBoundedRightCountAtBrakeStart,
+        activeBoundedLeftCountAtBrakeStart
+    );
+    setBoundedForwardPhase(
+        BoundedForwardPhase::ACTIVE_BRAKE,
+        millis(),
         activeBoundedRightCountAtBrakeStart,
         activeBoundedLeftCountAtBrakeStart
     );
@@ -1843,6 +2518,153 @@ bool enforceBoundedEncoderLimit()
     }
     applyMicroTurnOutputs(rightOutput, leftOutput, rightBrake, leftBrake);
     return true;
+  }
+
+  if (activeBoundedForwardCrawlEnvelope()) {
+    updateBoundedForwardSpeedEstimator(
+        guardSample.timestampMs,
+        rightCount,
+        leftCount
+    );
+    activeBoundedForwardSyncErrorCounts = abs(rightCount - leftCount);
+    activeBoundedSyncErrorCounts = activeBoundedForwardSyncErrorCounts;
+    activeBoundedForwardLeadingWheel = rightCount > leftCount
+        ? 1
+        : (leftCount > rightCount ? -1 : 0);
+
+    const bool slowdownReached =
+        rightCount >= activeBoundedForwardRightSlowdownBoundaryCounts ||
+        leftCount >= activeBoundedForwardLeftSlowdownBoundaryCounts;
+    bool enteredSlowdown = false;
+    if ((activeBoundedForwardPhase == BoundedForwardPhase::BREAKAWAY ||
+         activeBoundedForwardPhase == BoundedForwardPhase::APPROACH) &&
+        slowdownReached) {
+      setBoundedForwardPhase(
+          BoundedForwardPhase::SLOWDOWN,
+          guardSample.timestampMs,
+          rightCount,
+          leftCount
+      );
+      enteredSlowdown = true;
+    }
+
+    const bool inControlledFinalApproach =
+        activeBoundedForwardPhase == BoundedForwardPhase::SLOWDOWN ||
+        activeBoundedForwardPhase == BoundedForwardPhase::CRAWL;
+    if (inControlledFinalApproach &&
+        !boundedForwardSpeedEstimateUsable(guardSample.timestampMs)) {
+      syncBoundedForwardCrawlTelemetry(
+          guardSample.timestampMs, rightCount, leftCount
+      );
+      preserveBoundedForwardPriorBeforePredictiveBrake();
+      captureBoundedForwardPreBrakeGuard(
+          guardSample,
+          BoundedForwardBrakeTrigger::SPEED_ESTIMATE_INVALID
+      );
+      beginBoundedBraking(
+          true,
+          "BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID"
+      );
+      return true;
+    }
+
+    if (inControlledFinalApproach) {
+      updateBoundedForwardEnvelopeFromSpeed();
+      refreshBoundedForwardGuardThresholds(guardSample);
+
+      if (activeBoundedForwardSpeedSample.sampleSeq !=
+          activeBoundedForwardLastQualifiedSpeedSeq) {
+        activeBoundedForwardLastQualifiedSpeedSeq =
+            activeBoundedForwardSpeedSample.sampleSeq;
+        const bool belowCrawlSpeed =
+            activeBoundedForwardSpeedSample.rightSpeedMps <=
+                BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S &&
+            activeBoundedForwardSpeedSample.leftSpeedMps <=
+                BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S;
+        activeBoundedForwardCrawlStableSamples = belowCrawlSpeed
+            ? min(
+                  static_cast<uint8_t>(
+                      activeBoundedForwardCrawlStableSamples + 1
+                  ),
+                  BOUNDED_FORWARD_CRAWL_STABLE_SAMPLES
+              )
+            : 0;
+        activeBoundedForwardCrawlSpeedQualified =
+            activeBoundedForwardCrawlStableSamples >=
+            BOUNDED_FORWARD_CRAWL_STABLE_SAMPLES;
+      }
+      if (activeBoundedForwardPhase == BoundedForwardPhase::SLOWDOWN &&
+          activeBoundedForwardCrawlSpeedQualified) {
+        setBoundedForwardPhase(
+            BoundedForwardPhase::CRAWL,
+            guardSample.timestampMs,
+            rightCount,
+            leftCount
+        );
+      }
+
+      if (activeBoundedForwardSyncErrorCounts >
+          BOUNDED_FORWARD_SYNC_ERROR_LIMIT_COUNTS) {
+        syncBoundedForwardCrawlTelemetry(
+            guardSample.timestampMs, rightCount, leftCount
+        );
+        preserveBoundedForwardPriorBeforePredictiveBrake();
+        captureBoundedForwardPreBrakeGuard(
+            guardSample,
+            BoundedForwardBrakeTrigger::SYNC_LIMIT
+        );
+        beginBoundedBraking(true, "BOUNDED_FORWARD_SYNC_LIMIT");
+        return true;
+      }
+
+      const bool rightProjectedFinalAtTarget =
+          rightCount + activeBoundedForwardRightStopEnvelopeCounts >=
+          activeBoundedRightTargetCounts;
+      const bool leftProjectedFinalAtTarget =
+          leftCount + activeBoundedForwardLeftStopEnvelopeCounts >=
+          activeBoundedLeftTargetCounts;
+      if (rightProjectedFinalAtTarget || leftProjectedFinalAtTarget) {
+        syncBoundedForwardCrawlTelemetry(
+            guardSample.timestampMs, rightCount, leftCount
+        );
+        preserveBoundedForwardPriorBeforePredictiveBrake();
+        captureBoundedForwardPreBrakeGuard(
+            guardSample,
+            BoundedForwardBrakeTrigger::CRAWL_ENVELOPE
+        );
+        beginBoundedTargetSettling();
+        return true;
+      }
+    }
+
+    CommandRecord* command = activeCommand();
+    if (command != nullptr) {
+      command->rightBrakeStartCounts =
+          activeBoundedForwardRightBrakeBoundaryCounts;
+      command->leftBrakeStartCounts =
+          activeBoundedForwardLeftBrakeBoundaryCounts;
+      command->syncErrorCounts = activeBoundedForwardSyncErrorCounts;
+    }
+    syncBoundedForwardCrawlTelemetry(
+        guardSample.timestampMs, rightCount, leftCount
+    );
+    captureBoundedForwardPreviousGuard(guardSample);
+    if (enteredSlowdown) {
+      int controlledRightPwm = min(
+          rightPwm, activeBoundedForwardRightCrawlPwmCeiling
+      );
+      int controlledLeftPwm = min(
+          leftPwm, activeBoundedForwardLeftCrawlPwmCeiling
+      );
+      if (activeBoundedForwardLeadingWheel > 0) {
+        controlledRightPwm = min(controlledRightPwm, controlledLeftPwm);
+      } else if (activeBoundedForwardLeadingWheel < 0) {
+        controlledLeftPwm = min(controlledLeftPwm, controlledRightPwm);
+      }
+      setDrivePwm(controlledRightPwm, controlledLeftPwm);
+      return true;
+    }
+    return false;
   }
 
   const float dynamicStopMarginM = currentStopMarginM();
@@ -2031,6 +2853,18 @@ void updateBoundedBraking(uint32_t now)
   // Observe the settled encoder counts after releasing the electrical brake.
   // This records remaining mechanical coast; it does not claim that coast is
   // eliminated before a raised-wheel retest.
+  if (activeBoundedForwardCrawlEnvelope() &&
+      activeBoundedForwardPhase != BoundedForwardPhase::SETTLING) {
+    int32_t settlingRightCount;
+    int32_t settlingLeftCount;
+    readMotionCounts(settlingRightCount, settlingLeftCount);
+    setBoundedForwardPhase(
+        BoundedForwardPhase::SETTLING,
+        now,
+        settlingRightCount,
+        settlingLeftCount
+    );
+  }
   stopMotors();
   updateDistancesFromEncoders();
   if (now - activeBoundedBrakeStartTime <
@@ -2056,6 +2890,14 @@ void updateBoundedBraking(uint32_t now)
   }
   if (activeBoundedStableSamples < BOUNDED_SETTLED_STABLE_SAMPLES) {
     return;
+  }
+
+  if (activeBoundedForwardCrawlEnvelope()) {
+    syncBoundedForwardCrawlTelemetry(
+        now,
+        activeBoundedRightFinalCount,
+        activeBoundedLeftFinalCount
+    );
   }
 
   CommandRecord* command = activeCommand();
@@ -2119,12 +2961,22 @@ void updateBoundedBraking(uint32_t now)
     command->boundedInitialPulseCompleted = true;
   }
   activeBoundedInitialPulseCompleted = true;
-  if (positiveOvershoot && !activeBoundedFaultPending) {
+  const bool crawlEnvelopeProfile = activeBoundedMotionProfile ==
+      BoundedMotionProfile::BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1;
+  if (positiveOvershoot &&
+      (crawlEnvelopeProfile || !activeBoundedFaultPending)) {
     // Requested distance/angle is an upper physical bound. Any settled count
     // above target is still a bounded-distance violation.
     activeBoundedFaultPending = true;
     faultReason = "BOUNDED_DISTANCE_LIMIT";
     boundedFaultLatched = true;
+    boundedFaultReason = faultReason;
+  } else if (!completionAccepted && crawlEnvelopeProfile &&
+             activeBoundedFaultPending &&
+             faultReason == "BOUNDED_FORWARD_SYNC_LIMIT") {
+    // A synchronization stop that settles below the existing success window
+    // remains the established fail-closed underreach classification.
+    faultReason = "BOUNDED_TARGET_NOT_REACHED";
     boundedFaultReason = faultReason;
   } else if (!completionAccepted && !activeBoundedFaultPending) {
     if (activeBoundedMotionProfile == BoundedMotionProfile::BOUNDED_MICRO_TURN_V1 &&
@@ -2241,11 +3093,38 @@ void updateStarting(uint32_t now)
 
   // A wheel that has already broken away moves immediately to its calibrated
   // rolling PWM while the other wheel continues its short adaptive ramp.
-  const int commandRight =
+  int commandRight =
       rightBreakawayDetected ? rightSustainPwm() : rampPwm;
 
-  const int commandLeft =
+  int commandLeft =
       leftBreakawayDetected ? leftSustainPwm() : rampPwm;
+
+  if (activeBoundedForwardCrawlEnvelope() &&
+      activeBoundedForwardPhase == BoundedForwardPhase::SLOWDOWN) {
+    commandRight = min(
+        commandRight, activeBoundedForwardRightCrawlPwmCeiling
+    );
+    commandLeft = min(
+        commandLeft, activeBoundedForwardLeftCrawlPwmCeiling
+    );
+    if (rightCount > leftCount) {
+      commandRight = min(commandRight, commandLeft);
+    } else if (leftCount > rightCount) {
+      commandLeft = min(commandLeft, commandRight);
+    }
+    // The loop-level guard already entered SLOWDOWN. Re-evaluate hard limit,
+    // projected final and speed freshness immediately before this startup PWM.
+    if (enforceBoundedEncoderLimit() ||
+        !boundedForwardSpeedEstimateUsable(now)) {
+      if (activeBoundedMotion && !activeBoundedBrakeStarted) {
+        beginBoundedBraking(
+            true,
+            "BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID"
+        );
+      }
+      return;
+    }
+  }
 
   setDrivePwm(commandRight, commandLeft);
 }
@@ -2390,8 +3269,17 @@ void updateDriving(uint32_t now)
 
   const float maxProfileSpeed = activeMaxProfileSpeedMps();
 
-  const float desiredProfileSpeed =
-      fminf(maxProfileSpeed, brakingSpeed);
+  const bool boundedForwardControlledFinalApproach =
+      activeBoundedForwardCrawlEnvelope() &&
+      (activeBoundedForwardPhase == BoundedForwardPhase::SLOWDOWN ||
+       activeBoundedForwardPhase == BoundedForwardPhase::CRAWL);
+  float desiredProfileSpeed = fminf(maxProfileSpeed, brakingSpeed);
+  if (boundedForwardControlledFinalApproach) {
+    desiredProfileSpeed = fminf(
+        desiredProfileSpeed,
+        BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S
+    );
+  }
 
   if (profileSpeedMps < desiredProfileSpeed) {
     profileSpeedMps = fminf(
@@ -2414,13 +3302,17 @@ void updateDriving(uint32_t now)
   const float rightTargetSpeed = constrain(
       profileSpeedMps + syncCorrection,
       0.0f,
-      maxProfileSpeed
+      boundedForwardControlledFinalApproach
+          ? BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S
+          : maxProfileSpeed
   );
 
   const float leftTargetSpeed = constrain(
       profileSpeedMps - syncCorrection,
       0.0f,
-      maxProfileSpeed
+      boundedForwardControlledFinalApproach
+          ? BOUNDED_FORWARD_CRAWL_SPEED_CEILING_M_S
+          : maxProfileSpeed
   );
 
   rightSpeedMps =
@@ -2431,7 +3323,9 @@ void updateDriving(uint32_t now)
 
   rightPwm = calculateWheelPwm(
       rightTargetSpeed,
-      rightSpeedMps,
+      boundedForwardControlledFinalApproach
+          ? activeBoundedForwardSpeedSample.rightSpeedMps
+          : rightSpeedMps,
       rightIntegral,
       RIGHT_RUN_PWM_MIN,
       RIGHT_RUN_PWM_AT_MAX,
@@ -2440,46 +3334,59 @@ void updateDriving(uint32_t now)
 
   leftPwm = calculateWheelPwm(
       leftTargetSpeed,
-      leftSpeedMps,
+      boundedForwardControlledFinalApproach
+          ? activeBoundedForwardSpeedSample.leftSpeedMps
+          : leftSpeedMps,
       leftIntegral,
       LEFT_RUN_PWM_MIN,
       LEFT_RUN_PWM_AT_MAX,
       dt
   );
 
-  // The loaded chassis cannot reliably restart after a controller-requested
-  // coast. Preserve the PWM values proven by the loaded sustain test during
-  // the whole regulated segment. The fast distance guard below remains
-  // responsible for the final cutoff.
-  rightPwm = rightPwm < rightSustainPwm()
-                 ? rightSustainPwm()
-                 : rightPwm;
+  if (boundedForwardControlledFinalApproach) {
+    // This forward-only path deliberately bypasses the legacy sustain floor
+    // and lagging-wheel boost. Fixed ceilings cannot increase during a run.
+    rightPwm = min(rightPwm, activeBoundedForwardRightCrawlPwmCeiling);
+    leftPwm = min(leftPwm, activeBoundedForwardLeftCrawlPwmCeiling);
+    if (activeBoundedForwardLeadingWheel > 0) {
+      rightPwm = min(rightPwm, leftPwm);
+    } else if (activeBoundedForwardLeadingWheel < 0) {
+      leftPwm = min(leftPwm, rightPwm);
+    }
+  } else {
+    // The loaded chassis cannot reliably restart after a controller-requested
+    // coast. Preserve the established sustain floor outside the new crawl
+    // envelope profile's controlled final approach.
+    rightPwm = rightPwm < rightSustainPwm()
+                   ? rightSustainPwm()
+                   : rightPwm;
 
-  leftPwm = leftPwm < leftSustainPwm()
-                ? leftSustainPwm()
-                : leftPwm;
+    leftPwm = leftPwm < leftSustainPwm()
+                  ? leftSustainPwm()
+                  : leftPwm;
 
-  const int syncPwmBoost = constrain(
-      static_cast<int>(roundf(
-          fabsf(rightDistanceM - leftDistanceM) *
-          SYNC_PWM_GAIN_PER_M
-      )),
-      0,
-      MAX_SYNC_PWM_BOOST
-  );
-
-  if (rightDistanceM > leftDistanceM) {
-    leftPwm = constrain(
-        leftPwm + syncPwmBoost,
+    const int syncPwmBoost = constrain(
+        static_cast<int>(roundf(
+            fabsf(rightDistanceM - leftDistanceM) *
+            SYNC_PWM_GAIN_PER_M
+        )),
         0,
-        MAX_DRIVE_PWM
+        MAX_SYNC_PWM_BOOST
     );
-  } else if (leftDistanceM > rightDistanceM) {
-    rightPwm = constrain(
-        rightPwm + syncPwmBoost,
-        0,
-        MAX_DRIVE_PWM
-    );
+
+    if (rightDistanceM > leftDistanceM) {
+      leftPwm = constrain(
+          leftPwm + syncPwmBoost,
+          0,
+          MAX_DRIVE_PWM
+      );
+    } else if (leftDistanceM > rightDistanceM) {
+      rightPwm = constrain(
+          rightPwm + syncPwmBoost,
+          0,
+          MAX_DRIVE_PWM
+      );
+    }
   }
 
   if (rightTargetSpeed > STALL_CHECK_MIN_TARGET_M_S) {
@@ -2517,7 +3424,21 @@ void updateDriving(uint32_t now)
     return;
   }
 
-  if (activeBoundedMotion && activeBoundedMotionProfile ==
+  if (boundedForwardControlledFinalApproach) {
+    // Re-run the hard-limit, speed-validity and projected-final guard directly
+    // before the next directed output. Any failure enters active braking.
+    if (enforceBoundedEncoderLimit()) {
+      return;
+    }
+    if (!boundedForwardSpeedEstimateUsable(now)) {
+      beginBoundedBraking(
+          true,
+          "BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID"
+      );
+      return;
+    }
+    setDrivePwm(rightPwm, leftPwm);
+  } else if (activeBoundedMotion && activeBoundedMotionProfile ==
       BoundedMotionProfile::BOUNDED_MICRO_TURN_V1) {
     // A drive write is allowed only while both wheels are still unbraked.
     // The fast encoder guard above owns the transition to individual brake.
@@ -2798,7 +3719,7 @@ void appendJsonNullableString(String &json, const String *value)
 
 void appendJsonNullableFloat(String &json, bool present, float value)
 {
-  if (!present) {
+  if (!present || !isfinite(value)) {
     json += "null";
     return;
   }
@@ -2857,6 +3778,150 @@ void appendBoundedForwardGuardSample(
   json += sample.rightAtHardLimit ? "true" : "false";
   json += ",\"left_met_hard_limit\":";
   json += sample.leftAtHardLimit ? "true" : "false";
+  json += "}";
+}
+
+void appendBoundedForwardPhaseSnapshot(
+    String &json,
+    const BoundedForwardPhaseSnapshot &snapshot)
+{
+  if (!snapshot.captured) {
+    json += "null";
+    return;
+  }
+  json += "{\"timestamp_ms\":";
+  json += String(snapshot.timestampMs);
+  json += ",\"phase_seq\":";
+  json += String(snapshot.phaseSeq);
+  json += ",\"right_count\":";
+  json += String(snapshot.rightCount);
+  json += ",\"left_count\":";
+  json += String(snapshot.leftCount);
+  json += ",\"right_speed_m_s\":";
+  appendJsonNullableFloat(json, true, snapshot.rightSpeedMps);
+  json += ",\"left_speed_m_s\":";
+  appendJsonNullableFloat(json, true, snapshot.leftSpeedMps);
+  json += ",\"speed_sample_timestamp_ms\":";
+  appendJsonNullableMillis(json, snapshot.speedSampleTimestampMs);
+  json += ",\"speed_sample_age_ms\":";
+  json += String(snapshot.speedSampleAgeMs);
+  json += ",\"speed_sample_seq\":";
+  json += String(snapshot.speedSampleSeq);
+  json += ",\"right_remaining_counts\":";
+  json += String(snapshot.rightRemainingCounts);
+  json += ",\"left_remaining_counts\":";
+  json += String(snapshot.leftRemainingCounts);
+  json += ",\"right_slowdown_boundary_counts\":";
+  json += String(snapshot.rightSlowdownBoundaryCounts);
+  json += ",\"left_slowdown_boundary_counts\":";
+  json += String(snapshot.leftSlowdownBoundaryCounts);
+  json += ",\"right_brake_boundary_counts\":";
+  json += String(snapshot.rightBrakeBoundaryCounts);
+  json += ",\"left_brake_boundary_counts\":";
+  json += String(snapshot.leftBrakeBoundaryCounts);
+  json += ",\"right_stop_envelope_counts\":";
+  json += String(snapshot.rightStopEnvelopeCounts);
+  json += ",\"left_stop_envelope_counts\":";
+  json += String(snapshot.leftStopEnvelopeCounts);
+  json += ",\"right_pwm\":";
+  json += String(snapshot.rightPwm);
+  json += ",\"left_pwm\":";
+  json += String(snapshot.leftPwm);
+  json += "}";
+}
+
+void appendBoundedForwardCrawlEnvelopeTelemetry(
+    String &json,
+    const CommandRecord* bounded)
+{
+  if (bounded == nullptr || bounded->boundedMotionProfile !=
+      BoundedMotionProfile::BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1) {
+    json += "null";
+    return;
+  }
+  json += "{\"phase\":\"";
+  json += boundedForwardPhaseName(bounded->boundedForwardPhase);
+  json += "\",\"phase_seq\":";
+  json += String(bounded->boundedForwardPhaseSeq);
+  json += ",\"speed_status\":\"";
+  json += boundedForwardSpeedStatusName(
+      bounded->boundedForwardSpeedSample.status
+  );
+  json += "\",\"speed_failure_reason\":\"";
+  json += boundedForwardSpeedFailureReasonName(
+      bounded->boundedForwardSpeedSample.failureReason
+  );
+  json += "\",\"right_speed_m_s\":";
+  appendJsonNullableFloat(
+      json,
+      bounded->boundedForwardSpeedSample.captured,
+      bounded->boundedForwardSpeedSample.rightSpeedMps
+  );
+  json += ",\"left_speed_m_s\":";
+  appendJsonNullableFloat(
+      json,
+      bounded->boundedForwardSpeedSample.captured,
+      bounded->boundedForwardSpeedSample.leftSpeedMps
+  );
+  json += ",\"speed_sample_timestamp_ms\":";
+  appendJsonNullableMillis(
+      json,
+      bounded->boundedForwardSpeedSample.timestampMs
+  );
+  json += ",\"speed_sample_age_ms\":";
+  appendJsonNullableInt(
+      json,
+      bounded->boundedForwardSpeedSample.captured,
+      bounded->boundedForwardSpeedSampleAgeMs
+  );
+  json += ",\"speed_sample_seq\":";
+  appendJsonNullableInt(
+      json,
+      bounded->boundedForwardSpeedSample.captured,
+      bounded->boundedForwardSpeedSample.sampleSeq
+  );
+  json += ",\"right_remaining_counts\":";
+  json += String(bounded->boundedForwardRightRemainingCounts);
+  json += ",\"left_remaining_counts\":";
+  json += String(bounded->boundedForwardLeftRemainingCounts);
+  json += ",\"right_slowdown_boundary_counts\":";
+  json += String(bounded->boundedForwardRightSlowdownBoundaryCounts);
+  json += ",\"left_slowdown_boundary_counts\":";
+  json += String(bounded->boundedForwardLeftSlowdownBoundaryCounts);
+  json += ",\"right_brake_boundary_counts\":";
+  json += String(bounded->boundedForwardRightBrakeBoundaryCounts);
+  json += ",\"left_brake_boundary_counts\":";
+  json += String(bounded->boundedForwardLeftBrakeBoundaryCounts);
+  json += ",\"right_stop_envelope_counts\":";
+  json += String(bounded->boundedForwardRightStopEnvelopeCounts);
+  json += ",\"left_stop_envelope_counts\":";
+  json += String(bounded->boundedForwardLeftStopEnvelopeCounts);
+  json += ",\"right_crawl_pwm_ceiling\":";
+  json += String(bounded->boundedForwardRightCrawlPwmCeiling);
+  json += ",\"left_crawl_pwm_ceiling\":";
+  json += String(bounded->boundedForwardLeftCrawlPwmCeiling);
+  json += ",\"sync_error_counts\":";
+  json += String(bounded->boundedForwardSyncErrorCounts);
+  json += ",\"leading_wheel\":\"";
+  json += bounded->boundedForwardLeadingWheel > 0
+      ? "RIGHT"
+      : (bounded->boundedForwardLeadingWheel < 0 ? "LEFT" : "NONE");
+  json += "\",\"envelope_feasible\":";
+  json += bounded->boundedForwardEnvelopeFeasible ? "true" : "false";
+  json += ",\"crawl_stable_samples\":";
+  json += String(bounded->boundedForwardCrawlStableSamples);
+  json += ",\"crawl_speed_qualified\":";
+  json += bounded->boundedForwardCrawlSpeedQualified ? "true" : "false";
+  json += ",\"slowdown_entry\":";
+  appendBoundedForwardPhaseSnapshot(
+      json,
+      bounded->boundedForwardSlowdownEntry
+  );
+  json += ",\"crawl_entry\":";
+  appendBoundedForwardPhaseSnapshot(
+      json,
+      bounded->boundedForwardCrawlEntry
+  );
   json += "}";
 }
 
@@ -3124,6 +4189,9 @@ String buildStatusJson()
   json += "\"bounded_forward_brake_diagnostics\":";
   appendBoundedForwardBrakeDiagnostics(json, bounded);
   json += ",";
+  json += "\"bounded_forward_crawl_envelope\":";
+  appendBoundedForwardCrawlEnvelopeTelemetry(json, bounded);
+  json += ",";
   json += "\"bounded_motion_profile\":";
   if (bounded == nullptr) {
     json += "null";
@@ -3148,7 +4216,8 @@ String buildStatusJson()
   json += "\"bounded_forward_configured_stop_margin_m\":";
   appendJsonNullableFloat(
       json,
-      boundedForwardBrakePolicy != nullptr,
+      bounded != nullptr && bounded->boundedMotionProfile ==
+          BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1,
       bounded == nullptr ? 0.0f : bounded->boundedForwardConfiguredStopMarginM
   );
   json += ",";

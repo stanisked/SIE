@@ -1,5 +1,53 @@
 # Current bounded-motion MVP handoff
 
+## Experimental forward crawl envelope MVP
+
+- branch: `feature/esp32-forward-crawl-envelope-mvp-v1`;
+- base: `1dea45482c2830bcb4438c4a5ed3a2adf384b5d9`;
+- профиль: `BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1`;
+- внутренние фазы bounded forward: `BREAKAWAY`, `APPROACH`, `SLOWDOWN`,
+  `CRAWL`, `ACTIVE_BRAKE`, `SETTLING`;
+- отдельная fixed-scalar per-wheel speed estimate не меняет 100-ms PI cadence
+  и legacy speed logic;
+- slowdown и projected-final brake boundaries считаются из fresh speed и
+  provisional envelope model, а не из одного fixed margin;
+- slowdown и brake используют per-wheel OR semantics;
+- в `SLOWDOWN`/`CRAWL` PWM ceiling каждого колеса не повышается, legacy floor и
+  sync boost его не обходят, ведущее колесо не получает больше PWM;
+- invalid/stale speed в slowdown/crawl вызывает active brake до следующего
+  directed PWM write с `BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID`;
+- после `ACTIVE_BRAKE` directed PWM не возвращается;
+- при `envelope_feasible=false` directed motion не стартует, результат
+  fail-closed `BOUNDED_TARGET_NOT_REACHED`;
+- targets, hard limits `target + 1`, success window, brake/settle timing,
+  FAULT/latch, API, ledger, turns, square и legacy motion не менялись.
+
+Исходные evidence: manual encoder baseline 1032/1033 counts за 5 оборотов;
+dynamic 0.010 m reserve завершился overshoot 108/108; fixed 0.035 m reserve
+завершился safe underreach 81/80. Наблюдавшаяся guard cadence около 2 ms и
+отсутствие directed PWM после `BRAKING` относятся к этим отдельным physical
+traces, а не доказывают новый профиль.
+
+Constants и envelope model имеют явный provisional label и не считаются
+калиброванными. Change set не доказывает mechanical containment и не даёт
+operational approval для floor forward.
+
+Offline-проверки change set:
+
+- `.ino` SHA-256:
+  `ee82c04eb86ecf885dd7d20cc41e949ec019c5aaddc2011a4df5aca3312aea4e`;
+- три focused source-contract tests: `3 passed, 47 deselected`;
+- manifest JSON parse: PASS;
+- credential scan tracked firmware/docs: PASS, совпадений нет;
+- `git diff --check`: PASS;
+- Arduino compile/upload и hardware run не выполнялись.
+
+Следующий gate после отдельного compile/flash пользователем: ровно один
+raised-wheel bounded-forward запуск на `0.10 m`. До команды проверить `READY`,
+`bounded_fault_latched=false`, PWM 0/0 и новый `boot_session_id`. После команды
+сохранить полный terminal `/status` с phase/envelope telemetry и остановиться
+без retry, `/ack-fault` или floor-команды.
+
 ## Experimental forward conservative brake MVP
 
 - branch: `feature/esp32-forward-conservative-brake-mvp-v1`;

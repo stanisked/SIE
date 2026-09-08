@@ -284,49 +284,109 @@ def test_forward_guard_phase_preserves_separate_prior_and_trigger_samples(
     assert "forwardLastNonTriggeringBrakingGuard = sample" in rolling
 
 
-def test_forward_conservative_profile_uses_max_initial_stop_margin(
+def test_forward_crawl_profile_is_isolated_and_keeps_limits_and_latch(
     source: str,
 ) -> None:
-    assert "FORWARD_MAX_STOP_MARGIN_M = 0.035f" in source
     configure = function_body(source, "void configureBoundedCommand(")
-    assert "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1" in configure
-    assert "command.boundedForwardConfiguredStopMarginM" in configure
-    assert "FORWARD_MAX_STOP_MARGIN_M" in configure
-    assert "initialStopMarginM" in configure
-    assert "boundedBrakeStartCounts(" in configure
+    assert "direction == MotionDirection::FORWARD" in configure
+    assert "BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1" in configure
+    assert "BOUNDED_MICRO_TURN_V1" in configure
+    assert "command.rightLimitCounts = command.rightTargetCounts + 1" in configure
+    assert "command.leftLimitCounts = command.leftTargetCounts + 1" in configure
+    assert "boundedCompletionToleranceCounts" in configure
+    exact_profile = function_body(source, "bool activeBoundedForwardCrawlEnvelope()")
+    assert "activeBoundedMotionProfile ==" in exact_profile
+    assert "BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1" in exact_profile
+    square = function_body(source, "void updateSquareSequence()")
+    assert "startMotion(" in square
+    assert "configureBoundedCommand(" not in square
+    settle = function_body(source, "void updateBoundedBraking(uint32_t now)")
+    assert 'faultReason = "BOUNDED_DISTANCE_LIMIT"' in settle
+    assert 'faultReason = "BOUNDED_TARGET_NOT_REACHED"' in settle
+    assert "boundedFaultLatched = true" in settle
+    assert "BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1" in settle
 
 
-def test_forward_conservative_dynamic_update_cannot_move_brake_later(
+def test_forward_crawl_invalid_speed_brakes_before_next_directed_pwm(
     source: str,
 ) -> None:
     guard = function_body(source, "bool enforceBoundedEncoderLimit()")
-    dynamic = guard[guard.index("const float dynamicStopMarginM"):]
-    assert "activeBoundedRightBrakeStartCounts = min(" in dynamic
-    assert "activeBoundedLeftBrakeStartCounts = min(" in dynamic
-    assert "boundedBrakeStartCounts(" in dynamic
-    assert "activeBoundedRightBrakeStartCounts = max(" not in dynamic
-    assert "activeBoundedLeftBrakeStartCounts = max(" not in dynamic
+    hard_limit = guard.index("if (rightLimitReached || leftLimitReached)")
+    crawl = guard.index("if (activeBoundedForwardCrawlEnvelope())")
+    invalid = guard.index("!boundedForwardSpeedEstimateUsable", crawl)
+    brake = guard.index(
+        '"BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID"', invalid
+    )
+    assert hard_limit < crawl < invalid < brake
+    assert "setDrivePwm(" not in guard[invalid:brake]
+    driving = function_body(source, "void updateDriving(uint32_t now)")
+    controlled = driving.index("if (boundedForwardControlledFinalApproach)")
+    recheck = driving.index("if (enforceBoundedEncoderLimit())", controlled)
+    usable = driving.index("if (!boundedForwardSpeedEstimateUsable(now))", recheck)
+    write = driving.index("setDrivePwm(rightPwm, leftPwm);", usable)
+    assert recheck < usable < write
 
 
-def test_forward_conservative_status_is_scalar_nullable_and_keeps_phase_telemetry(
+def test_forward_crawl_phase_pwm_or_boundary_and_nullable_telemetry(
     source: str,
 ) -> None:
-    status = function_body(source, "String buildStatusJson()")
-    assert "bounded_forward_brake_policy" in status
-    assert "bounded_forward_configured_stop_margin_m" in status
-    assert "boundedForwardBrakePolicy == nullptr" in status
-    assert 'json += "null";' in status
-    policy = function_body(source, "const char* boundedForwardBrakePolicyName(")
-    assert "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1" in policy
-    assert "nullptr" in policy
-    diagnostics = function_body(source, "void appendBoundedForwardBrakeDiagnostics(")
-    for field in (
-        "prior_non_triggering_before_predictive_brake",
-        "pre_brake_guard",
-        "prior_non_triggering_before_hard_limit",
-        "first_hard_limit_guard",
+    for phase in (
+        "BREAKAWAY",
+        "APPROACH",
+        "SLOWDOWN",
+        "CRAWL",
+        "ACTIVE_BRAKE",
+        "SETTLING",
     ):
-        assert field in diagnostics
+        assert f"BoundedForwardPhase::{phase}" in source
+    guard = function_body(source, "bool enforceBoundedEncoderLimit()")
+    assert "rightCount >= activeBoundedForwardRightSlowdownBoundaryCounts ||" in guard
+    assert "activeBoundedForwardPhase == BoundedForwardPhase::BREAKAWAY ||" in guard
+    assert "rightProjectedFinalAtTarget || leftProjectedFinalAtTarget" in guard
+    starting = function_body(source, "void updateStarting(uint32_t now)")
+    assert "activeBoundedForwardPhase == BoundedForwardPhase::SLOWDOWN" in starting
+    assert "if (enforceBoundedEncoderLimit() ||" in starting
+    driving = function_body(source, "void updateDriving(uint32_t now)")
+    assert "activeBoundedForwardRightCrawlPwmCeiling" in driving
+    assert "activeBoundedForwardLeftCrawlPwmCeiling" in driving
+    assert "rightPwm = min(rightPwm, leftPwm)" in driving
+    assert "leftPwm = min(leftPwm, rightPwm)" in driving
+    braking = function_body(source, "void updateBoundedBraking(uint32_t now)")
+    assert "setDrivePwm(" not in braking
+    telemetry = function_body(
+        source,
+        "void appendBoundedForwardCrawlEnvelopeTelemetry(",
+    )
+    assert "BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1" in telemetry
+    assert 'json += "null";' in telemetry
+    for field in (
+        "phase_seq",
+        "speed_status",
+        "speed_failure_reason",
+        "right_speed_m_s",
+        "left_speed_m_s",
+        "speed_sample_timestamp_ms",
+        "speed_sample_age_ms",
+        "speed_sample_seq",
+        "right_remaining_counts",
+        "left_remaining_counts",
+        "right_slowdown_boundary_counts",
+        "left_slowdown_boundary_counts",
+        "right_brake_boundary_counts",
+        "left_brake_boundary_counts",
+        "right_stop_envelope_counts",
+        "left_stop_envelope_counts",
+        "right_crawl_pwm_ceiling",
+        "left_crawl_pwm_ceiling",
+        "sync_error_counts",
+        "leading_wheel",
+        "envelope_feasible",
+        "slowdown_entry",
+        "crawl_entry",
+    ):
+        assert field in telemetry
+    nullable_float = function_body(source, "void appendJsonNullableFloat(")
+    assert "!present || !isfinite(value)" in nullable_float
 
 
 def test_micro_turn_profile_reserves_six_counts_before_target(source: str) -> None:
@@ -338,9 +398,10 @@ def test_micro_turn_profile_reserves_six_counts_before_target(source: str) -> No
     assert "targetCounts - reserveCounts" in start
     configure = function_body(source, "void configureBoundedCommand(")
     assert "BoundedMotionProfile::BOUNDED_MICRO_TURN_V1" in configure
-    assert "BoundedMotionProfile::BOUNDED_FORWARD_CONSERVATIVE_MVP_V1" in configure
+    assert "BoundedMotionProfile::BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1" in configure
     assert "boundedMicroTurnBrakeStartCounts(" in configure
-    assert "boundedBrakeStartCounts(" in configure
+    assert "boundedForwardStopEnvelopeCounts(" in configure
+    assert "boundedForwardSlowdownReserveCounts(" in configure
     guard = function_body(source, "bool enforceBoundedEncoderLimit()")
     assert "BoundedMotionProfile::BOUNDED_MICRO_TURN_V1" in guard
     assert "boundedMicroTurnBrakeStartCounts(" in guard

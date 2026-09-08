@@ -55,10 +55,11 @@
     "per_command_requested_target_and_wheel_counts_stored": true,
     "guard_runs_each_loop_iteration": true,
     "covered_states": ["STARTING", "DRIVING", "BRAKING", "COASTING"],
-    "predictive_brake": "per-wheel brake-start counts are calculated before the requested target and can move earlier from current stop margin",
+    "predictive_brake": "profile-specific per-wheel brake-start или projected-final boundary рассчитывается до requested target; crawl envelope использует fresh speed evidence",
     "bounded_motion_profiles": {
       "BOUNDED_FORWARD_V1": "retained enum value for the prior bounded-forward profile",
       "BOUNDED_FORWARD_CONSERVATIVE_MVP_V1": "bounded forward configures its initial per-wheel brake start from FORWARD_MAX_STOP_MARGIN_M; dynamic evaluation may move it earlier but never later",
+      "BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1": "новый experimental bounded-forward profile с фазами APPROACH, SLOWDOWN и CRAWL, свежей per-wheel speed evidence и projected-final brake boundary",
       "BOUNDED_MICRO_TURN_V1": "bounded turns from 1 to 10 degrees reserve at least 6 encoder counts before the per-wheel target; dynamic stop margin may reserve more, never less"
     },
     "bounded_micro_turn_brake_reserve_counts": 6,
@@ -97,6 +98,7 @@
       "bounded_motion_profile",
       "bounded_forward_brake_policy",
       "bounded_forward_configured_stop_margin_m",
+      "bounded_forward_crawl_envelope",
       "bounded_turn_brake_reserve_counts",
       "bounded_turn_min_success_angle_rad",
       "bounded_turn_final_angle_rad",
@@ -114,7 +116,7 @@
     ],
     "residual_mechanical_overshoot": "must be measured in a separate raised-wheel retest",
     "bounded_forward_brake_observability_v1": {
-      "scope": "bounded forward profiles only, including BOUNDED_FORWARD_CONSERVATIVE_MVP_V1; fixed-size CommandRecord diagnostics preserved for active or last bounded command",
+      "scope": "только bounded forward profiles, включая BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1; fixed-size CommandRecord diagnostics сохраняются для active или last bounded command",
       "status_field": "bounded_forward_brake_diagnostics",
       "nullable_idle_or_non_forward": true,
       "snapshots": {
@@ -127,7 +129,7 @@
       "mechanical_containment_claimed": false
     },
     "bounded_forward_guard_phase_observability_v1": {
-      "scope": "bounded forward profiles only, including BOUNDED_FORWARD_CONSERVATIVE_MVP_V1; fixed scalar snapshots, no trace arrays",
+      "scope": "только bounded forward profiles, включая BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1; fixed scalar snapshots без trace arrays",
       "guard_sample": {
         "one_encoder_read": true,
         "one_timestamp_ms": true,
@@ -160,6 +162,52 @@
       "fault_latch_or_api_semantics_changed": false,
       "safe_underreach_may_end_as": "BOUNDED_TARGET_NOT_REACHED",
       "experimental_mvp": true,
+      "mechanical_containment_claimed": false,
+      "floor_forward_operationally_approved": false
+    },
+    "bounded_forward_crawl_envelope_mvp_v1": {
+      "scope": "только bounded forward; legacy, turns, square, routes и idempotency не меняются",
+      "profile": "BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1",
+      "policy_label": "PROVISIONAL_CRAWL_ENVELOPE_MVP_V1",
+      "policy_status": "provisional_not_calibrated",
+      "phases": ["BREAKAWAY", "APPROACH", "SLOWDOWN", "CRAWL", "ACTIVE_BRAKE", "SETTLING"],
+      "speed_estimator": {
+        "source": "per-wheel encoder counts без изменения legacy speed logic",
+        "sample_period_ms": 40,
+        "maximum_age_ms": 80,
+        "plausible_max_speed_m_s": 0.4,
+        "invalid_terminal_reason": "BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID",
+        "legacy_pi_cadence_changed": false
+      },
+      "envelope_components": [
+        "provisional путь замедления до crawl speed",
+        "путь за reaction interval",
+        "speed-dependent тормозной путь",
+        "encoder uncertainty"
+      ],
+      "crawl": {
+        "speed_ceiling_m_s": 0.06,
+        "stable_samples_required": 2,
+        "right_pwm_ceiling": 115,
+        "left_pwm_ceiling": 95,
+        "pwm_ceilings_monotonic_non_increasing": true,
+        "legacy_sustain_floor_or_sync_boost_applied": false
+      },
+      "per_wheel_or_semantics": {
+        "slowdown_boundary": true,
+        "projected_final_brake_boundary": true,
+        "hard_limit_priority": true
+      },
+      "envelope_infeasible": {
+        "directed_motion_started": false,
+        "terminal_reason": "BOUNDED_TARGET_NOT_REACHED",
+        "fault_latched": true
+      },
+      "target_counts_changed": false,
+      "target_plus_one_hard_limits_changed": false,
+      "completion_window_changed": false,
+      "active_brake_hold_or_settle_changed": false,
+      "automatic_retry_or_redrive": false,
       "mechanical_containment_claimed": false,
       "floor_forward_operationally_approved": false
     }

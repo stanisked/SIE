@@ -98,23 +98,41 @@ target and absolute limit, predictive brake-start counts, motion kind, and
 bounded timeout. The encoder guard runs on every firmware loop in STARTING,
 DRIVING, BRAKING and COASTING, independently of the 100 ms PI cadence.
 
-Bounded forward now uses the experimental
-`BOUNDED_FORWARD_CONSERVATIVE_MVP_V1` profile. Its initial per-wheel
-brake-start is calculated from the existing maximum forward stop margin
-`FORWARD_MAX_STOP_MARGIN_M = 0.035 m`, rather than from the current dynamic
-speed estimate. A later dynamic calculation may move either brake-start
-earlier, but never later than this configured conservative boundary. Status
-exposes `bounded_forward_brake_policy` and
-`bounded_forward_configured_stop_margin_m`; both are `null` for idle, legacy
-and turn commands.
+Bounded forward теперь использует экспериментальный provisional-профиль
+`BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1`. Его внутренние фазы:
+`BREAKAWAY`, `APPROACH`, `SLOWDOWN`, `CRAWL`, `ACTIVE_BRAKE` и `SETTLING`.
+Внешние `MotionState`, terminal classification и API-контракт не менялись.
 
-This profile reduces the risk of a late predictive brake by starting the
-active brake earlier. It can stop below the existing success window and finish
-with fail-closed `BOUNDED_TARGET_NOT_REACHED`. Targets, target-plus-one hard
-limits, PWM, active-brake hold, settle timing, completion classification,
-FAULT/latch behavior, routes, boot session and idempotency are unchanged. This
-is an experimental MVP profile. It does not prove physical containment and
-does not give operational approval for bounded forward on the floor.
+Отдельная per-wheel speed estimate строится только из encoder counts и не
+меняет существующую 100-ms PI cadence или legacy speed logic. Slowdown boundary
+оценивает путь до provisional crawl speed, brake boundary оценивает остаточный
+остановочный envelope из свежей скорости, reaction interval, braking model и
+count uncertainty. Это не один фиксированный stopping margin и не калибровка.
+Первые constants намеренно имеют versioned provisional label.
+
+`SLOWDOWN` начинается по OR-семантике, когда любое колесо достигает своей
+границы. В `SLOWDOWN` и `CRAWL` используется отдельный forward-only PWM path:
+per-wheel PWM ceiling монотонно не растёт, legacy sustain floor и sync boost не
+могут его обойти, а ведущее колесо не получает больше PWM, чем отстающее.
+`CRAWL` разрешён только после заданного числа последовательных valid fresh
+speed samples ниже crawl ceiling. Если speed estimate в этих фазах stale,
+invalid, non-finite, negative или impossible, до следующего directed PWM write
+запускается существующий active-brake path с причиной
+`BOUNDED_FORWARD_SPEED_ESTIMATE_INVALID`. Hard limit проверяется раньше.
+
+Active brake начинается по OR-семантике, когда projected final любого колеса
+достигает target. После входа в `ACTIVE_BRAKE` directed PWM не возвращается.
+Недопустимый sync error вызывает общий active brake без correction, retry или
+re-drive. Если начальный envelope не помещается в target,
+`envelope_feasible=false`: directed motion не стартует, а команда fail-closed
+завершается как `BOUNDED_TARGET_NOT_REACHED`.
+
+Targets, hard limits `target + 1`, success window, PWM mapping и nominal PWM,
+active-brake hold/settle timing, FAULT/latch, routes, boot session,
+idempotency, turns, square и legacy motion не менялись. Профиль может закончить
+команду `BOUNDED_TARGET_NOT_REACHED` или `BOUNDED_DISTANCE_LIMIT`. Он не
+доказывает physical containment и не даёт operational approval для floor
+forward.
 
 Bounded turns from 1 to 10 degrees use the separate
 `BOUNDED_MICRO_TURN_V1` profile: each wheel reserves at least 6 counts before
@@ -149,7 +167,7 @@ latched bounded fault and zero final PWM. The configured brake starts were
 distance was `0.1042 m`.
 
 For bounded-forward profiles, including
-`BOUNDED_FORWARD_CONSERVATIVE_MVP_V1`, `GET /status` preserves a fixed-size
+`BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1`, `GET /status` preserves a fixed-size
 `bounded_forward_brake_diagnostics` object with four nullable snapshots:
 `pre_brake_guard`, `brake_command`, `first_post_brake_loop` and
 `first_hard_limit_guard`. They record encoder/control timing, threshold and
@@ -221,12 +239,25 @@ mechanical containment и не определяет безопасный stoppin
 Raised-wheel evidence не даёт разрешения на floor stopping или operational
 forward motion.
 
-Для experimental conservative profile следующий gate остаётся ровно таким же:
-один raised-wheel bounded-forward запуск на `0.10 m`. Перед командой оператор
-проверяет `READY`, отсутствие latch, нулевой PWM и новый `boot_session_id`.
-После единственной команды он сохраняет полный terminal `/status`, включая
-profile, configured margin, phase diagnostics, targets, brake-start и settled
-counts, после чего останавливается без retry и без floor-команды.
+`GET /status` дополнительно отдаёт fixed-size
+`bounded_forward_crawl_envelope`: phase/sequence, speed status/reason,
+per-wheel speed/timestamp/age/sequence, remaining counts, slowdown/brake
+boundaries, stop-envelope counts, crawl PWM ceilings, sync error/leading wheel,
+`envelope_feasible`, `slowdown_entry` и `crawl_entry`. Для idle, legacy, turn и
+square этот объект равен `null`. Existing phase telemetry не переопределяется.
+
+Исходные evidence для профиля: manual encoder baseline 1032/1033 counts за
+пять оборотов, raised-wheel dynamic reserve 0.010 m с финалом 108/108 и
+overshoot, затем fixed 0.035 m reserve с финалом 81/80 и safe underreach.
+Успешный source-contract review этих фактов не заменяет compile/flash и
+physical gate.
+
+Следующий gate: ровно один raised-wheel bounded-forward запуск на `0.10 m`.
+Перед командой оператор проверяет `READY`, отсутствие latch, PWM 0/0 и новый
+`boot_session_id`. После единственной команды он сохраняет полный terminal
+`/status`, включая crawl-envelope и phase diagnostics, targets, limits и
+settled counts, затем останавливается без retry. Floor-команда на этом gate не
+разрешена.
 
 Any active bounded-command FAULT latches `bounded_fault_latched` with
 `bounded_fault_reason`, including timeout, Wi-Fi loss, encoder/stall and
