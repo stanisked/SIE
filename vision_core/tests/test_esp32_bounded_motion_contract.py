@@ -327,6 +327,50 @@ def test_forward_crawl_invalid_speed_brakes_before_next_directed_pwm(
     assert recheck < usable < write
 
 
+def test_forward_crawl_hard_limit_promotes_pending_speed_fault(
+    source: str,
+) -> None:
+    guard = function_body(source, "bool enforceBoundedEncoderLimit()")
+    hard_limit = guard[
+        guard.index("if (rightLimitReached || leftLimitReached)"):
+        guard.index("if (activeBoundedBrakeStarted)")
+    ]
+    assert hard_limit.index(
+        "captureBoundedForwardFirstHardLimitGuard(guardSample);"
+    ) < hard_limit.index('faultReason = "BOUNDED_DISTANCE_LIMIT";')
+    assert hard_limit.count(
+        'beginBoundedBraking(true, "BOUNDED_DISTANCE_LIMIT")'
+    ) == 1
+    assert 'faultReason = "BOUNDED_DISTANCE_LIMIT";' in hard_limit
+    assert "boundedFaultLatched = true;" in hard_limit
+    assert "boundedFaultReason = faultReason;" in hard_limit
+    assert "return false;" in hard_limit
+
+
+def test_forward_crawl_telemetry_is_null_for_legacy_square_and_keeps_ready_history(
+    source: str,
+) -> None:
+    status = function_body(source, "String buildStatusJson()")
+    assert "const CommandRecord* timing = active == nullptr ? last : active;" in status
+    assert "active == nullptr" in status
+    for state in (
+        "motionIsActive()",
+        "startRequested",
+        "squareIsActive()",
+        "squareRequested",
+    ):
+        assert state in status
+    assert (
+        "nonBoundedMotionOrSquareActive ? nullptr : bounded"
+        in status
+    )
+    assert (
+        "appendBoundedForwardCrawlEnvelopeTelemetry("
+        "json, crawlEnvelopeTelemetry);"
+        in status
+    )
+
+
 def test_forward_crawl_phase_pwm_or_boundary_and_nullable_telemetry(
     source: str,
 ) -> None:

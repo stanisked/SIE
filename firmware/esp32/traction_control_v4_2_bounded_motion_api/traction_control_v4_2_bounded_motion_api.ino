@@ -2424,6 +2424,11 @@ bool enforceBoundedEncoderLimit()
       beginBoundedBraking(true, "BOUNDED_DISTANCE_LIMIT");
       return true;
     }
+    // Hard-limit evidence has higher priority than an earlier pending fault.
+    // Keep the current brake/settle sequence running without restarting it.
+    faultReason = "BOUNDED_DISTANCE_LIMIT";
+    boundedFaultLatched = true;
+    boundedFaultReason = faultReason;
     return false;
   }
 
@@ -4186,11 +4191,17 @@ String buildStatusJson()
   const bool hasBoundedTelemetry =
       timing != nullptr && timing->boundedKind != BoundedMotionKind::NONE;
   const CommandRecord* bounded = hasBoundedTelemetry ? timing : nullptr;
+  const bool nonBoundedMotionOrSquareActive =
+      active == nullptr &&
+      (motionIsActive() || startRequested ||
+       squareIsActive() || squareRequested);
+  const CommandRecord* crawlEnvelopeTelemetry =
+      nonBoundedMotionOrSquareActive ? nullptr : bounded;
   json += "\"bounded_forward_brake_diagnostics\":";
   appendBoundedForwardBrakeDiagnostics(json, bounded);
   json += ",";
   json += "\"bounded_forward_crawl_envelope\":";
-  appendBoundedForwardCrawlEnvelopeTelemetry(json, bounded);
+  appendBoundedForwardCrawlEnvelopeTelemetry(json, crawlEnvelopeTelemetry);
   json += ",";
   json += "\"bounded_motion_profile\":";
   if (bounded == nullptr) {
