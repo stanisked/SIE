@@ -138,6 +138,25 @@ speed/sync/watchdog сохраняются; correction, retry и re-drive отс
 ни ограничение PWM, ни encoder hard-limit не доказывают mechanical containment.
 Профиль может дать недобор или overshoot и не разрешает operational floor forward.
 
+Итоговый experimental raised-wheel запуск short-step на `0.10 m` завершился
+следующим evidence:
+
+- profile: `BOUNDED_FORWARD_SHORT_STEP_MVP_V1`;
+- right/left target: `102/101` counts;
+- right/left crawl PWM: `95/95`;
+- right/left measured speed sample: `0.2227/0.2486 m/s`;
+- right/left counts при brake: `87/92`;
+- первый hard limit: left `102` counts;
+- right/left final: `93/102` counts;
+- terminal: `BOUNDED_DISTANCE_LIMIT`, fault latch `true`, final PWM `0/0`.
+
+Статус: `bounded_forward_0.10_m: NOT_QUALIFIED`. Floor gate не выполнялся.
+Этот результат относится к ESP32 bounded-forward execution profile и не
+является failure SIE planner или perception. Текущий ESP32 chassis execution
+adapter не разрешён для automatic short forward advance. Один raised-wheel
+trace не устанавливает hardware root cause и не служит основанием для нового
+numeric tuning.
+
 Сохранённый `BOUNDED_FORWARD_CRAWL_ENVELOPE_MVP_V1` имеет внутренние фазы:
 `BREAKAWAY`, `APPROACH`, `SLOWDOWN`, `CRAWL`, `ACTIVE_BRAKE` и `SETTLING`.
 Внешние `MotionState`, terminal classification и API-контракт не менялись.

@@ -52,15 +52,24 @@
 фактической скорости после BREAKAWAY. Это provisional MVP, возможны underreach
 и overshoot; mechanical containment и operational floor forward не утверждаются.
 
-Следующий gate после отдельной проверки сборки и прошивки оператором: ровно
-один raised-wheel запуск `POST /move-forward`, `distance_m=0.10`, с новым
-command_id и вручную проверенным текущим boot_session_id. До команды проверить
-READY, latch=false и PWM 0/0; колёса вывешены, внешний stop доступен.
-Сохранить terminal status: профиль, фазы, applied crawl PWM, speed sample и
-active usability, brake/settled snapshots, target/limit/final counts, reason,
-latch и финальный PWM. После единственного запуска остановиться, без retry,
-correction, ack-fault и floor-команды. При неожиданном движении использовать
-внешний stop. Проверки исходников не заменяют проверку сборки и физический gate.
+Итоговый experimental raised-wheel evidence для `0.10 m`:
+
+- profile: `BOUNDED_FORWARD_SHORT_STEP_MVP_V1`;
+- right/left target: `102/101` counts;
+- right/left crawl PWM: `95/95`;
+- right/left measured speed sample: `0.2227/0.2486 m/s`;
+- right/left counts при brake: `87/92`;
+- первый hard limit: left `102` counts;
+- right/left final: `93/102` counts;
+- terminal: `BOUNDED_DISTANCE_LIMIT`;
+- `bounded_fault_latched=true`;
+- final PWM: `0/0`.
+
+Статус: `bounded_forward_0.10_m: NOT_QUALIFIED`. Floor gate не выполнялся.
+Это evidence относится к ESP32 bounded-forward execution profile, а не к
+качеству SIE planner или perception. Текущий ESP32 chassis execution adapter
+не разрешён для automatic short forward advance. По одному запуску hardware
+root cause не установлен; новый numeric tuning из него не рекомендуется.
 
 ## Experimental forward crawl envelope MVP
 
