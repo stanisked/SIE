@@ -6,11 +6,17 @@ import cv2
 import numpy as np
 import pytest
 
+import vision_core.ar0234_ov9281_static_extrinsic as static_extrinsic
 from vision_core.ar0234_ov9281_static_extrinsic import (
     CameraIntrinsics,
     OV_COMBINED_SHAPE,
+    AR_SHAPE,
+    KernelFrame,
     StaticExtrinsicError,
     StaticPair,
+    _capture_counters,
+    _classify_static_candidates,
+    _raise_insufficient_static_pairs,
     build_static_transform_record,
     object_points_mm,
     require_acceptable_skew,
@@ -84,3 +90,49 @@ def test_solver_rejects_insufficient_pairs_before_pose_solve():
             ov_intrinsics=_intrinsics(),
             provenance={"source": "synthetic"},
         )
+
+
+def test_candidate_counters_distinguish_ar_and_ov_checkerboard_rejections(monkeypatch):
+    ar_frames = [
+        KernelFrame(np.zeros(AR_SHAPE, dtype=np.uint8), 1_000_000_000 + index, index)
+        for index in range(2)
+    ]
+    ov_frames = [
+        KernelFrame(np.zeros(OV_COMBINED_SHAPE, dtype=np.uint8), 1_000_000_000 + index, index)
+        for index in range(2)
+    ]
+    valid_corners = np.zeros((54, 1, 2), dtype=np.float64)
+    results = iter((None, valid_corners, None))
+    monkeypatch.setattr(static_extrinsic, "_checkerboard", lambda _frame: next(results))
+
+    accepted, counters = _classify_static_candidates(ar_frames, ov_frames)
+
+    assert accepted == []
+    assert counters == {
+        "candidate_pairs_seen": 2,
+        "rejected_skew": 0,
+        "rejected_ar_checkerboard_not_found": 1,
+        "rejected_ov_left_checkerboard_not_found": 1,
+        "rejected_decode_or_frame_error": 0,
+        "accepted_pairs": 0,
+    }
+
+
+def test_insufficient_capture_writes_summary_before_raising(tmp_path):
+    root = tmp_path / "capture"
+    root.mkdir()
+    with pytest.raises(StaticExtrinsicError, match="insufficient static valid pairs: 0/3"):
+        _raise_insufficient_static_pairs(
+            root=root,
+            pair_count=3,
+            accepted_count=0,
+            configuration={"static_target_affirmed": True},
+            counters=_capture_counters(),
+            preview_frames={"ar0234": {"saved": False}, "ov9281_physical_left": {"saved": False}},
+        )
+
+    summary = json.loads((root / "capture_rejection_summary.json").read_text(encoding="utf-8"))
+    assert summary["result"] == "INSUFFICIENT_STATIC_VALID_PAIRS"
+    assert summary["counters"]["accepted_pairs"] == 0
+    assert summary["diagnostic_preview_limitation"].endswith("not calibration pairs.")
+    json.dumps(summary, allow_nan=False, sort_keys=True)

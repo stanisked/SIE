@@ -345,6 +345,132 @@ def _frame_file(root: Path, section: str, pair_id: str, frame: np.ndarray) -> di
     return {"filename": f"{section}/{filename}", "sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)}
 
 
+def _capture_counters() -> dict[str, int]:
+    return {
+        "candidate_pairs_seen": 0,
+        "rejected_skew": 0,
+        "rejected_ar_checkerboard_not_found": 0,
+        "rejected_ov_left_checkerboard_not_found": 0,
+        "rejected_decode_or_frame_error": 0,
+        "accepted_pairs": 0,
+    }
+
+
+def _classify_static_candidates(
+    ar_frames: Iterable[KernelFrame],
+    ov_frames: Iterable[KernelFrame],
+) -> tuple[list[tuple[KernelFrame, KernelFrame, np.ndarray, int]], dict[str, int]]:
+    """Classify candidate pairs without changing capture or pairing semantics."""
+    accepted: list[tuple[KernelFrame, KernelFrame, np.ndarray, int]] = []
+    counters = _capture_counters()
+    for ar, ov in _nearest_one_to_one(ar_frames, ov_frames):
+        counters["candidate_pairs_seen"] += 1
+        try:
+            skew_ns = require_acceptable_skew(ar.timestamp_ns, ov.timestamp_ns)
+        except StaticExtrinsicError:
+            counters["rejected_skew"] += 1
+            continue
+        try:
+            left = split_physical_left(ov.image)
+            ar_corners = _checkerboard(ar.image)
+            if ar_corners is None:
+                counters["rejected_ar_checkerboard_not_found"] += 1
+                continue
+            left_corners = _checkerboard(left)
+        except (StaticExtrinsicError, cv2.error):
+            counters["rejected_decode_or_frame_error"] += 1
+            continue
+        if left_corners is None:
+            counters["rejected_ov_left_checkerboard_not_found"] += 1
+            continue
+        accepted.append((ar, ov, left, skew_ns))
+    counters["accepted_pairs"] = len(accepted)
+    return accepted, counters
+
+
+def _write_jpeg_preview(root: Path, filename: str, frame: np.ndarray) -> dict[str, Any]:
+    """Persist supplementary decoded-frame evidence, never a calibration pair."""
+    metadata: dict[str, Any] = {
+        "filename": filename,
+        "saved": False,
+        "role": "last successfully decoded preview frame only; not a calibration pair",
+    }
+    try:
+        ok, encoded = cv2.imencode(".jpg", frame)
+    except cv2.error:
+        ok, encoded = False, None
+    if ok and encoded is not None:
+        payload = encoded.tobytes()
+        _write_new(root / filename, payload)
+        metadata.update({"saved": True, "sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)})
+    else:
+        metadata["reason"] = "jpeg_encoding_failed"
+    return metadata
+
+
+def _diagnostic_preview_frames(root: Path, ar_frames: list[KernelFrame], ov_frames: list[KernelFrame]) -> dict[str, Any]:
+    ar_preview: dict[str, Any] = {
+        "filename": "diagnostic_last_ar0234.jpg",
+        "saved": False,
+        "role": "last successfully decoded preview frame only; not a calibration pair",
+    }
+    left_preview: dict[str, Any] = {
+        "filename": "diagnostic_last_ov9281_physical_left.jpg",
+        "saved": False,
+        "role": "last successfully decoded preview frame only; not a calibration pair",
+    }
+    if ar_frames:
+        ar_preview = _write_jpeg_preview(root, "diagnostic_last_ar0234.jpg", ar_frames[-1].image)
+    for frame in reversed(ov_frames):
+        try:
+            left_preview = _write_jpeg_preview(root, "diagnostic_last_ov9281_physical_left.jpg", split_physical_left(frame.image))
+        except StaticExtrinsicError:
+            continue
+        break
+    return {"ar0234": ar_preview, "ov9281_physical_left": left_preview}
+
+
+def _capture_summary(
+    *,
+    result: str,
+    configuration: dict[str, Any],
+    counters: dict[str, int],
+    preview_frames: dict[str, Any],
+) -> dict[str, Any]:
+    return _json_safe({
+        "schema_version": "sie.ar0234_ov9281_static_capture_rejection_summary.v1",
+        "result": result,
+        "configuration": configuration,
+        "counters": counters,
+        "diagnostic_preview_frames": preview_frames,
+        "diagnostic_preview_limitation": "Preview images are supplementary decoded-frame evidence only and are not calibration pairs.",
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "limitation": "Static target only. Kernel timestamp proximity is not proof of hardware synchronization and is not approved for dynamic scene pairing.",
+    })
+
+
+def _write_capture_summary(root: Path, summary: dict[str, Any]) -> None:
+    _write_new(root / "capture_rejection_summary.json", (json.dumps(_json_safe(summary), indent=2, sort_keys=True, allow_nan=False) + "\n").encode())
+
+
+def _raise_insufficient_static_pairs(
+    *,
+    root: Path,
+    pair_count: int,
+    accepted_count: int,
+    configuration: dict[str, Any],
+    counters: dict[str, int],
+    preview_frames: dict[str, Any],
+) -> None:
+    _write_capture_summary(root, _capture_summary(
+        result="INSUFFICIENT_STATIC_VALID_PAIRS",
+        configuration=configuration,
+        counters=counters,
+        preview_frames=preview_frames,
+    ))
+    raise StaticExtrinsicError(f"insufficient static valid pairs: {accepted_count}/{pair_count}")
+
+
 def capture_static_pairs(*, output_root: Path, ar_intrinsic: Path, ov_calibration: Path, pair_count: int, static_target_affirmed: bool, ar_device: Path = AR_DEVICE, ov_device: Path = OV_DEVICE) -> dict[str, Any]:
     if not static_target_affirmed:
         raise StaticExtrinsicError("capture requires --static-target-affirmed")
@@ -357,27 +483,49 @@ def capture_static_pairs(*, output_root: Path, ar_intrinsic: Path, ov_calibratio
     _load_ar_intrinsics(ar_intrinsic)
     if _sha256(ov_calibration) != OV_CALIBRATION_SHA256:
         raise StaticExtrinsicError("OV calibration SHA-256 mismatch")
+    output_root.mkdir(parents=True, exist_ok=False)
     ar_camera, ov_camera = DirectV4L2Camera(ar_device, *AR_MODE), DirectV4L2Camera(ov_device, *OV_MODE)
+    capture_errors = 0
     try:
         ar_mode, ov_mode = ar_camera.open(), ov_camera.open()
         for _ in range(30): ar_camera.read(); ov_camera.read()
         ar_frames: list[KernelFrame] = []; ov_frames: list[KernelFrame] = []
         for _ in range(pair_count * 4):
-            ov_frames.append(ov_camera.read()); ar_frames.append(ar_camera.read()); ov_frames.append(ov_camera.read())
+            for camera, frames in ((ov_camera, ov_frames), (ar_camera, ar_frames), (ov_camera, ov_frames)):
+                try:
+                    frames.append(camera.read())
+                except StaticExtrinsicError:
+                    capture_errors += 1
     finally:
         ar_camera.close(); ov_camera.close()
-    accepted: list[tuple[KernelFrame, KernelFrame, np.ndarray, int]] = []
-    for ar, ov in _nearest_one_to_one(ar_frames, ov_frames):
-        try: skew_ns = require_acceptable_skew(ar.timestamp_ns, ov.timestamp_ns)
-        except StaticExtrinsicError: continue
-        left = split_physical_left(ov.image)
-        ar_corners, left_corners = _checkerboard(ar.image), _checkerboard(left)
-        if ar_corners is None or left_corners is None:
-            continue
-        accepted.append((ar, ov, left, skew_ns))
-        if len(accepted) == pair_count: break
+    accepted, counters = _classify_static_candidates(ar_frames, ov_frames)
+    if len(accepted) > pair_count:
+        accepted = accepted[:pair_count]
+    counters["accepted_pairs"] = len(accepted)
+    counters["rejected_decode_or_frame_error"] += capture_errors
+    configuration = {
+        "static_target_affirmed": True,
+        "requested_pair_count": pair_count,
+        "capture_backend": CAPTURE_BACKEND,
+        "timestamp_clock_domain": CLOCK_DOMAIN,
+        "maximum_pair_skew_ns": MAX_PAIR_SKEW_NS,
+        "devices": {"ar0234": str(ar_device), "ov9281_combined": str(ov_device)},
+        "capture_configuration": {"ar0234": ar_mode, "ov9281_combined": ov_mode},
+        "calibrations": {
+            "ar0234_intrinsic_candidate": {"path": str(ar_intrinsic), "sha256": _sha256(ar_intrinsic), "status": "CANDIDATE_NOT_VALIDATED"},
+            "ov9281_stereo_v6": {"path": str(ov_calibration), "sha256": OV_CALIBRATION_SHA256},
+        },
+    }
+    preview_frames = _diagnostic_preview_frames(output_root, ar_frames, ov_frames)
     if len(accepted) < pair_count:
-        raise StaticExtrinsicError(f"insufficient static valid pairs: {len(accepted)}/{pair_count}")
+        _raise_insufficient_static_pairs(
+            root=output_root,
+            pair_count=pair_count,
+            accepted_count=len(accepted),
+            configuration=configuration,
+            counters=counters,
+            preview_frames=preview_frames,
+        )
     records: list[dict[str, Any]] = []
     for index, (ar, ov, left, skew_ns) in enumerate(accepted):
         pair_id = f"pair_{index:03d}"
@@ -407,6 +555,12 @@ def capture_static_pairs(*, output_root: Path, ar_intrinsic: Path, ov_calibratio
         "limitation": "Static target only. Kernel timestamp proximity is not proof of hardware synchronization and is not approved for dynamic scene pairing.",
     }
     _write_new(output_root / "capture_manifest.json", (json.dumps(_json_safe(manifest), indent=2, sort_keys=True, allow_nan=False) + "\n").encode())
+    _write_capture_summary(output_root, _capture_summary(
+        result="STATIC_VALID_PAIRS_CAPTURED",
+        configuration=configuration,
+        counters=counters,
+        preview_frames=preview_frames,
+    ))
     return manifest
 
 
