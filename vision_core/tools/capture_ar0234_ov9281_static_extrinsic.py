@@ -20,6 +20,7 @@ from vision_core.ar0234_ov9281_static_extrinsic import (
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", type=Path, required=True)
+    parser.add_argument("--session-id", required=True)
     parser.add_argument("--ar-intrinsic", type=Path, required=True)
     parser.add_argument("--ov-calibration", type=Path, default=OV_CALIBRATION_DEFAULT)
     parser.add_argument("--ar-device", type=Path, default=AR_DEVICE)
@@ -28,7 +29,7 @@ def main() -> int:
     parser.add_argument("--static-target-affirmed", action="store_true")
     arguments = parser.parse_args()
     try:
-        capture_static_pairs(output_root=arguments.output_root, ar_intrinsic=arguments.ar_intrinsic, ov_calibration=arguments.ov_calibration, pair_count=arguments.pair_count, static_target_affirmed=arguments.static_target_affirmed, ar_device=arguments.ar_device, ov_device=arguments.ov_device)
+        capture_static_pairs(output_root=arguments.output_root, session_id=arguments.session_id, ar_intrinsic=arguments.ar_intrinsic, ov_calibration=arguments.ov_calibration, pair_count=arguments.pair_count, static_target_affirmed=arguments.static_target_affirmed, ar_device=arguments.ar_device, ov_device=arguments.ov_device)
     except StaticExtrinsicError as error:
         parser.error(str(error))
     return 0

@@ -13,6 +13,7 @@ import json
 import math
 import mmap
 import os
+import re
 import select
 import tempfile
 from dataclasses import dataclass
@@ -42,6 +43,9 @@ OV_CALIBRATION_DEFAULT = Path(
 )
 CLOCK_DOMAIN = "CLOCK_MONOTONIC"
 CAPTURE_BACKEND = "DIRECT_V4L2_MMAP_DQBUF"
+DATASET_SCHEMA_VERSION = "sie.ar0234_ov9281_static_capture_dataset.v1"
+SESSION_SCHEMA_VERSION = "sie.ar0234_ov9281_static_capture_session.v1"
+_SESSION_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 
 V4L2_BUF_TYPE_VIDEO_CAPTURE = 1
 V4L2_MEMORY_MMAP = 1
@@ -340,9 +344,12 @@ def _png(frame: np.ndarray) -> bytes:
     return encoded.tobytes()
 
 
-def _frame_file(root: Path, section: str, pair_id: str, frame: np.ndarray) -> dict[str, Any]:
+def _frame_file(root: Path, section: str, pair_id: str, frame: np.ndarray, *, manifest_prefix: str = "") -> dict[str, Any]:
     payload = _png(frame); filename = f"{pair_id}.png"; _write_new(root / section / filename, payload)
-    return {"filename": f"{section}/{filename}", "sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)}
+    relative_name = f"{section}/{filename}"
+    if manifest_prefix:
+        relative_name = f"{manifest_prefix}/{relative_name}"
+    return {"filename": relative_name, "sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)}
 
 
 def _capture_counters() -> dict[str, int]:
@@ -471,23 +478,180 @@ def _raise_insufficient_static_pairs(
     raise StaticExtrinsicError(f"insufficient static valid pairs: {accepted_count}/{pair_count}")
 
 
-def capture_static_pairs(*, output_root: Path, ar_intrinsic: Path, ov_calibration: Path, pair_count: int, static_target_affirmed: bool, ar_device: Path = AR_DEVICE, ov_device: Path = OV_DEVICE) -> dict[str, Any]:
+def _validate_session_id(session_id: str) -> None:
+    if not isinstance(session_id, str) or _SESSION_ID_PATTERN.fullmatch(session_id) is None:
+        raise StaticExtrinsicError("session_id must be 1..64 ASCII letters, digits, '.', '_' or '-'")
+
+
+def _capture_configuration(
+    *,
+    ar_device: Path,
+    ov_device: Path,
+    ar_mode: dict[str, Any],
+    ov_mode: dict[str, Any],
+    ar_intrinsic: Path,
+    ov_calibration: Path,
+) -> dict[str, Any]:
+    return {
+        "capture_backend": CAPTURE_BACKEND,
+        "timestamp_clock_domain": CLOCK_DOMAIN,
+        "maximum_pair_skew_ns": MAX_PAIR_SKEW_NS,
+        "devices": {"ar0234": str(ar_device), "ov9281_combined": str(ov_device)},
+        "capture_configuration": {"ar0234": ar_mode, "ov9281_combined": ov_mode},
+        "calibrations": {
+            "ar0234_intrinsic_candidate": {
+                "path": str(ar_intrinsic),
+                "sha256": _sha256(ar_intrinsic),
+                "status": "CANDIDATE_NOT_VALIDATED",
+            },
+            "ov9281_stereo_v6": {"path": str(ov_calibration), "sha256": OV_CALIBRATION_SHA256},
+        },
+    }
+
+
+def _configuration_identity(configuration: dict[str, Any]) -> dict[str, Any]:
+    """Return the immutable dataset identity; calibration paths may move, hashes may not."""
+    if not isinstance(configuration, dict):
+        raise StaticExtrinsicError("capture provenance configuration is invalid")
+    calibrations = configuration.get("calibrations", {})
+    if not isinstance(calibrations, dict):
+        raise StaticExtrinsicError("capture calibration provenance is invalid")
+    ar_calibration = calibrations.get("ar0234_intrinsic_candidate", {})
+    ov_calibration = calibrations.get("ov9281_stereo_v6", {})
+    if not isinstance(ar_calibration, dict) or not isinstance(ov_calibration, dict):
+        raise StaticExtrinsicError("capture calibration provenance is invalid")
+    return {
+        "capture_backend": configuration.get("capture_backend"),
+        "timestamp_clock_domain": configuration.get("timestamp_clock_domain"),
+        "maximum_pair_skew_ns": configuration.get("maximum_pair_skew_ns"),
+        "devices": configuration.get("devices"),
+        "capture_configuration": configuration.get("capture_configuration"),
+        "calibration_sha256": {
+            "ar0234_intrinsic_candidate": ar_calibration.get("sha256"),
+            "ov9281_stereo_v6": ov_calibration.get("sha256"),
+        },
+    }
+
+
+def _new_dataset_manifest(configuration: dict[str, Any]) -> dict[str, Any]:
+    return _json_safe({
+        "schema_version": DATASET_SCHEMA_VERSION,
+        "status": "STATIC_ONLY_DATASET_CAPTURED",
+        "static_target_affirmed": True,
+        "dynamic_pairing_permitted": False,
+        "configuration": configuration,
+        "sessions": [],
+        "pairs": [],
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "updated_utc": datetime.now(timezone.utc).isoformat(),
+        "limitation": "Static target only. Kernel timestamp proximity is not proof of hardware synchronization and is not approved for dynamic scene pairing.",
+    })
+
+
+def _validate_dataset_manifest(manifest: dict[str, Any]) -> None:
+    if (
+        manifest.get("schema_version") != DATASET_SCHEMA_VERSION
+        or manifest.get("status") != "STATIC_ONLY_DATASET_CAPTURED"
+        or manifest.get("static_target_affirmed") is not True
+        or manifest.get("dynamic_pairing_permitted") is not False
+        or not isinstance(manifest.get("configuration"), dict)
+        or not isinstance(manifest.get("sessions"), list)
+        or not isinstance(manifest.get("pairs"), list)
+    ):
+        raise StaticExtrinsicError("capture manifest is not a supported static-only dataset")
+
+
+def _append_session_to_dataset(
+    dataset: dict[str, Any],
+    *,
+    configuration: dict[str, Any],
+    session: dict[str, Any],
+    pairs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    _validate_dataset_manifest(dataset)
+    if _configuration_identity(dataset["configuration"]) != _configuration_identity(configuration):
+        raise StaticExtrinsicError("capture provenance differs from existing dataset")
+    session_id = session.get("session_id")
+    _validate_session_id(session_id)
+    if any(row.get("session_id") == session_id for row in dataset["sessions"]):
+        raise StaticExtrinsicError(f"duplicate session_id: {session_id}")
+    known_pair_ids = {row.get("pair_id") for row in dataset["pairs"]}
+    pair_ids = [row.get("pair_id") for row in pairs]
+    if any(not isinstance(pair_id, str) or pair_id in known_pair_ids for pair_id in pair_ids) or len(set(pair_ids)) != len(pair_ids):
+        raise StaticExtrinsicError("pair_id is missing, duplicated, or already present in dataset")
+    if session.get("pair_ids") != pair_ids or any(row.get("session_id") != session_id for row in pairs):
+        raise StaticExtrinsicError("session and flat pair provenance are inconsistent")
+    updated = _json_safe(dataset)
+    updated["sessions"].append(_json_safe(session))
+    updated["pairs"].extend(_json_safe(pairs))
+    updated["updated_utc"] = datetime.now(timezone.utc).isoformat()
+    return _json_safe(updated)
+
+
+def _load_dataset_manifest(output_root: Path) -> dict[str, Any] | None:
+    manifest_path = output_root / "capture_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise StaticExtrinsicError("cannot read existing capture dataset manifest") from error
+    _validate_dataset_manifest(manifest)
+    return _json_safe(manifest)
+
+
+def _write_json_replace(path: Path, record: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write((json.dumps(_json_safe(record), indent=2, sort_keys=True, allow_nan=False) + "\n").encode())
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
+def capture_static_pairs(*, output_root: Path, session_id: str, ar_intrinsic: Path, ov_calibration: Path, pair_count: int, static_target_affirmed: bool, ar_device: Path = AR_DEVICE, ov_device: Path = OV_DEVICE) -> dict[str, Any]:
     if not static_target_affirmed:
         raise StaticExtrinsicError("capture requires --static-target-affirmed")
     if pair_count < 3:
         raise StaticExtrinsicError("pair_count must be at least three")
-    if output_root.exists():
-        raise StaticExtrinsicError(f"output root already exists: {output_root}")
+    _validate_session_id(session_id)
+    if output_root.exists() and not output_root.is_dir():
+        raise StaticExtrinsicError(f"output root is not a directory: {output_root}")
     if not ar_intrinsic.is_file() or not ov_calibration.is_file():
         raise StaticExtrinsicError("intrinsic or OV calibration file is absent")
     _load_ar_intrinsics(ar_intrinsic)
     if _sha256(ov_calibration) != OV_CALIBRATION_SHA256:
         raise StaticExtrinsicError("OV calibration SHA-256 mismatch")
-    output_root.mkdir(parents=True, exist_ok=False)
+    output_root.mkdir(parents=True, exist_ok=True)
+    existing_dataset = _load_dataset_manifest(output_root)
+    if existing_dataset is not None and any(row.get("session_id") == session_id for row in existing_dataset["sessions"]):
+        raise StaticExtrinsicError(f"duplicate session_id: {session_id}")
+    session_root = output_root / "sessions" / session_id
+    if session_root.exists():
+        raise StaticExtrinsicError(f"session output already exists: {session_root}")
     ar_camera, ov_camera = DirectV4L2Camera(ar_device, *AR_MODE), DirectV4L2Camera(ov_device, *OV_MODE)
     capture_errors = 0
     try:
         ar_mode, ov_mode = ar_camera.open(), ov_camera.open()
+        configuration = _capture_configuration(
+            ar_device=ar_device,
+            ov_device=ov_device,
+            ar_mode=ar_mode,
+            ov_mode=ov_mode,
+            ar_intrinsic=ar_intrinsic,
+            ov_calibration=ov_calibration,
+        )
+        if existing_dataset is not None and _configuration_identity(existing_dataset["configuration"]) != _configuration_identity(configuration):
+            raise StaticExtrinsicError("capture provenance differs from existing dataset")
+        session_root.mkdir(parents=True, exist_ok=False)
         for _ in range(30): ar_camera.read(); ov_camera.read()
         ar_frames: list[KernelFrame] = []; ov_frames: list[KernelFrame] = []
         for _ in range(pair_count * 4):
@@ -503,23 +667,11 @@ def capture_static_pairs(*, output_root: Path, ar_intrinsic: Path, ov_calibratio
         accepted = accepted[:pair_count]
     counters["accepted_pairs"] = len(accepted)
     counters["rejected_decode_or_frame_error"] += capture_errors
-    configuration = {
-        "static_target_affirmed": True,
-        "requested_pair_count": pair_count,
-        "capture_backend": CAPTURE_BACKEND,
-        "timestamp_clock_domain": CLOCK_DOMAIN,
-        "maximum_pair_skew_ns": MAX_PAIR_SKEW_NS,
-        "devices": {"ar0234": str(ar_device), "ov9281_combined": str(ov_device)},
-        "capture_configuration": {"ar0234": ar_mode, "ov9281_combined": ov_mode},
-        "calibrations": {
-            "ar0234_intrinsic_candidate": {"path": str(ar_intrinsic), "sha256": _sha256(ar_intrinsic), "status": "CANDIDATE_NOT_VALIDATED"},
-            "ov9281_stereo_v6": {"path": str(ov_calibration), "sha256": OV_CALIBRATION_SHA256},
-        },
-    }
-    preview_frames = _diagnostic_preview_frames(output_root, ar_frames, ov_frames)
+    configuration = _json_safe({**configuration, "static_target_affirmed": True, "requested_pair_count": pair_count})
+    preview_frames = _diagnostic_preview_frames(session_root, ar_frames, ov_frames)
     if len(accepted) < pair_count:
         _raise_insufficient_static_pairs(
-            root=output_root,
+            root=session_root,
             pair_count=pair_count,
             accepted_count=len(accepted),
             configuration=configuration,
@@ -528,39 +680,41 @@ def capture_static_pairs(*, output_root: Path, ar_intrinsic: Path, ov_calibratio
         )
     records: list[dict[str, Any]] = []
     for index, (ar, ov, left, skew_ns) in enumerate(accepted):
-        pair_id = f"pair_{index:03d}"
+        pair_id = f"{session_id}__pair_{index:03d}"
         record = {
             "schema_version": "sie.ar0234_ov9281_static_pair.v1", "pair_id": pair_id,
+            "session_id": session_id,
             "static_target_affirmed": True,
             "timestamp_clock_domain": CLOCK_DOMAIN,
             "capture_backend": CAPTURE_BACKEND,
-            "ar0234": {"timestamp_ns": ar.timestamp_ns, "sequence": ar.sequence, "file": _frame_file(output_root, "ar0234", pair_id, ar.image)},
-            "ov9281_combined": {"timestamp_ns": ov.timestamp_ns, "sequence": ov.sequence, "file": _frame_file(output_root, "ov9281_combined", pair_id, ov.image)},
-            "ov9281_physical_left": {"file": _frame_file(output_root, "ov9281_physical_left", pair_id, left)},
+            "ar0234": {"timestamp_ns": ar.timestamp_ns, "sequence": ar.sequence, "file": _frame_file(session_root, "ar0234", pair_id, ar.image, manifest_prefix=f"sessions/{session_id}")},
+            "ov9281_combined": {"timestamp_ns": ov.timestamp_ns, "sequence": ov.sequence, "file": _frame_file(session_root, "ov9281_combined", pair_id, ov.image, manifest_prefix=f"sessions/{session_id}")},
+            "ov9281_physical_left": {"file": _frame_file(session_root, "ov9281_physical_left", pair_id, left, manifest_prefix=f"sessions/{session_id}")},
             "skew_ns": skew_ns,
             "checkerboard": {"inner_corners": [9, 6], "square_size_mm": SQUARE_SIZE_MM, "ar0234_corner_count": 54, "ov9281_physical_left_corner_count": 54},
             "reference_frames": {"ar0234": "ar0234_rgb_optical_frame", "ov9281_physical_left": "ov9281_physical_left_optical_frame"},
         }
         records.append(record)
-    manifest = {
-        "schema_version": "sie.ar0234_ov9281_static_capture_manifest.v1", "status": "STATIC_ONLY_CAPTURED",
-        "static_target_affirmed": True, "dynamic_pairing_permitted": False,
-        "capture_backend": CAPTURE_BACKEND, "timestamp_clock_domain": CLOCK_DOMAIN,
-        "maximum_pair_skew_ns": MAX_PAIR_SKEW_NS,
-        "devices": {"ar0234": str(ar_device), "ov9281_combined": str(ov_device)},
-        "capture_configuration": {"ar0234": ar_mode, "ov9281_combined": ov_mode},
-        "calibrations": {"ar0234_intrinsic_candidate": {"path": str(ar_intrinsic), "sha256": _sha256(ar_intrinsic), "status": "CANDIDATE_NOT_VALIDATED"}, "ov9281_stereo_v6": {"path": str(ov_calibration), "sha256": OV_CALIBRATION_SHA256}},
-        "pair_count": len(records), "pairs": records,
+    session = {
+        "schema_version": SESSION_SCHEMA_VERSION,
+        "session_id": session_id,
+        "status": "STATIC_ONLY_CAPTURED",
+        "static_target_affirmed": True,
+        "configuration": configuration,
+        "pair_ids": [record["pair_id"] for record in records],
+        "capture_rejection_summary": f"sessions/{session_id}/capture_rejection_summary.json",
         "created_utc": datetime.now(timezone.utc).isoformat(),
-        "limitation": "Static target only. Kernel timestamp proximity is not proof of hardware synchronization and is not approved for dynamic scene pairing.",
+        "limitation": "Static target only. This session is not valid for dynamic scene pairing.",
     }
-    _write_new(output_root / "capture_manifest.json", (json.dumps(_json_safe(manifest), indent=2, sort_keys=True, allow_nan=False) + "\n").encode())
-    _write_capture_summary(output_root, _capture_summary(
+    dataset = existing_dataset if existing_dataset is not None else _new_dataset_manifest(configuration)
+    manifest = _append_session_to_dataset(dataset, configuration=configuration, session=session, pairs=records)
+    _write_capture_summary(session_root, _capture_summary(
         result="STATIC_VALID_PAIRS_CAPTURED",
         configuration=configuration,
         counters=counters,
         preview_frames=preview_frames,
     ))
+    _write_json_replace(output_root / "capture_manifest.json", manifest)
     return manifest
 
 
@@ -675,7 +829,14 @@ def _load_ov_intrinsics(path: Path) -> CameraIntrinsics:
 
 def solve_static_capture(*, capture_manifest: Path, ar_intrinsic: Path, ov_calibration: Path) -> dict[str, Any]:
     manifest = json.loads(capture_manifest.read_text(encoding="utf-8"))
-    if manifest.get("status") != "STATIC_ONLY_CAPTURED" or manifest.get("dynamic_pairing_permitted") is not False or manifest.get("timestamp_clock_domain") != CLOCK_DOMAIN:
+    if (
+        manifest.get("status") not in {"STATIC_ONLY_CAPTURED", "STATIC_ONLY_DATASET_CAPTURED"}
+        or manifest.get("dynamic_pairing_permitted") is not False
+        or (
+            manifest.get("timestamp_clock_domain") != CLOCK_DOMAIN
+            and manifest.get("configuration", {}).get("timestamp_clock_domain") != CLOCK_DOMAIN
+        )
+    ):
         raise StaticExtrinsicError("capture manifest is not static-only CLOCK_MONOTONIC evidence")
     pairs: list[StaticPair] = []
     root = capture_manifest.parent
