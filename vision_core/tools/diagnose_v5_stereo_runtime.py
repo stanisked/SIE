@@ -15,6 +15,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -72,6 +73,92 @@ def read_temperature_snapshot(
             key: float(temperatures[key])
             for key in sorted(expected_channels)
         },
+    }
+
+
+def observe_temperature(
+    *,
+    mode: str,
+    phase: str,
+    bridge_tool: Path,
+    state_file: Path,
+    maximum_age_s: float,
+    snapshot_reader: Callable[[Path, Path, float], dict] = read_temperature_snapshot,
+) -> dict:
+    """Return one explicit temperature observation without inventing values."""
+    if mode == "disabled":
+        return {
+            "status": "DISABLED",
+            "reason": "temperature_monitoring_disabled_for_this_run",
+            "snapshot": None,
+        }
+
+    try:
+        snapshot = snapshot_reader(bridge_tool, state_file, maximum_age_s)
+    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as error:
+        if mode == "required":
+            raise
+        return {
+            "status": "NOT_OBSERVED",
+            "reason": f"{phase}_snapshot_unavailable: {type(error).__name__}: {error}",
+            "snapshot": None,
+        }
+
+    return {"status": "OBSERVED", "reason": None, "snapshot": snapshot}
+
+
+def build_temperature_monitoring(
+    *,
+    mode: str,
+    before_frame: dict,
+    after_frame: dict,
+) -> dict:
+    """Compose JSON-safe before/after provenance and an optional delta."""
+    if mode == "disabled":
+        return {
+            "mode": mode,
+            "status": "DISABLED",
+            "reason": "temperature_monitoring_disabled_for_this_run",
+            "before_frame": before_frame,
+            "after_frame": after_frame,
+            "temperature_change": None,
+        }
+
+    before_snapshot = before_frame.get("snapshot")
+    after_snapshot = after_frame.get("snapshot")
+    if before_snapshot is not None and after_snapshot is not None:
+        change = {
+            f"{key}_c": round(
+                after_snapshot["temperatures_c"][key]
+                - before_snapshot["temperatures_c"][key],
+                4,
+            )
+            for key in ("ambient", "camera_left", "camera_right")
+        }
+        return {
+            "mode": mode,
+            "status": "OBSERVED",
+            "reason": None,
+            "before_frame": before_frame,
+            "after_frame": after_frame,
+            "temperature_change": change,
+        }
+
+    reasons = [
+        f"{phase}: {observation['reason']}"
+        for phase, observation in (
+            ("before_frame", before_frame),
+            ("after_frame", after_frame),
+        )
+        if observation.get("reason")
+    ]
+    return {
+        "mode": mode,
+        "status": "NOT_OBSERVED",
+        "reason": "; ".join(reasons),
+        "before_frame": before_frame,
+        "after_frame": after_frame,
+        "temperature_change": None,
     }
 
 
@@ -627,6 +714,12 @@ def main():
         default=5.0,
     )
     parser.add_argument(
+        "--temperature_mode",
+        choices=["required", "optional", "disabled"],
+        default="required",
+        help="required preserves fail-closed behavior; optional records missing evidence; disabled skips monitoring",
+    )
+    parser.add_argument(
         "--pixel_format",
         choices=["MJPG", "YUYV"],
         default="MJPG",
@@ -844,6 +937,34 @@ def main():
     }
 
     if offline_requested:
+        if args.temperature_mode == "disabled":
+            offline_temperature_before = observe_temperature(
+                mode="disabled",
+                phase="before_frame",
+                bridge_tool=Path(args.temperature_bridge_tool),
+                state_file=Path(args.temperature_state_file),
+                maximum_age_s=args.temperature_max_age_s,
+            )
+            offline_temperature_after = observe_temperature(
+                mode="disabled",
+                phase="after_frame",
+                bridge_tool=Path(args.temperature_bridge_tool),
+                state_file=Path(args.temperature_state_file),
+                maximum_age_s=args.temperature_max_age_s,
+            )
+        else:
+            offline_reason = "temperature_monitoring_not_available_for_offline_replay"
+            offline_temperature_before = {
+                "status": "NOT_OBSERVED",
+                "reason": offline_reason,
+                "snapshot": None,
+            }
+            offline_temperature_after = dict(offline_temperature_before)
+        capture_details["temperature_monitoring"] = build_temperature_monitoring(
+            mode=args.temperature_mode,
+            before_frame=offline_temperature_before,
+            after_frame=offline_temperature_after,
+        )
         left_raw = cv2.imread(str(args.offline_left), cv2.IMREAD_COLOR)
         right_raw = cv2.imread(str(args.offline_right), cv2.IMREAD_COLOR)
 
@@ -954,10 +1075,12 @@ def main():
                 f"in {attempts} attempts",
             )
 
-            temperature_before_frame = read_temperature_snapshot(
-                Path(args.temperature_bridge_tool),
-                Path(args.temperature_state_file),
-                args.temperature_max_age_s,
+            temperature_before_frame = observe_temperature(
+                mode=args.temperature_mode,
+                phase="before_frame",
+                bridge_tool=Path(args.temperature_bridge_tool),
+                state_file=Path(args.temperature_state_file),
+                maximum_age_s=args.temperature_max_age_s,
             )
 
             final_attempts = 0
@@ -970,36 +1093,40 @@ def main():
             else:
                 raise RuntimeError("failed to capture final gate frame")
 
-            temperature_after_frame = read_temperature_snapshot(
-                Path(args.temperature_bridge_tool),
-                Path(args.temperature_state_file),
-                args.temperature_max_age_s,
+            temperature_after_frame = observe_temperature(
+                mode=args.temperature_mode,
+                phase="after_frame",
+                bridge_tool=Path(args.temperature_bridge_tool),
+                state_file=Path(args.temperature_state_file),
+                maximum_age_s=args.temperature_max_age_s,
             )
-
-            temperature_change = {
-                key: round(
-                    temperature_after_frame["temperatures_c"][key]
-                    - temperature_before_frame["temperatures_c"][key],
-                    4,
-                )
-                for key in ("ambient", "camera_left", "camera_right")
-            }
-            capture_details["temperature_before_frame"] = (
-                temperature_before_frame
+            temperature_monitoring = build_temperature_monitoring(
+                mode=args.temperature_mode,
+                before_frame=temperature_before_frame,
+                after_frame=temperature_after_frame,
             )
-            capture_details["temperature_after_frame"] = (
-                temperature_after_frame
-            )
-            capture_details["temperature_change_c"] = temperature_change
+            capture_details["temperature_monitoring"] = temperature_monitoring
+            if temperature_before_frame["snapshot"] is not None:
+                capture_details["temperature_before_frame"] = temperature_before_frame["snapshot"]
+            if temperature_after_frame["snapshot"] is not None:
+                capture_details["temperature_after_frame"] = temperature_after_frame["snapshot"]
+            if temperature_monitoring["temperature_change"] is not None:
+                capture_details["temperature_change_c"] = {
+                    key.removesuffix("_c"): value
+                    for key, value in temperature_monitoring["temperature_change"].items()
+                }
             capture_details["final_frame_capture_attempts"] = final_attempts
-            print(
-                "Temperature before frame:",
-                temperature_before_frame["temperatures_c"],
-            )
-            print(
-                "Temperature after frame:",
-                temperature_after_frame["temperatures_c"],
-            )
+            print("Temperature monitoring:", temperature_monitoring["status"])
+            if temperature_before_frame["snapshot"] is not None:
+                print(
+                    "Temperature before frame:",
+                    temperature_before_frame["snapshot"]["temperatures_c"],
+                )
+            if temperature_after_frame["snapshot"] is not None:
+                print(
+                    "Temperature after frame:",
+                    temperature_after_frame["snapshot"]["temperatures_c"],
+                )
             capture_details.update(
                 {
                     "actual_pixel_format": actual_fourcc_str,
@@ -1089,6 +1216,7 @@ def main():
             output_dir / "temperature_before_frame.json",
             capture_details["temperature_before_frame"],
         )
+    if "temperature_after_frame" in capture_details:
         save_json(
             output_dir / "temperature_after_frame.json",
             capture_details["temperature_after_frame"],
@@ -1314,9 +1442,10 @@ def main():
         absolute_error = abs(signed_error)
         relative_error = absolute_error / args.ground_truth_mm * 100.0
 
-    temperature_evidence_present = (
-        "temperature_before_frame" in capture_details
-        and "temperature_after_frame" in capture_details
+    temperature_monitoring = capture_details.get("temperature_monitoring")
+    temperature_evidence_present = bool(
+        temperature_monitoring
+        and temperature_monitoring["status"] == "OBSERVED"
     )
     maximum_temperature_change_c = (
         max(
@@ -1336,12 +1465,17 @@ def main():
             roi_depth_stats is not None
             and bool(np.isfinite(roi_depth_stats["median"]))
         ),
-        "temperature_evidence_present": temperature_evidence_present,
-        "maximum_temperature_change_at_most_0_125_c": (
-            maximum_temperature_change_c is not None
-            and maximum_temperature_change_c <= 0.125
-        ),
     }
+    if args.temperature_mode == "required":
+        quality_checks.update(
+            {
+                "temperature_evidence_present": temperature_evidence_present,
+                "maximum_temperature_change_at_most_0_125_c": (
+                    maximum_temperature_change_c is not None
+                    and maximum_temperature_change_c <= 0.125
+                ),
+            }
+        )
     run_status = PASS if all(quality_checks.values()) else FAIL
 
     depth_report = {
