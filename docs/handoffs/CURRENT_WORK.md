@@ -21,3 +21,10 @@ evidence. Hardware sync не доказан: static AR↔OV extrinsic разре
 `/home/stanislav/sie_rgb_stereo_fusion/sensor_sync_ar0234_ov9281/static_extrinsic_capture_v2`.
 Даже после нового capture любой extrinsic candidate остаётся
 `PROVISIONAL_DIAGNOSTIC_ONLY`.
+
+Persistent dataset
+`/home/stanislav/sie_rgb_stereo_fusion/sensor_sync_ar0234_ov9281/static_extrinsic_capture_v2`
+создан с девятью valid pairs из трёх sessions. Aggregate candidate использует
+все `9/9` pairs и имеет reprojection RMS `3.903 px`. До нового capture нужен
+offline audit исходных PNG, session consistency и corner-ordering hypotheses;
+candidate остаётся `PROVISIONAL_DIAGNOSTIC_ONLY`.

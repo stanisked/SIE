@@ -16,12 +16,15 @@ from vision_core.ar0234_ov9281_static_extrinsic import (
     StaticExtrinsicError,
     StaticPair,
     _append_session_to_dataset,
+    _audit_file_integrity,
+    _audit_session_diagnosis,
     _capture_counters,
     _classify_static_candidates,
     _load_dataset_manifest,
     _new_dataset_manifest,
     _persist_successful_session,
     _raise_insufficient_static_pairs,
+    audit_static_extrinsic_dataset,
     build_static_transform_record,
     object_points_mm,
     require_acceptable_skew,
@@ -263,3 +266,77 @@ def test_incomplete_dataset_root_blocks_without_deleting_evidence(tmp_path):
         _load_dataset_manifest(root)
 
     assert evidence.read_bytes() == b"preserve me"
+
+
+def test_raw_integrity_audit_reads_without_modifying_input(tmp_path):
+    raw = tmp_path / "sessions" / "pose-a" / "ar0234" / "pair.png"
+    raw.parent.mkdir(parents=True)
+    raw.write_bytes(b"immutable raw evidence")
+    before = raw.read_bytes()
+
+    result = _audit_file_integrity(
+        tmp_path,
+        {"filename": "sessions/pose-a/ar0234/pair.png", "sha256": hashlib.sha256(before).hexdigest(), "bytes": len(before)},
+    )
+
+    assert result["status"] == "VERIFIED"
+    assert raw.read_bytes() == before
+
+
+def test_synthetic_audit_compares_identity_and_reversal_without_mutating_candidate(monkeypatch, tmp_path):
+    raw_root = tmp_path / "dataset"
+    raw_paths: dict[str, dict[str, object]] = {}
+    for section in ("ar0234", "ov9281_combined", "ov9281_physical_left"):
+        payload = section.encode("ascii")
+        path = raw_root / "sessions" / "pose-a" / section / "pair.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        raw_paths[section] = {"file": {"filename": f"sessions/pose-a/{section}/pair.png", "sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)}}
+    manifest = {
+        "schema_version": "sie.ar0234_ov9281_static_capture_dataset.v1",
+        "status": "STATIC_ONLY_DATASET_CAPTURED",
+        "dynamic_pairing_permitted": False,
+        "pairs": [{"pair_id": "pose-a__pair_000", "session_id": "pose-a", "ar0234": raw_paths["ar0234"], "ov9281_combined": raw_paths["ov9281_combined"], "ov9281_physical_left": raw_paths["ov9281_physical_left"]}],
+    }
+    manifest_path = raw_root / "capture_manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    candidate_path = raw_root / "candidate.json"
+    candidate_path.write_text(json.dumps({"schema_version": "sie.ar0234_ov9281_static_extrinsic_candidate.v1", "status": "PROVISIONAL_DIAGNOSTIC_ONLY", "transform": {"name": "T_stereo_left_rgb", "rotation_3x3": np.eye(3).tolist(), "translation_m": [0.0, 0.0, 0.0]}}), encoding="utf-8")
+    intrinsic_path, ov_path = raw_root / "ar.json", raw_root / "ov.npz"
+    intrinsic_path.write_bytes(b"ar")
+    ov_path.write_bytes(b"ov")
+    corners = _corners(np.zeros(3), np.array([0.0, 0.0, 1000.0]))
+    monkeypatch.setattr(static_extrinsic, "_load_ar_intrinsics", lambda _path: _intrinsics())
+    monkeypatch.setattr(static_extrinsic, "_load_ov_intrinsics", lambda _path: _intrinsics())
+    monkeypatch.setattr(static_extrinsic, "_checkerboard", lambda _image: corners.copy())
+    monkeypatch.setattr(static_extrinsic.cv2, "imread", lambda *_args, **_kwargs: np.zeros((10, 10, 3), dtype=np.uint8))
+    candidate_before = candidate_path.read_bytes()
+
+    report = audit_static_extrinsic_dataset(
+        capture_manifest=manifest_path, ar_intrinsic=intrinsic_path, ov_calibration=ov_path, candidate=candidate_path
+    )
+
+    pair = report["pairs"][0]
+    assert pair["cross_camera_reprojection_px"]["identity"]["rms_px"] < pair["cross_camera_reprojection_px"]["reversal_180"]["rms_px"]
+    assert report["candidate"]["status"] == "PROVISIONAL_DIAGNOSTIC_ONLY"
+    assert candidate_path.read_bytes() == candidate_before
+    json.dumps(report, allow_nan=False, sort_keys=True)
+
+
+def test_systematic_diagnosis_identifies_consistently_worse_session():
+    pairs = [
+        {"pair_id": "good-1", "session_id": "good", "status": "AUDITED", "cross_camera_reprojection_px": {"identity": {"rms_px": 1.0}}},
+        {"pair_id": "good-2", "session_id": "good", "status": "AUDITED", "cross_camera_reprojection_px": {"identity": {"rms_px": 1.1}}},
+        {"pair_id": "bad-1", "session_id": "bad", "status": "AUDITED", "cross_camera_reprojection_px": {"identity": {"rms_px": 4.0}}},
+        {"pair_id": "bad-2", "session_id": "bad", "status": "AUDITED", "cross_camera_reprojection_px": {"identity": {"rms_px": 4.1}}},
+    ]
+    sessions = [
+        {"session_id": "good", "identity_cross_reprojection_px": {"rms_px": 1.05}, "transform_residual_to_candidate": {"translation_mm": 1.0, "rotation_deg": 0.1}, "_identity_pair_rms_px": [1.0, 1.1]},
+        {"session_id": "bad", "identity_cross_reprojection_px": {"rms_px": 4.05}, "transform_residual_to_candidate": {"translation_mm": 4.0, "rotation_deg": 0.4}, "_identity_pair_rms_px": [4.0, 4.1]},
+    ]
+
+    diagnosis = _audit_session_diagnosis(pairs, sessions)
+
+    assert diagnosis["sessions_ranked_by_identity_cross_reprojection"][0]["session_id"] == "bad"
+    assert diagnosis["systematic_error_candidates"] == [{"session_id": "bad", "evidence": "all_identity_cross_reprojection_rms_px_above_global_pair_median", "pair_count": 2}]
+    json.dumps(diagnosis, allow_nan=False, sort_keys=True)

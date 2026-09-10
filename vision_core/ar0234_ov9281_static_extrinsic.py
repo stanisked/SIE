@@ -1007,5 +1007,257 @@ def solve_static_capture(*, capture_manifest: Path, ar_intrinsic: Path, ov_calib
     return build_static_transform_record(pairs=pairs, ar_intrinsics=_load_ar_intrinsics(ar_intrinsic), ov_intrinsics=_load_ov_intrinsics(ov_calibration), provenance=provenance)
 
 
+def _audit_reprojection_metrics(errors: np.ndarray) -> dict[str, Any]:
+    values = np.asarray(errors, dtype=np.float64).reshape(-1)
+    if values.size == 0:
+        return {"count": 0, "mean_px": None, "median_px": None, "p95_px": None, "max_px": None, "rms_px": None}
+    if not np.isfinite(values).all():
+        raise StaticExtrinsicError("audit reprojection errors are non-finite")
+    return _json_safe({"count": int(values.size), **_metrics([float(value) for value in values])})
+
+
+def _audit_file_integrity(root: Path, file_record: dict[str, Any]) -> dict[str, Any]:
+    filename = file_record.get("filename")
+    expected_sha256 = file_record.get("sha256")
+    expected_bytes = file_record.get("bytes")
+    result: dict[str, Any] = {
+        "filename": filename if isinstance(filename, str) else None,
+        "expected_sha256": expected_sha256 if isinstance(expected_sha256, str) else None,
+        "expected_bytes": expected_bytes if isinstance(expected_bytes, int) else None,
+        "exists": False,
+        "actual_sha256": None,
+        "actual_bytes": None,
+        "status": "INVALID_FILE_RECORD",
+    }
+    if not isinstance(filename, str) or not filename.startswith("sessions/") or not isinstance(expected_sha256, str):
+        return result
+    path = root / filename
+    if not path.is_file():
+        result["status"] = "MISSING"
+        return result
+    result["exists"] = True
+    result["actual_sha256"] = _sha256(path)
+    result["actual_bytes"] = path.stat().st_size
+    if result["actual_sha256"] != expected_sha256:
+        result["status"] = "SHA256_MISMATCH"
+    elif expected_bytes is not None and result["actual_bytes"] != expected_bytes:
+        result["status"] = "BYTE_COUNT_MISMATCH"
+    else:
+        result["status"] = "VERIFIED"
+    return result
+
+
+def _project_board(rotation: np.ndarray, translation_mm: np.ndarray, intrinsics: CameraIntrinsics) -> np.ndarray:
+    rvec, _ = cv2.Rodrigues(rotation)
+    pixels, _ = cv2.projectPoints(
+        object_points_mm(), rvec, translation_mm.reshape(3, 1), intrinsics.matrix, intrinsics.distortion
+    )
+    return pixels.astype(np.float64)
+
+
+def _audit_camera_local_pose(corners: np.ndarray, intrinsics: CameraIntrinsics) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    rotation, translation_mm = _pose(corners, intrinsics)
+    projected = _project_board(rotation, translation_mm, intrinsics)
+    errors = np.linalg.norm(projected.reshape(-1, 2) - corners.reshape(-1, 2), axis=1)
+    return rotation, translation_mm, _audit_reprojection_metrics(errors)
+
+
+def _cross_reprojection_metrics(*, ar_rotation: np.ndarray, ar_translation_mm: np.ndarray, target_corners: np.ndarray, candidate_rotation: np.ndarray, candidate_translation_mm: np.ndarray, ov_intrinsics: CameraIntrinsics) -> dict[str, Any]:
+    projected = _project_board(candidate_rotation @ ar_rotation, candidate_rotation @ ar_translation_mm + candidate_translation_mm, ov_intrinsics)
+    errors = np.linalg.norm(projected.reshape(-1, 2) - target_corners.reshape(-1, 2), axis=1)
+    return _audit_reprojection_metrics(errors)
+
+
+def _load_candidate_transform(path: Path) -> tuple[dict[str, Any], np.ndarray, np.ndarray]:
+    try:
+        candidate = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise StaticExtrinsicError("cannot read candidate JSON") from error
+    transform = candidate.get("transform", {})
+    rotation = np.asarray(transform.get("rotation_3x3"), dtype=np.float64)
+    translation_m = np.asarray(transform.get("translation_m"), dtype=np.float64)
+    if candidate.get("schema_version") != "sie.ar0234_ov9281_static_extrinsic_candidate.v1" or candidate.get("status") != "PROVISIONAL_DIAGNOSTIC_ONLY" or transform.get("name") != "T_stereo_left_rgb" or rotation.shape != (3, 3) or translation_m.shape != (3,) or not np.isfinite(rotation).all() or not np.isfinite(translation_m).all():
+        raise StaticExtrinsicError("candidate is not a finite provisional T_stereo_left_rgb record")
+    return _json_safe(candidate), rotation, translation_m * 1000.0
+
+
+def _audit_session_diagnosis(pair_records: list[dict[str, Any]], session_records: list[dict[str, Any]]) -> dict[str, Any]:
+    rms_by_pair = [
+        (row["pair_id"], row["session_id"], row["cross_camera_reprojection_px"]["identity"]["rms_px"])
+        for row in pair_records
+        if row.get("status") == "AUDITED" and row["cross_camera_reprojection_px"]["identity"]["rms_px"] is not None
+    ]
+    rms_values = [item[2] for item in rms_by_pair]
+    global_metrics = _audit_reprojection_metrics(np.asarray(rms_values, dtype=np.float64))
+    global_median = global_metrics["median_px"]
+    ranked_pairs = [
+        {"pair_id": pair_id, "session_id": session_id, "identity_cross_reprojection_rms_px": rms}
+        for pair_id, session_id, rms in sorted(rms_by_pair, key=lambda item: (-item[2], item[0]))
+    ]
+    ranked_sessions = sorted(
+        [
+            {
+                "session_id": row["session_id"],
+                "identity_cross_reprojection_rms_px": row["identity_cross_reprojection_px"]["rms_px"],
+                "translation_residual_to_candidate_mm": row["transform_residual_to_candidate"]["translation_mm"],
+                "rotation_residual_to_candidate_deg": row["transform_residual_to_candidate"]["rotation_deg"],
+            }
+            for row in session_records
+            if row["identity_cross_reprojection_px"]["rms_px"] is not None
+        ],
+        key=lambda row: (-row["identity_cross_reprojection_rms_px"], row["session_id"]),
+    )
+    systematic_sessions: list[dict[str, Any]] = []
+    if global_median is not None:
+        for row in session_records:
+            values = row.get("_identity_pair_rms_px", [])
+            if values and all(value > global_median for value in values):
+                systematic_sessions.append({
+                    "session_id": row["session_id"],
+                    "evidence": "all_identity_cross_reprojection_rms_px_above_global_pair_median",
+                    "pair_count": len(values),
+                })
+    return _json_safe({
+        "consensus_source": "existing_candidate_T_stereo_left_rgb",
+        "global_identity_cross_reprojection_rms_distribution_px": global_metrics,
+        "sessions_ranked_by_identity_cross_reprojection": ranked_sessions,
+        "pairs_ranked_by_identity_cross_reprojection": ranked_pairs,
+        "systematic_error_candidates": systematic_sessions,
+        "limitation": "These comparative rankings identify image-space and rigid-transform inconsistency only. They do not establish a hardware root cause or a new acceptance policy.",
+    })
+
+
+def audit_static_extrinsic_dataset(*, capture_manifest: Path, ar_intrinsic: Path, ov_calibration: Path, candidate: Path) -> dict[str, Any]:
+    try:
+        manifest = json.loads(capture_manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise StaticExtrinsicError("cannot read capture manifest for offline audit") from error
+    if manifest.get("schema_version") != DATASET_SCHEMA_VERSION or manifest.get("status") != "STATIC_ONLY_DATASET_CAPTURED" or manifest.get("dynamic_pairing_permitted") is not False or not isinstance(manifest.get("pairs"), list):
+        raise StaticExtrinsicError("offline audit requires an aggregated static-only dataset manifest")
+    candidate_record, candidate_rotation, candidate_translation_mm = _load_candidate_transform(candidate)
+    ar = _load_ar_intrinsics(ar_intrinsic)
+    ov = _load_ov_intrinsics(ov_calibration)
+    root = capture_manifest.parent
+    pair_reports: list[dict[str, Any]] = []
+    session_work: dict[str, list[dict[str, Any]]] = {}
+    raw_all_verified = True
+    for row in manifest["pairs"]:
+        pair_id, session_id = row.get("pair_id"), row.get("session_id")
+        if not isinstance(pair_id, str) or not isinstance(session_id, str):
+            raise StaticExtrinsicError("offline audit encountered pair without stable identifiers")
+        integrity = {
+            camera: _audit_file_integrity(root, row.get(camera, {}).get("file", {}))
+            for camera in ("ar0234", "ov9281_combined", "ov9281_physical_left")
+        }
+        verified = all(item["status"] == "VERIFIED" for item in integrity.values())
+        raw_all_verified = raw_all_verified and verified
+        report: dict[str, Any] = {
+            "pair_id": pair_id,
+            "session_id": session_id,
+            "timestamps_ns": {"ar0234": row.get("ar0234", {}).get("timestamp_ns"), "ov9281_combined": row.get("ov9281_combined", {}).get("timestamp_ns")},
+            "skew_ns": row.get("skew_ns"),
+            "raw_integrity": integrity,
+            "status": "INPUT_INTEGRITY_FAILED" if not verified else "CHECKERBOARD_NOT_FOUND",
+            "corner_counts": {"ar0234": None, "ov9281_physical_left": None},
+            "camera_local_pnp_reprojection_px": {"ar0234": None, "ov9281_physical_left": None},
+            "cross_camera_reprojection_px": {"identity": None, "reversal_180": None},
+            "transform_residual_to_candidate": None,
+        }
+        if verified:
+            ar_image = cv2.imread(str(root / integrity["ar0234"]["filename"]), cv2.IMREAD_COLOR)
+            left_image = cv2.imread(str(root / integrity["ov9281_physical_left"]["filename"]), cv2.IMREAD_COLOR)
+            ar_corners = _checkerboard(ar_image) if ar_image is not None else None
+            left_corners = _checkerboard(left_image) if left_image is not None else None
+            report["corner_counts"] = {"ar0234": CHECKERBOARD_CORNER_COUNT if ar_corners is not None else 0, "ov9281_physical_left": CHECKERBOARD_CORNER_COUNT if left_corners is not None else 0}
+            if ar_corners is not None and left_corners is not None:
+                ar_rotation, ar_translation_mm, ar_local = _audit_camera_local_pose(ar_corners, ar)
+                left_rotation, left_translation_mm, left_local = _audit_camera_local_pose(left_corners, ov)
+                pair_rotation = left_rotation @ ar_rotation.T
+                pair_translation_mm = left_translation_mm - pair_rotation @ ar_translation_mm
+                report.update({
+                    "status": "AUDITED",
+                    "camera_local_pnp_reprojection_px": {"ar0234": ar_local, "ov9281_physical_left": left_local},
+                    "cross_camera_reprojection_px": {
+                        "identity": _cross_reprojection_metrics(ar_rotation=ar_rotation, ar_translation_mm=ar_translation_mm, target_corners=left_corners, candidate_rotation=candidate_rotation, candidate_translation_mm=candidate_translation_mm, ov_intrinsics=ov),
+                        "reversal_180": _cross_reprojection_metrics(ar_rotation=ar_rotation, ar_translation_mm=ar_translation_mm, target_corners=left_corners[::-1].copy(), candidate_rotation=candidate_rotation, candidate_translation_mm=candidate_translation_mm, ov_intrinsics=ov),
+                    },
+                    "transform_residual_to_candidate": {"translation_mm": float(np.linalg.norm(pair_translation_mm - candidate_translation_mm)), "rotation_deg": _rotation_angle_deg(pair_rotation, candidate_rotation)},
+                    "_pair_rotation": pair_rotation,
+                    "_pair_translation_mm": pair_translation_mm,
+                })
+        pair_reports.append(report)
+        session_work.setdefault(session_id, []).append(report)
+    session_reports: list[dict[str, Any]] = []
+    for session_id in sorted(session_work):
+        rows = session_work[session_id]
+        audited = [row for row in rows if row["status"] == "AUDITED"]
+        identity_rms = [row["cross_camera_reprojection_px"]["identity"]["rms_px"] for row in audited]
+        if audited:
+            session_rotation = _mean_rotation([row["_pair_rotation"] for row in audited])
+            session_translation_mm = np.median(np.asarray([row["_pair_translation_mm"] for row in audited]), axis=0)
+            transform_residual = {"translation_mm": float(np.linalg.norm(session_translation_mm - candidate_translation_mm)), "rotation_deg": _rotation_angle_deg(session_rotation, candidate_rotation)}
+        else:
+            transform_residual = {"translation_mm": None, "rotation_deg": None}
+        session_reports.append({
+            "session_id": session_id,
+            "pair_count": len(rows),
+            "audited_pair_count": len(audited),
+            "identity_cross_reprojection_px": _audit_reprojection_metrics(np.asarray(identity_rms, dtype=np.float64)),
+            "transform_residual_to_candidate": transform_residual,
+            "_identity_pair_rms_px": identity_rms,
+        })
+    diagnosis = _audit_session_diagnosis(pair_reports, session_reports)
+    for row in session_reports:
+        row.pop("_identity_pair_rms_px")
+    for row in pair_reports:
+        row.pop("_pair_rotation", None)
+        row.pop("_pair_translation_mm", None)
+    return _json_safe({
+        "schema_version": "sie.ar0234_ov9281_static_extrinsic_offline_audit.v1",
+        "status": "DIAGNOSTIC_ONLY_COMPLETE" if raw_all_verified else "INPUT_INTEGRITY_BLOCKED",
+        "candidate": {"path": str(candidate), "sha256": _sha256(candidate), "status": candidate_record["status"], "transform_name": candidate_record["transform"]["name"], "status_unchanged": True},
+        "inputs": {"capture_manifest": {"path": str(capture_manifest), "sha256": _sha256(capture_manifest)}, "ar0234_intrinsic": {"path": str(ar_intrinsic), "sha256": _sha256(ar_intrinsic)}, "ov9281_calibration": {"path": str(ov_calibration), "sha256": _sha256(ov_calibration)}},
+        "raw_input_integrity": {"pair_count": len(pair_reports), "all_raw_files_verified": raw_all_verified},
+        "pairs": pair_reports,
+        "sessions": session_reports,
+        "diagnosis": diagnosis,
+        "facts": ["Raw file existence, byte count, and SHA-256 were read from the manifest and verified without modifying input evidence.", "Checkerboard, PnP, and cross-camera reprojection metrics were recomputed from raw PNG inputs.", "The candidate status remains PROVISIONAL_DIAGNOSTIC_ONLY and this audit does not alter its transform."],
+        "hypotheses": ["Identity and 180-degree reversal are comparison-only corner-ordering hypotheses.", "No corner order is selected, written, or applied by this audit.", "Session and pair rankings do not establish a hardware root cause or a new numeric acceptance policy."],
+        "limitation": "Offline diagnostic only. No dynamic pairing, runtime integration, hardware claim, calibration activation, or automatic retuning is performed.",
+    })
+
+
+def _offline_audit_summary_markdown(report: dict[str, Any]) -> str:
+    ranked_sessions = report["diagnosis"]["sessions_ranked_by_identity_cross_reprojection"]
+    highest = ranked_sessions[0]["session_id"] if ranked_sessions else "нет audited sessions"
+    return "\n".join([
+        "# Offline audit AR0234 ↔ OV9281",
+        "",
+        f"- Статус audit: `{report['status']}`",
+        f"- Статус candidate: `{report['candidate']['status']}` (не изменён)",
+        f"- Проверено pair: `{report['raw_input_integrity']['pair_count']}`",
+        f"- Все raw files verified: `{report['raw_input_integrity']['all_raw_files_verified']}`",
+        f"- Сессия с наибольшим identity cross-reprojection RMS: `{highest}`",
+        "",
+        "## Факты",
+        "",
+        *[f"- {item}" for item in report["facts"]],
+        "",
+        "## Ограничения",
+        "",
+        "- Сравнение identity и reversal_180 только диагностическое; новый corner order не выбран и не применён.",
+        "- Audit не устанавливает hardware root cause, не активирует candidate и не задаёт acceptance policy.",
+        "",
+    ])
+
+
+def write_offline_audit_outputs(*, output_dir: Path, report: dict[str, Any]) -> None:
+    if output_dir.exists():
+        raise StaticExtrinsicError(f"offline audit output directory already exists: {output_dir}")
+    output_dir.mkdir(parents=True, exist_ok=False)
+    _write_new(output_dir / "offline_audit_report.json", _json_payload(report))
+    _write_new(output_dir / "offline_audit_summary.md", _offline_audit_summary_markdown(report).encode("utf-8"))
+
+
 def write_json_new(path: Path, record: dict[str, Any]) -> None:
     _write_new(path, (json.dumps(_json_safe(record), indent=2, sort_keys=True, allow_nan=False) + "\n").encode())
