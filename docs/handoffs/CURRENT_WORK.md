@@ -36,3 +36,19 @@ cross-camera reprojection кандидата остаётся системати
 rectified-left frames. Такой review остаётся comparison-only: он не применяет
 новую трансформацию автоматически и не меняет статус кандидата
 `PROVISIONAL_DIAGNOSTIC_ONLY`.
+
+## AR0234 intrinsic V3 independent validation v1
+
+Новый отдельный pipeline собирает только новые static checkerboard evidence
+AR0234 в persistent root
+`/home/stanislav/sie_rgb_stereo_fusion/ar0234_intrinsic/independent_validation_v1`.
+Каждая session хранит immutable raw PNG и `session_manifest.json` с SHA-256,
+timestamp, capture configuration и operator pose label; aggregate manifest
+добавляет sessions append-only.
+
+Offline validator проверяет новые raw кадры против существующего V3 intrinsic:
+повторно находит corners `9×6`, вычисляет PnP reprojection и coverage по сетке
+`3×3`. Это independent validation, не recalibration, не activation record и не
+новая numeric acceptance policy. До отдельного evidence и review intrinsic V3
+остаётся candidate. AR↔OV extrinsic candidate также остаётся
+`PROVISIONAL_DIAGNOSTIC_ONLY`.
