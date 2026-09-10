@@ -457,7 +457,11 @@ def _capture_summary(
 
 
 def _write_capture_summary(root: Path, summary: dict[str, Any]) -> None:
-    _write_new(root / "capture_rejection_summary.json", (json.dumps(_json_safe(summary), indent=2, sort_keys=True, allow_nan=False) + "\n").encode())
+    _write_new(root / "capture_rejection_summary.json", _json_payload(summary))
+
+
+def _json_payload(record: dict[str, Any]) -> bytes:
+    return (json.dumps(_json_safe(record), indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
 
 
 def _raise_insufficient_static_pairs(
@@ -591,12 +595,18 @@ def _append_session_to_dataset(
 def _load_dataset_manifest(output_root: Path) -> dict[str, Any] | None:
     manifest_path = output_root / "capture_manifest.json"
     if not manifest_path.exists():
+        sessions_root = output_root / "sessions"
+        if sessions_root.exists():
+            raise StaticExtrinsicError(
+                "dataset root contains session evidence but capture_manifest.json is absent; refusing reconstruction"
+            )
         return None
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise StaticExtrinsicError("cannot read existing capture dataset manifest") from error
     _validate_dataset_manifest(manifest)
+    _validate_dataset_session_evidence(output_root, manifest)
     return _json_safe(manifest)
 
 
@@ -606,7 +616,7 @@ def _write_json_replace(path: Path, record: dict[str, Any]) -> None:
     temporary = Path(temporary_name)
     try:
         with os.fdopen(fd, "wb") as stream:
-            stream.write((json.dumps(_json_safe(record), indent=2, sort_keys=True, allow_nan=False) + "\n").encode())
+            stream.write(_json_payload(record))
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
@@ -615,6 +625,156 @@ def _write_json_replace(path: Path, record: dict[str, Any]) -> None:
             temporary.unlink()
         except FileNotFoundError:
             pass
+
+
+def _session_manifest_record(
+    *,
+    session_id: str,
+    configuration: dict[str, Any],
+    pairs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return _json_safe({
+        "schema_version": SESSION_SCHEMA_VERSION,
+        "session_id": session_id,
+        "status": "STATIC_ONLY_CAPTURED",
+        "static_target_affirmed": True,
+        "configuration": configuration,
+        "pair_count": len(pairs),
+        "pair_ids": [record["pair_id"] for record in pairs],
+        "pairs": pairs,
+        "capture_rejection_summary": f"sessions/{session_id}/capture_rejection_summary.json",
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "limitation": "Static target only. This session is not valid for dynamic scene pairing.",
+    })
+
+
+def _write_session_manifest(session_root: Path, record: dict[str, Any]) -> dict[str, Any]:
+    payload = _json_payload(record)
+    _write_new(session_root / "session_manifest.json", payload)
+    return {
+        "filename": f"sessions/{record['session_id']}/session_manifest.json",
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+
+
+def _session_entry(
+    *,
+    session_manifest: dict[str, Any],
+    session_manifest_file: dict[str, Any],
+) -> dict[str, Any]:
+    return _json_safe({
+        "schema_version": SESSION_SCHEMA_VERSION,
+        "session_id": session_manifest["session_id"],
+        "status": session_manifest["status"],
+        "static_target_affirmed": True,
+        "configuration": session_manifest["configuration"],
+        "pair_ids": session_manifest["pair_ids"],
+        "capture_rejection_summary": session_manifest["capture_rejection_summary"],
+        "session_manifest": session_manifest_file,
+        "created_utc": session_manifest["created_utc"],
+        "limitation": session_manifest["limitation"],
+    })
+
+
+def _validate_pair_file_evidence(output_root: Path, session_id: str, pair: dict[str, Any]) -> None:
+    for camera in ("ar0234", "ov9281_combined", "ov9281_physical_left"):
+        file_record = pair.get(camera, {}).get("file") if isinstance(pair.get(camera), dict) else None
+        if not isinstance(file_record, dict):
+            raise StaticExtrinsicError("session pair file evidence is incomplete")
+        filename, expected_sha256 = file_record.get("filename"), file_record.get("sha256")
+        prefix = f"sessions/{session_id}/"
+        if not isinstance(filename, str) or not filename.startswith(prefix) or not isinstance(expected_sha256, str):
+            raise StaticExtrinsicError("session pair file provenance is invalid")
+        path = output_root / filename
+        if not path.is_file() or _sha256(path) != expected_sha256:
+            raise StaticExtrinsicError("session raw pair file is absent or checksum differs")
+
+
+def _validate_dataset_session_evidence(output_root: Path, dataset: dict[str, Any]) -> None:
+    sessions_root = output_root / "sessions"
+    if not sessions_root.is_dir():
+        raise StaticExtrinsicError("dataset manifest lacks sessions directory")
+    declared_ids: set[str] = set()
+    expected_pairs: list[dict[str, Any]] = []
+    for entry in dataset["sessions"]:
+        if not isinstance(entry, dict):
+            raise StaticExtrinsicError("dataset session entry is invalid")
+        session_id = entry.get("session_id")
+        _validate_session_id(session_id)
+        if session_id in declared_ids:
+            raise StaticExtrinsicError("dataset manifest contains duplicate session_id")
+        declared_ids.add(session_id)
+        reference = entry.get("session_manifest")
+        if not isinstance(reference, dict) or reference.get("filename") != f"sessions/{session_id}/session_manifest.json":
+            raise StaticExtrinsicError("dataset session manifest reference is incomplete")
+        session_manifest_path = output_root / reference["filename"]
+        if not session_manifest_path.is_file():
+            raise StaticExtrinsicError("dataset session manifest is absent")
+        payload = session_manifest_path.read_bytes()
+        if reference.get("sha256") != hashlib.sha256(payload).hexdigest():
+            raise StaticExtrinsicError("dataset session manifest checksum differs")
+        try:
+            session_manifest = json.loads(payload)
+        except json.JSONDecodeError as error:
+            raise StaticExtrinsicError("dataset session manifest is invalid JSON") from error
+        if (
+            session_manifest.get("schema_version") != SESSION_SCHEMA_VERSION
+            or session_manifest.get("session_id") != session_id
+            or session_manifest.get("status") != "STATIC_ONLY_CAPTURED"
+            or session_manifest.get("static_target_affirmed") is not True
+            or not isinstance(session_manifest.get("pairs"), list)
+            or any(not isinstance(row, dict) for row in session_manifest["pairs"])
+            or session_manifest.get("pair_ids") != [row.get("pair_id") for row in session_manifest["pairs"]]
+            or any(row.get("session_id") != session_id for row in session_manifest["pairs"])
+        ):
+            raise StaticExtrinsicError("dataset session manifest is incomplete or inconsistent")
+        for pair in session_manifest["pairs"]:
+            if not isinstance(pair, dict):
+                raise StaticExtrinsicError("dataset session pair is invalid")
+            _validate_pair_file_evidence(output_root, session_id, pair)
+        if _configuration_identity(session_manifest.get("configuration")) != _configuration_identity(dataset["configuration"]):
+            raise StaticExtrinsicError("dataset session provenance differs from dataset provenance")
+        if (
+            entry.get("schema_version") != SESSION_SCHEMA_VERSION
+            or entry.get("status") != session_manifest["status"]
+            or entry.get("static_target_affirmed") is not True
+            or _configuration_identity(entry.get("configuration")) != _configuration_identity(session_manifest["configuration"])
+            or entry.get("pair_ids") != session_manifest["pair_ids"]
+            or entry.get("capture_rejection_summary") != session_manifest["capture_rejection_summary"]
+            or not (output_root / session_manifest["capture_rejection_summary"]).is_file()
+        ):
+            raise StaticExtrinsicError("dataset session entry differs from immutable session manifest")
+        expected_pairs.extend(session_manifest["pairs"])
+    actual_session_dirs = {path.name for path in sessions_root.iterdir() if path.is_dir()}
+    if actual_session_dirs != declared_ids:
+        raise StaticExtrinsicError("dataset sessions directory and manifest are incomplete or inconsistent")
+    if dataset["pairs"] != expected_pairs:
+        raise StaticExtrinsicError("dataset flat pairs differ from immutable session manifests")
+
+
+def _persist_successful_session(
+    *,
+    output_root: Path,
+    session_root: Path,
+    existing_dataset: dict[str, Any] | None,
+    configuration: dict[str, Any],
+    session_id: str,
+    pairs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    session_manifest = _session_manifest_record(
+        session_id=session_id,
+        configuration=configuration,
+        pairs=pairs,
+    )
+    session_manifest_file = _write_session_manifest(session_root, session_manifest)
+    session = _session_entry(
+        session_manifest=session_manifest,
+        session_manifest_file=session_manifest_file,
+    )
+    dataset = existing_dataset if existing_dataset is not None else _new_dataset_manifest(configuration)
+    manifest = _append_session_to_dataset(dataset, configuration=configuration, session=session, pairs=pairs)
+    _write_json_replace(output_root / "capture_manifest.json", manifest)
+    return manifest
 
 
 def capture_static_pairs(*, output_root: Path, session_id: str, ar_intrinsic: Path, ov_calibration: Path, pair_count: int, static_target_affirmed: bool, ar_device: Path = AR_DEVICE, ov_device: Path = OV_DEVICE) -> dict[str, Any]:
@@ -695,27 +855,20 @@ def capture_static_pairs(*, output_root: Path, session_id: str, ar_intrinsic: Pa
             "reference_frames": {"ar0234": "ar0234_rgb_optical_frame", "ov9281_physical_left": "ov9281_physical_left_optical_frame"},
         }
         records.append(record)
-    session = {
-        "schema_version": SESSION_SCHEMA_VERSION,
-        "session_id": session_id,
-        "status": "STATIC_ONLY_CAPTURED",
-        "static_target_affirmed": True,
-        "configuration": configuration,
-        "pair_ids": [record["pair_id"] for record in records],
-        "capture_rejection_summary": f"sessions/{session_id}/capture_rejection_summary.json",
-        "created_utc": datetime.now(timezone.utc).isoformat(),
-        "limitation": "Static target only. This session is not valid for dynamic scene pairing.",
-    }
-    dataset = existing_dataset if existing_dataset is not None else _new_dataset_manifest(configuration)
-    manifest = _append_session_to_dataset(dataset, configuration=configuration, session=session, pairs=records)
     _write_capture_summary(session_root, _capture_summary(
         result="STATIC_VALID_PAIRS_CAPTURED",
         configuration=configuration,
         counters=counters,
         preview_frames=preview_frames,
     ))
-    _write_json_replace(output_root / "capture_manifest.json", manifest)
-    return manifest
+    return _persist_successful_session(
+        output_root=output_root,
+        session_root=session_root,
+        existing_dataset=existing_dataset,
+        configuration=configuration,
+        session_id=session_id,
+        pairs=records,
+    )
 
 
 @dataclass(frozen=True)

@@ -14,3 +14,10 @@ AR0234 intrinsic остаётся candidate, пока для него не по�
 evidence. Hardware sync не доказан: static AR↔OV extrinsic разрешён только
 для неподвижной сцены; dynamic pairing по host timestamps по-прежнему
 запрещён.
+
+Предыдущие наборы `/tmp/sie_ar0234_ov9281_static_dataset_v*` недействительны
+из-за дефекта сохранения append-only dataset. Будущие raw evidence нужно
+сохранять только в постоянном каталоге
+`/home/stanislav/sie_rgb_stereo_fusion/sensor_sync_ar0234_ov9281/static_extrinsic_capture_v2`.
+Даже после нового capture любой extrinsic candidate остаётся
+`PROVISIONAL_DIAGNOSTIC_ONLY`.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 
 import cv2
@@ -17,7 +18,9 @@ from vision_core.ar0234_ov9281_static_extrinsic import (
     _append_session_to_dataset,
     _capture_counters,
     _classify_static_candidates,
+    _load_dataset_manifest,
     _new_dataset_manifest,
+    _persist_successful_session,
     _raise_insufficient_static_pairs,
     build_static_transform_record,
     object_points_mm,
@@ -49,6 +52,45 @@ def _session_with_pair(session_id: str) -> tuple[dict[str, object], list[dict[st
     return (
         {"schema_version": "sie.ar0234_ov9281_static_capture_session.v1", "session_id": session_id, "pair_ids": [pair_id]},
         pairs,
+    )
+
+
+def _persistent_pair(root, session_id: str, index: int) -> dict[str, object]:
+    pair_id = f"{session_id}__pair_{index:03d}"
+    files: dict[str, dict[str, object]] = {}
+    for section in ("ar0234", "ov9281_combined", "ov9281_physical_left"):
+        payload = f"{section}:{pair_id}".encode("ascii")
+        path = root / "sessions" / session_id / section / f"{pair_id}.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        files[section] = {
+            "file": {
+                "filename": f"sessions/{session_id}/{section}/{pair_id}.png",
+                "sha256": hashlib.sha256(payload).hexdigest(),
+            }
+        }
+    return {
+        "pair_id": pair_id,
+        "session_id": session_id,
+        "skew_ns": 1_000,
+        "ar0234": files["ar0234"],
+        "ov9281_combined": files["ov9281_combined"],
+        "ov9281_physical_left": files["ov9281_physical_left"],
+    }
+
+
+def _persist_test_session(root, session_id: str, existing_dataset=None):
+    session_root = root / "sessions" / session_id
+    session_root.mkdir(parents=True, exist_ok=False)
+    (session_root / "capture_rejection_summary.json").write_text("{}\n", encoding="utf-8")
+    pairs = [_persistent_pair(root, session_id, index) for index in range(3)]
+    return _persist_successful_session(
+        output_root=root,
+        session_root=session_root,
+        existing_dataset=existing_dataset,
+        configuration=_capture_configuration(),
+        session_id=session_id,
+        pairs=pairs,
     )
 
 
@@ -166,25 +208,20 @@ def test_insufficient_capture_writes_summary_before_raising(tmp_path):
     json.dumps(summary, allow_nan=False, sort_keys=True)
 
 
-def test_append_second_session_preserves_first_session_and_pairs():
-    configuration = _capture_configuration()
-    first_session, first_pairs = _session_with_pair("pose-a")
-    second_session, second_pairs = _session_with_pair("pose-b")
-    dataset = _append_session_to_dataset(
-        _new_dataset_manifest(configuration),
-        configuration=configuration,
-        session=first_session,
-        pairs=first_pairs,
-    )
-    dataset = _append_session_to_dataset(
-        dataset,
-        configuration=configuration,
-        session=second_session,
-        pairs=second_pairs,
-    )
+def test_append_second_session_preserves_first_directory_and_session_manifest_bytes(tmp_path):
+    root = tmp_path / "dataset"
+    root.mkdir()
+    dataset = _persist_test_session(root, "pose-a")
+    first_session_manifest = root / "sessions" / "pose-a" / "session_manifest.json"
+    first_bytes = first_session_manifest.read_bytes()
+
+    dataset = _persist_test_session(root, "pose-b", existing_dataset=dataset)
 
     assert [session["session_id"] for session in dataset["sessions"]] == ["pose-a", "pose-b"]
-    assert [pair["pair_id"] for pair in dataset["pairs"]] == ["pose-a__pair_000", "pose-b__pair_000"]
+    assert len(dataset["pairs"]) == 6
+    assert (root / "sessions" / "pose-a").is_dir()
+    assert first_session_manifest.read_bytes() == first_bytes
+    assert _load_dataset_manifest(root) == dataset
     json.dumps(dataset, allow_nan=False, sort_keys=True)
 
 
@@ -214,3 +251,15 @@ def test_mismatched_dataset_provenance_is_blocked():
             session=new_session,
             pairs=new_pairs,
         )
+
+
+def test_incomplete_dataset_root_blocks_without_deleting_evidence(tmp_path):
+    root = tmp_path / "dataset"
+    evidence = root / "sessions" / "pose-a" / "existing_raw.png"
+    evidence.parent.mkdir(parents=True)
+    evidence.write_bytes(b"preserve me")
+
+    with pytest.raises(StaticExtrinsicError, match="contains session evidence"):
+        _load_dataset_manifest(root)
+
+    assert evidence.read_bytes() == b"preserve me"
