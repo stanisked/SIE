@@ -24,7 +24,15 @@ evidence. Hardware sync не доказан: static AR↔OV extrinsic разре
 
 Persistent dataset
 `/home/stanislav/sie_rgb_stereo_fusion/sensor_sync_ar0234_ov9281/static_extrinsic_capture_v2`
-создан с девятью valid pairs из трёх sessions. Aggregate candidate использует
-все `9/9` pairs и имеет reprojection RMS `3.903 px`. До нового capture нужен
-offline audit исходных PNG, session consistency и corner-ordering hypotheses;
-candidate остаётся `PROVISIONAL_DIAGNOSTIC_ONLY`.
+сейчас содержит `12` valid pairs из четырёх sessions. Offline audit v2
+подтвердил raw integrity `12/12`, низкую camera-local PnP reprojection около
+`0.44 px` для AR0234 и `0.24 px` для physical-left OV9281, корректный
+`identity` corner order и ошибочный `reversal_180` около `210 px`. При этом
+cross-camera reprojection кандидата остаётся систематически высокой, около
+`4.70 px`.
+
+До нового capture или runtime-интеграции нужен отдельный forensic review
+формулы `T_ov_from_ar`, направления transform и различия raw physical-left и
+rectified-left frames. Такой review остаётся comparison-only: он не применяет
+новую трансформацию автоматически и не меняет статус кандидата
+`PROVISIONAL_DIAGNOSTIC_ONLY`.
