@@ -52,3 +52,9 @@ Offline validator проверяет новые raw кадры против су
 новая numeric acceptance policy. До отдельного evidence и review intrinsic V3
 остаётся candidate. AR↔OV extrinsic candidate также остаётся
 `PROVISIONAL_DIAGNOSTIC_ONLY`.
+
+Live preview coverage grid служит только positioning aid: он показывает
+текущий bin шахматной мишени до capture, но его frames не являются evidence,
+calibration pairs или screenshots и вообще не сохраняются. После визуального
+попадания в нужный bin immutable evidence по-прежнему собирается только
+отдельной capture CLI.
