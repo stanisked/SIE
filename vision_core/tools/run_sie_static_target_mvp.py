@@ -27,6 +27,12 @@ from vision_core.person_depth_fusion.live import LiveFusionError, build_live_run
 from vision_core.tools.prepare_ar0234_yaw_observations import load_optical_axis_cx  # noqa: E402
 
 
+DEFAULT_TEMPERATURE_DISABLED_POLICY = (
+    "vision_core/config/runtime/"
+    "stereo_calibration_v6_runtime_policy_v3_temperature_disabled_mvp.json"
+)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, required=True)
@@ -34,6 +40,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--project-root", type=Path, required=True)
     parser.add_argument("--ar-intrinsic", type=Path, required=True)
     parser.add_argument("--center-tolerance-px", type=float, required=True)
+    parser.add_argument(
+        "--stereo-policy",
+        type=Path,
+        default=PROJECT_ROOT / DEFAULT_TEMPERATURE_DISABLED_POLICY,
+        help="explicit supervised-MVP Stereo V6 policy; default disables the experimental temperature bridge",
+    )
     parser.add_argument("--person-threshold", type=float, choices=(0.4, 0.5), default=0.5)
     parser.add_argument("--execute", action="store_true", help="allow one confirmed bounded HTTP command")
     parser.add_argument("--base-url", help="explicit ESP32 http:// host, required with --execute")
@@ -92,7 +104,13 @@ def main() -> int:
                 print(json.dumps(_combined("BLOCKED_PREFLIGHT", "STATUS_UNAVAILABLE_BEFORE_OBSERVATION", supervision=None, bridge=None, executor=None, network=network), allow_nan=False, sort_keys=True))
                 return 0
             boot_session_id = initial_status["boot_session_id"]
-        runtime = build_live_runtime(model=args.model, reference=args.reference, project_root=args.project_root, person_threshold=args.person_threshold)
+        runtime = build_live_runtime(
+            model=args.model,
+            reference=args.reference,
+            project_root=args.project_root,
+            person_threshold=args.person_threshold,
+            stereo_policy_path=args.stereo_policy.resolve(),
+        )
         runtime.start()
         supervisor = MetricFirstTargetSupervisor(live_runtime=runtime, optical_axis_cx_px=load_optical_axis_cx(args.ar_intrinsic), center_tolerance_px=args.center_tolerance_px)
         cycles = [runtime.cycle(f"static-target-mvp-{index:06d}") for index in range(1, WINDOW_SIZE + 1)]

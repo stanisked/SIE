@@ -70,6 +70,22 @@ Keep future updates evidence-based:
 - update this handoff whenever activation state, validated range, hardware mapping, calibration, runtime guard, or safe continuation order changes;
 - create a new versioned artifact instead of mutating a frozen contract or concealing a behavior change behind the old name.
 
+### 0.5 Supervised MVP exception: temperature monitoring disabled
+
+`stereo_calibration_v6_runtime_policy_v3_temperature_disabled_mvp.json` is a
+separate, explicit supervised-MVP policy. It exists because the DS18B20 bridge
+was an experiment to observe temperature influence, not a required component
+of the current supervised demonstration. With this policy the runtime does not
+start a bridge and does not read `/tmp/sie_h05b_temperature_state.json`; its
+guard emits `temperature_monitoring.status=DISABLED` and a machine-readable
+reason instead of fabricating a temperature value.
+
+This exception does not replace or modify V2. V2 remains
+`ACTIVE_CONDITIONAL` with its recorded temperature envelope and remains the
+only policy carrying that temperature applicability claim. V3 is limited to a
+supervised experimental MVP and is not evidence of thermal validation,
+calibration expansion, or operational/autonomous approval.
+
 ## 1. Outcome
 
 `stereo_calibration_v6` passed fresh checkerboard rectification and physical depth checks within the currently approved range. The guarded V6 runtime was created and launched successfully.

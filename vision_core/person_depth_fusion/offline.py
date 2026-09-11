@@ -87,6 +87,7 @@ class FusionCalibration:
     stereo_policy_path: Path
     stereo_policy_id: str
     stereo_depth_range_m: tuple[float, float]
+    temperature_monitoring_mode: str = "REQUIRED"
 
 
 @dataclass(frozen=True)
@@ -195,7 +196,10 @@ def load_fusion_calibration(*, candidate_path: Path = EXTRINSIC_CANDIDATE_PATH, 
         raise PersonDepthFusionError("cannot load Stereo V6 P1") from error
     if p1.shape != (3, 4) or not np.isfinite(p1).all():
         raise PersonDepthFusionError("Stereo V6 P1 is invalid")
-    return FusionCalibration(candidate_path, expected_candidate_sha256, validation_path, expected_validation_sha256, str(candidate["calibration_id"]), raw_from_ar_m, ar_from_rectified_left_m, ar.camera_matrix, ar.distortion, p1, stereo_calibration_path, STEREO_CALIBRATION_SHA256, stereo_policy_path, str(policy["policy_id"]), (lo, hi))
+    temperature_monitoring_mode = str(policy.get("temperature_monitoring_mode", "REQUIRED"))
+    if temperature_monitoring_mode not in {"REQUIRED", "DISABLED_EXPERIMENTAL_MVP"}:
+        raise PersonDepthFusionError("Stereo V6 temperature monitoring mode is invalid")
+    return FusionCalibration(candidate_path, expected_candidate_sha256, validation_path, expected_validation_sha256, str(candidate["calibration_id"]), raw_from_ar_m, ar_from_rectified_left_m, ar.camera_matrix, ar.distortion, p1, stereo_calibration_path, STEREO_CALIBRATION_SHA256, stereo_policy_path, str(policy["policy_id"]), (lo, hi), temperature_monitoring_mode)
 
 
 class _OfflinePlaybackGuard:

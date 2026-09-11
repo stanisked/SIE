@@ -113,6 +113,7 @@ class LivePersonDepthFusion:
             "schema_version": "sie.person_depth_live_cycle.v1", "cycle_id": cycle_id,
             "captured_at_utc": captured.astimezone(timezone.utc).isoformat(), "pair_skew_s": skew,
             "temperature_eligibility_evaluated": False, "person_threshold": self.person_threshold,
+            "temperature_monitoring": _temperature_monitoring_payload(self.fusion.calibration),
         }
         if not np.isfinite(skew) or skew > MAX_PAIR_SKEW_S:
             base.update(status="PAIR_SKEW_TOO_HIGH", person={"status": None, "confidence": None, "bbox_xyxy_px": None}, measurement=None,
@@ -139,14 +140,31 @@ class LivePersonDepthFusion:
         return base
 
 
+def _temperature_monitoring_payload(calibration: FusionCalibration) -> dict[str, str | None]:
+    if calibration.temperature_monitoring_mode == "DISABLED_EXPERIMENTAL_MVP":
+        return {
+            "status": "DISABLED",
+            "reason": "temperature_monitoring_disabled_for_supervised_mvp",
+        }
+    return {"status": "REQUIRED", "reason": None}
+
+
 def build_live_runtime(*, model: Path, reference: Path, project_root: Path, person_threshold: float = .5,
                        detector_factory: Callable[[Path, Path, float], Any] = MPPersonDetOpenCV,
                        calibration_loader: Callable[[], FusionCalibration] = load_fusion_calibration,
                        kernel_factory: Callable[[FusionCalibration], Any] | None = None,
-                       camera_factory: Callable[[Path, Any], Any] = CheckedCamera) -> LivePersonDepthFusion:
+                       camera_factory: Callable[[Path, Any], Any] = CheckedCamera,
+                       stereo_policy_path: Path | None = None) -> LivePersonDepthFusion:
     if not model.is_absolute() or not reference.is_absolute() or not project_root.is_absolute():
         raise LiveFusionError("model, reference and project-root must be absolute paths")
-    calibration = calibration_loader()
+    if stereo_policy_path is not None:
+        if calibration_loader is not load_fusion_calibration:
+            raise LiveFusionError("custom calibration_loader cannot be combined with stereo_policy_path")
+        if not stereo_policy_path.is_absolute():
+            raise LiveFusionError("stereo_policy_path must be an absolute path")
+        calibration = load_fusion_calibration(stereo_policy_path=stereo_policy_path)
+    else:
+        calibration = calibration_loader()
     kernel = (kernel_factory or (lambda value: build_offline_stereo_kernel(value, project_root=project_root)))(calibration)
     detector = detector_factory(model, reference, person_threshold)
     return LivePersonDepthFusion(PersonDepthFusionOffline(PersonLocalizationPipeline(detector), kernel, calibration),

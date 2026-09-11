@@ -48,8 +48,10 @@ class CalibrationGuardError(RuntimeError):
 @dataclass(frozen=True)
 class TemperatureGateResult:
     checked_at_utc: str
-    state_age_s: float
-    temperatures_c: dict[str, float]
+    state_age_s: float | None
+    temperatures_c: dict[str, float] | None
+    status: str = "REQUIRED_OK"
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -120,6 +122,7 @@ class StereoCalibrationGuard:
         self.policy_path = policy_path.resolve()
         self.now_unix_s = now_unix_s
         self.policy = load_json_object(self.policy_path, "runtime policy")
+        self.temperature_monitoring_mode = "REQUIRED"
         self.gating_channels: frozenset[str] = frozenset()
         self.observational_channels: frozenset[str] = frozenset()
         self._validate_policy()
@@ -134,8 +137,11 @@ class StereoCalibrationGuard:
             str(self.policy["calibration_path"]),
             "calibration",
         )
-        self.temperature_state_path = Path(
-            str(self.policy["temperature_state_file"])
+        temperature_state_file = self.policy.get("temperature_state_file")
+        self.temperature_state_path = (
+            Path(str(temperature_state_file))
+            if temperature_state_file is not None
+            else None
         )
         self.activation_record: dict[str, Any] | None = None
         self.envelope: dict[str, dict[str, float]] | None = None
@@ -165,6 +171,20 @@ class StereoCalibrationGuard:
             raise CalibrationGuardError(
                 "INVALID_POLICY", "required activation status must be ACTIVE_CONDITIONAL"
             )
+        mode = self.policy.get("temperature_monitoring_mode", "REQUIRED")
+        if mode not in {"REQUIRED", "DISABLED_EXPERIMENTAL_MVP"}:
+            raise CalibrationGuardError(
+                "INVALID_POLICY", "unsupported temperature_monitoring_mode"
+            )
+        self.temperature_monitoring_mode = mode
+        if mode == "DISABLED_EXPERIMENTAL_MVP":
+            if self.policy.get("temperature_monitoring_reason") != (
+                "temperature_bridge_experiment_disabled_for_supervised_mvp"
+            ):
+                raise CalibrationGuardError(
+                    "INVALID_POLICY", "explicit disabled-monitoring reason is required"
+                )
+            return
         maximum_age_s = float(self.policy.get("maximum_temperature_state_age_s", 0))
         if not math.isfinite(maximum_age_s) or maximum_age_s <= 0:
             raise CalibrationGuardError(
@@ -252,6 +272,9 @@ class StereoCalibrationGuard:
             raise CalibrationGuardError(
                 "CAPTURE_MODE_MISMATCH", "policy and activation record differ"
             )
+        if self.temperature_monitoring_mode == "DISABLED_EXPERIMENTAL_MVP":
+            self.activation_record = record
+            return record
         if set(record.get("temperature_gating_channels", [])) != set(
             self.gating_channels
         ):
@@ -296,9 +319,25 @@ class StereoCalibrationGuard:
         return record
 
     def check_before_measurement(self) -> TemperatureGateResult:
-        if self.activation_record is None or self.envelope is None:
+        if self.activation_record is None:
             raise CalibrationGuardError(
                 "GUARD_NOT_STARTED", "startup() must succeed before measurement checks"
+            )
+        if self.temperature_monitoring_mode == "DISABLED_EXPERIMENTAL_MVP":
+            return TemperatureGateResult(
+                checked_at_utc=datetime.now(timezone.utc).isoformat(),
+                state_age_s=None,
+                temperatures_c=None,
+                status="DISABLED",
+                reason="temperature_monitoring_disabled_for_supervised_mvp",
+            )
+        if self.envelope is None:
+            raise CalibrationGuardError(
+                "GUARD_NOT_STARTED", "startup() must succeed before measurement checks"
+            )
+        if self.temperature_state_path is None:
+            raise CalibrationGuardError(
+                "INVALID_POLICY", "temperature_state_file is required"
             )
         state = load_json_object(self.temperature_state_path, "temperature state")
         if state.get("status") != "OK":

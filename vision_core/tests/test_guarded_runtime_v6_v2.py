@@ -132,6 +132,63 @@ def test_num_disparities_is_required_keyword_only() -> None:
     assert parameter.default is inspect.Parameter.empty
 
 
+def test_temperature_disabled_mvp_never_reads_a_state_file(tmp_path) -> None:
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "sie_stereo_runtime_policy_v1",
+                "status": "ENABLED",
+                "required_activation_status": "ACTIVE_CONDITIONAL",
+                "temperature_monitoring_mode": "DISABLED_EXPERIMENTAL_MVP",
+                "temperature_monitoring_reason": "temperature_bridge_experiment_disabled_for_supervised_mvp",
+                "activation_record_path": "unused_activation.json",
+                "calibration_path": "unused_calibration.npz",
+            }
+        ),
+        encoding="utf-8",
+    )
+    value = StereoCalibrationGuard(policy_path, project_root=tmp_path)
+    value.activation_record = {}
+
+    result = value.check_before_measurement()
+
+    assert result.status == "DISABLED"
+    assert result.reason == "temperature_monitoring_disabled_for_supervised_mvp"
+    assert result.state_age_s is None
+    assert result.temperatures_c is None
+
+
+def test_required_temperature_mode_still_fails_closed_without_state_file(tmp_path) -> None:
+    policy_path = tmp_path / "policy.json"
+    policy_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "sie_stereo_runtime_policy_v1",
+                "status": "ENABLED",
+                "required_activation_status": "ACTIVE_CONDITIONAL",
+                "maximum_temperature_state_age_s": 5.0,
+                "expected_rom_mapping": ROM_MAPPING,
+                "temperature_gating_channels": ["camera_left", "camera_right"],
+                "temperature_observational_channels": ["ambient"],
+                "activation_record_path": "unused_activation.json",
+                "calibration_path": "unused_calibration.npz",
+                "temperature_state_file": str(tmp_path / "missing.json"),
+            }
+        ),
+        encoding="utf-8",
+    )
+    value = StereoCalibrationGuard(policy_path, project_root=tmp_path)
+    value.activation_record = {}
+    value.envelope = {
+        "camera_left": {"minimum_c": 30.0, "maximum_c": 32.375},
+        "camera_right": {"minimum_c": 31.125, "maximum_c": 33.9375},
+    }
+
+    with pytest.raises(Exception, match="MISSING_FILE"):
+        value.check_before_measurement()
+
+
 def test_missing_num_disparities_is_rejected() -> None:
     with pytest.raises(TypeError, match="num_disparities"):
         runtime_v2.GuardedStereoDepthProcessor(

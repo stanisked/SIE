@@ -483,3 +483,18 @@ Actuator capability: `adapter_id=esp32_zk5ad_sgm37_520`,
 Текущая платформа заблокировала выполнение из-за qualification конкретного
 actuator adapter. Это не блокирует perception, measurement или decision.
 Run не является доказательством qualified execution или физического движения.
+
+## Stereo V6: temperature bridge отключён для supervised MVP
+
+Temperature bridge для OV9281 был экспериментом по наблюдению влияния
+температуры. Для отдельного supervised MVP добавлен явный policy v3
+`stereo_calibration_v6_runtime_policy_v3_temperature_disabled_mvp.json`.
+В этом режиме bridge не запускается, `/tmp/sie_h05b_temperature_state.json` не
+читается, а guard возвращает `temperature_monitoring.status=DISABLED` с
+причиной `temperature_monitoring_disabled_for_supervised_mvp`.
+
+Это не меняет и не заменяет `ACTIVE_CONDITIONAL` policy v2: его temperature
+envelope, state-file gate и существующая activation evidence остаются
+нетронутыми. Новый режим разрешён только для supervised experimental MVP; он
+не является новой валидацией температуры, расширением диапазона глубины или
+операционным разрешением автономного движения.
