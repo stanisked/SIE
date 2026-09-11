@@ -506,3 +506,12 @@ MP PersonDet ONNX содержит трёхвходовой `Clip`; систем
 `/home/stanislav/dev_ws/runtime_envs/sie_mp_persondet_cv414/bin/python` с
 OpenCV `4.14`. Detector теперь fail-closed выдаёт короткую понятную ошибку до
 ONNX importer, если OpenCV старее `4.14`.
+
+### Capability gate не обходит supervised executor
+
+Live run от `2026-09-11` подтвердил стабильный metric `ADVANCE` на расстоянии
+около `2.37 m`, но `bounded_forward_0.10_m` для
+`esp32_zk5ad_sgm37_520` остаётся `NOT_QUALIFIED`. Исправлен outer
+`run_sie_static_target_mvp.py`: такой результат теперь терминально блокирует
+создание bridge plan, получение boot session и любой HTTP путь. Это не меняет
+perception, metric decision или qualification record.

@@ -23,6 +23,7 @@ from vision_core.person_approach.metric_first_target_supervisor import (  # noqa
     MetricFirstTargetSupervisor,
     WINDOW_SIZE,
 )
+from sie_core.actuator_capability_gate import RESULT_ALLOWED  # noqa: E402
 from vision_core.person_depth_fusion.live import LiveFusionError, build_live_runtime  # noqa: E402
 from vision_core.tools.prepare_ar0234_yaw_observations import load_optical_axis_cx  # noqa: E402
 
@@ -64,7 +65,14 @@ def bridge_envelope(
     if type(supervision) is not dict or type(cycles) is not list:
         return None
     decision = supervision.get("metric_decision")
-    if type(decision) is not dict or decision.get("status") != "ADVANCE":
+    capability_gate = supervision.get("actuator_capability_gate")
+    if (
+        supervision.get("stage") != "AWAIT_OPERATOR_ADVANCE_AND_REOBSERVATION"
+        or type(decision) is not dict
+        or decision.get("status") != "ADVANCE"
+        or type(capability_gate) is not dict
+        or capability_gate.get("result") != RESULT_ALLOWED
+    ):
         return None
     return {
         "decision": decision,
@@ -72,6 +80,22 @@ def bridge_envelope(
         "boot_session_id": boot_session_id,
         "previous_terminal_motion_outcome": None,
     }
+
+
+def execution_block_result(supervision: object) -> tuple[str, str | None] | None:
+    """Make an existing capability block terminal before session/HTTP handling."""
+    if type(supervision) is not dict:
+        return "BLOCKED_NO_EXECUTION_PLAN", "INVALID_SUPERVISION_RESULT"
+    if supervision.get("stage") == "AWAIT_OPERATOR_ADVANCE_AND_REOBSERVATION":
+        capability_gate = supervision.get("actuator_capability_gate")
+        if type(capability_gate) is dict and capability_gate.get("result") == RESULT_ALLOWED:
+            return None
+    result = supervision.get("result")
+    reason = supervision.get("reason")
+    return (
+        result if type(result) is str and result else "BLOCKED_NO_EXECUTION_PLAN",
+        reason if type(reason) is str else "SUPERVISION_DID_NOT_ALLOW_EXECUTION",
+    )
 
 
 def _combined(result: str, reason: str | None, *, supervision: dict[str, Any] | None, bridge: dict[str, Any] | None, executor: dict[str, Any] | None, network: bool) -> dict[str, Any]:
@@ -94,16 +118,6 @@ def main() -> int:
     try:
         if args.execute and not args.base_url:
             raise ExecutionContractError("--execute requires --base-url")
-        initial_status: dict[str, Any] | None = None
-        boot_session_id: str | None = None
-        network = False
-        if args.execute:
-            status_code, initial_status = fetch_bounded_status(base_url=args.base_url, timeout_s=args.timeout_s)
-            network = True
-            if status_code != 200 or type(initial_status.get("boot_session_id")) is not str:
-                print(json.dumps(_combined("BLOCKED_PREFLIGHT", "STATUS_UNAVAILABLE_BEFORE_OBSERVATION", supervision=None, bridge=None, executor=None, network=network), allow_nan=False, sort_keys=True))
-                return 0
-            boot_session_id = initial_status["boot_session_id"]
         runtime = build_live_runtime(
             model=args.model,
             reference=args.reference,
@@ -115,16 +129,30 @@ def main() -> int:
         supervisor = MetricFirstTargetSupervisor(live_runtime=runtime, optical_axis_cx_px=load_optical_axis_cx(args.ar_intrinsic), center_tolerance_px=args.center_tolerance_px)
         cycles = [runtime.cycle(f"static-target-mvp-{index:06d}") for index in range(1, WINDOW_SIZE + 1)]
         supervision = supervisor.process_shared_window(cycles)
+        blocked = execution_block_result(supervision)
         if not args.execute:
+            if blocked is not None:
+                result, reason = blocked
+                print(json.dumps(_combined(result, reason, supervision=supervision, bridge=None, executor=None, network=False), allow_nan=False, sort_keys=True))
+                return 0
             print(json.dumps(_combined("AWAIT_OPERATOR_EXECUTION", "RE-RUN_WITH_--execute_TO_FETCH_FRESH_SESSION_AND_ALLOW_ONE_COMMAND", supervision=supervision, bridge=None, executor=None, network=False), allow_nan=False, sort_keys=True))
             return 0
+        if blocked is not None:
+            result, reason = blocked
+            print(json.dumps(_combined(result, reason, supervision=supervision, bridge=None, executor=None, network=False), allow_nan=False, sort_keys=True))
+            return 0
+        status_code, initial_status = fetch_bounded_status(base_url=args.base_url, timeout_s=args.timeout_s)
+        if status_code != 200 or type(initial_status.get("boot_session_id")) is not str:
+            print(json.dumps(_combined("BLOCKED_PREFLIGHT", "STATUS_UNAVAILABLE_AFTER_SUPERVISION", supervision=supervision, bridge=None, executor=None, network=True), allow_nan=False, sort_keys=True))
+            return 0
+        boot_session_id = initial_status["boot_session_id"]
         envelope = bridge_envelope(supervision=supervision, cycles=cycles, boot_session_id=boot_session_id)
         if envelope is None:
-            print(json.dumps(_combined("NO_EXECUTION_PLAN", "METRIC_ADVANCE_NOT_AVAILABLE_FROM_THIS_SHARED_WINDOW", supervision=supervision, bridge=None, executor=None, network=network), allow_nan=False, sort_keys=True))
+            print(json.dumps(_combined("BLOCKED_NO_EXECUTION_PLAN", "SUPERVISION_DID_NOT_ALLOW_EXECUTION", supervision=supervision, bridge=None, executor=None, network=True), allow_nan=False, sort_keys=True))
             return 0
         plan = plan_bounded_command(envelope).to_dict()
         if plan.get("result") != "PLANNED_BOUNDED_COMMAND":
-            print(json.dumps(_combined("NO_EXECUTION_PLAN", plan.get("block_reason"), supervision=supervision, bridge=plan, executor=None, network=network), allow_nan=False, sort_keys=True))
+            print(json.dumps(_combined("BLOCKED_NO_EXECUTION_PLAN", plan.get("block_reason"), supervision=supervision, bridge=plan, executor=None, network=True), allow_nan=False, sort_keys=True))
             return 0
         command_id = plan["command_id"]
         confirmation = input(f"Подтверди ровно этот command_id для одного шага: {command_id}\n> ").strip()

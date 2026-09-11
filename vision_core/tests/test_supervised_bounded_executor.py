@@ -7,7 +7,10 @@ from sie_core.supervised_bounded_executor import (
     execute_one_supervised_command,
     validate_planned_bounded_command,
 )
-from vision_core.tools.run_sie_static_target_mvp import bridge_envelope
+from vision_core.tools.run_sie_static_target_mvp import (
+    bridge_envelope,
+    execution_block_result,
+)
 
 
 def plan() -> dict:
@@ -102,15 +105,32 @@ def test_executes_one_post_then_requires_reobservation_without_retry() -> None:
     assert result["reobserve_required"] is True
 
 
-def test_static_target_adapter_reuses_only_metric_advance_and_shared_window() -> None:
+def test_static_target_adapter_requires_allowed_capability_and_shared_window() -> None:
     cycles = [{"cycle_id": f"cycle-{index}"} for index in range(5)]
     decision = {"decision_id": "decision-1", "status": "ADVANCE"}
     envelope = bridge_envelope(
-        supervision={"metric_decision": decision}, cycles=cycles,
+        supervision={
+            "stage": "AWAIT_OPERATOR_ADVANCE_AND_REOBSERVATION",
+            "metric_decision": decision,
+            "actuator_capability_gate": {"result": "DRY_RUN_ACTION_ALLOWED"},
+        }, cycles=cycles,
         boot_session_id="0123456789ABCDEF",
     )
 
     assert envelope is not None
     assert envelope["decision"] is decision
     assert envelope["evidence_window"] is cycles
-    assert bridge_envelope(supervision={"metric_decision": {"status": "HOLD_TARGET_REACHED"}}, cycles=cycles, boot_session_id="0123456789ABCDEF") is None
+    blocked = {
+        "result": "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",
+        "stage": "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",
+        "reason": "forward profile is not qualified",
+        "metric_decision": decision,
+        "actuator_capability_gate": {
+            "result": "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",
+        },
+    }
+    assert bridge_envelope(supervision=blocked, cycles=cycles, boot_session_id="0123456789ABCDEF") is None
+    assert execution_block_result(blocked) == (
+        "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",
+        "forward profile is not qualified",
+    )
