@@ -498,3 +498,11 @@ envelope, state-file gate и существующая activation evidence ост
 нетронутыми. Новый режим разрешён только для supervised experimental MVP; он
 не является новой валидацией температуры, расширением диапазона глубины или
 операционным разрешением автономного движения.
+
+### MP-PersonDet runtime prerequisite
+
+MP PersonDet ONNX содержит трёхвходовой `Clip`; системный OpenCV `4.6.0` его
+не импортирует. Supervised MVP должен запускаться через проверенное окружение
+`/home/stanislav/dev_ws/runtime_envs/sie_mp_persondet_cv414/bin/python` с
+OpenCV `4.14`. Detector теперь fail-closed выдаёт короткую понятную ошибку до
+ONNX importer, если OpenCV старее `4.14`.

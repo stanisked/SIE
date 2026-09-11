@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import numpy as np, pytest
+from vision_core.person_localization import mp_persondet
 from vision_core.person_localization.mp_persondet import MPPersonDetOpenCV, MODEL_SHA256
 from vision_core.person_localization.pipeline import PersonLocalizationPipeline
 from vision_core.person_localization.models import BoundingBox, PersonDetection, PersonLocalizationStatus
@@ -16,6 +17,10 @@ def test_score_threshold_default_explicit_metadata_and_invalid_values(tmp_path):
  assert explicit.confidence_threshold==.4 and explicit.metadata()['inference_parameters']['score_threshold']==.4
  for invalid in (True,False,0.,1.1,float('nan'),float('inf'),'0.4'):
   with pytest.raises(ValueError,match='score_threshold'): MPPersonDetOpenCV(tmp_path/'missing.onnx',Path('/missing'),invalid)
+def test_legacy_opencv_fails_before_onnx_import(monkeypatch):
+ monkeypatch.setattr(mp_persondet.cv2,"__version__","4.6.0")
+ with pytest.raises(RuntimeError,match="OpenCV >=4.14"):
+  mp_persondet._require_supported_opencv_dnn()
 def test_pipeline_zero_one_many():
  class D:
   def __init__(self,x): self.artifact=artifact(); self.x=x

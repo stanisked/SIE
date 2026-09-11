@@ -8,6 +8,13 @@ from .detector import ARTIFACT_SCHEMA_VERSION, CONFIDENCE_SEMANTICS, OUTPUT_CONT
 from .models import BoundingBox, PersonDetection
 
 MODEL_SHA256="47fd5599d6fa17608f03e0eb0ae230baa6e597d7e8a2c8199fe00abea55a701f"
+MINIMUM_OPENCV_DNN_VERSION=(4,14)
+def _require_supported_opencv_dnn() -> None:
+ parts=str(cv2.__version__).split(".")
+ try: version=tuple(int(value) for value in parts[:2])
+ except ValueError as error: raise RuntimeError(f"unsupported OpenCV version format: {cv2.__version__!r}") from error
+ if len(version)!=2 or version<MINIMUM_OPENCV_DNN_VERSION:
+  raise RuntimeError("MP-PersonDet ONNX requires OpenCV >=4.14 for three-input Clip; current OpenCV is "+str(cv2.__version__)+". Use the validated OpenCV 4.14 runtime environment.")
 def _score_threshold(value):
  if type(value) not in (int,float) or not math.isfinite(value) or not 0 < value <= 1: raise ValueError("score_threshold must be a finite int/float in (0, 1]")
  return float(value)
@@ -36,6 +43,7 @@ class MPPersonDetOpenCV:
   self.score_threshold=_score_threshold(score_threshold)
   data=model.read_bytes()
   if hashlib.sha256(data).hexdigest()!=MODEL_SHA256: raise ValueError("MODEL_SHA256_MISMATCH")
+  _require_supported_opencv_dnn()
   self.artifact=artifact(self.score_threshold); self._net=cv2.dnn.readNetFromONNX(np.frombuffer(data,np.uint8)); self._net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV); self._net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU); self._anchors=_anchors(reference)
  def detect(self, frame_bgr:np.ndarray):
   h,w=frame_bgr.shape[:2]; ratio=min(224/h,224/w); rh,rw=int(h*ratio),int(w*ratio); rgb=(cv2.cvtColor(frame_bgr,cv2.COLOR_BGR2RGB).astype(np.float32)/255-.5)*2; rgb=cv2.resize(rgb,(rw,rh)); top,left=(224-rh)//2,(224-rw)//2; padded=cv2.copyMakeBorder(rgb,top,224-rh-top,left,224-rw-left,cv2.BORDER_CONSTANT,value=(0,0,0)); self._net.setInput(np.transpose(padded,(2,0,1))[None].astype(np.float32)); boxes,logits=self._net.forward(["Identity:0","Identity_1:0"])
