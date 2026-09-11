@@ -583,3 +583,28 @@ references остаются внешними и неизменными: AR0234 i
 Следующий шаг: выполнить новое observation после этого действия и прогнать
 следующие decision cycle. Autonomous loop, retries, correction movement и
 forward executor approval из этого единичного результата не следуют.
+
+## Close-range AR0234 visual locator
+
+Текущий MP-PersonDet остаётся source adapter для существующего full-body
+person-depth pipeline. На близкой дистанции обрезанный силуэт может растянуть
+его full-body bbox на фон и исказить `center_x`, поэтому он не используется
+как единственный источник будущего close-range yaw alignment.
+
+Локальный audit без загрузок подтвердил validated OpenCV `4.14` runtime и его
+bundled модели `haarcascade_frontalface_default.xml`, `haarcascade_upperbody.xml`
+и `haarcascade_fullbody.xml`. Для отдельного close-range locator выбран
+`haarcascade_frontalface_default.xml`: это самый простой уже локальный
+face detector без ONNX/DNN зависимости. Он выдаёт JSON-safe observation с
+`SINGLE_TARGET`, `NO_TARGET` или `MULTIPLE_TARGETS`, `center_x_px`, bbox,
+uncalibrated classifier confidence, `reference_frame=ar0234_image_frame` и
+`units=px`; raw frames/pixels в record не входят.
+
+`run_ar0234_close_range_locator_preview.py` использует только approved
+`AR0234_BY_ID` path и проверенный `1920x1200`, `30 FPS`, `MJPG`, buffer `1`
+capture adapter. Preview рисует overlay на копии frame и ничего не сохраняет.
+Он является positioning/observation aid, не заменяет person-depth pipeline,
+не создаёт yaw plan и не включает HTTP, ESP32, turn или forward motion.
+Его physical accuracy и устойчивость к частично видимому лицу ещё не
+подтверждены: до подключения к temporal yaw planner нужен отдельный visual
+observation gate без движения.
