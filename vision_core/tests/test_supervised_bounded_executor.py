@@ -8,6 +8,7 @@ from sie_core.supervised_bounded_executor import (
     validate_planned_bounded_command,
 )
 from vision_core.tools.run_sie_static_target_mvp import (
+    authorize_generated_demo_plan,
     bridge_envelope,
     execution_block_result,
     supervised_demo_override_allowed,
@@ -142,7 +143,6 @@ def test_supervised_demo_override_allows_only_current_not_qualified_forward() ->
         execute = True
         authorization_mode = "SUPERVISED_EXPERIMENTAL_TRIAL"
         experimental_reason = "one supervised demo step"
-        confirm_command_id = "pa-supervised-mvp-001"
 
     cycles = [{"cycle_id": f"cycle-{index}"} for index in range(5)]
     decision = {"decision_id": "decision-1", "status": "ADVANCE"}
@@ -172,3 +172,17 @@ def test_supervised_demo_override_allows_only_current_not_qualified_forward() ->
 
     blocked["planned_dry_run"]["endpoint"] = "/turn-left"
     assert not supervised_demo_override_allowed(args, blocked)
+
+
+def test_generated_command_id_is_confirmed_in_process_without_manual_session_or_hash() -> None:
+    prompts: list[str] = []
+
+    authorization = authorize_generated_demo_plan(
+        plan=plan(),
+        experimental_reason="one supervised demo step",
+        prompt=lambda message: prompts.append(message) or "pa-supervised-mvp-001",
+    )
+
+    assert "pa-supervised-mvp-001" in prompts[0]
+    assert authorization["confirmed_command_id"] == "pa-supervised-mvp-001"
+    assert authorization["automatic_capability_qualification_changed"] is False

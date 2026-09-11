@@ -8,8 +8,10 @@ depth, decision или planning заново: входом служит толь
 `PLANNED_BOUNDED_COMMAND` из existing bridge.
 
 - по умолчанию CLI печатает `AWAIT_OPERATOR_CONFIRMATION` и не открывает сеть;
-- режим `--execute` требует explicit `http://` адрес ESP32 и точный
-  `--confirm-command-id`, совпадающий с планом;
+- режим `--execute` требует explicit `http://` адрес ESP32,
+  `SUPERVISED_EXPERIMENTAL_TRIAL` и непустую причину; после fresh window
+  runner сам получает session, печатает generated `command_id` и ждёт его
+  точный ввод в том же процессе;
 - executor делает один `GET /status`, проверяет `READY`, отсутствие latch и
   совпадение fresh `boot_session_id`, затем отправляет ровно один `POST`;
 - после принятия команды он читает terminal status и всегда выдаёт
@@ -521,8 +523,10 @@ perception, metric decision или qualification record.
 `bounded_forward_0.10_m` остаётся `NOT_QUALIFIED` для автономной работы на
 `esp32_zk5ad_sgm37_520`. Для одной демонстрационной петли разрешён только
 явный `SUPERVISED_DEMO_ONE_STEP`: `--execute`,
-`--authorization-mode SUPERVISED_EXPERIMENTAL_TRIAL`, непустая причина и
-точный `--confirm-command-id`. Исключение допускает только `POST
-/move-forward` с `distance_m=0.10` и только для текущего capability profile.
+`--authorization-mode SUPERVISED_EXPERIMENTAL_TRIAL` и непустая причина.
+После fresh observation runner сам читает текущий `/status`, строит plan,
+выводит generated `command_id` и ждёт его точный ввод в том же процессе.
+Исключение допускает только `POST /move-forward` с `distance_m=0.10` и только
+для текущего capability profile.
 Оно не изменяет qualification status, не создаёт retry/correction command и
 после terminal state требует re-observation. Это не operational approval.

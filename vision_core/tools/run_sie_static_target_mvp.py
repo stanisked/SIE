@@ -55,7 +55,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--base-url", help="explicit ESP32 http:// host, required with --execute")
     parser.add_argument("--authorization-mode", choices=("QUALIFIED", "SUPERVISED_EXPERIMENTAL_TRIAL"), default="QUALIFIED")
     parser.add_argument("--experimental-reason")
-    parser.add_argument("--confirm-command-id", help="exact command_id shown by a prior supervised planning record")
     parser.add_argument("--timeout-s", type=float, default=2.0)
     parser.add_argument("--poll-interval-s", type=float, default=0.2)
     parser.add_argument("--terminal-timeout-s", type=float, default=8.0)
@@ -93,8 +92,6 @@ def supervised_demo_override_allowed(args: argparse.Namespace, supervision: obje
         and args.authorization_mode == "SUPERVISED_EXPERIMENTAL_TRIAL"
         and type(args.experimental_reason) is str
         and bool(args.experimental_reason.strip())
-        and type(args.confirm_command_id) is str
-        and bool(args.confirm_command_id.strip())
         and _current_not_qualified_forward_demo(supervision)
     )
 
@@ -146,6 +143,31 @@ def execution_block_result(
     )
 
 
+def authorize_generated_demo_plan(
+    *, plan: object, experimental_reason: object, prompt: Any = input,
+) -> dict[str, Any]:
+    """Show the fresh bridge ID and accept only an exact local confirmation."""
+    if type(plan) is not dict:
+        raise ExecutionContractError("generated bridge plan has no command_id")
+    query = plan.get("query")
+    query_command_id = query.get("command_id") if type(query) is dict else None
+    command_id = plan.get("command_id", query_command_id)
+    if type(command_id) is not str or not command_id:
+        raise ExecutionContractError("generated bridge plan has no command_id")
+    if query_command_id is not None and query_command_id != command_id:
+        raise ExecutionContractError("generated bridge plan command_id representations differ")
+    confirmation = prompt(
+        "Подтверди ровно этот command_id для одного supervised demo шага: "
+        f"{command_id}\n> "
+    ).strip()
+    return authorize_operator_trial(
+        planned_command=plan,
+        confirmation_command_id=confirmation,
+        authorization_mode="SUPERVISED_EXPERIMENTAL_TRIAL",
+        experimental_reason=experimental_reason,
+    )
+
+
 def _combined(result: str, reason: str | None, *, supervision: dict[str, Any] | None, bridge: dict[str, Any] | None, executor: dict[str, Any] | None, network: bool, supervised_demo_override: bool = False) -> dict[str, Any]:
     return {
         "schema_version": "sie.static_target_supervised_mvp.v1",
@@ -173,10 +195,8 @@ def main() -> int:
             args.authorization_mode != "SUPERVISED_EXPERIMENTAL_TRIAL"
             or type(args.experimental_reason) is not str
             or not args.experimental_reason.strip()
-            or type(args.confirm_command_id) is not str
-            or not args.confirm_command_id.strip()
         ):
-            raise ExecutionContractError("--execute requires SUPERVISED_EXPERIMENTAL_TRIAL, non-empty --experimental-reason and --confirm-command-id")
+            raise ExecutionContractError("--execute requires SUPERVISED_EXPERIMENTAL_TRIAL and non-empty --experimental-reason")
         runtime = build_live_runtime(
             model=args.model,
             reference=args.reference,
@@ -221,7 +241,9 @@ def main() -> int:
         if plan.get("result") != "PLANNED_BOUNDED_COMMAND":
             print(json.dumps(_combined("BLOCKED_NO_EXECUTION_PLAN", plan.get("block_reason"), supervision=supervision, bridge=plan, executor=None, network=True), allow_nan=False, sort_keys=True))
             return 0
-        authorization = authorize_operator_trial(planned_command=plan, confirmation_command_id=args.confirm_command_id, authorization_mode=args.authorization_mode, experimental_reason=args.experimental_reason)
+        authorization = authorize_generated_demo_plan(
+            plan=plan, experimental_reason=args.experimental_reason,
+        )
         executor = execute_one_supervised_command(planned_command=plan, authorization=authorization, base_url=args.base_url, timeout_s=args.timeout_s, poll_interval_s=args.poll_interval_s, terminal_timeout_s=args.terminal_timeout_s)
         print(json.dumps(_combined(executor["result"], executor.get("reason"), supervision=supervision, bridge=plan, executor=executor, network=True, supervised_demo_override=demo_override), allow_nan=False, sort_keys=True))
     except (ExecutionContractError, LiveFusionError, ValueError, RuntimeError) as error:
