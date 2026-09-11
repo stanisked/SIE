@@ -14,9 +14,12 @@ depth, decision или planning заново: входом служит толь
   точный ввод в том же процессе;
 - executor делает один `GET /status`, проверяет `READY`, отсутствие latch и
   совпадение fresh `boot_session_id`, затем отправляет ровно один `POST`;
-- после принятия команды он читает terminal status и всегда выдаёт
-  `AWAIT_REOBSERVATION`; retries, correction commands, `/stop` и `/ack-fault`
-  не вызываются автоматически;
+- после принятия команды он до общего deadline повторяет только read-only
+  `GET /status`: timeout, transport error, non-200 или временно невалидный
+  ответ не создают второй `POST`; terminal state даёт
+  `AWAIT_REOBSERVATION`, а deadline без terminal record даёт
+  `TERMINAL_STATUS_UNKNOWN`; retries команд, correction commands, `/stop` и
+  `/ack-fault` не вызываются автоматически;
 - `SUPERVISED_EXPERIMENTAL_TRIAL` является явно записанным операторским
   разрешением на один trial. Оно не меняет `NOT_QUALIFIED` capability profile и
   не делает adapter автоматически qualified.

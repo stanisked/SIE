@@ -271,19 +271,33 @@ def execute_one_supervised_command(
 
     deadline = monotonic() + terminal_timeout_s
     terminal: dict[str, Any] | None = None
-    while monotonic() <= deadline:
-        sleep(poll_interval_s)
+    last_status: dict[str, Any] | None = None
+    last_read_reason = "TERMINAL_STATUS_DEADLINE_EXPIRED"
+    while monotonic() < deadline:
+        remaining_s = deadline - monotonic()
+        sleep(min(poll_interval_s, remaining_s))
+        if monotonic() > deadline:
+            break
         try:
             status_code, status = fetch_bounded_status(base_url=base_url, request=request, timeout_s=timeout_s)
-        except ExecutionContractError as error:
-            return _record(result="TERMINAL_STATUS_UNKNOWN", reason=str(error), planned_command=command, authorization=auth, preflight_status=preflight, request_response=response, network_performed=True, motor_command_performed=True)
+        except (ExecutionContractError, URLError, OSError, ValueError, TypeError) as error:
+            # The accepted command may complete while a single read fails.
+            # Continue with GET only; this loop never repeats the POST.
+            last_read_reason = f"STATUS_READ_ERROR: {error}"
+            continue
+        if type(status_code) is not int or type(status) is not dict:
+            last_read_reason = "STATUS_RESPONSE_INVALID"
+            continue
+        last_status = status
         if status_code != 200:
-            return _record(result="TERMINAL_STATUS_UNKNOWN", reason=f"STATUS_HTTP_{status_code}", planned_command=command, authorization=auth, preflight_status=preflight, request_response=response, terminal_status=status, network_performed=True, motor_command_performed=True)
+            last_read_reason = f"STATUS_HTTP_{status_code}"
+            continue
         if status.get("boot_session_id") != command["query"]["boot_session_id"]:
-            return _record(result="TERMINAL_STATUS_UNKNOWN", reason="BOOT_SESSION_CHANGED_DURING_COMMAND", planned_command=command, authorization=auth, preflight_status=preflight, request_response=response, terminal_status=status, network_performed=True, motor_command_performed=True)
+            last_read_reason = "BOOT_SESSION_CHANGED_DURING_COMMAND"
+            continue
         if status.get("last_command_id") == command["query"]["command_id"] and status.get("last_command_state") in TERMINAL_COMMAND_STATES:
             terminal = status
             break
     if terminal is None:
-        return _record(result="TERMINAL_STATUS_TIMEOUT", reason="NO_RETRY_OR_CORRECTION_PERFORMED", planned_command=command, authorization=auth, preflight_status=preflight, request_response=response, network_performed=True, motor_command_performed=True)
+        return _record(result="TERMINAL_STATUS_UNKNOWN", reason=last_read_reason, planned_command=command, authorization=auth, preflight_status=preflight, request_response=response, terminal_status=last_status, network_performed=True, motor_command_performed=True)
     return _record(result="AWAIT_REOBSERVATION", reason=terminal.get("bounded_fault_reason"), planned_command=command, authorization=auth, preflight_status=preflight, request_response=response, terminal_status=terminal, network_performed=True, motor_command_performed=True)

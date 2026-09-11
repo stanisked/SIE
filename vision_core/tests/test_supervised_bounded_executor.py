@@ -107,6 +107,61 @@ def test_executes_one_post_then_requires_reobservation_without_retry() -> None:
     assert result["reobserve_required"] is True
 
 
+def test_terminal_read_recovers_from_one_transient_failure_without_reposting() -> None:
+    calls: list[tuple[str, str]] = []
+    responses: list[object] = [
+        (200, ready_status()),
+        (202, {"accepted": True, "command_id": "pa-supervised-mvp-001", "command_state": "ACCEPTED"}),
+        OSError("temporary status read failure"),
+        (200, ready_status(last_command_id="pa-supervised-mvp-001", last_command_state="PARTIAL_PROGRESS")),
+    ]
+
+    def request(method: str, url: str, timeout_s: float) -> tuple[int, dict]:
+        calls.append((method, url))
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response  # type: ignore[return-value]
+
+    result = execute_one_supervised_command(
+        planned_command=plan(), authorization=authorization("SUPERVISED_EXPERIMENTAL_TRIAL"),
+        base_url="http://127.0.0.1", request=request, sleep=lambda _: None,
+        monotonic=lambda: 0.0,
+    )
+
+    assert result["result"] == "AWAIT_REOBSERVATION"
+    assert [method for method, _ in calls] == ["GET", "POST", "GET", "GET"]
+    assert sum(method == "POST" for method, _ in calls) == 1
+    assert result["terminal_status"]["last_command_state"] == "PARTIAL_PROGRESS"
+
+
+def test_terminal_read_exhausts_deadline_without_reposting() -> None:
+    calls: list[tuple[str, str]] = []
+    clock = [0.0]
+
+    def request(method: str, url: str, timeout_s: float) -> tuple[int, dict]:
+        calls.append((method, url))
+        if method == "POST":
+            return 202, {"accepted": True, "command_id": "pa-supervised-mvp-001", "command_state": "ACCEPTED"}
+        if len(calls) == 1:
+            return 200, ready_status()
+        return 503, {"status": "temporary_unavailable"}
+
+    def sleep(seconds: float) -> None:
+        clock[0] += seconds
+
+    result = execute_one_supervised_command(
+        planned_command=plan(), authorization=authorization(), base_url="http://127.0.0.1",
+        request=request, sleep=sleep, monotonic=lambda: clock[0],
+        poll_interval_s=0.2, terminal_timeout_s=0.5,
+    )
+
+    assert result["result"] == "TERMINAL_STATUS_UNKNOWN"
+    assert result["reason"] == "STATUS_HTTP_503"
+    assert sum(method == "POST" for method, _ in calls) == 1
+    assert all(method in {"GET", "POST"} for method, _ in calls)
+
+
 def test_static_target_adapter_requires_allowed_capability_and_shared_window() -> None:
     cycles = [{"cycle_id": f"cycle-{index}"} for index in range(5)]
     decision = {"decision_id": "decision-1", "status": "ADVANCE"}
