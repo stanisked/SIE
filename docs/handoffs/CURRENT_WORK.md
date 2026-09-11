@@ -515,3 +515,14 @@ Live run от `2026-09-11` подтвердил стабильный metric `ADV
 `run_sie_static_target_mvp.py`: такой результат теперь терминально блокирует
 создание bridge plan, получение boot session и любой HTTP путь. Это не меняет
 perception, metric decision или qualification record.
+
+### Supervised demo one-step exception
+
+`bounded_forward_0.10_m` остаётся `NOT_QUALIFIED` для автономной работы на
+`esp32_zk5ad_sgm37_520`. Для одной демонстрационной петли разрешён только
+явный `SUPERVISED_DEMO_ONE_STEP`: `--execute`,
+`--authorization-mode SUPERVISED_EXPERIMENTAL_TRIAL`, непустая причина и
+точный `--confirm-command-id`. Исключение допускает только `POST
+/move-forward` с `distance_m=0.10` и только для текущего capability profile.
+Оно не изменяет qualification status, не создаёт retry/correction command и
+после terminal state требует re-observation. Это не operational approval.

@@ -10,6 +10,7 @@ from sie_core.supervised_bounded_executor import (
 from vision_core.tools.run_sie_static_target_mvp import (
     bridge_envelope,
     execution_block_result,
+    supervised_demo_override_allowed,
 )
 
 
@@ -134,3 +135,40 @@ def test_static_target_adapter_requires_allowed_capability_and_shared_window() -
         "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",
         "forward profile is not qualified",
     )
+
+
+def test_supervised_demo_override_allows_only_current_not_qualified_forward() -> None:
+    class Args:
+        execute = True
+        authorization_mode = "SUPERVISED_EXPERIMENTAL_TRIAL"
+        experimental_reason = "one supervised demo step"
+        confirm_command_id = "pa-supervised-mvp-001"
+
+    cycles = [{"cycle_id": f"cycle-{index}"} for index in range(5)]
+    decision = {"decision_id": "decision-1", "status": "ADVANCE"}
+    blocked = {
+        "result": "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",
+        "stage": "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",
+        "reason": "forward profile is not qualified",
+        "metric_decision": decision,
+        "planned_dry_run": {"method": "POST", "endpoint": "/move-forward", "distance_m": 0.10},
+        "actuator_capability_gate": {
+            "result": "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",
+            "capability_record": {
+                "adapter_id": "esp32_zk5ad_sgm37_520",
+                "capability_id": "bounded_forward_0.10_m",
+                "qualification_status": "NOT_QUALIFIED",
+            },
+        },
+    }
+    args = Args()
+
+    assert supervised_demo_override_allowed(args, blocked)
+    assert execution_block_result(blocked, allow_supervised_demo_override=True) is None
+    assert bridge_envelope(
+        supervision=blocked, cycles=cycles, boot_session_id="0123456789ABCDEF",
+        allow_supervised_demo_override=True,
+    ) is not None
+
+    blocked["planned_dry_run"]["endpoint"] = "/turn-left"
+    assert not supervised_demo_override_allowed(args, blocked)
