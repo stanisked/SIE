@@ -533,3 +533,47 @@ perception, metric decision или qualification record.
 для текущего capability profile.
 Оно не изменяет qualification status, не создаёт retry/correction command и
 после terminal state требует re-observation. Это не operational approval.
+
+## Supervised physical SIE demo: first successful one-step evidence
+
+Зафиксирован первый успешный supervised physical SIE demo step. Цепочка была
+следующей: текущий `person` perception adapter обнаружил человека, общий live
+runtime сформировал depth measurement, metric-first decision выбрал
+`ADVANCE`, capability gate пропустил только явно подтверждённый supervised
+trial, executor отправил один bounded action, а затем прочитал terminal
+record и вернул `AWAIT_REOBSERVATION`.
+
+Факты одного запуска:
+
+- action: `POST /move-forward`, `distance_m=0.1`;
+- terminal firmware state: `SUCCESS`;
+- `average_distance_m=0.0982`;
+- final encoder counts: `left/right=99/99`;
+- `elapsed_ms=1380`;
+- `heading_rad=-0.0015`;
+- brake trigger: `SHORT_STEP_ENVELOPE`;
+- `bounded_fault_latched=false`;
+- executor result: `AWAIT_REOBSERVATION`;
+- `execution_scope=SUPERVISED_DEMO_ONE_STEP`.
+
+Область применимости строго ограничена одним supervised one-step demo. Это
+evidence рабочей цепочки perception -> depth -> decision -> bounded action ->
+stop, а не разрешение автономной работы. Capability
+`esp32_zk5ad_sgm37_520 / bounded_forward_0.10_m` остаётся
+`NOT_QUALIFIED` для autonomous execution.
+
+AR image alignment в этом запуске предложил `TURN_RIGHT`, но turn execution в
+текущем MVP не включён. Этот факт не расширяет turn semantics и не означает,
+что поворот был выполнен.
+
+Relevant implementation references: `5b58220` (integrated supervised target
+runner), `257f245` (capability gate), `278dfca` (one-step supervised demo
+exception), `d6b0e3a` (reliable terminal `GET /status` polling). Calibration
+references остаются внешними и неизменными: AR0234 intrinsic v5
+`/home/stanislav/sie_rgb_stereo_fusion/ar0234_intrinsic/ar0234_intrinsic_v5_final_20260910/final/calibration_fullres.json`
+и supervised V6 policy
+`vision_core/config/runtime/stereo_calibration_v6_runtime_policy_v3_temperature_disabled_mvp.json`.
+
+Следующий шаг: выполнить новое observation после этого действия и прогнать
+следующие decision cycle. Autonomous loop, retries, correction movement и
+forward executor approval из этого единичного результата не следуют.
