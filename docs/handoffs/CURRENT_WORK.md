@@ -556,6 +556,12 @@ record и вернул `AWAIT_REOBSERVATION`.
 - executor result: `AWAIT_REOBSERVATION`;
 - `execution_scope=SUPERVISED_DEMO_ONE_STEP`.
 
+Physical reference for this evidence: человек находился примерно на `2.5 m`,
+тогда как SIE выдала `median_z=2.1498 m`. Это не точная дальномерная
+валидация. Статус наблюдения: preliminary far-range observation. Решение
+`ADVANCE` было верным по знаку и выбранному действию, но абсолютная ошибка
+глубины требует отдельной проверки на измеренной дистанции.
+
 Область применимости строго ограничена одним supervised one-step demo. Это
 evidence рабочей цепочки perception -> depth -> decision -> bounded action ->
 stop, а не разрешение автономной работы. Capability
