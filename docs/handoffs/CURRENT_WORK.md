@@ -1,5 +1,29 @@
 # Current bounded-motion MVP handoff
 
+## Supervised motion executor MVP
+
+Ветка `codex/sie-supervised-motion-executor-mvp-v1` добавляет отдельный
+supervised executor для демонстрационного цикла SIE. Он не делает perception,
+depth, decision или planning заново: входом служит только готовый
+`PLANNED_BOUNDED_COMMAND` из existing bridge.
+
+- по умолчанию CLI печатает `AWAIT_OPERATOR_CONFIRMATION` и не открывает сеть;
+- режим `--execute` требует explicit `http://` адрес ESP32 и точный
+  `--confirm-command-id`, совпадающий с планом;
+- executor делает один `GET /status`, проверяет `READY`, отсутствие latch и
+  совпадение fresh `boot_session_id`, затем отправляет ровно один `POST`;
+- после принятия команды он читает terminal status и всегда выдаёт
+  `AWAIT_REOBSERVATION`; retries, correction commands, `/stop` и `/ack-fault`
+  не вызываются автоматически;
+- `SUPERVISED_EXPERIMENTAL_TRIAL` является явно записанным операторским
+  разрешением на один trial. Оно не меняет `NOT_QUALIFIED` capability profile и
+  не делает adapter автоматически qualified.
+
+Первый показ предназначен для статичной заметной цели и одного короткого
+bounded шага. Запуск камеры, сеть к ESP32 и физическое движение выполняет
+только оператор. Успех trial не является calibration или operational approval:
+после terminal result нужен новый observation/decision cycle.
+
 ## Actuator Capability Gate dry-run
 
 Ветка `feature/sie-actuator-capability-gate-dry-run-v1` добавляет универсальный
