@@ -19,10 +19,19 @@ depth, decision или planning заново: входом служит толь
   разрешением на один trial. Оно не меняет `NOT_QUALIFIED` capability profile и
   не делает adapter автоматически qualified.
 
-Первый показ предназначен для статичной заметной цели и одного короткого
-bounded шага. Запуск камеры, сеть к ESP32 и физическое движение выполняет
+Первый показ предназначен для статичной добровольно участвующей персоны и
+одного короткого bounded шага. Current source adapter распознаёт только
+`entity_type=person`; произвольные объекты этим change set не заявляются.
+Запуск камеры, сеть к ESP32 и физическое движение выполняет
 только оператор. Успех trial не является calibration или operational approval:
 после terminal result нужен новый observation/decision cycle.
+
+`vision_core/tools/run_sie_static_target_mvp.py` собирает один общий
+five-cycle window через existing live runtime, передаёт exact window и metric
+`ADVANCE` в existing bridge, а затем вызывает executor. Он не подставляет
+старые JSONL, не создаёт decision math и не собирает command ID вручную.
+Переход к HTTP доступен только с `--execute`; CLI сам читает boot session,
+показывает generated command ID и ждёт его точный ручной ввод перед POST.
 
 ## Actuator Capability Gate dry-run
 

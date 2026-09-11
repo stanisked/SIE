@@ -7,6 +7,7 @@ from sie_core.supervised_bounded_executor import (
     execute_one_supervised_command,
     validate_planned_bounded_command,
 )
+from vision_core.tools.run_sie_static_target_mvp import bridge_envelope
 
 
 def plan() -> dict:
@@ -99,3 +100,17 @@ def test_executes_one_post_then_requires_reobservation_without_retry() -> None:
     assert result["network_performed"] is True
     assert result["motor_command_performed"] is True
     assert result["reobserve_required"] is True
+
+
+def test_static_target_adapter_reuses_only_metric_advance_and_shared_window() -> None:
+    cycles = [{"cycle_id": f"cycle-{index}"} for index in range(5)]
+    decision = {"decision_id": "decision-1", "status": "ADVANCE"}
+    envelope = bridge_envelope(
+        supervision={"metric_decision": decision}, cycles=cycles,
+        boot_session_id="0123456789ABCDEF",
+    )
+
+    assert envelope is not None
+    assert envelope["decision"] is decision
+    assert envelope["evidence_window"] is cycles
+    assert bridge_envelope(supervision={"metric_decision": {"status": "HOLD_TARGET_REACHED"}}, cycles=cycles, boot_session_id="0123456789ABCDEF") is None

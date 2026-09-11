@@ -204,6 +204,16 @@ def _bounded_url(base_url: str, endpoint: str, query: dict[str, Any]) -> str:
     return root + endpoint + "?" + urlencode(query)
 
 
+def fetch_bounded_status(
+    *, base_url: object, request: HttpRequest = _http_request, timeout_s: float = 2.0
+) -> tuple[int, dict[str, Any]]:
+    """Read one status document; callers decide whether it is usable."""
+    url_root = _text(base_url, "base_url")
+    if not math.isfinite(timeout_s) or timeout_s <= 0:
+        raise ExecutionContractError("HTTP timeout must be positive finite")
+    return request("GET", _bounded_url(url_root, "/status", {}), timeout_s)
+
+
 def execute_one_supervised_command(
     *,
     planned_command: object,
@@ -237,14 +247,13 @@ def execute_one_supervised_command(
             _text(auth.get("experimental_reason"), "experimental_reason")
         elif auth.get("experimental_reason") is not None:
             raise ExecutionContractError("qualified authorization must not carry experimental_reason")
-        url_root = _text(base_url, "base_url")
         if not math.isfinite(timeout_s) or timeout_s <= 0 or not math.isfinite(poll_interval_s) or poll_interval_s <= 0 or not math.isfinite(terminal_timeout_s) or terminal_timeout_s <= 0:
             raise ExecutionContractError("HTTP and polling timeouts must be positive finite values")
     except ExecutionContractError as error:
         return _record(result="BLOCKED_EXECUTION_CONTRACT", reason=str(error), planned_command=command, authorization=auth)
 
     try:
-        preflight_code, preflight = request("GET", _bounded_url(url_root, "/status", {}), timeout_s)
+        preflight_code, preflight = fetch_bounded_status(base_url=base_url, request=request, timeout_s=timeout_s)
     except ExecutionContractError as error:
         return _record(result="BLOCKED_PREFLIGHT", reason=str(error), planned_command=command, authorization=auth, network_performed=True)
     if preflight_code != 200:
@@ -254,7 +263,7 @@ def execute_one_supervised_command(
         return _record(result="BLOCKED_PREFLIGHT", reason=preflight_reason, planned_command=command, authorization=auth, preflight_status=preflight, network_performed=True)
 
     try:
-        response_code, response = request("POST", _bounded_url(url_root, command["endpoint"], command["query"]), timeout_s)
+        response_code, response = request("POST", _bounded_url(_text(base_url, "base_url"), command["endpoint"], command["query"]), timeout_s)
     except ExecutionContractError as error:
         return _record(result="COMMAND_TRANSPORT_UNKNOWN", reason=str(error), planned_command=command, authorization=auth, preflight_status=preflight, network_performed=True)
     if response_code != 202 or response.get("accepted") is not True or response.get("command_id") != command["query"]["command_id"]:
@@ -265,7 +274,7 @@ def execute_one_supervised_command(
     while monotonic() <= deadline:
         sleep(poll_interval_s)
         try:
-            status_code, status = request("GET", _bounded_url(url_root, "/status", {}), timeout_s)
+            status_code, status = fetch_bounded_status(base_url=base_url, request=request, timeout_s=timeout_s)
         except ExecutionContractError as error:
             return _record(result="TERMINAL_STATUS_UNKNOWN", reason=str(error), planned_command=command, authorization=auth, preflight_status=preflight, request_response=response, network_performed=True, motor_command_performed=True)
         if status_code != 200:
