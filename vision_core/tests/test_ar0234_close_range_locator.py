@@ -12,6 +12,7 @@ import numpy as np
 from vision_core.person_localization.close_range_locator import (
     CloseRangeDetection,
     OpenCvHaarFaceLocator,
+    TemporalFaceTracker,
     build_close_range_target_record,
     default_face_cascade_path,
 )
@@ -25,9 +26,9 @@ sys.modules[spec.name] = preview
 spec.loader.exec_module(preview)
 
 
-def _record(detections: list[CloseRangeDetection]) -> dict:
+def _record(tracking) -> dict:
     return build_close_range_target_record(
-        detections=detections,
+        tracking=tracking,
         evidence_id="close-range-000001",
         captured_at_utc=datetime(2026, 9, 11, tzinfo=timezone.utc),
         image_width=1920,
@@ -35,24 +36,52 @@ def _record(detections: list[CloseRangeDetection]) -> dict:
     )
 
 
-def test_close_range_record_is_json_safe_and_fail_closed_by_target_count() -> None:
-    detection = CloseRangeDetection((1000, 120, 1100, 260), 0.75)
-    single = _record([detection])
+def _face(x: int, y: int = 120) -> CloseRangeDetection:
+    return CloseRangeDetection((x, y, x + 100, y + 140), 0.75)
+
+
+def test_persistent_face_plus_one_frame_false_detection_is_single_target() -> None:
+    tracker = TemporalFaceTracker()
+    for index in range(5):
+        detections = [_face(1000 + index * 3)]
+        if index == 2:
+            detections.append(_face(300, 700))
+        tracking = tracker.update(detections)
+    single = _record(tracking)
     assert single["target_status"] == "SINGLE_TARGET"
-    assert single["center_x_px"] == 1050.0
-    assert single["bbox_xyxy_px"] == [1000, 120, 1100, 260]
+    assert single["raw_detection_count"] == 1
+    assert single["persistent_track_count"] == 1
+    assert single["selected_track_id"] == "face-track-000001"
+    assert single["center_x_px"] == 1062.0
+    assert single["bbox_xyxy_px"] == [1012, 120, 1112, 260]
     assert single["reference_frame"] == "ar0234_image_frame"
     assert single["units"] == "px"
     assert "pixels" not in single and "frame" not in single
     json.dumps(single, allow_nan=False)
 
-    no_target = _record([])
-    assert no_target["target_status"] == "NO_TARGET"
-    assert no_target["center_x_px"] is None and no_target["bbox_xyxy_px"] is None
 
-    multiple = _record([detection, CloseRangeDetection((1200, 150, 1300, 290), 0.7)])
+def test_two_persistent_faces_are_multiple_targets() -> None:
+    tracker = TemporalFaceTracker()
+    for index in range(5):
+        tracking = tracker.update([_face(400 + index * 2), _face(1200 + index * 2)])
+    multiple = _record(tracking)
     assert multiple["target_status"] == "MULTIPLE_TARGETS"
+    assert multiple["raw_detection_count"] == 2
+    assert multiple["persistent_track_count"] == 2
+    assert multiple["selected_track_id"] is None
     assert multiple["center_x_px"] is None and multiple["confidence"] is None
+
+
+def test_only_unstable_false_detections_are_no_target() -> None:
+    tracker = TemporalFaceTracker()
+    for x in (100, 400, 700, 1000, 1300):
+        tracking = tracker.update([_face(x, 700)])
+    no_target = _record(tracking)
+    assert no_target["target_status"] == "NO_TARGET"
+    assert no_target["raw_detection_count"] == 1
+    assert no_target["persistent_track_count"] == 0
+    assert no_target["selected_track_id"] is None
+    assert no_target["center_x_px"] is None and no_target["bbox_xyxy_px"] is None
 
 
 def test_local_bundled_face_cascade_is_available_without_download() -> None:
@@ -64,16 +93,21 @@ def test_local_bundled_face_cascade_is_available_without_download() -> None:
 
 def test_overlay_uses_copy_and_displays_single_no_and_multiple_states() -> None:
     frame = np.zeros((1200, 1920, 3), dtype=np.uint8)
-    detection = CloseRangeDetection((1000, 120, 1100, 260), 0.75)
-    for status, detections, center, confidence in (
-        ("SINGLE_TARGET", [detection], 1050.0, 0.75),
-        ("NO_TARGET", [], None, None),
-        ("MULTIPLE_TARGETS", [detection, CloseRangeDetection((1200, 150, 1300, 290), 0.7)], None, None),
+    detection = _face(1000)
+    tracker = TemporalFaceTracker()
+    for _ in range(3):
+        single_tracking = tracker.update([detection])
+    for status, raw, tracking, center, confidence in (
+        ("SINGLE_TARGET", [detection], single_tracking, 1050.0, 0.75),
+        ("NO_TARGET", [], TemporalFaceTracker().update([]), None, None),
+        ("MULTIPLE_TARGETS", [detection, _face(1200)], single_tracking, None, None),
     ):
         view = preview.draw_overlay(
             frame,
             target_status=status,
-            detections=detections,
+            raw_detections=raw,
+            persistent_tracks=tracking.persistent_tracks,
+            selected_track_id=("face-track-000001" if status == "SINGLE_TARGET" else None),
             center_x_px=center,
             confidence=confidence,
         )

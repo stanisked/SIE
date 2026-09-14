@@ -21,6 +21,8 @@ from vision_core.person_localization.close_range_locator import (  # noqa: E402
     CloseRangeDetection,
     CloseRangeTargetStatus,
     OpenCvHaarFaceLocator,
+    PersistentFaceTrack,
+    TemporalFaceTracker,
     build_close_range_target_record,
 )
 from vision_core.tools.run_ar0234_alignment_preview import PreviewWindow  # noqa: E402
@@ -35,7 +37,9 @@ def draw_overlay(
     frame: np.ndarray,
     *,
     target_status: str,
-    detections: list[CloseRangeDetection],
+    raw_detections: list[CloseRangeDetection],
+    persistent_tracks: tuple[PersistentFaceTrack, ...],
+    selected_track_id: str | None,
     center_x_px: float | None,
     confidence: float | None,
 ) -> np.ndarray:
@@ -46,10 +50,27 @@ def draw_overlay(
         CloseRangeTargetStatus.NO_TARGET.value: (0, 0, 220),
         CloseRangeTargetStatus.MULTIPLE_TARGETS.value: (0, 180, 255),
     }[target_status]
-    for detection in detections:
+    for detection in raw_detections:
         x_min, y_min, x_max, y_max = detection.bbox_xyxy_px
-        cv2.rectangle(view, (x_min, y_min), (x_max, y_max), color, 2)
-    text = f"{target_status} faces={len(detections)}"
+        cv2.rectangle(view, (x_min, y_min), (x_max, y_max), (125, 125, 125), 1)
+    for track in persistent_tracks:
+        x_min, y_min, x_max, y_max = track.bbox_xyxy_px
+        thickness = 4 if track.track_id == selected_track_id else 2
+        cv2.rectangle(view, (x_min, y_min), (x_max, y_max), (0, 220, 0), thickness)
+        cv2.putText(
+            view,
+            track.track_id,
+            (x_min, max(20, y_min - 8)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.55,
+            (0, 220, 0),
+            1,
+            cv2.LINE_AA,
+        )
+    text = (
+        f"{target_status} raw={len(raw_detections)} "
+        f"persistent={len(persistent_tracks)}"
+    )
     cv2.putText(view, text, (24, 38), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2, cv2.LINE_AA)
     if target_status == CloseRangeTargetStatus.SINGLE_TARGET.value:
         assert center_x_px is not None and confidence is not None
@@ -89,6 +110,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.max_frames < 0:
         raise ValueError("--max-frames must be 0 or positive")
     locator = OpenCvHaarFaceLocator()
+    tracker = TemporalFaceTracker()
     capture = AR0234Capture(
         AR0234CaptureConfig(
             device=AR0234_BY_ID,
@@ -110,8 +132,9 @@ def main(argv: list[str] | None = None) -> int:
             frame = capture.read()
             count += 1
             detections = locator.detect(frame)
+            tracking = tracker.update(detections)
             record = build_close_range_target_record(
-                detections=detections,
+                tracking=tracking,
                 evidence_id=f"close-range-preview-{count:06d}",
                 captured_at_utc=datetime.now(timezone.utc),
                 image_width=AR_WIDTH,
@@ -120,7 +143,9 @@ def main(argv: list[str] | None = None) -> int:
             view = draw_overlay(
                 frame,
                 target_status=record["target_status"],
-                detections=detections,
+                raw_detections=detections,
+                persistent_tracks=tracking.persistent_tracks,
+                selected_track_id=record["selected_track_id"],
                 center_x_px=record["center_x_px"],
                 confidence=record["confidence"],
             )

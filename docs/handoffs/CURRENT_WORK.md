@@ -608,3 +608,17 @@ capture adapter. Preview рисует overlay на копии frame и ниче�
 Его physical accuracy и устойчивость к частично видимому лицу ещё не
 подтверждены: до подключения к temporal yaw planner нужен отдельный visual
 observation gate без движения.
+
+Поверх сырых Haar candidates добавлен отдельный temporal слой из пяти кадров.
+Candidate становится persistent только после как минимум трёх согласованных
+наблюдений с проверкой IoU и близости обоих координат центра. Одиночный ложный
+bbox больше не становится target: при отсутствии persistent track результат
+`NO_TARGET`. Ровно один persistent track даёт `SINGLE_TARGET`; два и более
+дают `MULTIPLE_TARGETS`, без выбора самого большого bbox. Record явно несёт
+`raw_detection_count`, `persistent_track_count` и `selected_track_id`; bbox,
+`center_x_px` и confidence присутствуют только у `SINGLE_TARGET`.
+
+Preview показывает сырые Haar bbox тонким серым, persistent tracks зелёным, а
+выбранный target толстым зелёным. Это по-прежнему visual-only experimental
+locator, не qualified для yaw alignment и не подключён к temporal planner,
+turn или motion control.
