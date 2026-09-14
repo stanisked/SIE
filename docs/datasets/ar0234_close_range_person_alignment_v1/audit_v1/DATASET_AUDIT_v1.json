@@ -1,0 +1,1361 @@
+{
+  "annotation_status": "NOT_ANNOTATED",
+  "contact_sheet": "docs/datasets/ar0234_close_range_person_alignment_v1/audit_v1/contact_sheet_3_per_session.jpg",
+  "counts": {
+    "by_contains_person": {
+      "false": 42,
+      "true": 148
+    },
+    "by_distance_band": {
+      "0.8-1.2m": 22,
+      "1.5-2.0m": 126,
+      "not_applicable": 42
+    },
+    "by_lateral_position": {
+      "center": 106,
+      "left": 21,
+      "right": 21,
+      "varied": 42
+    },
+    "by_lighting": {
+      "daylight": 190
+    },
+    "by_pose": {
+      "not_applicable": 42,
+      "sitting": 21,
+      "standing_front": 85,
+      "standing_half_profile_left": 21,
+      "standing_half_profile_right": 21
+    },
+    "by_session_id": {
+      "hard-negative-room-objects-daylight-01": 21,
+      "hard-negative-teddy-daylight-01": 21,
+      "sitting-center-daylight-01": 21,
+      "standing-center-daylight-01": 21,
+      "standing-center-near-daylight-01": 22,
+      "standing-half-profile-left-daylight-01": 21,
+      "standing-half-profile-right-daylight-01": 21,
+      "standing-left-daylight-01": 21,
+      "standing-right-daylight-01": 21
+    }
+  },
+  "dataset_id": "ar0234_close_range_person_alignment_v1",
+  "dataset_root": "/home/stanislav/sie_rgb_stereo_fusion/datasets/ar0234_close_range_person_alignment_v1",
+  "duplicates": {
+    "exact_sha256_groups": [],
+    "near_duplicate_method": "mean absolute grayscale difference on 64x40 thumbnail <= 2.0; diagnostic only",
+    "near_duplicate_pairs": [
+      {
+        "first": "hard-negative-room-objects-daylight-01_000002.png",
+        "mean_absolute_difference": 1.980078101158142,
+        "second": "hard-negative-room-objects-daylight-01_000003.png"
+      },
+      {
+        "first": "hard-negative-room-objects-daylight-01_000017.png",
+        "mean_absolute_difference": 1.419531226158142,
+        "second": "hard-negative-room-objects-daylight-01_000018.png"
+      },
+      {
+        "first": "hard-negative-teddy-daylight-01_000011.png",
+        "mean_absolute_difference": 1.7449219226837158,
+        "second": "hard-negative-teddy-daylight-01_000012.png"
+      },
+      {
+        "first": "hard-negative-teddy-daylight-01_000020.png",
+        "mean_absolute_difference": 1.1882812976837158,
+        "second": "hard-negative-teddy-daylight-01_000021.png"
+      },
+      {
+        "first": "sitting-center-daylight-01_000001.png",
+        "mean_absolute_difference": 1.447656273841858,
+        "second": "sitting-center-daylight-01_000002.png"
+      },
+      {
+        "first": "sitting-center-daylight-01_000004.png",
+        "mean_absolute_difference": 1.1171875,
+        "second": "sitting-center-daylight-01_000005.png"
+      },
+      {
+        "first": "sitting-center-daylight-01_000007.png",
+        "mean_absolute_difference": 1.51171875,
+        "second": "sitting-center-daylight-01_000008.png"
+      },
+      {
+        "first": "sitting-center-daylight-01_000010.png",
+        "mean_absolute_difference": 1.077734351158142,
+        "second": "sitting-center-daylight-01_000011.png"
+      },
+      {
+        "first": "sitting-center-daylight-01_000012.png",
+        "mean_absolute_difference": 1.3984375,
+        "second": "sitting-center-daylight-01_000013.png"
+      },
+      {
+        "first": "sitting-center-daylight-01_000016.png",
+        "mean_absolute_difference": 0.830859363079071,
+        "second": "sitting-center-daylight-01_000017.png"
+      },
+      {
+        "first": "sitting-center-daylight-01_000019.png",
+        "mean_absolute_difference": 1.974218726158142,
+        "second": "sitting-center-daylight-01_000020.png"
+      },
+      {
+        "first": "sitting-center-daylight-01_000020.png",
+        "mean_absolute_difference": 1.382421851158142,
+        "second": "sitting-center-daylight-01_000021.png"
+      },
+      {
+        "first": "standing-half-profile-left-daylight-01_000002.png",
+        "mean_absolute_difference": 1.6492187976837158,
+        "second": "standing-half-profile-left-daylight-01_000003.png"
+      },
+      {
+        "first": "standing-half-profile-left-daylight-01_000003.png",
+        "mean_absolute_difference": 1.10546875,
+        "second": "standing-half-profile-left-daylight-01_000004.png"
+      },
+      {
+        "first": "standing-half-profile-left-daylight-01_000003.png",
+        "mean_absolute_difference": 1.256250023841858,
+        "second": "standing-half-profile-left-daylight-01_000005.png"
+      },
+      {
+        "first": "standing-half-profile-left-daylight-01_000004.png",
+        "mean_absolute_difference": 0.79296875,
+        "second": "standing-half-profile-left-daylight-01_000005.png"
+      },
+      {
+        "first": "standing-half-profile-left-daylight-01_000012.png",
+        "mean_absolute_difference": 1.2578125,
+        "second": "standing-half-profile-left-daylight-01_000013.png"
+      },
+      {
+        "first": "standing-half-profile-left-daylight-01_000012.png",
+        "mean_absolute_difference": 1.439843773841858,
+        "second": "standing-half-profile-left-daylight-01_000014.png"
+      },
+      {
+        "first": "standing-half-profile-left-daylight-01_000013.png",
+        "mean_absolute_difference": 1.174218773841858,
+        "second": "standing-half-profile-left-daylight-01_000014.png"
+      },
+      {
+        "first": "standing-half-profile-left-daylight-01_000019.png",
+        "mean_absolute_difference": 1.5421874523162842,
+        "second": "standing-half-profile-left-daylight-01_000020.png"
+      },
+      {
+        "first": "standing-half-profile-right-daylight-01_000001.png",
+        "mean_absolute_difference": 1.8046875,
+        "second": "standing-half-profile-right-daylight-01_000003.png"
+      },
+      {
+        "first": "standing-half-profile-right-daylight-01_000016.png",
+        "mean_absolute_difference": 1.166015625,
+        "second": "standing-half-profile-right-daylight-01_000017.png"
+      },
+      {
+        "first": "standing-half-profile-right-daylight-01_000017.png",
+        "mean_absolute_difference": 1.7492187023162842,
+        "second": "standing-half-profile-right-daylight-01_000018.png"
+      },
+      {
+        "first": "standing-right-daylight-01_000009.png",
+        "mean_absolute_difference": 1.8214843273162842,
+        "second": "standing-right-daylight-01_000010.png"
+      },
+      {
+        "first": "standing-right-daylight-01_000014.png",
+        "mean_absolute_difference": 0.9390624761581421,
+        "second": "standing-right-daylight-01_000015.png"
+      }
+    ]
+  },
+  "image_count": 190,
+  "image_quality": {
+    "aggregate": {
+      "brightness_max": 139.79589713541668,
+      "brightness_mean": 126.98973975466008,
+      "brightness_median": 132.58338346354168,
+      "brightness_min": 94.51227821180555,
+      "clipping_percent_max": 0.02560763888888889,
+      "clipping_percent_mean": 0.008336988304093568,
+      "count": 190,
+      "sharpness_max": 316.67146781238984,
+      "sharpness_mean": 164.3805495614443,
+      "sharpness_median": 140.3872655252594,
+      "sharpness_min": 69.27950425058997
+    },
+    "metric_definitions": {
+      "brightness": "mean grayscale value 0..255",
+      "clipping": "percent grayscale pixels <=1 or >=254",
+      "sharpness": "variance of Laplacian"
+    },
+    "per_image": [
+      {
+        "brightness_mean": 134.12797699652776,
+        "clipping_percent": 0.0049479166666666664,
+        "image_filename": "standing-center-daylight-01_000001.png",
+        "sharpness_laplacian_variance": 201.86642215062102
+      },
+      {
+        "brightness_mean": 133.57434114583333,
+        "clipping_percent": 0.0048177083333333336,
+        "image_filename": "standing-center-daylight-01_000002.png",
+        "sharpness_laplacian_variance": 198.42339079539187
+      },
+      {
+        "brightness_mean": 133.97949088541668,
+        "clipping_percent": 0.007031249999999999,
+        "image_filename": "standing-center-daylight-01_000003.png",
+        "sharpness_laplacian_variance": 204.8407538249232
+      },
+      {
+        "brightness_mean": 135.29204340277778,
+        "clipping_percent": 0.0048177083333333336,
+        "image_filename": "standing-center-daylight-01_000004.png",
+        "sharpness_laplacian_variance": 207.0250335785108
+      },
+      {
+        "brightness_mean": 134.73338194444443,
+        "clipping_percent": 0.0045138888888888885,
+        "image_filename": "standing-center-daylight-01_000005.png",
+        "sharpness_laplacian_variance": 197.60591387562388
+      },
+      {
+        "brightness_mean": 136.95840060763888,
+        "clipping_percent": 0.0025173611111111113,
+        "image_filename": "standing-center-daylight-01_000006.png",
+        "sharpness_laplacian_variance": 181.5804559384759
+      },
+      {
+        "brightness_mean": 135.60299522569446,
+        "clipping_percent": 0.0028211805555555555,
+        "image_filename": "standing-center-daylight-01_000007.png",
+        "sharpness_laplacian_variance": 191.9762946997325
+      },
+      {
+        "brightness_mean": 135.48402256944445,
+        "clipping_percent": 0.004774305555555556,
+        "image_filename": "standing-center-daylight-01_000008.png",
+        "sharpness_laplacian_variance": 188.68222005163105
+      },
+      {
+        "brightness_mean": 135.24518663194445,
+        "clipping_percent": 0.0052517361111111115,
+        "image_filename": "standing-center-daylight-01_000009.png",
+        "sharpness_laplacian_variance": 195.04579399261476
+      },
+      {
+        "brightness_mean": 134.03916623263888,
+        "clipping_percent": 0.0033854166666666663,
+        "image_filename": "standing-center-daylight-01_000010.png",
+        "sharpness_laplacian_variance": 189.36744032049762
+      },
+      {
+        "brightness_mean": 134.0116506076389,
+        "clipping_percent": 0.004470486111111111,
+        "image_filename": "standing-center-daylight-01_000011.png",
+        "sharpness_laplacian_variance": 190.8704352286464
+      },
+      {
+        "brightness_mean": 134.01886848958333,
+        "clipping_percent": 0.006901041666666667,
+        "image_filename": "standing-center-daylight-01_000012.png",
+        "sharpness_laplacian_variance": 171.33545174559868
+      },
+      {
+        "brightness_mean": 134.69278819444443,
+        "clipping_percent": 0.0032986111111111107,
+        "image_filename": "standing-center-daylight-01_000013.png",
+        "sharpness_laplacian_variance": 181.03547375093746
+      },
+      {
+        "brightness_mean": 133.37821875,
+        "clipping_percent": 0.004253472222222222,
+        "image_filename": "standing-center-daylight-01_000014.png",
+        "sharpness_laplacian_variance": 176.05788451296183
+      },
+      {
+        "brightness_mean": 134.41413715277778,
+        "clipping_percent": 0.0022569444444444442,
+        "image_filename": "standing-center-daylight-01_000015.png",
+        "sharpness_laplacian_variance": 170.89361755362788
+      },
+      {
+        "brightness_mean": 133.51825303819444,
+        "clipping_percent": 0.003949652777777778,
+        "image_filename": "standing-center-daylight-01_000016.png",
+        "sharpness_laplacian_variance": 173.19702530332188
+      },
+      {
+        "brightness_mean": 133.30018446180554,
+        "clipping_percent": 0.0052517361111111115,
+        "image_filename": "standing-center-daylight-01_000017.png",
+        "sharpness_laplacian_variance": 184.54200859832457
+      },
+      {
+        "brightness_mean": 132.40916319444443,
+        "clipping_percent": 0.003949652777777778,
+        "image_filename": "standing-center-daylight-01_000018.png",
+        "sharpness_laplacian_variance": 188.97942184545892
+      },
+      {
+        "brightness_mean": 131.97138585069445,
+        "clipping_percent": 0.0029947916666666664,
+        "image_filename": "standing-center-daylight-01_000019.png",
+        "sharpness_laplacian_variance": 174.44443402180923
+      },
+      {
+        "brightness_mean": 132.75124348958335,
+        "clipping_percent": 0.003342013888888889,
+        "image_filename": "standing-center-daylight-01_000020.png",
+        "sharpness_laplacian_variance": 182.2090497232318
+      },
+      {
+        "brightness_mean": 132.9052973090278,
+        "clipping_percent": 0.004210069444444445,
+        "image_filename": "standing-center-daylight-01_000021.png",
+        "sharpness_laplacian_variance": 178.9161987566544
+      },
+      {
+        "brightness_mean": 136.18221180555557,
+        "clipping_percent": 0.002560763888888889,
+        "image_filename": "standing-left-daylight-01_000001.png",
+        "sharpness_laplacian_variance": 246.7131856906314
+      },
+      {
+        "brightness_mean": 136.44828602430556,
+        "clipping_percent": 0.0018663194444444443,
+        "image_filename": "standing-left-daylight-01_000002.png",
+        "sharpness_laplacian_variance": 234.714319171676
+      },
+      {
+        "brightness_mean": 136.37264930555557,
+        "clipping_percent": 0.001605902777777778,
+        "image_filename": "standing-left-daylight-01_000003.png",
+        "sharpness_laplacian_variance": 227.99646474142767
+      },
+      {
+        "brightness_mean": 136.80519401041667,
+        "clipping_percent": 0.0016493055555555553,
+        "image_filename": "standing-left-daylight-01_000004.png",
+        "sharpness_laplacian_variance": 231.1828645410088
+      },
+      {
+        "brightness_mean": 137.03423350694445,
+        "clipping_percent": 0.0016927083333333332,
+        "image_filename": "standing-left-daylight-01_000005.png",
+        "sharpness_laplacian_variance": 222.61513322563334
+      },
+      {
+        "brightness_mean": 137.16425303819443,
+        "clipping_percent": 0.001388888888888889,
+        "image_filename": "standing-left-daylight-01_000006.png",
+        "sharpness_laplacian_variance": 236.08156099934214
+      },
+      {
+        "brightness_mean": 137.43774392361112,
+        "clipping_percent": 0.001345486111111111,
+        "image_filename": "standing-left-daylight-01_000007.png",
+        "sharpness_laplacian_variance": 233.6187175308159
+      },
+      {
+        "brightness_mean": 136.0217734375,
+        "clipping_percent": 0.0030815972222222225,
+        "image_filename": "standing-left-daylight-01_000008.png",
+        "sharpness_laplacian_variance": 242.17932291630194
+      },
+      {
+        "brightness_mean": 136.12394574652777,
+        "clipping_percent": 0.0035156249999999997,
+        "image_filename": "standing-left-daylight-01_000009.png",
+        "sharpness_laplacian_variance": 236.80868700626135
+      },
+      {
+        "brightness_mean": 136.1494787326389,
+        "clipping_percent": 0.002777777777777778,
+        "image_filename": "standing-left-daylight-01_000010.png",
+        "sharpness_laplacian_variance": 241.28311631334103
+      },
+      {
+        "brightness_mean": 136.30575043402777,
+        "clipping_percent": 0.0040798611111111105,
+        "image_filename": "standing-left-daylight-01_000011.png",
+        "sharpness_laplacian_variance": 238.05933785372585
+      },
+      {
+        "brightness_mean": 135.77518793402777,
+        "clipping_percent": 0.005338541666666667,
+        "image_filename": "standing-left-daylight-01_000012.png",
+        "sharpness_laplacian_variance": 231.1990931657487
+      },
+      {
+        "brightness_mean": 136.5851032986111,
+        "clipping_percent": 0.0027343750000000003,
+        "image_filename": "standing-left-daylight-01_000013.png",
+        "sharpness_laplacian_variance": 209.34173830376443
+      },
+      {
+        "brightness_mean": 136.62338194444445,
+        "clipping_percent": 0.002690972222222222,
+        "image_filename": "standing-left-daylight-01_000014.png",
+        "sharpness_laplacian_variance": 211.0940751115443
+      },
+      {
+        "brightness_mean": 134.61121180555557,
+        "clipping_percent": 0.003949652777777778,
+        "image_filename": "standing-left-daylight-01_000015.png",
+        "sharpness_laplacian_variance": 247.51379336222018
+      },
+      {
+        "brightness_mean": 133.38489279513888,
+        "clipping_percent": 0.003472222222222222,
+        "image_filename": "standing-left-daylight-01_000016.png",
+        "sharpness_laplacian_variance": 227.63445067758036
+      },
+      {
+        "brightness_mean": 131.78454340277779,
+        "clipping_percent": 0.0035156249999999997,
+        "image_filename": "standing-left-daylight-01_000017.png",
+        "sharpness_laplacian_variance": 231.72922296245622
+      },
+      {
+        "brightness_mean": 133.31102734375,
+        "clipping_percent": 0.005338541666666667,
+        "image_filename": "standing-left-daylight-01_000018.png",
+        "sharpness_laplacian_variance": 256.70435193850193
+      },
+      {
+        "brightness_mean": 134.95390494791667,
+        "clipping_percent": 0.0029947916666666664,
+        "image_filename": "standing-left-daylight-01_000019.png",
+        "sharpness_laplacian_variance": 265.5916910725232
+      },
+      {
+        "brightness_mean": 134.69508550347223,
+        "clipping_percent": 0.0033854166666666663,
+        "image_filename": "standing-left-daylight-01_000020.png",
+        "sharpness_laplacian_variance": 266.46219435213817
+      },
+      {
+        "brightness_mean": 135.64158289930555,
+        "clipping_percent": 0.009548611111111112,
+        "image_filename": "standing-left-daylight-01_000021.png",
+        "sharpness_laplacian_variance": 316.67146781238984
+      },
+      {
+        "brightness_mean": 124.44873003472222,
+        "clipping_percent": 0.009505208333333333,
+        "image_filename": "standing-right-daylight-01_000001.png",
+        "sharpness_laplacian_variance": 264.7184075338931
+      },
+      {
+        "brightness_mean": 123.84598524305555,
+        "clipping_percent": 0.010069444444444445,
+        "image_filename": "standing-right-daylight-01_000002.png",
+        "sharpness_laplacian_variance": 270.5189123060389
+      },
+      {
+        "brightness_mean": 123.16820269097222,
+        "clipping_percent": 0.011762152777777778,
+        "image_filename": "standing-right-daylight-01_000003.png",
+        "sharpness_laplacian_variance": 268.12054769110773
+      },
+      {
+        "brightness_mean": 122.95502734375,
+        "clipping_percent": 0.009722222222222222,
+        "image_filename": "standing-right-daylight-01_000004.png",
+        "sharpness_laplacian_variance": 274.37708835649494
+      },
+      {
+        "brightness_mean": 123.39340494791666,
+        "clipping_percent": 0.010850694444444444,
+        "image_filename": "standing-right-daylight-01_000005.png",
+        "sharpness_laplacian_variance": 265.480747993971
+      },
+      {
+        "brightness_mean": 122.45337022569444,
+        "clipping_percent": 0.008767361111111111,
+        "image_filename": "standing-right-daylight-01_000006.png",
+        "sharpness_laplacian_variance": 281.32538322278714
+      },
+      {
+        "brightness_mean": 122.68928081597223,
+        "clipping_percent": 0.009505208333333333,
+        "image_filename": "standing-right-daylight-01_000007.png",
+        "sharpness_laplacian_variance": 262.6092842850596
+      },
+      {
+        "brightness_mean": 122.17328342013889,
+        "clipping_percent": 0.013888888888888888,
+        "image_filename": "standing-right-daylight-01_000008.png",
+        "sharpness_laplacian_variance": 287.3593545464222
+      },
+      {
+        "brightness_mean": 124.64211241319444,
+        "clipping_percent": 0.009288194444444444,
+        "image_filename": "standing-right-daylight-01_000009.png",
+        "sharpness_laplacian_variance": 257.37700749804384
+      },
+      {
+        "brightness_mean": 124.5586427951389,
+        "clipping_percent": 0.007638888888888889,
+        "image_filename": "standing-right-daylight-01_000010.png",
+        "sharpness_laplacian_variance": 256.9879472060546
+      },
+      {
+        "brightness_mean": 124.06227039930556,
+        "clipping_percent": 0.007942708333333333,
+        "image_filename": "standing-right-daylight-01_000011.png",
+        "sharpness_laplacian_variance": 259.41053835500776
+      },
+      {
+        "brightness_mean": 121.87144878472222,
+        "clipping_percent": 0.012760416666666665,
+        "image_filename": "standing-right-daylight-01_000012.png",
+        "sharpness_laplacian_variance": 277.1856658618094
+      },
+      {
+        "brightness_mean": 119.09590017361111,
+        "clipping_percent": 0.008680555555555556,
+        "image_filename": "standing-right-daylight-01_000013.png",
+        "sharpness_laplacian_variance": 251.9115667261278
+      },
+      {
+        "brightness_mean": 118.57341753472222,
+        "clipping_percent": 0.007552083333333333,
+        "image_filename": "standing-right-daylight-01_000014.png",
+        "sharpness_laplacian_variance": 251.3200195928811
+      },
+      {
+        "brightness_mean": 118.43667361111112,
+        "clipping_percent": 0.008506944444444444,
+        "image_filename": "standing-right-daylight-01_000015.png",
+        "sharpness_laplacian_variance": 252.63437714586024
+      },
+      {
+        "brightness_mean": 118.79154513888889,
+        "clipping_percent": 0.007421875,
+        "image_filename": "standing-right-daylight-01_000016.png",
+        "sharpness_laplacian_variance": 249.06314451679572
+      },
+      {
+        "brightness_mean": 118.8965859375,
+        "clipping_percent": 0.00625,
+        "image_filename": "standing-right-daylight-01_000017.png",
+        "sharpness_laplacian_variance": 239.35458192500343
+      },
+      {
+        "brightness_mean": 117.46393576388888,
+        "clipping_percent": 0.009809027777777778,
+        "image_filename": "standing-right-daylight-01_000018.png",
+        "sharpness_laplacian_variance": 234.46487565106406
+      },
+      {
+        "brightness_mean": 116.53216276041667,
+        "clipping_percent": 0.008550347222222221,
+        "image_filename": "standing-right-daylight-01_000019.png",
+        "sharpness_laplacian_variance": 235.85702282865557
+      },
+      {
+        "brightness_mean": 115.24212022569445,
+        "clipping_percent": 0.007204861111111111,
+        "image_filename": "standing-right-daylight-01_000020.png",
+        "sharpness_laplacian_variance": 229.41824236344232
+      },
+      {
+        "brightness_mean": 113.72571527777778,
+        "clipping_percent": 0.009505208333333333,
+        "image_filename": "standing-right-daylight-01_000021.png",
+        "sharpness_laplacian_variance": 228.36923520822415
+      },
+      {
+        "brightness_mean": 106.95327039930555,
+        "clipping_percent": 0.016362847222222223,
+        "image_filename": "standing-half-profile-left-daylight-01_000001.png",
+        "sharpness_laplacian_variance": 247.32929817666735
+      },
+      {
+        "brightness_mean": 106.430703125,
+        "clipping_percent": 0.014670138888888889,
+        "image_filename": "standing-half-profile-left-daylight-01_000002.png",
+        "sharpness_laplacian_variance": 249.37281599023126
+      },
+      {
+        "brightness_mean": 106.39079861111111,
+        "clipping_percent": 0.013194444444444443,
+        "image_filename": "standing-half-profile-left-daylight-01_000003.png",
+        "sharpness_laplacian_variance": 248.1616390827996
+      },
+      {
+        "brightness_mean": 106.30845876736112,
+        "clipping_percent": 0.012890625000000001,
+        "image_filename": "standing-half-profile-left-daylight-01_000004.png",
+        "sharpness_laplacian_variance": 251.00263205445154
+      },
+      {
+        "brightness_mean": 106.135453125,
+        "clipping_percent": 0.015928819444444447,
+        "image_filename": "standing-half-profile-left-daylight-01_000005.png",
+        "sharpness_laplacian_variance": 245.90123087203114
+      },
+      {
+        "brightness_mean": 106.98809071180555,
+        "clipping_percent": 0.01484375,
+        "image_filename": "standing-half-profile-left-daylight-01_000006.png",
+        "sharpness_laplacian_variance": 253.82700954814
+      },
+      {
+        "brightness_mean": 106.27333897569444,
+        "clipping_percent": 0.014496527777777777,
+        "image_filename": "standing-half-profile-left-daylight-01_000007.png",
+        "sharpness_laplacian_variance": 249.74983559293605
+      },
+      {
+        "brightness_mean": 105.9832890625,
+        "clipping_percent": 0.010286458333333333,
+        "image_filename": "standing-half-profile-left-daylight-01_000008.png",
+        "sharpness_laplacian_variance": 240.03026789984634
+      },
+      {
+        "brightness_mean": 106.01000520833334,
+        "clipping_percent": 0.011111111111111112,
+        "image_filename": "standing-half-profile-left-daylight-01_000009.png",
+        "sharpness_laplacian_variance": 231.74464666760397
+      },
+      {
+        "brightness_mean": 105.46792578125,
+        "clipping_percent": 0.012673611111111111,
+        "image_filename": "standing-half-profile-left-daylight-01_000010.png",
+        "sharpness_laplacian_variance": 232.4566692206761
+      },
+      {
+        "brightness_mean": 104.90699782986111,
+        "clipping_percent": 0.009765625,
+        "image_filename": "standing-half-profile-left-daylight-01_000011.png",
+        "sharpness_laplacian_variance": 232.797379095459
+      },
+      {
+        "brightness_mean": 104.3280798611111,
+        "clipping_percent": 0.012890625000000001,
+        "image_filename": "standing-half-profile-left-daylight-01_000012.png",
+        "sharpness_laplacian_variance": 241.45982201569646
+      },
+      {
+        "brightness_mean": 104.18447135416666,
+        "clipping_percent": 0.013541666666666665,
+        "image_filename": "standing-half-profile-left-daylight-01_000013.png",
+        "sharpness_laplacian_variance": 242.71630727710783
+      },
+      {
+        "brightness_mean": 104.01483376736111,
+        "clipping_percent": 0.011588541666666667,
+        "image_filename": "standing-half-profile-left-daylight-01_000014.png",
+        "sharpness_laplacian_variance": 238.82432117286888
+      },
+      {
+        "brightness_mean": 102.57188628472223,
+        "clipping_percent": 0.012456597222222223,
+        "image_filename": "standing-half-profile-left-daylight-01_000015.png",
+        "sharpness_laplacian_variance": 246.31720549581567
+      },
+      {
+        "brightness_mean": 102.13995052083334,
+        "clipping_percent": 0.012239583333333333,
+        "image_filename": "standing-half-profile-left-daylight-01_000016.png",
+        "sharpness_laplacian_variance": 236.93223095427635
+      },
+      {
+        "brightness_mean": 100.64668142361111,
+        "clipping_percent": 0.010546875,
+        "image_filename": "standing-half-profile-left-daylight-01_000017.png",
+        "sharpness_laplacian_variance": 238.47793839515512
+      },
+      {
+        "brightness_mean": 100.11243012152778,
+        "clipping_percent": 0.01171875,
+        "image_filename": "standing-half-profile-left-daylight-01_000018.png",
+        "sharpness_laplacian_variance": 236.10917892062042
+      },
+      {
+        "brightness_mean": 99.12336111111111,
+        "clipping_percent": 0.011024305555555555,
+        "image_filename": "standing-half-profile-left-daylight-01_000019.png",
+        "sharpness_laplacian_variance": 232.69170483275178
+      },
+      {
+        "brightness_mean": 98.56285503472222,
+        "clipping_percent": 0.010720486111111111,
+        "image_filename": "standing-half-profile-left-daylight-01_000020.png",
+        "sharpness_laplacian_variance": 234.13447781768122
+      },
+      {
+        "brightness_mean": 94.51227821180555,
+        "clipping_percent": 0.013107638888888887,
+        "image_filename": "standing-half-profile-left-daylight-01_000021.png",
+        "sharpness_laplacian_variance": 235.8073156076382
+      },
+      {
+        "brightness_mean": 129.99497439236112,
+        "clipping_percent": 0.007118055555555556,
+        "image_filename": "standing-half-profile-right-daylight-01_000001.png",
+        "sharpness_laplacian_variance": 113.86520007455613
+      },
+      {
+        "brightness_mean": 129.22850998263888,
+        "clipping_percent": 0.008463541666666668,
+        "image_filename": "standing-half-profile-right-daylight-01_000002.png",
+        "sharpness_laplacian_variance": 114.86246738778104
+      },
+      {
+        "brightness_mean": 129.4877582465278,
+        "clipping_percent": 0.010112847222222223,
+        "image_filename": "standing-half-profile-right-daylight-01_000003.png",
+        "sharpness_laplacian_variance": 111.55760714387095
+      },
+      {
+        "brightness_mean": 129.89490842013888,
+        "clipping_percent": 0.010112847222222223,
+        "image_filename": "standing-half-profile-right-daylight-01_000004.png",
+        "sharpness_laplacian_variance": 117.1457083332964
+      },
+      {
+        "brightness_mean": 129.80292144097223,
+        "clipping_percent": 0.007508680555555557,
+        "image_filename": "standing-half-profile-right-daylight-01_000005.png",
+        "sharpness_laplacian_variance": 111.48015352945279
+      },
+      {
+        "brightness_mean": 128.2258415798611,
+        "clipping_percent": 0.007378472222222222,
+        "image_filename": "standing-half-profile-right-daylight-01_000006.png",
+        "sharpness_laplacian_variance": 117.75317029390892
+      },
+      {
+        "brightness_mean": 128.80083203125,
+        "clipping_percent": 0.007855902777777778,
+        "image_filename": "standing-half-profile-right-daylight-01_000007.png",
+        "sharpness_laplacian_variance": 111.72367314739296
+      },
+      {
+        "brightness_mean": 126.30617664930556,
+        "clipping_percent": 0.012586805555555556,
+        "image_filename": "standing-half-profile-right-daylight-01_000008.png",
+        "sharpness_laplacian_variance": 118.89557931412756
+      },
+      {
+        "brightness_mean": 127.40906640625,
+        "clipping_percent": 0.011675347222222222,
+        "image_filename": "standing-half-profile-right-daylight-01_000009.png",
+        "sharpness_laplacian_variance": 110.43997466205435
+      },
+      {
+        "brightness_mean": 126.0712421875,
+        "clipping_percent": 0.015190972222222222,
+        "image_filename": "standing-half-profile-right-daylight-01_000010.png",
+        "sharpness_laplacian_variance": 116.14261442180188
+      },
+      {
+        "brightness_mean": 126.82717491319444,
+        "clipping_percent": 0.007248263888888888,
+        "image_filename": "standing-half-profile-right-daylight-01_000011.png",
+        "sharpness_laplacian_variance": 116.11080425155059
+      },
+      {
+        "brightness_mean": 126.7335920138889,
+        "clipping_percent": 0.007638888888888889,
+        "image_filename": "standing-half-profile-right-daylight-01_000012.png",
+        "sharpness_laplacian_variance": 119.70335712937936
+      },
+      {
+        "brightness_mean": 126.70599479166667,
+        "clipping_percent": 0.008680555555555556,
+        "image_filename": "standing-half-profile-right-daylight-01_000013.png",
+        "sharpness_laplacian_variance": 108.8777625840475
+      },
+      {
+        "brightness_mean": 126.99075434027777,
+        "clipping_percent": 0.008289930555555556,
+        "image_filename": "standing-half-profile-right-daylight-01_000014.png",
+        "sharpness_laplacian_variance": 107.10239571930985
+      },
+      {
+        "brightness_mean": 125.49391145833333,
+        "clipping_percent": 0.009114583333333334,
+        "image_filename": "standing-half-profile-right-daylight-01_000015.png",
+        "sharpness_laplacian_variance": 111.74390453137649
+      },
+      {
+        "brightness_mean": 126.35875998263889,
+        "clipping_percent": 0.018055555555555554,
+        "image_filename": "standing-half-profile-right-daylight-01_000016.png",
+        "sharpness_laplacian_variance": 107.32598764814512
+      },
+      {
+        "brightness_mean": 126.27301085069445,
+        "clipping_percent": 0.01618923611111111,
+        "image_filename": "standing-half-profile-right-daylight-01_000017.png",
+        "sharpness_laplacian_variance": 109.03336291255226
+      },
+      {
+        "brightness_mean": 126.18471440972222,
+        "clipping_percent": 0.017708333333333333,
+        "image_filename": "standing-half-profile-right-daylight-01_000018.png",
+        "sharpness_laplacian_variance": 106.39048613972808
+      },
+      {
+        "brightness_mean": 125.32240842013888,
+        "clipping_percent": 0.013368055555555557,
+        "image_filename": "standing-half-profile-right-daylight-01_000019.png",
+        "sharpness_laplacian_variance": 119.53744873180631
+      },
+      {
+        "brightness_mean": 127.28821267361111,
+        "clipping_percent": 0.014062499999999999,
+        "image_filename": "standing-half-profile-right-daylight-01_000020.png",
+        "sharpness_laplacian_variance": 114.59419900105323
+      },
+      {
+        "brightness_mean": 127.06991319444444,
+        "clipping_percent": 0.013932291666666666,
+        "image_filename": "standing-half-profile-right-daylight-01_000021.png",
+        "sharpness_laplacian_variance": 108.78009667563182
+      },
+      {
+        "brightness_mean": 132.3647204861111,
+        "clipping_percent": 0.012456597222222223,
+        "image_filename": "hard-negative-teddy-daylight-01_000001.png",
+        "sharpness_laplacian_variance": 83.39547146836102
+      },
+      {
+        "brightness_mean": 133.73344444444444,
+        "clipping_percent": 0.014236111111111113,
+        "image_filename": "hard-negative-teddy-daylight-01_000002.png",
+        "sharpness_laplacian_variance": 145.15686270067687
+      },
+      {
+        "brightness_mean": 135.43803038194446,
+        "clipping_percent": 0.01614583333333333,
+        "image_filename": "hard-negative-teddy-daylight-01_000003.png",
+        "sharpness_laplacian_variance": 145.75374993397952
+      },
+      {
+        "brightness_mean": 135.42888107638888,
+        "clipping_percent": 0.01618923611111111,
+        "image_filename": "hard-negative-teddy-daylight-01_000004.png",
+        "sharpness_laplacian_variance": 141.4857588093079
+      },
+      {
+        "brightness_mean": 135.71003038194445,
+        "clipping_percent": 0.013324652777777779,
+        "image_filename": "hard-negative-teddy-daylight-01_000005.png",
+        "sharpness_laplacian_variance": 148.38851076074656
+      },
+      {
+        "brightness_mean": 128.58279166666668,
+        "clipping_percent": 0.02230902777777778,
+        "image_filename": "hard-negative-teddy-daylight-01_000006.png",
+        "sharpness_laplacian_variance": 214.2194142513019
+      },
+      {
+        "brightness_mean": 127.77074348958334,
+        "clipping_percent": 0.025130208333333334,
+        "image_filename": "hard-negative-teddy-daylight-01_000007.png",
+        "sharpness_laplacian_variance": 216.5695124935421
+      },
+      {
+        "brightness_mean": 128.78790060763887,
+        "clipping_percent": 0.020052083333333335,
+        "image_filename": "hard-negative-teddy-daylight-01_000008.png",
+        "sharpness_laplacian_variance": 208.4582491929186
+      },
+      {
+        "brightness_mean": 132.98703559027777,
+        "clipping_percent": 0.009548611111111112,
+        "image_filename": "hard-negative-teddy-daylight-01_000009.png",
+        "sharpness_laplacian_variance": 80.31434681517626
+      },
+      {
+        "brightness_mean": 132.6198862847222,
+        "clipping_percent": 0.009114583333333334,
+        "image_filename": "hard-negative-teddy-daylight-01_000010.png",
+        "sharpness_laplacian_variance": 79.89920302618916
+      },
+      {
+        "brightness_mean": 132.6077521701389,
+        "clipping_percent": 0.013020833333333334,
+        "image_filename": "hard-negative-teddy-daylight-01_000011.png",
+        "sharpness_laplacian_variance": 77.30446227017548
+      },
+      {
+        "brightness_mean": 132.15659548611112,
+        "clipping_percent": 0.009331597222222222,
+        "image_filename": "hard-negative-teddy-daylight-01_000012.png",
+        "sharpness_laplacian_variance": 72.13639053531222
+      },
+      {
+        "brightness_mean": 131.041984375,
+        "clipping_percent": 0.007986111111111112,
+        "image_filename": "hard-negative-teddy-daylight-01_000013.png",
+        "sharpness_laplacian_variance": 70.02143558737217
+      },
+      {
+        "brightness_mean": 133.24918489583334,
+        "clipping_percent": 0.009157986111111112,
+        "image_filename": "hard-negative-teddy-daylight-01_000014.png",
+        "sharpness_laplacian_variance": 97.1196335259264
+      },
+      {
+        "brightness_mean": 133.06914756944445,
+        "clipping_percent": 0.012196180555555556,
+        "image_filename": "hard-negative-teddy-daylight-01_000015.png",
+        "sharpness_laplacian_variance": 134.5676827132521
+      },
+      {
+        "brightness_mean": 134.06891145833333,
+        "clipping_percent": 0.013541666666666665,
+        "image_filename": "hard-negative-teddy-daylight-01_000016.png",
+        "sharpness_laplacian_variance": 139.28877224121092
+      },
+      {
+        "brightness_mean": 137.86960546875,
+        "clipping_percent": 0.008333333333333333,
+        "image_filename": "hard-negative-teddy-daylight-01_000017.png",
+        "sharpness_laplacian_variance": 101.07299469584828
+      },
+      {
+        "brightness_mean": 137.03715147569446,
+        "clipping_percent": 0.010590277777777777,
+        "image_filename": "hard-negative-teddy-daylight-01_000018.png",
+        "sharpness_laplacian_variance": 122.40260630800583
+      },
+      {
+        "brightness_mean": 136.35775086805555,
+        "clipping_percent": 0.007942708333333333,
+        "image_filename": "hard-negative-teddy-daylight-01_000019.png",
+        "sharpness_laplacian_variance": 91.15039292819249
+      },
+      {
+        "brightness_mean": 138.45888845486112,
+        "clipping_percent": 0.003689236111111111,
+        "image_filename": "hard-negative-teddy-daylight-01_000020.png",
+        "sharpness_laplacian_variance": 69.41742916916066
+      },
+      {
+        "brightness_mean": 138.7432621527778,
+        "clipping_percent": 0.006901041666666667,
+        "image_filename": "hard-negative-teddy-daylight-01_000021.png",
+        "sharpness_laplacian_variance": 71.44479990660699
+      },
+      {
+        "brightness_mean": 134.0973671875,
+        "clipping_percent": 0.005121527777777778,
+        "image_filename": "sitting-center-daylight-01_000001.png",
+        "sharpness_laplacian_variance": 91.5206857636168
+      },
+      {
+        "brightness_mean": 133.9533745659722,
+        "clipping_percent": 0.007335069444444444,
+        "image_filename": "sitting-center-daylight-01_000002.png",
+        "sharpness_laplacian_variance": 92.88894442163085
+      },
+      {
+        "brightness_mean": 133.80642491319443,
+        "clipping_percent": 0.00390625,
+        "image_filename": "sitting-center-daylight-01_000003.png",
+        "sharpness_laplacian_variance": 92.77329166660564
+      },
+      {
+        "brightness_mean": 134.53040885416667,
+        "clipping_percent": 0.00681423611111111,
+        "image_filename": "sitting-center-daylight-01_000004.png",
+        "sharpness_laplacian_variance": 90.3384569079588
+      },
+      {
+        "brightness_mean": 134.61183767361112,
+        "clipping_percent": 0.00625,
+        "image_filename": "sitting-center-daylight-01_000005.png",
+        "sharpness_laplacian_variance": 90.26410111025186
+      },
+      {
+        "brightness_mean": 134.4986076388889,
+        "clipping_percent": 0.005555555555555556,
+        "image_filename": "sitting-center-daylight-01_000006.png",
+        "sharpness_laplacian_variance": 98.31439580468066
+      },
+      {
+        "brightness_mean": 134.4702673611111,
+        "clipping_percent": 0.006119791666666667,
+        "image_filename": "sitting-center-daylight-01_000007.png",
+        "sharpness_laplacian_variance": 89.23773847473518
+      },
+      {
+        "brightness_mean": 134.78142708333334,
+        "clipping_percent": 0.007986111111111112,
+        "image_filename": "sitting-center-daylight-01_000008.png",
+        "sharpness_laplacian_variance": 90.16494681483215
+      },
+      {
+        "brightness_mean": 134.23999522569446,
+        "clipping_percent": 0.006423611111111112,
+        "image_filename": "sitting-center-daylight-01_000009.png",
+        "sharpness_laplacian_variance": 88.75852516866726
+      },
+      {
+        "brightness_mean": 134.50683984375,
+        "clipping_percent": 0.005078125,
+        "image_filename": "sitting-center-daylight-01_000010.png",
+        "sharpness_laplacian_variance": 87.54760108843749
+      },
+      {
+        "brightness_mean": 134.42184505208334,
+        "clipping_percent": 0.005425347222222222,
+        "image_filename": "sitting-center-daylight-01_000011.png",
+        "sharpness_laplacian_variance": 87.01932243078993
+      },
+      {
+        "brightness_mean": 132.58273003472223,
+        "clipping_percent": 0.005642361111111111,
+        "image_filename": "sitting-center-daylight-01_000012.png",
+        "sharpness_laplacian_variance": 95.70317577437777
+      },
+      {
+        "brightness_mean": 132.80068532986112,
+        "clipping_percent": 0.007248263888888888,
+        "image_filename": "sitting-center-daylight-01_000013.png",
+        "sharpness_laplacian_variance": 96.27440219419864
+      },
+      {
+        "brightness_mean": 132.5840368923611,
+        "clipping_percent": 0.005815972222222222,
+        "image_filename": "sitting-center-daylight-01_000014.png",
+        "sharpness_laplacian_variance": 95.85454334303093
+      },
+      {
+        "brightness_mean": 133.46126475694444,
+        "clipping_percent": 0.006467013888888889,
+        "image_filename": "sitting-center-daylight-01_000015.png",
+        "sharpness_laplacian_variance": 95.26390104151898
+      },
+      {
+        "brightness_mean": 133.5271931423611,
+        "clipping_percent": 0.007552083333333333,
+        "image_filename": "sitting-center-daylight-01_000016.png",
+        "sharpness_laplacian_variance": 96.72058392740207
+      },
+      {
+        "brightness_mean": 133.58043315972222,
+        "clipping_percent": 0.005685763888888889,
+        "image_filename": "sitting-center-daylight-01_000017.png",
+        "sharpness_laplacian_variance": 89.82999053544997
+      },
+      {
+        "brightness_mean": 133.08989322916668,
+        "clipping_percent": 0.00802951388888889,
+        "image_filename": "sitting-center-daylight-01_000018.png",
+        "sharpness_laplacian_variance": 96.97302211857529
+      },
+      {
+        "brightness_mean": 133.17325998263888,
+        "clipping_percent": 0.005208333333333334,
+        "image_filename": "sitting-center-daylight-01_000019.png",
+        "sharpness_laplacian_variance": 93.03882150777008
+      },
+      {
+        "brightness_mean": 132.83670138888888,
+        "clipping_percent": 0.006076388888888889,
+        "image_filename": "sitting-center-daylight-01_000020.png",
+        "sharpness_laplacian_variance": 98.1137625867963
+      },
+      {
+        "brightness_mean": 132.97323307291666,
+        "clipping_percent": 0.006336805555555556,
+        "image_filename": "sitting-center-daylight-01_000021.png",
+        "sharpness_laplacian_variance": 97.92329072478944
+      },
+      {
+        "brightness_mean": 114.52059505208334,
+        "clipping_percent": 0.006640625000000001,
+        "image_filename": "standing-center-near-daylight-01_000001.png",
+        "sharpness_laplacian_variance": 136.77715281521247
+      },
+      {
+        "brightness_mean": 113.08889105902777,
+        "clipping_percent": 0.009505208333333333,
+        "image_filename": "standing-center-near-daylight-01_000002.png",
+        "sharpness_laplacian_variance": 154.14701384254445
+      },
+      {
+        "brightness_mean": 113.41141970486112,
+        "clipping_percent": 0.009027777777777777,
+        "image_filename": "standing-center-near-daylight-01_000003.png",
+        "sharpness_laplacian_variance": 147.44858376704448
+      },
+      {
+        "brightness_mean": 119.10439887152778,
+        "clipping_percent": 0.006076388888888889,
+        "image_filename": "standing-center-near-daylight-01_000004.png",
+        "sharpness_laplacian_variance": 146.29687205656762
+      },
+      {
+        "brightness_mean": 118.33573177083333,
+        "clipping_percent": 0.012630208333333334,
+        "image_filename": "standing-center-near-daylight-01_000005.png",
+        "sharpness_laplacian_variance": 147.03290103008047
+      },
+      {
+        "brightness_mean": 115.38558940972223,
+        "clipping_percent": 0.005989583333333333,
+        "image_filename": "standing-center-near-daylight-01_000006.png",
+        "sharpness_laplacian_variance": 126.6116028451724
+      },
+      {
+        "brightness_mean": 116.88962369791666,
+        "clipping_percent": 0.004600694444444445,
+        "image_filename": "standing-center-near-daylight-01_000007.png",
+        "sharpness_laplacian_variance": 118.58746288913134
+      },
+      {
+        "brightness_mean": 115.2101015625,
+        "clipping_percent": 0.0078125,
+        "image_filename": "standing-center-near-daylight-01_000008.png",
+        "sharpness_laplacian_variance": 135.51499553612595
+      },
+      {
+        "brightness_mean": 116.00261154513889,
+        "clipping_percent": 0.006684027777777778,
+        "image_filename": "standing-center-near-daylight-01_000009.png",
+        "sharpness_laplacian_variance": 126.63643263365171
+      },
+      {
+        "brightness_mean": 116.26363324652777,
+        "clipping_percent": 0.0045138888888888885,
+        "image_filename": "standing-center-near-daylight-01_000010.png",
+        "sharpness_laplacian_variance": 128.37878071197719
+      },
+      {
+        "brightness_mean": 117.53084722222222,
+        "clipping_percent": 0.004861111111111111,
+        "image_filename": "standing-center-near-daylight-01_000011.png",
+        "sharpness_laplacian_variance": 128.86953341990815
+      },
+      {
+        "brightness_mean": 115.15568836805555,
+        "clipping_percent": 0.005295138888888888,
+        "image_filename": "standing-center-near-daylight-01_000012.png",
+        "sharpness_laplacian_variance": 130.99067182366937
+      },
+      {
+        "brightness_mean": 117.46372786458333,
+        "clipping_percent": 0.004340277777777778,
+        "image_filename": "standing-center-near-daylight-01_000013.png",
+        "sharpness_laplacian_variance": 125.34770833274254
+      },
+      {
+        "brightness_mean": 117.86533506944444,
+        "clipping_percent": 0.007118055555555556,
+        "image_filename": "standing-center-near-daylight-01_000014.png",
+        "sharpness_laplacian_variance": 127.19814452066896
+      },
+      {
+        "brightness_mean": 115.67499782986111,
+        "clipping_percent": 0.004427083333333333,
+        "image_filename": "standing-center-near-daylight-01_000015.png",
+        "sharpness_laplacian_variance": 122.88501518830455
+      },
+      {
+        "brightness_mean": 119.50261458333334,
+        "clipping_percent": 0.003993055555555556,
+        "image_filename": "standing-center-near-daylight-01_000016.png",
+        "sharpness_laplacian_variance": 120.09252730052786
+      },
+      {
+        "brightness_mean": 115.90237934027778,
+        "clipping_percent": 0.004253472222222222,
+        "image_filename": "standing-center-near-daylight-01_000017.png",
+        "sharpness_laplacian_variance": 126.37577687774588
+      },
+      {
+        "brightness_mean": 114.70115277777778,
+        "clipping_percent": 0.006163194444444445,
+        "image_filename": "standing-center-near-daylight-01_000018.png",
+        "sharpness_laplacian_variance": 134.43034851273063
+      },
+      {
+        "brightness_mean": 117.38677604166666,
+        "clipping_percent": 0.006163194444444445,
+        "image_filename": "standing-center-near-daylight-01_000019.png",
+        "sharpness_laplacian_variance": 120.00588688638643
+      },
+      {
+        "brightness_mean": 113.67913194444445,
+        "clipping_percent": 0.005555555555555556,
+        "image_filename": "standing-center-near-daylight-01_000020.png",
+        "sharpness_laplacian_variance": 121.69038598989052
+      },
+      {
+        "brightness_mean": 114.56441493055556,
+        "clipping_percent": 0.007248263888888888,
+        "image_filename": "standing-center-near-daylight-01_000021.png",
+        "sharpness_laplacian_variance": 113.08354434876544
+      },
+      {
+        "brightness_mean": 122.25027517361112,
+        "clipping_percent": 0.001996527777777778,
+        "image_filename": "standing-center-near-daylight-01_000022.png",
+        "sharpness_laplacian_variance": 114.87256061866965
+      },
+      {
+        "brightness_mean": 138.64095399305555,
+        "clipping_percent": 0.0047309027777777775,
+        "image_filename": "hard-negative-room-objects-daylight-01_000001.png",
+        "sharpness_laplacian_variance": 76.47684540700955
+      },
+      {
+        "brightness_mean": 138.4562599826389,
+        "clipping_percent": 0.005381944444444444,
+        "image_filename": "hard-negative-room-objects-daylight-01_000002.png",
+        "sharpness_laplacian_variance": 72.37614972089133
+      },
+      {
+        "brightness_mean": 138.77124956597223,
+        "clipping_percent": 0.0038194444444444443,
+        "image_filename": "hard-negative-room-objects-daylight-01_000003.png",
+        "sharpness_laplacian_variance": 69.27950425058997
+      },
+      {
+        "brightness_mean": 136.4628302951389,
+        "clipping_percent": 0.004470486111111111,
+        "image_filename": "hard-negative-room-objects-daylight-01_000004.png",
+        "sharpness_laplacian_variance": 70.75401820393205
+      },
+      {
+        "brightness_mean": 138.6957421875,
+        "clipping_percent": 0.01232638888888889,
+        "image_filename": "hard-negative-room-objects-daylight-01_000005.png",
+        "sharpness_laplacian_variance": 92.11265744172255
+      },
+      {
+        "brightness_mean": 137.49813411458334,
+        "clipping_percent": 0.017057291666666665,
+        "image_filename": "hard-negative-room-objects-daylight-01_000006.png",
+        "sharpness_laplacian_variance": 124.55165092549628
+      },
+      {
+        "brightness_mean": 137.05700737847224,
+        "clipping_percent": 0.02560763888888889,
+        "image_filename": "hard-negative-room-objects-daylight-01_000007.png",
+        "sharpness_laplacian_variance": 130.50960373210975
+      },
+      {
+        "brightness_mean": 137.11862586805555,
+        "clipping_percent": 0.018967013888888887,
+        "image_filename": "hard-negative-room-objects-daylight-01_000008.png",
+        "sharpness_laplacian_variance": 122.9331822522417
+      },
+      {
+        "brightness_mean": 136.95201953125,
+        "clipping_percent": 0.015494791666666667,
+        "image_filename": "hard-negative-room-objects-daylight-01_000009.png",
+        "sharpness_laplacian_variance": 112.68595596508618
+      },
+      {
+        "brightness_mean": 134.72723611111113,
+        "clipping_percent": 0.0045138888888888885,
+        "image_filename": "hard-negative-room-objects-daylight-01_000010.png",
+        "sharpness_laplacian_variance": 91.64559504185634
+      },
+      {
+        "brightness_mean": 139.79589713541668,
+        "clipping_percent": 0.0038194444444444443,
+        "image_filename": "hard-negative-room-objects-daylight-01_000011.png",
+        "sharpness_laplacian_variance": 93.24987755782217
+      },
+      {
+        "brightness_mean": 139.1281098090278,
+        "clipping_percent": 0.0050347222222222225,
+        "image_filename": "hard-negative-room-objects-daylight-01_000012.png",
+        "sharpness_laplacian_variance": 97.66528070859087
+      },
+      {
+        "brightness_mean": 137.8418728298611,
+        "clipping_percent": 0.0042968749999999995,
+        "image_filename": "hard-negative-room-objects-daylight-01_000013.png",
+        "sharpness_laplacian_variance": 97.1773774043142
+      },
+      {
+        "brightness_mean": 137.17461631944445,
+        "clipping_percent": 0.007769097222222222,
+        "image_filename": "hard-negative-room-objects-daylight-01_000014.png",
+        "sharpness_laplacian_variance": 101.45940969250317
+      },
+      {
+        "brightness_mean": 138.12197960069443,
+        "clipping_percent": 0.01579861111111111,
+        "image_filename": "hard-negative-room-objects-daylight-01_000015.png",
+        "sharpness_laplacian_variance": 105.08598005845336
+      },
+      {
+        "brightness_mean": 136.33091493055556,
+        "clipping_percent": 0.009678819444444445,
+        "image_filename": "hard-negative-room-objects-daylight-01_000016.png",
+        "sharpness_laplacian_variance": 112.74350606365435
+      },
+      {
+        "brightness_mean": 139.02554427083334,
+        "clipping_percent": 0.016362847222222223,
+        "image_filename": "hard-negative-room-objects-daylight-01_000017.png",
+        "sharpness_laplacian_variance": 104.94127787501186
+      },
+      {
+        "brightness_mean": 139.07378038194443,
+        "clipping_percent": 0.017708333333333333,
+        "image_filename": "hard-negative-room-objects-daylight-01_000018.png",
+        "sharpness_laplacian_variance": 111.67951455614558
+      },
+      {
+        "brightness_mean": 138.09365494791666,
+        "clipping_percent": 0.006032986111111111,
+        "image_filename": "hard-negative-room-objects-daylight-01_000019.png",
+        "sharpness_laplacian_variance": 109.45521390163681
+      },
+      {
+        "brightness_mean": 137.29615364583333,
+        "clipping_percent": 0.0010416666666666667,
+        "image_filename": "hard-negative-room-objects-daylight-01_000020.png",
+        "sharpness_laplacian_variance": 98.66252149841989
+      },
+      {
+        "brightness_mean": 137.9312170138889,
+        "clipping_percent": 0.006119791666666667,
+        "image_filename": "hard-negative-room-objects-daylight-01_000021.png",
+        "sharpness_laplacian_variance": 98.63086957437473
+      }
+    ]
+  },
+  "integrity": {
+    "all_images_valid": true,
+    "decode_failures": [],
+    "sha_mismatches": [],
+    "wrong_dimensions": []
+  },
+  "label_count": 0,
+  "manifest_image_check": {
+    "duplicate_record_filenames": [],
+    "extra_images": [],
+    "missing_images": [],
+    "unique_filename_count": 190
+  },
+  "manifest_records": 190,
+  "notes": [
+    "Raw dataset files were read only.",
+    "Quality, duplicate and near-duplicate findings are diagnostic and do not define an acceptance policy.",
+    "No model qualification for yaw or motion follows from this audit."
+  ],
+  "read_only": true,
+  "schema_version": "sie.ar0234_close_range_person_alignment_audit.v1",
+  "session_count": 9,
+  "training_status": "NOT_TRAINED"
+}
