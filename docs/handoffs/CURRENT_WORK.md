@@ -622,3 +622,24 @@ Preview показывает сырые Haar bbox тонким серым, persi
 выбранный target толстым зелёным. Это по-прежнему visual-only experimental
 locator, не qualified для yaw alignment и не подключён к temporal planner,
 turn или motion control.
+
+## Dataset capture pack: AR0234 close-range person alignment v1
+
+Подготовлен отдельный offline capture pack
+`ar0234_close_range_person_alignment_v1` для будущего fine-tune одного класса
+`person_upper_body`. Dataset ещё не собран, модель не обучена. Pack не меняет
+existing person-depth pipeline, close-range Haar locator, stereo/depth,
+calibration, ESP32, network, motor или turn/yaw logic.
+
+Capture tool использует только approved AR0234 by-id path с `1920x1200`,
+`MJPG`, `30 FPS`, buffer `1`; он не запускает model inference. Raw lossless
+PNG сохраняется только по `SPACE` или `S`, без overlay, и не перезаписывает
+существующие кадры. Dataset layout содержит `raw/`, `images/`, `labels/`,
+`manifests/`, `splits/` и `reports/`; `images/` получает hardlink к canonical
+raw PNG для совместимости с LabelImg. Первая физическая съёмка остаётся
+отдельным действием оператора.
+
+До разметки split не создаётся. После ручной LabelImg YOLO-разметки validator
+проверяет единственный class id `0`, bbox и соответствие stem. Создание
+`train/val/test` разрешено только по полным session_id, не по соседним кадрам.
+Никакой qualification для yaw или движения из подготовки dataset не следует.
