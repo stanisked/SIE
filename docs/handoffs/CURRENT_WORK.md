@@ -627,8 +627,8 @@ turn или motion control.
 
 Подготовлен отдельный offline capture pack
 `ar0234_close_range_person_alignment_v1` для будущего fine-tune одного класса
-`person_upper_body`. В persistent dataset сейчас 190 кадров из 9 sessions.
-Кадры ещё НЕ размечены, модель НЕ обучалась. Pack не меняет
+`person_upper_body`. Frozen capture snapshot содержит 394 кадра из 18
+sessions. Кадры ещё НЕ размечены, модель НЕ обучалась. Pack не меняет
 existing person-depth pipeline, close-range Haar locator, stereo/depth,
 calibration, ESP32, network, motor или turn/yaw logic.
 
@@ -645,7 +645,18 @@ raw PNG для совместимости с LabelImg. Первая физиче
 `train/val/test` разрешено только по полным session_id, не по соседним кадрам.
 Никакой qualification для yaw или движения из подготовки dataset не следует.
 
-Read-only `DATASET_AUDIT_v1` подтвердил 190/190 целостных PNG `1920x1200`,
-нулевые exact duplicate groups и 25 диагностических near-duplicate пар по
-thumbnail-критерию. Отчёт и contact sheet находятся в
-`docs/datasets/ar0234_close_range_person_alignment_v1/audit_v1/`.
+Read-only `DATASET_AUDIT_v2` подтвердил 394/394 целостных PNG `1920x1200`,
+нулевые exact duplicate groups и 45 диагностических near-duplicate пар по
+thumbnail-критерию. Frozen inventory
+`ar0234-close-range-person-alignment-v1-7ca5104ddcd29e22` фиксирует SHA-256
+каждого raw PNG и каждого manifest file. Capture package имеет статус
+`FROZEN_PENDING_ANNOTATION`.
+
+LabelImg layout readiness: ровно один `images/` directory, единственный класс
+`person_upper_body` в `classes.txt`, пустой `labels/`, 305 positive изображений
+ожидают bbox и 89 negative изображений могут законно остаться без `.txt`.
+`labelImg` на capture host пока не установлен. После установки открывать только
+`images/`, сохранять только в `labels/`; `raw/` остаётся неизменяемым.
+Отчёты находятся в
+`docs/datasets/ar0234_close_range_person_alignment_v1/audit_v2/` и
+`docs/datasets/ar0234_close_range_person_alignment_v1/frozen_capture_inventory_v1/`.

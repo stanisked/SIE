@@ -29,3 +29,19 @@ tags: дистанция, pose, положение, свет, тип сцены 
 
 Не используй соседние кадры одной session в разных выборках. `train/val/test`
 split создаётся только после полной ручной разметки и только по `session_id`.
+
+## Запуск LabelImg
+
+На capture host `labelImg` пока не установлен. После локальной установки
+запусти ровно так:
+
+```bash
+labelImg \
+  /home/stanislav/sie_rgb_stereo_fusion/datasets/ar0234_close_range_person_alignment_v1/images \
+  /home/stanislav/sie_rgb_stereo_fusion/datasets/ar0234_close_range_person_alignment_v1/classes.txt \
+  /home/stanislav/sie_rgb_stereo_fusion/datasets/ar0234_close_range_person_alignment_v1/labels
+```
+
+В LabelImg выбери формат `YOLO`. Открывай только `images/`, а save directory
+оставь `labels/`; `raw/` не открывай и не изменяй. Перед split запускай
+`manage_ar0234_close_range_person_alignment_dataset.py --validate-labels`.

@@ -11,19 +11,62 @@ from typing import Any
 from .capture import CLASS_NAME, DATASET_ID, DatasetCaptureError, _paths, _validate_output_root
 
 
-def validate_yolo_labels(root: Path) -> dict[str, Any]:
+def inspect_labelimg_layout(root: Path) -> dict[str, Any]:
+    """Describe the fixed LabelImg layout without requiring labels to exist yet."""
     _validate_output_root(root)
     paths = _paths(root)
     _require_classes(paths["classes"])
+    records = _load_capture_records(paths["capture_records"])
     images = sorted(paths["images"].glob("*.png"))
-    if not images:
-        raise DatasetCaptureError("images/ contains no PNG files")
+    image_names = {image.name for image in images}
+    if not images or image_names != set(records):
+        raise DatasetCaptureError("images/ must match capture records before annotation")
+    sessions = _load_session_metadata(paths["manifests"], {record["session_id"] for record in records.values()})
+    labels = {path.stem: path for path in paths["labels"].glob("*.txt")}
+    extras = sorted(stem for stem in labels if f"{stem}.png" not in image_names)
+    if extras:
+        raise DatasetCaptureError(f"labels without matching images: {extras}")
+    positive_pending = 0
+    negative_without_label = 0
+    for filename, record in records.items():
+        has_label = Path(filename).stem in labels
+        contains_person = sessions[record["session_id"]]
+        if contains_person and not has_label:
+            positive_pending += 1
+        if not contains_person and not has_label:
+            negative_without_label += 1
+    return {
+        "schema_version": "sie.ar0234_close_range_person_alignment_label_layout.v1",
+        "dataset_id": DATASET_ID,
+        "status": "READY_FOR_ANNOTATION",
+        "class_names": [CLASS_NAME],
+        "images_directory": str(paths["images"]),
+        "labels_directory": str(paths["labels"]),
+        "classes_file": str(paths["classes"]),
+        "image_count": len(images),
+        "existing_label_count": len(labels),
+        "positive_images_pending_annotation": positive_pending,
+        "negative_images_without_txt_allowed": negative_without_label,
+    }
+
+
+def validate_yolo_labels(root: Path) -> dict[str, Any]:
+    _validate_output_root(root)
+    paths = _paths(root)
+    layout = inspect_labelimg_layout(root)
+    images = sorted(paths["images"].glob("*.png"))
+    records = _load_capture_records(paths["capture_records"])
+    sessions = _load_session_metadata(paths["manifests"], {record["session_id"] for record in records.values()})
     validated: list[str] = []
     for image in images:
         label = paths["labels"] / f"{image.stem}.txt"
         if label.is_symlink() or not label.is_file():
-            raise DatasetCaptureError(f"missing LabelImg YOLO label: {label.name}")
+            if sessions[records[image.name]["session_id"]]:
+                raise DatasetCaptureError(f"positive image is missing LabelImg YOLO label: {label.name}")
+            continue
         _validate_label_file(label)
+        if sessions[records[image.name]["session_id"]] and not label.read_text(encoding="utf-8").strip():
+            raise DatasetCaptureError(f"positive image must contain at least one bbox: {label.name}")
         validated.append(image.stem)
     known_stems = set(validated)
     extra = sorted(path.name for path in paths["labels"].glob("*.txt") if path.stem not in known_stems)
@@ -34,6 +77,7 @@ def validate_yolo_labels(root: Path) -> dict[str, Any]:
         "dataset_id": DATASET_ID,
         "status": "VALID",
         "validated_image_count": len(validated),
+        "negative_images_without_txt_allowed": layout["negative_images_without_txt_allowed"],
         "class_name": CLASS_NAME,
     }
     json.dumps(result, allow_nan=False)
@@ -125,3 +169,20 @@ def _load_capture_records(path: Path) -> dict[str, dict[str, str]]:
             raise DatasetCaptureError("duplicate image filename in capture records")
         output[record["image_filename"]] = {"session_id": record["session_id"]}
     return output
+
+
+def _load_session_metadata(manifests: Path, session_ids: set[str]) -> dict[str, bool]:
+    result: dict[str, bool] = {}
+    for session_id in session_ids:
+        path = manifests / f"{session_id}.json"
+        if path.is_symlink() or not path.is_file():
+            raise DatasetCaptureError(f"missing session metadata: {session_id}")
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as error:
+            raise DatasetCaptureError(f"invalid session metadata: {path.name}") from error
+        contains_person = payload.get("session_tags", {}).get("contains_person") if isinstance(payload, dict) else None
+        if type(contains_person) is not bool:
+            raise DatasetCaptureError(f"session contains_person is invalid: {path.name}")
+        result[session_id] = contains_person
+    return result

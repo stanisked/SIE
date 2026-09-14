@@ -24,10 +24,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-root", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--report-version", choices=("v1", "v2"), default="v1")
     return parser.parse_args(argv)
 
 
-def audit_dataset(dataset_root: Path, output_dir: Path) -> dict[str, object]:
+def audit_dataset(dataset_root: Path, output_dir: Path, *, report_version: str = "v1") -> dict[str, object]:
     root = dataset_root.resolve()
     if not root.is_dir() or root.is_symlink():
         raise ValueError(f"dataset root must be a real directory: {dataset_root}")
@@ -91,10 +92,10 @@ def audit_dataset(dataset_root: Path, output_dir: Path) -> dict[str, object]:
         )
     quality_summary = _quality_summary(quality)
     output_dir.mkdir(parents=True, exist_ok=True)
-    contact_sheet = output_dir / "contact_sheet_3_per_session.jpg"
+    contact_sheet = output_dir / f"contact_sheet_3_per_session_{report_version}.jpg"
     _write_contact_sheet(images_by_name, records, sessions, contact_sheet)
     report: dict[str, object] = {
-        "schema_version": "sie.ar0234_close_range_person_alignment_audit.v1",
+        "schema_version": f"sie.ar0234_close_range_person_alignment_audit.{report_version}",
         "dataset_id": DATASET_ID,
         "dataset_root": str(root),
         "read_only": True,
@@ -112,9 +113,9 @@ def audit_dataset(dataset_root: Path, output_dir: Path) -> dict[str, object]:
         "training_status": "NOT_TRAINED",
         "notes": ["Raw dataset files were read only.", "Quality, duplicate and near-duplicate findings are diagnostic and do not define an acceptance policy.", "No model qualification for yaw or motion follows from this audit."],
     }
-    report_path = output_dir / "DATASET_AUDIT_v1.json"
+    report_path = output_dir / f"DATASET_AUDIT_{report_version}.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8")
-    _write_summary(report, output_dir / "DATASET_AUDIT_v1.md")
+    _write_summary(report, output_dir / f"DATASET_AUDIT_{report_version}.md", report_version)
     return report
 
 
@@ -167,13 +168,13 @@ def _write_contact_sheet(images: dict[str, np.ndarray], records: list[dict[str, 
     _write_image_exclusive(path, np.vstack(rows))
 
 
-def _write_summary(report: dict[str, object], path: Path) -> None:
+def _write_summary(report: dict[str, object], path: Path, report_version: str) -> None:
     counts = report["counts"]
     integrity = report["integrity"]
     quality = report["image_quality"]["aggregate"]
     duplicates = report["duplicates"]
     lines = [
-        "# DATASET_AUDIT_v1",
+        f"# DATASET_AUDIT_{report_version}",
         "",
         f"Dataset: `{report['dataset_root']}` (read-only audit).",
         "",
@@ -227,8 +228,8 @@ def _write_image_exclusive(path: Path, image: np.ndarray) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    report = audit_dataset(args.dataset_root, args.output_dir)
-    print(json.dumps({"status": "OK", "report": str(args.output_dir / "DATASET_AUDIT_v1.json"), "sessions": report["session_count"], "images": report["image_count"]}, sort_keys=True))
+    report = audit_dataset(args.dataset_root, args.output_dir, report_version=args.report_version)
+    print(json.dumps({"status": "OK", "report": str(args.output_dir / f"DATASET_AUDIT_{args.report_version}.json"), "sessions": report["session_count"], "images": report["image_count"]}, sort_keys=True))
     return 0
 
 
