@@ -9,15 +9,16 @@
 
 ## Разметка
 
-Используй LabelImg в YOLO format. `classes.txt` содержит ровно одну строку:
-`person_upper_body`. Один bbox должен включать голову, плечи и торс до нижней
-границы кадра. Лицо отдельно не размечается. Для пустой сцены LabelImg должен
-оставить корректный пустой `.txt` с тем же stem, что и PNG.
+Разметка выполняется локально в LabelMe, затем детерминированно конвертируется
+в YOLO. Единственный допустимый класс: `person_upper_body`. LabelMe JSON
+хранится отдельно в `annotations_labelme/`; в JSON запрещён `imageData`.
+`raw/` остаётся canonical lossless source, а `images/` содержит hardlink на
+тот же PNG и является входом LabelMe. YOLO `.txt` создаются только converter
+в `labels/`, который никогда не заменяет существующий label без `--overwrite`.
 
-Canonical lossless source хранится в `raw/`; `images/` содержит hardlink на
-тот же PNG и служит входом LabelImg. `labels/` содержит соответствующие YOLO
-файлы. Перед split запускай validator, который требует class id `0`, пять
-полей, конечные normalized значения в `(0, 1]` и bbox внутри кадра.
+Для positive кадра требуется ровно один rectangle. Для negative кадра допустим
+JSON без `shapes` либо отсутствие JSON; его YOLO file не содержит bbox.
+До полного audit не создавай `train/val/test` split.
 
 ## Сбор
 
@@ -30,18 +31,19 @@ tags: дистанция, pose, положение, свет, тип сцены 
 Не используй соседние кадры одной session в разных выборках. `train/val/test`
 split создаётся только после полной ручной разметки и только по `session_id`.
 
-## Запуск LabelImg
+## Запуск LabelMe
 
-На capture host `labelImg` пока не установлен. После локальной установки
-запусти ровно так:
+Открывай только `images/`; LabelMe JSON сохраняй только в
+`annotations_labelme/`. Не открывай и не меняй `raw/`. Конфиг ограничивает
+метку `person_upper_body`, exact validation, rectangle workflow и выключает
+embedding исходного изображения:
 
 ```bash
-labelImg \
+labelme \
   /home/stanislav/sie_rgb_stereo_fusion/datasets/ar0234_close_range_person_alignment_v1/images \
-  /home/stanislav/sie_rgb_stereo_fusion/datasets/ar0234_close_range_person_alignment_v1/classes.txt \
-  /home/stanislav/sie_rgb_stereo_fusion/datasets/ar0234_close_range_person_alignment_v1/labels
+  --config /home/stanislav/dev_ws/sie_v6_temperature_disabled_mvp/docs/datasets/ar0234_close_range_person_alignment_v1/labelme_person_upper_body_config.yaml \
+  --output /home/stanislav/sie_rgb_stereo_fusion/datasets/ar0234_close_range_person_alignment_v1/annotations_labelme
 ```
 
-В LabelImg выбери формат `YOLO`. Открывай только `images/`, а save directory
-оставь `labels/`; `raw/` не открывай и не изменяй. Перед split запускай
-`manage_ar0234_close_range_person_alignment_dataset.py --validate-labels`.
+После разметки сначала выполни `--mode dry-run`, затем только при чистом
+отчёте `--mode apply`; validation не создаёт split.

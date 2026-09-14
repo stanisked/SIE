@@ -652,11 +652,18 @@ thumbnail-критерию. Frozen inventory
 каждого raw PNG и каждого manifest file. Capture package имеет статус
 `FROZEN_PENDING_ANNOTATION`.
 
-LabelImg layout readiness: ровно один `images/` directory, единственный класс
-`person_upper_body` в `classes.txt`, пустой `labels/`, 305 positive изображений
-ожидают bbox и 89 negative изображений могут законно остаться без `.txt`.
-`labelImg` на capture host пока не установлен. После установки открывать только
-`images/`, сохранять только в `labels/`; `raw/` остаётся неизменяемым.
+Подготовлен локальный LabelMe -> YOLO annotation workflow для frozen snapshot.
+LabelMe принимает только exact `person_upper_body`, `rectangle` и не встраивает
+`imageData`; JSON хранится отдельно в `annotations_labelme/`. Converter
+проверяет snapshot ID, SHA raw PNG, `imagePath`, `1920x1200` и правило одного
+bbox для 305 positive кадров. 89 negative кадров могут законно не иметь JSON
+и YOLO bbox. `labels/` не перезаписывается без явного `--overwrite`; split пока
+не создаётся. `raw/`, `images/`, manifests и frozen inventory неизменяемы.
+Модель по-прежнему не обучалась и не qualified для yaw или движения.
+Read-only validator обнаружил уже существующий
+`labels/hard-negative-room-objects-artificial-01_000001.json`. Он не удалён,
+не перемещён и не использован как YOLO label; дальнейший apply fail-closed,
+пока этот файл не пройдет отдельный явный аудит.
 Отчёты находятся в
 `docs/datasets/ar0234_close_range_person_alignment_v1/audit_v2/` и
 `docs/datasets/ar0234_close_range_person_alignment_v1/frozen_capture_inventory_v1/`.

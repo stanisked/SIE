@@ -1,0 +1,24 @@
+---
+# LabelMe config for ar0234_close_range_person_alignment_v1 only.
+auto_save: false
+display_label_popup: false
+with_image_data: false
+keep_prev: false
+keep_prev_scale: false
+keep_prev_brightness_contrast: false
+flags:
+label_flags:
+labels:
+  - person_upper_body
+validate_label: exact
+sort_labels: true
+canvas:
+  allow_out_of_bounds_points: false
+shortcuts:
+  create_rectangle: Ctrl+R
+  create_polygon:
+  create_oriented_rectangle:
+  create_circle:
+  create_line:
+  create_point:
+  create_linestrip:
