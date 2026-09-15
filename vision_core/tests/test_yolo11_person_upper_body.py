@@ -7,6 +7,7 @@ import numpy as np
 from vision_core.person_localization.yolo11_person_upper_body import (
     LetterboxTransform,
     PersonUpperBodyDetection,
+    bbox_truncation_flags,
     build_preview_record,
     decode_yolo11_one_class_output,
     letterbox_bgr,
@@ -56,5 +57,28 @@ def test_nms_and_json_safe_visual_only_record() -> None:
     )
     assert record["reference_frame"] == "ar0234_image_frame"
     assert record["detection_count"] == 2
+    assert record["detections"][0]["truncated_left"] is False
+    assert record["detections"][0]["truncated_right"] is False
+    assert record["detections"][0]["truncated_top"] is False
+    assert record["detections"][0]["truncated_bottom"] is False
     assert "pixels" not in record
     json.dumps(record, allow_nan=False)
+
+
+def test_bbox_truncation_flags_describe_each_image_boundary() -> None:
+    assert bbox_truncation_flags(
+        (0.0, 12.0, 700.0, 1200.0), frame_width=1920, frame_height=1200
+    ) == {
+        "truncated_left": True,
+        "truncated_right": False,
+        "truncated_top": False,
+        "truncated_bottom": True,
+    }
+    assert bbox_truncation_flags(
+        (200.0, 0.0, 1920.0, 800.0), frame_width=1920, frame_height=1200
+    ) == {
+        "truncated_left": False,
+        "truncated_right": True,
+        "truncated_top": True,
+        "truncated_bottom": False,
+    }

@@ -142,6 +142,32 @@ def nms_detections(
     return selected
 
 
+def bbox_truncation_flags(
+    bbox_xyxy_px: tuple[float, float, float, float],
+    *,
+    frame_width: int,
+    frame_height: int,
+) -> dict[str, bool]:
+    """Describe whether a decoded bbox reaches an image boundary.
+
+    These flags describe geometric truncation evidence only.  They do not
+    suppress a detection or serve as a decision or motion gate.
+    """
+    if frame_width <= 0 or frame_height <= 0:
+        raise ValueError("frame dimensions must be positive")
+    x1, y1, x2, y2 = bbox_xyxy_px
+    if not all(math.isfinite(value) for value in bbox_xyxy_px):
+        raise ValueError("bbox values must be finite")
+    if x2 <= x1 or y2 <= y1:
+        raise ValueError("bbox must have positive area")
+    return {
+        "truncated_left": x1 <= 0.0,
+        "truncated_right": x2 >= float(frame_width),
+        "truncated_top": y1 <= 0.0,
+        "truncated_bottom": y2 >= float(frame_height),
+    }
+
+
 def decode_yolo11_one_class_output(
     output: np.ndarray,
     *,
@@ -193,6 +219,11 @@ def build_preview_record(
             "bbox_xyxy_px": [round(value, 6) for value in item.bbox_xyxy_px],
             "center_x_px": round(item.center_x_px, 6),
             "confidence": round(item.confidence, 6),
+            **bbox_truncation_flags(
+                item.bbox_xyxy_px,
+                frame_width=frame_width,
+                frame_height=frame_height,
+            ),
         }
         for item in detections
     ]

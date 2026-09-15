@@ -761,6 +761,34 @@ turn, motor, ESP32, HTTP или network action.
 команда находятся в
 `docs/datasets/ar0234_close_range_person_alignment_v1/ONNX_PREVIEW_SETUP.md`.
 Этот preview не квалифицирует yaw или движение.
+
+### Первый AR0234 YOLO11 `person_upper_body` visual-only live replay
+
+Первый live replay зафиксирован как visual-only evidence для
+`best.onnx` с SHA-256
+`dde42238b5742f9c0b79c29863c44bc97b678aa75b86a4db5bb602a2d72c259c`.
+Это YOLO11n с единственным class `person_upper_body` и candidate confidence
+threshold `0.40`. Внутренний Colab test сообщил precision `0.99755`, recall
+`1.0`, mAP50 `0.995`, mAP50-95 `0.89608`; эти метрики относятся к этому
+internal test, а не к квалификации SIE runtime.
+
+В live human center replay все `33` присланных JSONL frames имели
+`detection_count=1`, mean `center_x_px=995.104` и mean confidence `0.933`.
+В live left replay `center_x_px` был около `541 px`, confidence `0.945..0.954`;
+в live right replay `center_x_px=1457..1475 px`, confidence `0.896..0.953`.
+При AR0234 intrinsic `cx` около `941 px` это подтверждает detection и
+корректный horizontal image-space ordering left/center/right. В отдельном
+live Teddy placement все присланные JSONL frames имели `detection_count=0`.
+
+Preview record теперь несёт у каждого bbox evidence-only поля
+`truncated_left`, `truncated_right`, `truncated_top`, `truncated_bottom`.
+Они отмечают касание bbox границы `1920x1200`, не блокируют detection и не
+являются gate. В текущих human replay bbox часто `truncated_bottom`, поэтому
+этот факт должен сохраняться как quality provenance, а не скрываться.
+
+Модель остаётся visual-only. Этот replay не доказывает точность yaw,
+autonomy или qualification движения. Следующий этап: stationary
+robot-mounted visual replay, без подключения модели к yaw, turn или motion.
 Отчёт и contact sheet:
 `docs/datasets/ar0234_close_range_person_alignment_v1/labelme_consistency_audit_v1/`.
 Отчёты находятся в
