@@ -686,6 +686,25 @@ Annotation protocol уточнён: единственный class остаёт�
 `person_upper_body`; bbox идёт от верхней границы головы до пояса или верхних
 бёдер, всегда исключает ноги и ступни, а нижней границы изображения касается
 только при реально обрезанном торсе.
+
+Read-only LabelMe consistency audit v1 выполнен для 305 positive JSON и 305
+shapes: все имеют `person_upper_body`, один `rectangle`, разрешимый `imagePath`
+к существующему PNG и корректную геометрию после нормализации порядка точек.
+Нет proven impossible bbox, wrong label, multiple shape или image mismatch.
+Диагностически отмечены 43 reversed-X point order, 23 top-edge и 103
+bottom-edge bbox. Edge-touch не является доказательством ошибки, но эти
+подмножества требуют ручной проверки по уточнённому upper-body protocol.
+Aspect-ratio extremes коррелируют с sitting pose, а не сами по себе с ошибкой.
+
+Work-preserving решение audit: сохранить semantics `person_upper_body`.
+Не менять её на `person` без перерисовки и не делать bulk rewrite bbox;
+точечный review допустим только для кандидатов. Отдельно обнаружен workflow
+mismatch: все LabelMe `imagePath` корректно разрешаются как `../images/...`,
+но текущий converter требует basename, а текущий несохранённый config содержит
+`labels: [person]` вместо `person_upper_body`. Эти два finding не исправлены
+этим read-only audit и требуют отдельного узкого решения до YOLO conversion.
+Отчёт и contact sheet:
+`docs/datasets/ar0234_close_range_person_alignment_v1/labelme_consistency_audit_v1/`.
 Отчёты находятся в
 `docs/datasets/ar0234_close_range_person_alignment_v1/audit_v2/` и
 `docs/datasets/ar0234_close_range_person_alignment_v1/frozen_capture_inventory_v1/`.
