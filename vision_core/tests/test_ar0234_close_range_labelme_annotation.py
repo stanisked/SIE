@@ -51,12 +51,18 @@ def _prepare_frozen_package(tmp_path: Path) -> tuple[Path, Path, Path, dict[str,
     return root, annotations, inventory, {"positive": positive, "negative": negative}
 
 
-def _labelme(filename: str, *, label: str = "person_upper_body", shapes: list[dict[str, object]] | None = None) -> dict[str, object]:
+def _labelme(
+    filename: str,
+    *,
+    label: str = "person_upper_body",
+    shapes: list[dict[str, object]] | None = None,
+    image_path: str | None = None,
+) -> dict[str, object]:
     return {
         "version": "5.0.0",
         "flags": {},
         "shapes": shapes if shapes is not None else [{"label": label, "points": [[100.0, 120.0], [900.0, 1100.0]], "shape_type": "rectangle", "flags": {}}],
-        "imagePath": filename,
+        "imagePath": image_path if image_path is not None else f"../images/{filename}",
         "imageData": None,
         "imageHeight": 1200,
         "imageWidth": 1920,
@@ -89,6 +95,31 @@ def test_invalid_or_multiple_labelme_shapes_fail_closed_without_writing_label(tm
     assert report["status"] == "BLOCKED_ANNOTATION_FAILURES"
     assert report["failure_count"] == 1
     assert not (root / "labels" / f"{stem}.txt").exists()
+
+
+def test_relative_image_path_and_reversed_rectangle_points_are_normalized_in_dry_run(tmp_path: Path) -> None:
+    root, annotations, inventory, names = _prepare_frozen_package(tmp_path)
+    stem = Path(names["positive"]).stem
+    payload = _labelme(
+        names["positive"],
+        shapes=[{"label": "person_upper_body", "points": [[900, 1100], [100, -2.842170943040401e-14]], "shape_type": "rectangle", "flags": {}}],
+    )
+    (annotations / f"{stem}.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = convert_labelme_to_yolo(root, annotations_dir=annotations, inventory_path=inventory, dry_run=True, overwrite=False)
+    assert report["status"] == "READY_TO_WRITE"
+    assert report["normalized_point_order_records"] == 1
+    assert report["converted"][0]["yolo"] == "0 0.2604166667 0.4583333333 0.4166666667 0.9166666667"
+
+
+def test_image_path_escape_fails_closed(tmp_path: Path) -> None:
+    root, annotations, inventory, names = _prepare_frozen_package(tmp_path)
+    stem = Path(names["positive"]).stem
+    payload = _labelme(names["positive"], image_path=f"../raw/{names['positive']}")
+    (annotations / f"{stem}.json").write_text(json.dumps(payload), encoding="utf-8")
+    report = convert_labelme_to_yolo(root, annotations_dir=annotations, inventory_path=inventory, dry_run=True, overwrite=False)
+    assert report["status"] == "BLOCKED_ANNOTATION_FAILURES"
+    assert report["failure_count"] == 1
+    assert "escapes the dataset images directory" in report["failures"][0]["reason"]
 
 
 def test_validator_reports_non_yolo_file_in_labels_without_deleting_it(tmp_path: Path) -> None:

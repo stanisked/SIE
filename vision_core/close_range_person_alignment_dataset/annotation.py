@@ -18,6 +18,7 @@ ANNOTATION_CLASS = "person_upper_body"
 ANNOTATION_SCHEMA_VERSION = "sie.ar0234_close_range_person_alignment_annotation.v1"
 EXPECTED_WIDTH = 1920
 EXPECTED_HEIGHT = 1200
+EDGE_EPSILON_PX = 1e-9
 
 
 def convert_labelme_to_yolo(
@@ -36,6 +37,7 @@ def convert_labelme_to_yolo(
         for path in context["unexpected_label_files"]
     ]
     negatives_without_json = 0
+    normalized_point_order_records = 0
     for filename, record in context["records"].items():
         stem = Path(filename).stem
         annotation = annotations_dir / f"{stem}.json"
@@ -46,10 +48,18 @@ def convert_labelme_to_yolo(
                     raise DatasetCaptureError("positive image has no LabelMe JSON")
                 negatives_without_json += 1
                 continue
-            result = _parse_annotation(annotation, filename=filename, positive=positive)
+            result = _parse_annotation(
+                annotation,
+                filename=filename,
+                expected_image=context["image_paths"][filename],
+                images_dir=context["paths"]["images"],
+                positive=positive,
+            )
             if result is None:
                 continue
-            yolo = _to_yolo(result)
+            rectangle, normalized_point_order = result
+            normalized_point_order_records += int(normalized_point_order)
+            yolo = _to_yolo(rectangle)
             target = context["paths"]["labels"] / f"{stem}.txt"
             if target.exists() or target.is_symlink():
                 if not overwrite:
@@ -72,6 +82,7 @@ def convert_labelme_to_yolo(
         "status": status,
         "image_count": len(context["records"]),
         "converted_positive_count": len(converted),
+        "normalized_point_order_records": normalized_point_order_records,
         "negative_images_without_json": negatives_without_json,
         "failure_count": len(failures),
         "failures": failures,
@@ -100,7 +111,13 @@ def validate_annotation_package(
         yolo = context["paths"]["labels"] / f"{stem}.txt"
         positive = context["contains_person"][record["session_id"]]
         try:
-            result = None if not annotation.exists() else _parse_annotation(annotation, filename=filename, positive=positive)
+            result = None if not annotation.exists() else _parse_annotation(
+                annotation,
+                filename=filename,
+                expected_image=context["image_paths"][filename],
+                images_dir=context["paths"]["images"],
+                positive=positive,
+            )
             if positive and result is None:
                 pending_positive.append(filename)
                 continue
@@ -108,7 +125,7 @@ def validate_annotation_package(
                 negative_with_bbox.append(filename)
                 continue
             if result is not None:
-                expected = _to_yolo(result)
+                expected = _to_yolo(result[0])
                 if not yolo.is_file() or yolo.is_symlink():
                     yolo_missing.append(filename)
                 elif yolo.read_text(encoding="utf-8").strip() != expected:
@@ -173,18 +190,37 @@ def _load_context(root: Path, annotations_dir: Path, inventory_path: Path) -> di
     return {
         "paths": paths,
         "records": records,
+        "image_paths": image_paths,
         "contains_person": contains_person,
         "snapshot_id": inventory["snapshot_id"],
         "unexpected_label_files": unexpected_label_files,
     }
 
 
-def _parse_annotation(path: Path, *, filename: str, positive: bool) -> tuple[float, float, float, float] | None:
+def _parse_annotation(
+    path: Path,
+    *,
+    filename: str,
+    expected_image: Path,
+    images_dir: Path,
+    positive: bool,
+) -> tuple[tuple[float, float, float, float], bool] | None:
     if path.is_symlink() or not path.is_file():
         raise DatasetCaptureError("annotation JSON is unsafe or missing")
     payload = _strict_json(path)
-    if payload.get("imagePath") != filename:
+    image_path_value = payload.get("imagePath")
+    if not isinstance(image_path_value, str) or not image_path_value:
+        raise DatasetCaptureError("imagePath must be a non-empty string")
+    resolved_images_dir = images_dir.resolve(strict=True)
+    resolved_image = (path.parent / image_path_value).resolve(strict=False)
+    try:
+        resolved_image.relative_to(resolved_images_dir)
+    except ValueError as error:
+        raise DatasetCaptureError("imagePath escapes the dataset images directory") from error
+    if resolved_image != expected_image.resolve(strict=True) or resolved_image.name != filename:
         raise DatasetCaptureError("imagePath does not match the source image filename")
+    if not resolved_image.is_file() or resolved_image.is_symlink():
+        raise DatasetCaptureError("imagePath source image is missing or unsafe")
     if payload.get("imageWidth") != EXPECTED_WIDTH or payload.get("imageHeight") != EXPECTED_HEIGHT:
         raise DatasetCaptureError("LabelMe image dimensions must be 1920x1200")
     if payload.get("imageData") is not None:
@@ -209,9 +245,20 @@ def _parse_annotation(path: Path, *, filename: str, positive: bool) -> tuple[flo
     except (TypeError, ValueError, IndexError) as error:
         raise DatasetCaptureError("rectangle points are invalid") from error
     values = (x1, y1, x2, y2)
-    if any(not math.isfinite(value) for value in values) or not (0.0 <= x1 < x2 <= EXPECTED_WIDTH and 0.0 <= y1 < y2 <= EXPECTED_HEIGHT):
+    if any(not math.isfinite(value) for value in values):
         raise DatasetCaptureError("rectangle must be finite, non-empty and inside image bounds")
-    return x1, y1, x2, y2
+    left, right = sorted((x1, x2))
+    top, bottom = sorted((y1, y2))
+    if not (
+        -EDGE_EPSILON_PX <= left < right <= EXPECTED_WIDTH + EDGE_EPSILON_PX
+        and -EDGE_EPSILON_PX <= top < bottom <= EXPECTED_HEIGHT + EDGE_EPSILON_PX
+    ):
+        raise DatasetCaptureError("rectangle must be finite, non-empty and inside image bounds")
+    left = min(max(left, 0.0), float(EXPECTED_WIDTH))
+    right = min(max(right, 0.0), float(EXPECTED_WIDTH))
+    top = min(max(top, 0.0), float(EXPECTED_HEIGHT))
+    bottom = min(max(bottom, 0.0), float(EXPECTED_HEIGHT))
+    return (left, top, right, bottom), (x1 > x2 or y1 > y2)
 
 
 def _to_yolo(rectangle: tuple[float, float, float, float]) -> str:

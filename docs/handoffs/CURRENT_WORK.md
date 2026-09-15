@@ -700,9 +700,23 @@ Work-preserving решение audit: сохранить semantics `person_upper
 Не менять её на `person` без перерисовки и не делать bulk rewrite bbox;
 точечный review допустим только для кандидатов. Отдельно обнаружен workflow
 mismatch: все LabelMe `imagePath` корректно разрешаются как `../images/...`,
-но текущий converter требует basename, а текущий несохранённый config содержит
-`labels: [person]` вместо `person_upper_body`. Эти два finding не исправлены
-этим read-only audit и требуют отдельного узкого решения до YOLO conversion.
+но предыдущий converter требовал basename, а текущий несохранённый config
+содержал `labels: [person]` вместо `person_upper_body`. Эти finding были
+отмечены для отдельной compatibility-правки до YOLO conversion.
+
+Compatibility-правка выполнена: config восстановлен к единственному exact
+class `person_upper_body`; converter теперь принимает `../images/<name>.png`
+только если canonical resolve остаётся внутри dataset `images/`, файл есть,
+stem и `1920x1200` совпадают. Path traversal остаётся fail-closed. Порядок
+двух rectangle points нормализуется через min/max; микродопуск
+`1e-9 px` допускает только floating-point след границы `-2.84e-14`, а не
+реальный выход bbox за кадр. Report явно несёт
+`normalized_point_order_records`.
+
+Actual dry-run прошёл: `305` positive LabelMe JSON готовы к conversion,
+`89` negative без JSON допустимы, `43` records нормализовали point order,
+`failure_count=0`, `labels/*.txt` осталось `0 -> 0`. Apply/YOLO conversion,
+split и model artifacts по-прежнему не выполнялись.
 Отчёт и contact sheet:
 `docs/datasets/ar0234_close_range_person_alignment_v1/labelme_consistency_audit_v1/`.
 Отчёты находятся в
