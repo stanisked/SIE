@@ -17,7 +17,7 @@ from vision_core.close_range_person_alignment_dataset.capture import (
     save_raw_frame,
     validate_stable_device_path,
 )
-from vision_core.close_range_person_alignment_dataset.labels import inspect_labelimg_layout, validate_yolo_labels
+from vision_core.close_range_person_alignment_dataset.labels import _validate_label_file, inspect_labelimg_layout, validate_yolo_labels
 
 
 NOW = datetime(2026, 9, 14, tzinfo=timezone.utc)
@@ -92,3 +92,13 @@ def test_labelimg_preflight_allows_unlabelled_negative_but_not_positive(tmp_path
         validate_yolo_labels(root)
     (root / "labels" / f"{Path(positive['image_filename']).stem}.txt").write_text("0 0.5 0.5 0.4 0.5\n", encoding="utf-8")
     assert validate_yolo_labels(root)["status"] == "VALID"
+
+
+def test_yolo_serialization_rounding_tolerance_is_not_a_real_boundary_relaxation(tmp_path: Path) -> None:
+    rounded = tmp_path / "rounded.txt"
+    rounded.write_text("0 0.4183426370 0.5000089030 0.2524345444 0.9999821941\n", encoding="utf-8")
+    _validate_label_file(rounded)
+    outside = tmp_path / "outside.txt"
+    outside.write_text("0 0.9 0.5 0.3 0.4\n", encoding="utf-8")
+    with pytest.raises(DatasetCaptureError, match="bbox extends outside"):
+        _validate_label_file(outside)

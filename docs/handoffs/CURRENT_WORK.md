@@ -727,6 +727,17 @@ Controlled apply выполнен после подтверждения: source 
 source snapshot, converter commit
 `f8db449958ddee58f71a044b57ebe98a264bd3aa` и timestamp находится в
 `docs/datasets/ar0234_close_range_person_alignment_v1/yolo_derived_labels_v1/`.
+
+Deterministic session-isolated split создан для того же frozen snapshot с
+strategy `deterministic_session_stratified_pair_holdout_v1` и seed `20260915`.
+Распределение: train `268` images (`221` positive, `47` negative), val `63`
+(`42` positive, `21` negative), test `63` (`42` positive, `21` negative).
+Каждый split содержит positive и negative evidence, daylight и artificial
+sessions; все `394` images распределены ровно один раз, session overlap и
+image overlap отсутствуют. `splits/` содержит lists, `dataset.yaml`, manifest,
+SHA-256 split files и report. Это internal held-out split одного capture
+environment, не доказательство generalization, training quality, yaw или
+motion qualification. Training/model creation не выполнялись.
 Отчёт и contact sheet:
 `docs/datasets/ar0234_close_range_person_alignment_v1/labelme_consistency_audit_v1/`.
 Отчёты находятся в

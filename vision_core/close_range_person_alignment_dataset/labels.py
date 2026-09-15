@@ -11,6 +11,9 @@ from typing import Any
 from .capture import CLASS_NAME, DATASET_ID, DatasetCaptureError, _paths, _validate_output_root
 
 
+YOLO_SERIALIZATION_EPSILON = 1e-9
+
+
 def inspect_labelimg_layout(root: Path) -> dict[str, Any]:
     """Describe the fixed LabelImg layout without requiring labels to exist yet."""
     _validate_output_root(root)
@@ -147,7 +150,12 @@ def _validate_label_file(path: Path) -> None:
         values = (center_x, center_y, width, height)
         if any(not math.isfinite(value) or value <= 0.0 or value > 1.0 for value in values):
             raise DatasetCaptureError(f"{path.name}:{number} values must be finite and in (0, 1]")
-        if center_x - width / 2.0 < 0.0 or center_x + width / 2.0 > 1.0 or center_y - height / 2.0 < 0.0 or center_y + height / 2.0 > 1.0:
+        if (
+            center_x - width / 2.0 < -YOLO_SERIALIZATION_EPSILON
+            or center_x + width / 2.0 > 1.0 + YOLO_SERIALIZATION_EPSILON
+            or center_y - height / 2.0 < -YOLO_SERIALIZATION_EPSILON
+            or center_y + height / 2.0 > 1.0 + YOLO_SERIALIZATION_EPSILON
+        ):
             raise DatasetCaptureError(f"{path.name}:{number} bbox extends outside the image")
 
 
