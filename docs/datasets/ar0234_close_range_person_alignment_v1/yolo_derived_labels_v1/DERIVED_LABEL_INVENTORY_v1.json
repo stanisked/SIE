@@ -1,0 +1,1844 @@
+{
+  "converter_commit": "f8db449958ddee58f71a044b57ebe98a264bd3aa",
+  "converter_schema_version": "sie.ar0234_close_range_person_alignment_annotation.v1",
+  "converter_source_sha256": "aead3decc8399e01b0d1c7b27d932e45d4303ada998e36693d8c1dbbda924ed1",
+  "created_at_utc": "2026-09-15T12:35:12.154453+00:00",
+  "dataset_id": "ar0234_close_range_person_alignment_v1",
+  "failure_count": 0,
+  "labels": [
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000001.png",
+      "label_filename": "sitting-center-artificial-01_000001.txt",
+      "sha256": "0cfc86aa87dd295e1602d5cd7374da6134e449610d34fee98a67d0a3c65875a3"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000002.png",
+      "label_filename": "sitting-center-artificial-01_000002.txt",
+      "sha256": "6a8e17af68c5f22f251bffdf68e1164bd0c5b5e02aecef444d1c928805e9706b"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000003.png",
+      "label_filename": "sitting-center-artificial-01_000003.txt",
+      "sha256": "b528e7c765138d3a454e79f8e11e4d19e3db6a7f050efed925a3e1cf571240c4"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000004.png",
+      "label_filename": "sitting-center-artificial-01_000004.txt",
+      "sha256": "51c7be35adcab60ed0b2340996be6ff5b854962f2338b8f67cdbdb4429172afc"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000005.png",
+      "label_filename": "sitting-center-artificial-01_000005.txt",
+      "sha256": "69d493397352220b12d2eb656e51ff474de8056ac308fb0105c178848ad104d4"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000006.png",
+      "label_filename": "sitting-center-artificial-01_000006.txt",
+      "sha256": "43b8a7ecc794ab3159be95478fc518b68dac7ac600aa02b8d81a6670f1ca7a1e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000007.png",
+      "label_filename": "sitting-center-artificial-01_000007.txt",
+      "sha256": "88cd3c7687c0d63eedc282343a9cdf750a133cc3d04b2b75599c97a5f16c7532"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000008.png",
+      "label_filename": "sitting-center-artificial-01_000008.txt",
+      "sha256": "8a6498b0af75567aa5fa8076197025ed4a03384d6d05d8009a1807e8ca26c807"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000009.png",
+      "label_filename": "sitting-center-artificial-01_000009.txt",
+      "sha256": "eaea1574ba1c6bd807e5f16a1058927b4331ab2f4079ac91e1d91e98a55a0ba7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000010.png",
+      "label_filename": "sitting-center-artificial-01_000010.txt",
+      "sha256": "d5a309e26c5af68adc65b894be6b68221caf05fe54e471450dd21159d797f991"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000011.png",
+      "label_filename": "sitting-center-artificial-01_000011.txt",
+      "sha256": "74f3d6ba9b2f4808e07d1914371e41f89440176244cbe8f7f091bc6552aeed69"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000012.png",
+      "label_filename": "sitting-center-artificial-01_000012.txt",
+      "sha256": "3ee62781813837999322e2f6fbceca1b313b8b9c2677e294f7c1c4764d2fd754"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000013.png",
+      "label_filename": "sitting-center-artificial-01_000013.txt",
+      "sha256": "ebf25ed234ed8c6cb5e8dd7534dec5040cf1e5c5c76b9c4ae2ab8edc24cdc045"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000014.png",
+      "label_filename": "sitting-center-artificial-01_000014.txt",
+      "sha256": "59d6abf606d7748f937718cb8f989be7f12347c279055174a475944a1708ed72"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000015.png",
+      "label_filename": "sitting-center-artificial-01_000015.txt",
+      "sha256": "79d01b9018fad1e0aecfdc3bd2b2e6abaf616c845a22d6bde7cce7345f066cd6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000016.png",
+      "label_filename": "sitting-center-artificial-01_000016.txt",
+      "sha256": "abec0ebe028c3dc3f53760594aba8f372c19a66be6be914d7dcb700fc304e63d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000017.png",
+      "label_filename": "sitting-center-artificial-01_000017.txt",
+      "sha256": "c4315e38b36d5f020cfc088cc79767d8be805d236b3348b2a3cd6db24b2d4781"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000018.png",
+      "label_filename": "sitting-center-artificial-01_000018.txt",
+      "sha256": "11be52c3665eb7c9b26e689c83ac05b1d291ab8acc6ae53bc2efc606a752e388"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000019.png",
+      "label_filename": "sitting-center-artificial-01_000019.txt",
+      "sha256": "1e250e05ad8a3767a78e0532376cc07ac34c52dda2639312afae33bd1360f6e5"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000020.png",
+      "label_filename": "sitting-center-artificial-01_000020.txt",
+      "sha256": "83f3c11f33b4f3fbd385f5e3ab3d1f4392debcbb5b37e9bdf95ff91d71faaa3a"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000021.png",
+      "label_filename": "sitting-center-artificial-01_000021.txt",
+      "sha256": "38e1b9bdf4d88e251b4750e71c4a1012f94ec457fac05040b006409f605afa1f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-artificial-01_000022.png",
+      "label_filename": "sitting-center-artificial-01_000022.txt",
+      "sha256": "19915695c6aeea87bbafdb8e6ba8104540b453edca7fad89bb80c9d487f680d9"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000001.png",
+      "label_filename": "sitting-center-daylight-01_000001.txt",
+      "sha256": "1e9145969971106213991b8ad1c7595e175d8056666b15264cf19520dff63ead"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000002.png",
+      "label_filename": "sitting-center-daylight-01_000002.txt",
+      "sha256": "411244a478939f8018d14a3d254d38933ea354f4b5b2b3efd9c52665b798edf2"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000003.png",
+      "label_filename": "sitting-center-daylight-01_000003.txt",
+      "sha256": "35f6b1ae915e5921e3b5be4bb46048cdd58dcdf1627da9298dff85b32535debe"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000004.png",
+      "label_filename": "sitting-center-daylight-01_000004.txt",
+      "sha256": "d1cc425d1d34112890d9af08b5aa6e3f5049245a302901cefee092e3fef7fbe6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000005.png",
+      "label_filename": "sitting-center-daylight-01_000005.txt",
+      "sha256": "560c10f5c3397c9085f5d3b0c04fb984906e3528b4542e27251a2b11622a0805"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000006.png",
+      "label_filename": "sitting-center-daylight-01_000006.txt",
+      "sha256": "3d2b75c0711329433b92c4b60206f36256d0a45d1a10fd10a9cc845f7eb78440"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000007.png",
+      "label_filename": "sitting-center-daylight-01_000007.txt",
+      "sha256": "1063fc7ac3fdfbf173b3cdb6488d0c32b191671b108fdbe9069fc7614137b800"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000008.png",
+      "label_filename": "sitting-center-daylight-01_000008.txt",
+      "sha256": "1ffc93f493fa255126017073257b665ee4b1af062c6815e672e9f574d5bd5ee8"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000009.png",
+      "label_filename": "sitting-center-daylight-01_000009.txt",
+      "sha256": "cc5e7e410b5179782507eae75b25814663d534d3fcfd005e49b95bbad0c24346"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000010.png",
+      "label_filename": "sitting-center-daylight-01_000010.txt",
+      "sha256": "9202b22df54acd6287769ad56cf066d4b9f0f2944afe5fdd28513bf761f9bd95"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000011.png",
+      "label_filename": "sitting-center-daylight-01_000011.txt",
+      "sha256": "e40f6eef444a97ec0dd0a6faebb6f4c69104bbe32e1f1776534d6cc08e4cde65"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000012.png",
+      "label_filename": "sitting-center-daylight-01_000012.txt",
+      "sha256": "86069f904ca3156721173fc1a5c18babdd043f9d2f6d8a4037535b9daeec8353"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000013.png",
+      "label_filename": "sitting-center-daylight-01_000013.txt",
+      "sha256": "332a1e5b7ec7562e6b5057f5b6c72e90da14824198d3bc3112211b3f01b34763"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000014.png",
+      "label_filename": "sitting-center-daylight-01_000014.txt",
+      "sha256": "a65cb7ecdc1f4e649ec946ada966ea4a61ff8c84a12d984a5b8a7e9a40d79554"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000015.png",
+      "label_filename": "sitting-center-daylight-01_000015.txt",
+      "sha256": "28f454b1cf5562eaa3b556b441a6feaaea52365eec090b66b4665653c3593eae"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000016.png",
+      "label_filename": "sitting-center-daylight-01_000016.txt",
+      "sha256": "95aa316d29d938d0a8e1b6fbcd2e43c92181dd14bee1e72242fa8bd5014cef8c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000017.png",
+      "label_filename": "sitting-center-daylight-01_000017.txt",
+      "sha256": "c59e255de7a26db8321fab8e88adacf4dcd7d67a2fb1c869adcfbe1675072b5a"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000018.png",
+      "label_filename": "sitting-center-daylight-01_000018.txt",
+      "sha256": "09b8c1bf373ecd34931e503e4c0e282a4e0ed648f925036167fd4b0e963339c3"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000019.png",
+      "label_filename": "sitting-center-daylight-01_000019.txt",
+      "sha256": "076f24c1fd792c46c134aceda3982a4abfe0118c204383ad02bd346700334836"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000020.png",
+      "label_filename": "sitting-center-daylight-01_000020.txt",
+      "sha256": "7c91b5db8cde175048c0b41c2b6e5089c9105c78e6f1434ef6e63f844088ddb8"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "sitting-center-daylight-01_000021.png",
+      "label_filename": "sitting-center-daylight-01_000021.txt",
+      "sha256": "03834863f170f2782b51b30f76ad3650d4fa60a4a66901d6edd79b23093ca45f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000001.png",
+      "label_filename": "standing-center-artificial-01_000001.txt",
+      "sha256": "99b19d239e5831de54abde71e46b2826003879ed1a492cbcd9146fadc7f6d47f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000002.png",
+      "label_filename": "standing-center-artificial-01_000002.txt",
+      "sha256": "b5c47899391d95128a5b1a989d8bbe7860fbcbb20dec8c2f1b3cdb3b1128abc6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000003.png",
+      "label_filename": "standing-center-artificial-01_000003.txt",
+      "sha256": "5f9128fb845302b90c6df59718b2c1fdeb359da4ecaa847e7c99ba1f9c0f7f7a"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000004.png",
+      "label_filename": "standing-center-artificial-01_000004.txt",
+      "sha256": "43478074c0dee57371778a4dc73376974d9db77cfc8e7bc0b30b719129afff00"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000005.png",
+      "label_filename": "standing-center-artificial-01_000005.txt",
+      "sha256": "689d994eff8b6025c0d9b8d3db468d651d8ee6ff64f194d52a6d8a6afcb0da90"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000006.png",
+      "label_filename": "standing-center-artificial-01_000006.txt",
+      "sha256": "83232c541e436e43320aff3de9ac17069974767fcd41d6c7a92da8d87d7fcb34"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000007.png",
+      "label_filename": "standing-center-artificial-01_000007.txt",
+      "sha256": "1d44c86f8787c06792950849d5709bdba403c7cac5d5f500fc6e2d810aca51ce"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000008.png",
+      "label_filename": "standing-center-artificial-01_000008.txt",
+      "sha256": "6cce8583274a2ba21f8ca26cbea18f79abfd198e2ee266b9706ab0b4a08cc261"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000009.png",
+      "label_filename": "standing-center-artificial-01_000009.txt",
+      "sha256": "411893d2fb907ba931dbec793f4128123f761ec07340e358be78f5dcec4250a7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000010.png",
+      "label_filename": "standing-center-artificial-01_000010.txt",
+      "sha256": "aba7780e142dac381d5f49593b1c506dfc81ea3ad8819257e203d0458a3ef663"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000011.png",
+      "label_filename": "standing-center-artificial-01_000011.txt",
+      "sha256": "062100acd3c46e3d98b64889cbe30dd791acce3f361518453f7403ce479ad170"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000012.png",
+      "label_filename": "standing-center-artificial-01_000012.txt",
+      "sha256": "5312822b9a08dc52e058d12fc00fff2a6c4ed60b9b99d5646363d776a1f937f9"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000013.png",
+      "label_filename": "standing-center-artificial-01_000013.txt",
+      "sha256": "dac5bacefdab56dfeb5c3229af6b5968d182213cc330f2d7cbbdb34b304ea4ee"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000014.png",
+      "label_filename": "standing-center-artificial-01_000014.txt",
+      "sha256": "e84b92f8cb6d828a6f244533780f0210af67ff4bb5f1f64b53ec755c074605c4"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000015.png",
+      "label_filename": "standing-center-artificial-01_000015.txt",
+      "sha256": "e11dcf411614f18af7795693826c7781700e2a6aae5bcf6c58c8cac3dc35596d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000016.png",
+      "label_filename": "standing-center-artificial-01_000016.txt",
+      "sha256": "42f3f5a0bf131b47b73dafbed38c6963912c22d9c94ffe33506a92206f7f55f3"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000017.png",
+      "label_filename": "standing-center-artificial-01_000017.txt",
+      "sha256": "581412f9b4569cf98e9e4c786d83bee94e0b4737dd20ff564b91faf1a25f99d3"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000018.png",
+      "label_filename": "standing-center-artificial-01_000018.txt",
+      "sha256": "657ec2b819eab8d879f2c4fddd0ab6f8fb0d06b011cc3352247fbac2084bed99"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000019.png",
+      "label_filename": "standing-center-artificial-01_000019.txt",
+      "sha256": "df0b7bc97f08642d8e222431702991600664b1c4689db74d9364eadbda919cc1"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000020.png",
+      "label_filename": "standing-center-artificial-01_000020.txt",
+      "sha256": "d9cdfe69751363ffb337b210f90b856521548efc7af5880dba30bafd09b9add2"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000021.png",
+      "label_filename": "standing-center-artificial-01_000021.txt",
+      "sha256": "b5bb91553895e90e98eb62b47a0636f874393fb7e4694f208a3da05dd986dd6c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-artificial-01_000022.png",
+      "label_filename": "standing-center-artificial-01_000022.txt",
+      "sha256": "537395bfb1b840237952fe71b8cdd8f7df60b0174c81b5b0d6d00e24e723328d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000001.png",
+      "label_filename": "standing-center-daylight-01_000001.txt",
+      "sha256": "106bfcb2a5b2a78fd6f6e6d7478bfb83136e16ef6525b5273c2a400f608b185f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000002.png",
+      "label_filename": "standing-center-daylight-01_000002.txt",
+      "sha256": "3ba425dd546ef7c08731792b86678d1d2f86cc1023a47ca8273ecb350391dd4c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000003.png",
+      "label_filename": "standing-center-daylight-01_000003.txt",
+      "sha256": "35b71d1f1194260e7fe2e4365dd5608708b58e653773bd78458e172d029f038d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000004.png",
+      "label_filename": "standing-center-daylight-01_000004.txt",
+      "sha256": "b5de2f84c47f8bec7e556d632c783c523188a93eff1a8e44108239a60423bdad"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000005.png",
+      "label_filename": "standing-center-daylight-01_000005.txt",
+      "sha256": "ad011d747c7eef3b70755bdf1146d4b5131baacc62a0d6397a66b3d32ea8057d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000006.png",
+      "label_filename": "standing-center-daylight-01_000006.txt",
+      "sha256": "a4f41a5895739ecf97f04ef1dfb5c5dfc647326d1b20b6fe18ad59bd38a84bb6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000007.png",
+      "label_filename": "standing-center-daylight-01_000007.txt",
+      "sha256": "dea91c35c4c150c3119dcfe6c35675dad51a77f72927903f3e8e4cceaba071c4"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000008.png",
+      "label_filename": "standing-center-daylight-01_000008.txt",
+      "sha256": "709315e3fa3bde6365ab7f67622b54b6308b4e1a722c909ff5208ebb88060352"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000009.png",
+      "label_filename": "standing-center-daylight-01_000009.txt",
+      "sha256": "675a2c18f5216d63e0888813455d6509446650fb92d555630571e53371fdceaa"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000010.png",
+      "label_filename": "standing-center-daylight-01_000010.txt",
+      "sha256": "ddf8df26ac9a7ae502432b27d755ac8ddf25ecffeae406b86e5529af8e75f91e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000011.png",
+      "label_filename": "standing-center-daylight-01_000011.txt",
+      "sha256": "d9d83d082e5c3c1acf144502aca689b01717427c985553c30ed91d127741a05c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000012.png",
+      "label_filename": "standing-center-daylight-01_000012.txt",
+      "sha256": "2084c12bb8e24f6777d282d13bc2fce8e3fa6cf3ac419cb07f4a896be6f1a781"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000013.png",
+      "label_filename": "standing-center-daylight-01_000013.txt",
+      "sha256": "daa42fef4b8d69a3d8501f25aa15469f8579bd82457f52ef9ff1c1d3618999bb"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000014.png",
+      "label_filename": "standing-center-daylight-01_000014.txt",
+      "sha256": "77bc6789f59e23cc5d33111c879c2b2f6d257896e93f90f6d57ea658fc84cd6c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000015.png",
+      "label_filename": "standing-center-daylight-01_000015.txt",
+      "sha256": "f12669e234408a5bc845f31de264ac48e5f374414399f0e7de14fd4ea973f010"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000016.png",
+      "label_filename": "standing-center-daylight-01_000016.txt",
+      "sha256": "bd733eacd0530c2caa0471f431ab5e29231f9656421eea4f2b8aadf28b6af433"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000017.png",
+      "label_filename": "standing-center-daylight-01_000017.txt",
+      "sha256": "061c4a2f6b3ac6cb40b12ae2c558066acb73ac03aeaae9f29c6258d7659ab56b"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000018.png",
+      "label_filename": "standing-center-daylight-01_000018.txt",
+      "sha256": "b30c887bda874ccf5b10d1050181fc2dd572a86110864495c988c3f26843d31d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000019.png",
+      "label_filename": "standing-center-daylight-01_000019.txt",
+      "sha256": "ef02b9a745d62037a722b7b0dd127cee859531a693e5463c958f791dc7b3e179"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000020.png",
+      "label_filename": "standing-center-daylight-01_000020.txt",
+      "sha256": "b1345bb33260eaa36cd3a5344c4f69b5986ae6f98c6a54319ed62d7b01b71c5c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-daylight-01_000021.png",
+      "label_filename": "standing-center-daylight-01_000021.txt",
+      "sha256": "fcc94e027593926a59429c38644c65cefca022fa0d11f113f92ee97036b2fbbf"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000001.png",
+      "label_filename": "standing-center-far-artificial-01_000001.txt",
+      "sha256": "97ae4d3567feb475f0c340d56cc3a526d5948c90ee6628a49716cb22d8466467"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000002.png",
+      "label_filename": "standing-center-far-artificial-01_000002.txt",
+      "sha256": "00166584c932695ba582c82f427e7347fb59b2707a854a1149dc65e965ec011c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000003.png",
+      "label_filename": "standing-center-far-artificial-01_000003.txt",
+      "sha256": "ece409f879c9e751759490df28502893a195df5af16ffccd5ec6cfd16ba23894"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000004.png",
+      "label_filename": "standing-center-far-artificial-01_000004.txt",
+      "sha256": "9d7b5ef746596ffcebaa03362bf76397be24a905d0e7218cd2fa7494e1cb3abc"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000005.png",
+      "label_filename": "standing-center-far-artificial-01_000005.txt",
+      "sha256": "4ebecf700fd6bbf58c7f6541378a0e2ee5547decd2d18aff8d7ff7ce0a08264f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000006.png",
+      "label_filename": "standing-center-far-artificial-01_000006.txt",
+      "sha256": "3be4de53dd30cf97c534837e9e8dc9ac342f687e475064627f25db42e0018d0d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000007.png",
+      "label_filename": "standing-center-far-artificial-01_000007.txt",
+      "sha256": "328210278d6c7b71cfeb873d5ceb401b0bb3b8d42140a499a9b0d5858c527c10"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000008.png",
+      "label_filename": "standing-center-far-artificial-01_000008.txt",
+      "sha256": "98981a6021432da6dfe0f539c3d61245716ab09e001c700007e221efa414d09f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000009.png",
+      "label_filename": "standing-center-far-artificial-01_000009.txt",
+      "sha256": "a6fc53f34d860e935e28cbdef677328aaa84b93dca57dd0fd32283b3f3fa37a3"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000010.png",
+      "label_filename": "standing-center-far-artificial-01_000010.txt",
+      "sha256": "99c5c2a7db2857b7c94afc6a69bd60cc1abfc4ce244c32ace0fc75e217962712"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000011.png",
+      "label_filename": "standing-center-far-artificial-01_000011.txt",
+      "sha256": "940779d671e458f7c8f7b009353d134425f8f145d93f6ab6c14fc03eb6338ee6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000012.png",
+      "label_filename": "standing-center-far-artificial-01_000012.txt",
+      "sha256": "e7f2a1031f4768eced49da78dac6ed507967dcdeb9d51ceba1d20cdcb0e1c301"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000013.png",
+      "label_filename": "standing-center-far-artificial-01_000013.txt",
+      "sha256": "f39dd740830db6b6b51e5a9fd96d70c67ad17881754d34a119a3d0ed386ed005"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000014.png",
+      "label_filename": "standing-center-far-artificial-01_000014.txt",
+      "sha256": "d254f9d2bdabcd2e41812ae17dd7eecde7d8dc19e58fb4d06143cf4b313cad83"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000015.png",
+      "label_filename": "standing-center-far-artificial-01_000015.txt",
+      "sha256": "3db70f93cae212e48cc541881e27893fc8fd19e2ae788a9bf11ce19019c67729"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000016.png",
+      "label_filename": "standing-center-far-artificial-01_000016.txt",
+      "sha256": "9c0711e88a55da9a1b235f4d28e8f9f6297d050e3851afb40930922f3780e010"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000017.png",
+      "label_filename": "standing-center-far-artificial-01_000017.txt",
+      "sha256": "2b49a9c8b927bbd532dd59703279ecc442853ff01e989ad5fbca70e210993d7a"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000018.png",
+      "label_filename": "standing-center-far-artificial-01_000018.txt",
+      "sha256": "1ac61bdcf05b86628abb6f259f7b41958c865d1103c87dfb3964c76727585f09"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000019.png",
+      "label_filename": "standing-center-far-artificial-01_000019.txt",
+      "sha256": "f8a89140990bbcc2f8a0177dbd93e29bc95e00998caa54e5eafd97cda8af3109"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000020.png",
+      "label_filename": "standing-center-far-artificial-01_000020.txt",
+      "sha256": "d830a1b43b9271604951dc88305b8522f1bead6b7c9ac325835999ab20df4dec"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000021.png",
+      "label_filename": "standing-center-far-artificial-01_000021.txt",
+      "sha256": "d47c034ce86ae30fe88a70e675f5018e8c3f140a9d3af7d999498d52a663f6c7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-far-artificial-01_000022.png",
+      "label_filename": "standing-center-far-artificial-01_000022.txt",
+      "sha256": "f1aa815063985d51ecb8c30055c258148a5dc6bd3204348cf3d5a96267688c9b"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000001.png",
+      "label_filename": "standing-center-near-daylight-01_000001.txt",
+      "sha256": "7c77bc5e350da249f9cd116b0008a867aefb42a0b14b3a8082d38700ff11a385"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000002.png",
+      "label_filename": "standing-center-near-daylight-01_000002.txt",
+      "sha256": "b77f8868295c320b52918e52259ca5e6ca5ba6f6fd58378cde44f78436efb975"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000003.png",
+      "label_filename": "standing-center-near-daylight-01_000003.txt",
+      "sha256": "7334cf9ba2784676111e81e0711ec69f36152758949f7970d2ff27f26e081e23"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000004.png",
+      "label_filename": "standing-center-near-daylight-01_000004.txt",
+      "sha256": "84d300db859252f62de69417042b26d020c0513ad2eb5b011528956aa3045abc"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000005.png",
+      "label_filename": "standing-center-near-daylight-01_000005.txt",
+      "sha256": "e3894eb0493bcfeed5325d9cba3d2028afc78c215f357f60fea6d590a1209102"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000006.png",
+      "label_filename": "standing-center-near-daylight-01_000006.txt",
+      "sha256": "2c864c77e24a5e71bef4f64ec8b4fafd6a4a04a7dd79dce91b100728e4384ad8"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000007.png",
+      "label_filename": "standing-center-near-daylight-01_000007.txt",
+      "sha256": "96589af989c9826bd91e09637b5c4dadf82b3e7eef8ebcfdac863ea6b1c1250c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000008.png",
+      "label_filename": "standing-center-near-daylight-01_000008.txt",
+      "sha256": "4152266eb78c477d27d6ec102fb868c7aa556c266556c57c245c8f3609652109"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000009.png",
+      "label_filename": "standing-center-near-daylight-01_000009.txt",
+      "sha256": "4a357c0494db879c46e26a9c2574dd805ddc44ddb5cab7ee8015af6de037f2f8"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000010.png",
+      "label_filename": "standing-center-near-daylight-01_000010.txt",
+      "sha256": "66aa523fc1d1a88bfe3970386ad7fdd38ecb501571569795e40b6d3d75e78633"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000011.png",
+      "label_filename": "standing-center-near-daylight-01_000011.txt",
+      "sha256": "93a83c7ee6c99d6e58ed3c200ca3b2a6c99bb9b342ff4de510a8ccf6a13700a0"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000012.png",
+      "label_filename": "standing-center-near-daylight-01_000012.txt",
+      "sha256": "abc45eba81d68f4b8eca5e4490000c39ace15ef5bf42ab63e474efeb64c538c3"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000013.png",
+      "label_filename": "standing-center-near-daylight-01_000013.txt",
+      "sha256": "b5d247fdaf5b4adcbc66d58fbbbbcc6494fad455f157b0e988c61c1162bffef0"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000014.png",
+      "label_filename": "standing-center-near-daylight-01_000014.txt",
+      "sha256": "69dc1b52bebfc5b6fccd655e44c43e011feb32aa954827f86def29c0a8e9e154"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000015.png",
+      "label_filename": "standing-center-near-daylight-01_000015.txt",
+      "sha256": "ead936cd6865aa674104bc457e481db47365842d6f4bc8ff8969a062f210cbfa"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000016.png",
+      "label_filename": "standing-center-near-daylight-01_000016.txt",
+      "sha256": "9c0a177d60f2ca207e3cc082ae58a6696847b4d990808f5cd5457ee0750606fa"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000017.png",
+      "label_filename": "standing-center-near-daylight-01_000017.txt",
+      "sha256": "5095001f6d4e6880de15fbb076acbb329381d7fcb24b3da5edee161ad14eb77e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000018.png",
+      "label_filename": "standing-center-near-daylight-01_000018.txt",
+      "sha256": "2af44bb167f383703770c40bb568144706e4e087eab9c3a1157f9b8558469094"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000019.png",
+      "label_filename": "standing-center-near-daylight-01_000019.txt",
+      "sha256": "bf19dad4a62359d601050430c55a6bace9e174d6aee1cda7d75305f96c27e025"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000020.png",
+      "label_filename": "standing-center-near-daylight-01_000020.txt",
+      "sha256": "159507d735c874ef151b98e29a1ab6dc98701bc33a6ddbed8985c2c896e91ce9"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000021.png",
+      "label_filename": "standing-center-near-daylight-01_000021.txt",
+      "sha256": "e2af1ff1973458e46cc7c06781577ba6fe74336def166c31b36dcd15c090cf4d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-center-near-daylight-01_000022.png",
+      "label_filename": "standing-center-near-daylight-01_000022.txt",
+      "sha256": "3a174085fdfc7dca1a761bd73b48d94e1fa507aa6ce9018569a729cc84fb5142"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000001.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000001.txt",
+      "sha256": "0c52c367998e4478f161c781fb2f61f6c9aee94c8d5673bd5ec05d8d1e6fdfa6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000002.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000002.txt",
+      "sha256": "14c497487b37fa42daac835dd349d4be42b7d1a8cb03893f65898eb2691e639d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000003.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000003.txt",
+      "sha256": "17ceaa061d4234d3d7948e2dc8b949f9eefdd78d537b888103715282c1c84f46"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000004.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000004.txt",
+      "sha256": "7f36b97551ee0c694d6ef9d36ff47c4b7144758c30454207d6fc7b44e2ea2340"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000005.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000005.txt",
+      "sha256": "af158b2d1b5ac50d67cddf394318e2f21b65fe8303263a7f45b4ba35dacdf51f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000006.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000006.txt",
+      "sha256": "07ad67f6018e0077be8003b11c34100a4d291a5349c5860d94cf360df8535f7e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000007.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000007.txt",
+      "sha256": "aafec549cfde7ae0c24ef320ee35803e003fb4cd376a3474a27d0676c21978e9"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000008.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000008.txt",
+      "sha256": "8f224443baab8becb165eba7e04d91f78bd4bb3e63ffd2579651e148b375b278"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000009.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000009.txt",
+      "sha256": "1cf572d79093fd05396cf7188252a4c5fa716a1518943552630b45f51c476937"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000010.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000010.txt",
+      "sha256": "5d76445590d9154338e0efc9044ec30209041c43fec5e6ff3cad3daa2c4c50f5"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000011.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000011.txt",
+      "sha256": "0d5ce5bfb1ebb40d260661dfe67cc594435032bb7bd75b317ad84732dbcba087"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000012.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000012.txt",
+      "sha256": "500d4af45266bb8db9f1bf8d0db3e35d30be590bc3811a0cc82685e5d8fa8b94"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000013.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000013.txt",
+      "sha256": "97972f162f227402b6f7ab2c1638f2e10a5a99049827f7aadccb02308dc1e05e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000014.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000014.txt",
+      "sha256": "508e7873235a2ce1804fcc6d60121c2d1b0b8e1c1909abc75a687da4730c0063"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000015.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000015.txt",
+      "sha256": "e23e4760900794814082112ed7f3784e387d0d2535a52c67cbe69318cd829615"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000016.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000016.txt",
+      "sha256": "c191cdd9b7c1c5bec22ff99a8cfe3d2cb78f8956c83c72d8a261a1ae18496be7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000017.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000017.txt",
+      "sha256": "d1fc5c780dce73f5973ff51d8b33c55159600944e8b05776aa440e1c4da7eff4"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000018.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000018.txt",
+      "sha256": "550088f99ba6d32832c0b8eaa9e1256985b9a1261d450003cb1c3545908861da"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000019.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000019.txt",
+      "sha256": "184092d7e9519d95f62a765251c8a9f27de7a8927d2b69e18718ce5dfb015720"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000020.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000020.txt",
+      "sha256": "359041ac444f9427253244b640cbbc2b2ae6c398a8be772a90225cbcc10e7424"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-artificial-01_000021.png",
+      "label_filename": "standing-half-profile-left-artificial-01_000021.txt",
+      "sha256": "2d237c0e74c5fe1f305485bac92c9efb2a2954b85d647364da84325d53ab3db6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000001.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000001.txt",
+      "sha256": "62ac3e08a4e1c5f92c7829e297463aef2f94b7502e6a3c2f7360fe39bd49bea7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000002.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000002.txt",
+      "sha256": "f2cb5733d6c2beaaa6626f3a3bc3265ec2a72dd6c36916fb084ca0aae3b5605b"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000003.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000003.txt",
+      "sha256": "9866887a2e1ac3f3ed3ecccd23451dde9472b0e73f03198bac1d3e08bd1fb36e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000004.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000004.txt",
+      "sha256": "aad47e567e045b2acbb005d92425cd5fed3b72862568e83dd19c3de72b23c94e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000005.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000005.txt",
+      "sha256": "43fc8a1c22573dba885525063a7ac245b2d4fb92bfe3f612bfa3d918d68cbc69"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000006.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000006.txt",
+      "sha256": "c28367392ae3546c3f5400fb0acdc0fa334ff25145c64b88b8b335946d02c87a"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000007.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000007.txt",
+      "sha256": "cd3bdbff9597b2f0ab1c706bb66071a69287b06214bd4c75c54f4b11131745e6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000008.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000008.txt",
+      "sha256": "7ed3ee47187a7644ec52ac1e40152449ddca6615b5fcd7013e9f08b398de98cb"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000009.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000009.txt",
+      "sha256": "d18ff11430e24f4957b927695c82fe889facdc9e403c2c7dd7531713e2dc863d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000010.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000010.txt",
+      "sha256": "edd3e4a21d2f388b8f912b7954e7399095d55f117d8837ea720aa664a5a21d4d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000011.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000011.txt",
+      "sha256": "e1f127b1c96179e21b418671d6f607707a0274b76a02ebd5ed20556bb77e7fa9"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000012.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000012.txt",
+      "sha256": "9b791a06f90aa632c56943f23f952c3d3e992c2293eefecc0b55582b89b02ad4"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000013.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000013.txt",
+      "sha256": "120508d733f92728337ba617402676a5a4957a25ebe7eee3e0e84a733fcb0db7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000014.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000014.txt",
+      "sha256": "5380af4db58e58a87efac2b116373315b6e938eb36aa9d234480f05ffc9d9443"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000015.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000015.txt",
+      "sha256": "15aa6770dad42bf4f3e98174bc8ef8f30ba9443a37e1afbd17281b7fbd7737ef"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000016.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000016.txt",
+      "sha256": "4206b574e95e79e3c15c9be9d2e6e19a81ac7cb0e11753826599ac3cd5f9b598"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000017.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000017.txt",
+      "sha256": "92e7f394cb023a9bdbbbc112684e945ea4300144b7b4a1dd273beb62d0a0a6de"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000018.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000018.txt",
+      "sha256": "fc8f65e6616916c959e2ec24183de3e52989fde0e20c212c5519194fc482c875"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000019.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000019.txt",
+      "sha256": "5a999db4bb4a7580de9ec0f1381d2250a5200b4107a99c5d86e3844501b1e87f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000020.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000020.txt",
+      "sha256": "4392b7cc77ed6c361b4b5f458682e30fa7d09108d8a05b0bfacabd990c2e7e2f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-left-daylight-01_000021.png",
+      "label_filename": "standing-half-profile-left-daylight-01_000021.txt",
+      "sha256": "4dd5cb44326658d52683d40f1a47be5106a4371944ca276f6ff56f0408e4ad0f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000001.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000001.txt",
+      "sha256": "3ae118653df1da770c2625da512482f24e164e0009159b4e7fa0921488cef77c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000002.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000002.txt",
+      "sha256": "78bf15bbd4f61cae51c949d47c835f5a9b5c96afb23db99ee916164066b7660a"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000003.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000003.txt",
+      "sha256": "2edede62c8151e0684981e9669f46e4dea5fbc4e739d8ecfb2f1398ee56e6dc2"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000004.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000004.txt",
+      "sha256": "c76330df31c7a74a46604b44589c6be311273c3ab21325368f47be34cda96a6f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000005.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000005.txt",
+      "sha256": "c62cb137bb80af6eafacc05ec22977a134e7eedb1afe317d52ef67ca498dbfcd"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000006.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000006.txt",
+      "sha256": "dc8f1a593fa8ce81f50e9bbb3c7c963d5d2da2ead49a0072e5eb5f1dedbba632"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000007.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000007.txt",
+      "sha256": "fecb42c89481946dbdedbaec45fa26b62fd386389f7f2b6e91a76f60ef3425e1"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000008.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000008.txt",
+      "sha256": "b5796fa37aa8a3b12265fd2d743c9afce527aede8486bd4d192bea8b9a21b7ce"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000009.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000009.txt",
+      "sha256": "0fb281ee6ffaeea89eba2c6f0425e989bfa9a0d90dc2927b603d7782fe07e3c5"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000010.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000010.txt",
+      "sha256": "8f2409b654549727e191bc2073a57a1f83f9860ba86f6c22a19733803c04a8d3"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000011.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000011.txt",
+      "sha256": "7d0cfc98fc8f662d133e7f994b2894e7a0f7de6ff62bbfc5c9109e76da447146"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000012.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000012.txt",
+      "sha256": "e55ae228be0268a84ff400634770283d994b3e8d73b50fe45d7b13a08dd1175e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000013.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000013.txt",
+      "sha256": "b192cb3d5b303e658fc9daba38e558a6c09ff25c57b6282e5c0a00f49b9a34eb"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000014.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000014.txt",
+      "sha256": "c321c91fe695cb633e97d9880801b586d9bc3b215a38dcbd3b5102ba0c71b1d6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000015.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000015.txt",
+      "sha256": "7e93f69de8dc478b1209219556134e023b467f1e39eaae598a20e9af45fa0aa6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000016.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000016.txt",
+      "sha256": "a82056abbd3d410e80c0e9711eb5de88bc1b1690211599f6e7f6a97d7059c372"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000017.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000017.txt",
+      "sha256": "bcd535d314375e0f220bc5fb949bc48b91afd15d549ba2f6766a84c046edd49d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000018.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000018.txt",
+      "sha256": "0168e08c1a039988bc296e93c9ef6ac74577fdc4cd8a0e22f265c95db45ad827"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000019.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000019.txt",
+      "sha256": "6302e43b959dd04fcb109dd1592a9d2bbb45123b8a482c658afcc1e3bfc22f8e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000020.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000020.txt",
+      "sha256": "59689390448020e3e691b19c993f25997cedef293093c40d2a6dda0bfaef228c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000021.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000021.txt",
+      "sha256": "152b61c01845185cfa9b73dc2eb07c55e7a9a868406e1f603d034a41768fcc8d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000022.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000022.txt",
+      "sha256": "0965212488713e184e9e17a506ebe4aa787a32d59c7e08715f92a9acb6815891"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000023.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000023.txt",
+      "sha256": "060bad36cd8c604d3b4c8655e2d443853a32a4d6906a2c56f1fb0003defc416a"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-artificial-01_000024.png",
+      "label_filename": "standing-half-profile-right-artificial-01_000024.txt",
+      "sha256": "bdfcfdfee9990b61bd25abcb591caf43dbfe5f41b4ac27f300e2cfd850330a68"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000001.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000001.txt",
+      "sha256": "52bfdb6e9ffdcbe060fbc37f8df5f71091f123f22394d8954e3ed5f36de86b7a"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000002.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000002.txt",
+      "sha256": "a68f008a61201e344c88ff1a28c317db7148ff8bc66302cb98aa23c9ae8aec32"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000003.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000003.txt",
+      "sha256": "465315f05da5ad396d146eff609b8e4bec17f4e429e76c9867d2e2004b15865e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000004.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000004.txt",
+      "sha256": "61f788c9c741f6b02b74ade8d55de75ee171a09d75ad8013cc4aee28f5a9ba76"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000005.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000005.txt",
+      "sha256": "ab88b72da071624aae27777d60ddba5b6450e7a28a134fe8f4a36708f7a222aa"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000006.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000006.txt",
+      "sha256": "8c2c4085bd30e0758add8605d7d4d4776cc1c463dfbd86f3b0c3990458e16983"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000007.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000007.txt",
+      "sha256": "7b5df780481c44dd67bbadd44d7240d5ce7bf5a68304e47a3e175335770a06ec"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000008.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000008.txt",
+      "sha256": "8b6a50c614298b00d9f9d5b11134c066f036d53bc38ebc280d6637ead009a440"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000009.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000009.txt",
+      "sha256": "022a2e266f154111226109363c87850f3c9355d68ad717e4511b83277b829f79"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000010.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000010.txt",
+      "sha256": "7153bd767ab1c359f7a815fb980f3062b03a50b176c20b74b47f0bdceca4c97b"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000011.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000011.txt",
+      "sha256": "58acdc4876511a55d83d157a6e378d76e93cb2cd03112ca1ea2a17381aa8bad7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000012.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000012.txt",
+      "sha256": "c8c0846f2d885347210c3479e2b380698537c76e27f19c28846cc08478f045d1"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000013.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000013.txt",
+      "sha256": "1e1f91b352320e5b7dae00395719951117ba1b68f3189d5b51741a9b33f79bc9"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000014.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000014.txt",
+      "sha256": "313c267162da9b3ea1974f3b9709c9536b61dbd4eb95cc2cd6e0b2cdddb155a3"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000015.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000015.txt",
+      "sha256": "f53236f0a742a93af48e76b8714ef6d761f52ef2387473012f3bf9cec90aadba"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000016.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000016.txt",
+      "sha256": "c18ce27e0ab23a052971988c2fd6eb2ce14a8e64889ea9818aec1555b18d124e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000017.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000017.txt",
+      "sha256": "bdd9987515eb0a9ba8e182364fad40a507531704cd78dd5513f3c32c4de81b14"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000018.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000018.txt",
+      "sha256": "eb24a06c5e1f7eaa28efb7956c71d591c2ab2e31df05e82a01396e765c9ee249"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000019.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000019.txt",
+      "sha256": "fe9912cf74e496bd72b6f83f6d4870ba6c036f13748f3e4281624185facc9158"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000020.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000020.txt",
+      "sha256": "1f905c3a0949b8d3859c7d6f9c2c16071102f2871f6fdd09cb9ae723cbf74029"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-half-profile-right-daylight-01_000021.png",
+      "label_filename": "standing-half-profile-right-daylight-01_000021.txt",
+      "sha256": "ae7a7090695da9ec31a85c2e4718f7584b7c42bfa2d499cd60cb03f2f5c7f750"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000001.png",
+      "label_filename": "standing-left-artificial-01_000001.txt",
+      "sha256": "956906c7d3d1699e456873eb491587c558b5ad981ab429b12da4c3d59a0cc105"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000002.png",
+      "label_filename": "standing-left-artificial-01_000002.txt",
+      "sha256": "a18615758d9d46183adea0b255667d548b0c3a17dffa9b42ae684a5a3a980b2d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000003.png",
+      "label_filename": "standing-left-artificial-01_000003.txt",
+      "sha256": "29471851f9ca9d9868b358396d9450453eb5eec5ac9a8e9c9dff788041676a7c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000004.png",
+      "label_filename": "standing-left-artificial-01_000004.txt",
+      "sha256": "28b11f3380d3dd46827cc7ee9b570394885e6c070763810a62c76106d7002d88"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000005.png",
+      "label_filename": "standing-left-artificial-01_000005.txt",
+      "sha256": "4a5752ad830a76b5b3e167c87c05a620db4723cd3f18420a2f8982c2e05c752f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000006.png",
+      "label_filename": "standing-left-artificial-01_000006.txt",
+      "sha256": "f2581f62e95b8add7bc4a58a642278aaa6158ae99d91c94348345ef62f1b8746"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000007.png",
+      "label_filename": "standing-left-artificial-01_000007.txt",
+      "sha256": "6daa06e4e8b63e1934019e40864bc99107039ae5c5c093aa567c53f8ac38377c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000008.png",
+      "label_filename": "standing-left-artificial-01_000008.txt",
+      "sha256": "5ecbc46aa7ba57018d0643506b1c8ea6e3d1a7187ab8d28f74f581d0755fd09d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000009.png",
+      "label_filename": "standing-left-artificial-01_000009.txt",
+      "sha256": "4cf94ba0236eed162cd53811d38991342ad986e53ff8a9d69ff32b6d12bd02bb"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000010.png",
+      "label_filename": "standing-left-artificial-01_000010.txt",
+      "sha256": "5dcbed8a4d83ce1891e1b9dcca724c033f1d3e70f12ceff6f48b468640f49455"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000011.png",
+      "label_filename": "standing-left-artificial-01_000011.txt",
+      "sha256": "428ddcf379d35326e18ee05c65c418796bea4fab08c236a829f07f4b19066a81"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000012.png",
+      "label_filename": "standing-left-artificial-01_000012.txt",
+      "sha256": "a89cebceb9e1011f77643af6206527955ab8f0f30c75ce88655d43c4622d9921"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000013.png",
+      "label_filename": "standing-left-artificial-01_000013.txt",
+      "sha256": "9034d2b3d8e2e07ce32adb4787b8a4500d7e4e2473411d625eac2d57f68864d7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000014.png",
+      "label_filename": "standing-left-artificial-01_000014.txt",
+      "sha256": "d702a6751e8f4fa67f646c4badf4cd281923e48b743fafae1b19deabab337160"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000015.png",
+      "label_filename": "standing-left-artificial-01_000015.txt",
+      "sha256": "5721315ad32a7c95fec7b7df638ef0ba2cee53d26fc666ad2efdce3a829513ad"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000016.png",
+      "label_filename": "standing-left-artificial-01_000016.txt",
+      "sha256": "add1e2219d1a969e1cc23e6e76a4b280f0af6ca81ed5ee17b638ba4ee6754614"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000017.png",
+      "label_filename": "standing-left-artificial-01_000017.txt",
+      "sha256": "2c65310256780ff5e9cebcc40fb71316d2930d59a12ef3f30bd7158d2c2f7824"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000018.png",
+      "label_filename": "standing-left-artificial-01_000018.txt",
+      "sha256": "d9046b9cd9a952f4fe8cb2a8c66175939bf2ad06a350adc270da6b29a9a371a0"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000019.png",
+      "label_filename": "standing-left-artificial-01_000019.txt",
+      "sha256": "b800da4ea9e4df58f18a754326c729ed1a3b80f5af9dcc2d1933f58d7d91fcec"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000020.png",
+      "label_filename": "standing-left-artificial-01_000020.txt",
+      "sha256": "f0a0046c83ade08e6cb896f69237a1b4e595de189bdbc524833d712d268219ef"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000021.png",
+      "label_filename": "standing-left-artificial-01_000021.txt",
+      "sha256": "83dc74f85903a2cad464b86712bfbc32d1202dadbb2a96a46eb40379bc11867a"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000022.png",
+      "label_filename": "standing-left-artificial-01_000022.txt",
+      "sha256": "e6c45d897b59cb51867a82990b7c7b29a76c105870d3c407a4cb75b196fe45d4"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000023.png",
+      "label_filename": "standing-left-artificial-01_000023.txt",
+      "sha256": "4b742f49eacf38c63a0625f372c87fd4fe29c1449dd7788849497b334fa592f8"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000024.png",
+      "label_filename": "standing-left-artificial-01_000024.txt",
+      "sha256": "4e75aa700c28e34f3eb8e7d8fd8d8da9e1c78fbccd517a56037f440f2ec4368d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-artificial-01_000025.png",
+      "label_filename": "standing-left-artificial-01_000025.txt",
+      "sha256": "52b7c35bc73d5bad448e26bdb712bdad41aa8300a0f340edba4136e6daed8618"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000001.png",
+      "label_filename": "standing-left-daylight-01_000001.txt",
+      "sha256": "9ac28f390e871075ac7a4e138e66cf27bdebcd7c39062f35b90409b07a95453c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000002.png",
+      "label_filename": "standing-left-daylight-01_000002.txt",
+      "sha256": "7c275d0526652b6cc458b1a1460dc87f437b245f334a83474c78747851234cf2"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000003.png",
+      "label_filename": "standing-left-daylight-01_000003.txt",
+      "sha256": "1094574378db27a91bbcc672f0744528303180eb15b0dddda1d7758d1b488151"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000004.png",
+      "label_filename": "standing-left-daylight-01_000004.txt",
+      "sha256": "d43a459294c3b1c790d92bd96459ae228f91cb88e047357cd6dc22db49c82742"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000005.png",
+      "label_filename": "standing-left-daylight-01_000005.txt",
+      "sha256": "af7124fb5d94712ec729ba909f3a60755636157ad4cca5c8440c1dc52ec8e002"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000006.png",
+      "label_filename": "standing-left-daylight-01_000006.txt",
+      "sha256": "fd3af44b28d9236a21139c7c817419a7f7e311fc7d230b6396594544c3374aef"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000007.png",
+      "label_filename": "standing-left-daylight-01_000007.txt",
+      "sha256": "9211a50e6c0d4fab6b175f419d0ce7cbdf95e97f35cfae0bf96ad03c3b1189b2"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000008.png",
+      "label_filename": "standing-left-daylight-01_000008.txt",
+      "sha256": "7216ea27635b3d10473de98784dcd4dc0db509f40b8892b1c5e0d8aafb0291a6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000009.png",
+      "label_filename": "standing-left-daylight-01_000009.txt",
+      "sha256": "a893a12e6db5f15e614b983e96582602cd3b5461ea21a57557fb6ac903529ef7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000010.png",
+      "label_filename": "standing-left-daylight-01_000010.txt",
+      "sha256": "758b475a36bfd5e2ee755a944b320fc321ce04672f7ccf2cab8f4025ceee912e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000011.png",
+      "label_filename": "standing-left-daylight-01_000011.txt",
+      "sha256": "ca9b098a942422e4330bf8b0970a034ebfa1d17e2fcf7b29aa42dee2c282abee"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000012.png",
+      "label_filename": "standing-left-daylight-01_000012.txt",
+      "sha256": "0ce0116c4e2a31ccadf5b68f99e3402ef2801513a2bcf539b4c5b96cc8ed707c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000013.png",
+      "label_filename": "standing-left-daylight-01_000013.txt",
+      "sha256": "c18a75c4f242a9eaa1efd3bf916a3cbe8b729c40d74fa82040d7a8441ba880dc"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000014.png",
+      "label_filename": "standing-left-daylight-01_000014.txt",
+      "sha256": "2b10c267c7cbaa1a668321e801d3ddffec30d7610f9887f42cb89f00bcd3c1ec"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000015.png",
+      "label_filename": "standing-left-daylight-01_000015.txt",
+      "sha256": "8dd10a87b6045d829e9c733584afd26fc1dbc02984b43fa463b843465cd3357f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000016.png",
+      "label_filename": "standing-left-daylight-01_000016.txt",
+      "sha256": "4a72ba54486d1ccc11bc0c38a314db753f60cde8f92a0bb7e70eb94ebd592987"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000017.png",
+      "label_filename": "standing-left-daylight-01_000017.txt",
+      "sha256": "f0ad0c401e99c4ece523dc476a12379365ef19a89d91028c6b8c49c8a17a5091"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000018.png",
+      "label_filename": "standing-left-daylight-01_000018.txt",
+      "sha256": "6fd843b3bc9d80059442f11bedc60359b1c3715b3a4c9e805260e86aac5cc4d7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000019.png",
+      "label_filename": "standing-left-daylight-01_000019.txt",
+      "sha256": "94c2f306973c61167faba5267f3287ac31825b98b109591b58407e4a4a9d533e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000020.png",
+      "label_filename": "standing-left-daylight-01_000020.txt",
+      "sha256": "46902ae043006fe268c4a605a45f33d22fb42f1280fe9e6da45697ab2d22794c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-left-daylight-01_000021.png",
+      "label_filename": "standing-left-daylight-01_000021.txt",
+      "sha256": "128079b8d293bea3bfc19cc1fdf191e4b75c8db4e01c8a72a254fde295a44dbd"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000001.png",
+      "label_filename": "standing-right-artificial-01_000001.txt",
+      "sha256": "c0d6fe2353e405d3a56c0b863f948310cfe000d925a7ec69404c8bb814c683b2"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000002.png",
+      "label_filename": "standing-right-artificial-01_000002.txt",
+      "sha256": "1a2b9ca8ee41068e8ecf7491a629664f02e153eda982c8ac9394e7748868ba48"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000003.png",
+      "label_filename": "standing-right-artificial-01_000003.txt",
+      "sha256": "29d949846b25e1c9734634943be67cf89b5fdf6409dca7bf5898687afcdd52f4"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000004.png",
+      "label_filename": "standing-right-artificial-01_000004.txt",
+      "sha256": "f8bc6e869c8dda7d5c7fdc46842a914a62114c09bcdc7b11df0a888ffe0703c3"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000005.png",
+      "label_filename": "standing-right-artificial-01_000005.txt",
+      "sha256": "0eacba51e6f813b3fe5541a7848f99f418cb10d9076facae9a91e1cc62b5d818"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000006.png",
+      "label_filename": "standing-right-artificial-01_000006.txt",
+      "sha256": "efa1abbfe7599c4027d98af639d40f4b3e8cf6b5c6f8d240d9942cb615f29c6b"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000007.png",
+      "label_filename": "standing-right-artificial-01_000007.txt",
+      "sha256": "7063cc51db6ca4e84cc03a91fe65900118f205608b13e9243dd15531563c63bd"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000008.png",
+      "label_filename": "standing-right-artificial-01_000008.txt",
+      "sha256": "e7ee067748ad12392653355f62585fd7a65c84898d439b32159b762d26a148d0"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000009.png",
+      "label_filename": "standing-right-artificial-01_000009.txt",
+      "sha256": "9079efd53128dbc1da1357ebf117f50a643c16609d75c0035ec439e43d034bbd"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000010.png",
+      "label_filename": "standing-right-artificial-01_000010.txt",
+      "sha256": "fe62d37a1634657a8d02b695fa10117bb253b8d2208c3cb8dd3dbdf88724b161"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000011.png",
+      "label_filename": "standing-right-artificial-01_000011.txt",
+      "sha256": "d356bbda58f5094be263ccf5cf890c1e3c96f59991659a62f2ffdde65a259d73"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000012.png",
+      "label_filename": "standing-right-artificial-01_000012.txt",
+      "sha256": "f45969374d7af3f763e04f469ef01169c92c03bcbe3afa598ce494f15fd54c31"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000013.png",
+      "label_filename": "standing-right-artificial-01_000013.txt",
+      "sha256": "bc021fe79b3206f113b782414fe6eeb4ab0116054d6a66c825ce8d6505811fe8"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000014.png",
+      "label_filename": "standing-right-artificial-01_000014.txt",
+      "sha256": "fd157bd3f3b595b7e4cc552af8c490fb5f37772fc61dfd59a50d5690ffda64fe"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000015.png",
+      "label_filename": "standing-right-artificial-01_000015.txt",
+      "sha256": "031e273329d8cbfbdbc7ca730d0924eda9afed375060a483f40ae0a153139bca"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000016.png",
+      "label_filename": "standing-right-artificial-01_000016.txt",
+      "sha256": "b858f44533b82a37b274511f0f4d4e87c0651d22909e73a96bd7f285e1cf7c06"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000017.png",
+      "label_filename": "standing-right-artificial-01_000017.txt",
+      "sha256": "6d50736c953139cd7a671a0a85d52dd9652f3d375c7ebf8d3f2c0e12e7a771aa"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000018.png",
+      "label_filename": "standing-right-artificial-01_000018.txt",
+      "sha256": "826180967cd54618ec0903d44da5b4d46413b94e2b15cab9dc44ddb06ac3ea31"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000019.png",
+      "label_filename": "standing-right-artificial-01_000019.txt",
+      "sha256": "adeab8406df99129c259657995ae4d42e30c459f6a723429a25137df42c3f761"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000020.png",
+      "label_filename": "standing-right-artificial-01_000020.txt",
+      "sha256": "e6c4c4fc8ec1f36bea6a10a225120c729d08af80310627f816c702b5ba9df4e6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-artificial-01_000021.png",
+      "label_filename": "standing-right-artificial-01_000021.txt",
+      "sha256": "724c3ed7510123689bea7e12187eaf1b5d7e40d747ac4020125fd60dfa3fc594"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000001.png",
+      "label_filename": "standing-right-daylight-01_000001.txt",
+      "sha256": "bee30eaa10374a4f58ad7d9860f4cfd11b4c2ca02a1cbab4750d23fb81172d6b"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000002.png",
+      "label_filename": "standing-right-daylight-01_000002.txt",
+      "sha256": "f80ec81acb06a6f187343c6efccca538db0b763b3cb68c24e9ad0099243a469d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000003.png",
+      "label_filename": "standing-right-daylight-01_000003.txt",
+      "sha256": "b5d34ed5ccbe40e210ae8f48d9a1fdd1d82ac8a166366e13422fe16cf4c1d12c"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000004.png",
+      "label_filename": "standing-right-daylight-01_000004.txt",
+      "sha256": "baec70dbf7812834b87001c01ba3cdf7ed3a23935d074e6df0afdd88b6376b28"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000005.png",
+      "label_filename": "standing-right-daylight-01_000005.txt",
+      "sha256": "3b5a6d0e908e329fe435e11990bba94b3c527d23dfd025966776233b3d7e5c9b"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000006.png",
+      "label_filename": "standing-right-daylight-01_000006.txt",
+      "sha256": "c648021a4c0ce91db6b3c6495b6fdf8618136cd75a916d7af9b0dfae69a7225f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000007.png",
+      "label_filename": "standing-right-daylight-01_000007.txt",
+      "sha256": "bf942ac37002437456b83736f336edf68c459c8cd1c1f93352830420b2240612"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000008.png",
+      "label_filename": "standing-right-daylight-01_000008.txt",
+      "sha256": "53be11bf9781c7302567affc7f4a70dbd1a4487ef647f57c1dfa329f3b5ffcb9"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000009.png",
+      "label_filename": "standing-right-daylight-01_000009.txt",
+      "sha256": "8f22defc507e76d039c1125455ad0075d1f18fa57895d3335739e840183f81f8"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000010.png",
+      "label_filename": "standing-right-daylight-01_000010.txt",
+      "sha256": "69fd7cc2cafe41a3dda5befa09dd7cc4f100dd1f13edab3823f5449eb7728cb6"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000011.png",
+      "label_filename": "standing-right-daylight-01_000011.txt",
+      "sha256": "ea7ea474b641109c7e1821e5bc15e17fd7b54628609a35773fd2e2f679854b0f"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000012.png",
+      "label_filename": "standing-right-daylight-01_000012.txt",
+      "sha256": "58588dc81372e85cbd4afe6285f2132f53bebaa44bef70cc657ec268862dece7"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000013.png",
+      "label_filename": "standing-right-daylight-01_000013.txt",
+      "sha256": "4f9a3bb5575e3bdd2b6be61c545a7a2bfb530fefad68befa17de15a609393e8d"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000014.png",
+      "label_filename": "standing-right-daylight-01_000014.txt",
+      "sha256": "18c671b1ca22d820055183bada899eabdf336cfda3474bdbcc823eda91ad927e"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000015.png",
+      "label_filename": "standing-right-daylight-01_000015.txt",
+      "sha256": "c7074ff32334d832de25373813ee454977861f7f16b44a8210a844d14ad44f95"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000016.png",
+      "label_filename": "standing-right-daylight-01_000016.txt",
+      "sha256": "068d758b09c69a91aa12a0a138fca5ff6784018cae8043ae7013c5653ba87d46"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000017.png",
+      "label_filename": "standing-right-daylight-01_000017.txt",
+      "sha256": "722a8077f30522d50dcaca563b9ea9e2f998e78a29f238d4c2840d5d84f174f1"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000018.png",
+      "label_filename": "standing-right-daylight-01_000018.txt",
+      "sha256": "c3e08f0b0eea8a569ffdeb0f5b7de64d2d3d55d140f5083227a83b6e11f56bee"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000019.png",
+      "label_filename": "standing-right-daylight-01_000019.txt",
+      "sha256": "9b892ce934317046b57cdb34a4248e3ccd4780a1d24fa9c1cdb28f2ceb372012"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000020.png",
+      "label_filename": "standing-right-daylight-01_000020.txt",
+      "sha256": "a99bc40ddc7d7b155dc98136191d47aa2bc457003c7af5f37f38e159f1688ddd"
+    },
+    {
+      "bytes": 54,
+      "image_filename": "standing-right-daylight-01_000021.png",
+      "label_filename": "standing-right-daylight-01_000021.txt",
+      "sha256": "f1eb646860a538c1657b40e47ffcc0c613e50e2dd54e3f29bcf073eedff232e3"
+    }
+  ],
+  "negative_images_without_label_count": 89,
+  "positive_label_count": 305,
+  "schema_version": "sie.ar0234_close_range_person_alignment_derived_label_inventory.v1",
+  "source_snapshot_id": "ar0234-close-range-person-alignment-v1-7ca5104ddcd29e22"
+}

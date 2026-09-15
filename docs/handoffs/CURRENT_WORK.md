@@ -717,6 +717,16 @@ Actual dry-run прошёл: `305` positive LabelMe JSON готовы к convers
 `89` negative без JSON допустимы, `43` records нормализовали point order,
 `failure_count=0`, `labels/*.txt` осталось `0 -> 0`. Apply/YOLO conversion,
 split и model artifacts по-прежнему не выполнялись.
+
+Controlled apply выполнен после подтверждения: source snapshot ID точно
+`ar0234-close-range-person-alignment-v1-7ca5104ddcd29e22`, overwrite не
+использовался. Созданы только `305` derived `labels/*.txt` с одним bbox класса
+`0`; `89` negative изображений законно остались без `.txt`. Immediate validator
+вернул `VALID`, `positive_pending_annotation=0`, `failure_count=0`, split не
+создан и training не запускался. Derived inventory с SHA-256 каждого `.txt`,
+source snapshot, converter commit
+`f8db449958ddee58f71a044b57ebe98a264bd3aa` и timestamp находится в
+`docs/datasets/ar0234_close_range_person_alignment_v1/yolo_derived_labels_v1/`.
 Отчёт и contact sheet:
 `docs/datasets/ar0234_close_range_person_alignment_v1/labelme_consistency_audit_v1/`.
 Отчёты находятся в
