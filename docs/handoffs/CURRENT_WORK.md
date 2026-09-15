@@ -789,6 +789,38 @@ Preview record теперь несёт у каждого bbox evidence-only по
 Модель остаётся visual-only. Этот replay не доказывает точность yaw,
 autonomy или qualification движения. Следующий этап: stationary
 robot-mounted visual replay, без подключения модели к yaw, turn или motion.
+
+### YOLO11 primary AR0234 evidence в supervised one-step demo
+
+Для следующего supervised physical `ADVANCE 0.10 m` actual
+`run_sie_static_target_mvp.py` использует локальный YOLO11n
+`person_upper_body` как primary AR0234 image-space evidence. На каждом из
+пяти общих live cycles YOLO получает тот же AR0234 frame, что и прежний
+person-depth adapter, и сохраняет JSON-safe observation с
+`SINGLE_TARGET`/`NO_TARGET`/`MULTIPLE_TARGETS`, bbox, `center_x_px`,
+confidence, truncation metadata, model SHA и `source_cycle_id`.
+
+Роли намеренно разделены: YOLO отвечает только за person image-space
+observation/alignment evidence; существующий MP-PersonDet остаётся внутри
+person-depth pipeline только как ROI source для текущего stereo metric
+measurement; metric decision и bounded plan остаются существующими слоями.
+YOLO target status использует тот же общий five-cycle evidence rule: latest
+должен быть `SINGLE_TARGET`, требуется минимум четыре single targets, а
+`MULTIPLE_TARGETS` блокирует действие. `NO_TARGET` не создаёт bridge plan,
+HTTP request или motor command. `truncated_*` остаются quality metadata и
+никогда не образуют новый hard gate.
+
+Final JSON теперь несёт `yolo_primary_evidence`, metric measurement/decision
+в `supervision`, generated `command_id`, `bridge_plan`, `terminal_esp32_record`
+и `reobserve_required`. Для явно подтверждённого one-step trial execution
+scope равен `SUPERVISED_DEMO_ONE_STEP_YOLO_PRIMARY`; это не меняет
+`NOT_QUALIFIED` capability и не означает autonomy или motion qualification.
+
+Минимально совместимый способ запуска описан в
+`docs/datasets/ar0234_close_range_person_alignment_v1/ONNX_PREVIEW_SETUP.md`:
+создаётся отдельный companion venv с OpenCV 4.14 и ONNX Runtime, а validated
+MP-PersonDet environment не модифицируется. Камеры, ESP32, сеть и моторы при
+этой разработке не запускались.
 Отчёт и contact sheet:
 `docs/datasets/ar0234_close_range_person_alignment_v1/labelme_consistency_audit_v1/`.
 Отчёты находятся в

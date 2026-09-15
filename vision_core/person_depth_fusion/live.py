@@ -51,11 +51,13 @@ class LivePersonDepthFusion:
 
     def __init__(
         self, fusion: PersonDepthFusionOffline, *, ar_camera: Any, stereo_camera: Any,
+        primary_image_observer: Any | None = None,
         control_runner: ControlRunner = default_control_runner,
         now_utc: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self.fusion, self.ar_camera, self.stereo_camera = fusion, ar_camera, stereo_camera
+        self.primary_image_observer = primary_image_observer
         self.control_runner, self.now_utc, self.monotonic = control_runner, now_utc, monotonic
         self.person_threshold = float(fusion.person_pipeline.detector.artifact.confidence_threshold)
         self.started = False
@@ -108,12 +110,23 @@ class LivePersonDepthFusion:
         if not isinstance(captured, datetime) or captured.tzinfo is None:
             self.close()
             raise LiveFusionError("UTC clock must return timezone-aware datetime")
+        primary_observation = None
+        if self.primary_image_observer is not None:
+            try:
+                primary_observation = self.primary_image_observer.observe(
+                    ar_frame, captured_at_utc=captured, cycle_id=cycle_id
+                )
+                json.dumps(primary_observation, allow_nan=False, sort_keys=True)
+            except Exception as error:
+                self.close()
+                raise LiveFusionError(f"primary AR0234 image observation failed: {error}") from error
         skew = abs(ar_stamp - stereo_stamp)
         base: dict[str, Any] = {
             "schema_version": "sie.person_depth_live_cycle.v1", "cycle_id": cycle_id,
             "captured_at_utc": captured.astimezone(timezone.utc).isoformat(), "pair_skew_s": skew,
             "temperature_eligibility_evaluated": False, "person_threshold": self.person_threshold,
             "temperature_monitoring": _temperature_monitoring_payload(self.fusion.calibration),
+            "primary_person_observation": primary_observation,
         }
         if not np.isfinite(skew) or skew > MAX_PAIR_SKEW_S:
             base.update(status="PAIR_SKEW_TOO_HIGH", person={"status": None, "confidence": None, "bbox_xyxy_px": None}, measurement=None,
@@ -154,7 +167,8 @@ def build_live_runtime(*, model: Path, reference: Path, project_root: Path, pers
                        calibration_loader: Callable[[], FusionCalibration] = load_fusion_calibration,
                        kernel_factory: Callable[[FusionCalibration], Any] | None = None,
                        camera_factory: Callable[[Path, Any], Any] = CheckedCamera,
-                       stereo_policy_path: Path | None = None) -> LivePersonDepthFusion:
+                       stereo_policy_path: Path | None = None,
+                       primary_image_observer: Any | None = None) -> LivePersonDepthFusion:
     if not model.is_absolute() or not reference.is_absolute() or not project_root.is_absolute():
         raise LiveFusionError("model, reference and project-root must be absolute paths")
     if stereo_policy_path is not None:
@@ -169,4 +183,5 @@ def build_live_runtime(*, model: Path, reference: Path, project_root: Path, pers
     detector = detector_factory(model, reference, person_threshold)
     return LivePersonDepthFusion(PersonDepthFusionOffline(PersonLocalizationPipeline(detector), kernel, calibration),
                                  ar_camera=camera_factory(AR0234_BY_ID, AR_MODE),
-                                 stereo_camera=camera_factory(STEREO_BY_ID, STEREO_MODE))
+                                 stereo_camera=camera_factory(STEREO_BY_ID, STEREO_MODE),
+                                 primary_image_observer=primary_image_observer)

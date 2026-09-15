@@ -38,3 +38,23 @@ PYTHONPATH=. /home/stanislav/.venvs/sie-ar0234-yolo11-preview/bin/python \
 
 Результат не квалифицирует yaw alignment, turn, forward motion или любой
 исполнительный слой. До такого использования нужны отдельные evidence и review.
+
+## Companion runtime для supervised static-target demo
+
+Проверенное окружение MP-PersonDet
+`/home/stanislav/dev_ws/runtime_envs/sie_mp_persondet_cv414` не меняется.
+Для совместного supervised demo создай отдельный sibling venv с OpenCV 4.14 и
+ONNX Runtime:
+
+```bash
+python3 -m venv /home/stanislav/dev_ws/runtime_envs/sie_static_target_yolo_onnx_cv414
+/home/stanislav/dev_ws/runtime_envs/sie_static_target_yolo_onnx_cv414/bin/python -m pip install --upgrade pip
+/home/stanislav/dev_ws/runtime_envs/sie_static_target_yolo_onnx_cv414/bin/python -m pip install \
+  "opencv-python>=4.14,<4.15" onnxruntime numpy
+```
+
+Этот companion runtime нужен только потому, что actual supervised runner
+использует сохранённый MP-PersonDet для stereo ROI и локальный YOLO ONNX для
+primary AR0234 image evidence. Он не меняет validated MP-PersonDet venv,
+model artifact или V6 stereo policy. Перед физическим запуском отдельно
+проверь `--help`; камера и ESP32 при этой проверке не открываются.

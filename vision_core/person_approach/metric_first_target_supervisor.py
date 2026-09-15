@@ -230,7 +230,9 @@ class MetricFirstTargetSupervisor:
         window = [self.live_runtime.cycle(f"metric-first-target-{index:06d}") for index in range(1, WINDOW_SIZE + 1)]
         return self.process_shared_window(window)
 
-    def process_shared_window(self, cycles: object) -> dict[str, Any]:
+    def process_shared_window(
+        self, cycles: object, *, alignment_observations: object | None = None
+    ) -> dict[str, Any]:
         try:
             window = _json_safe(cycles)
         except (TypeError, ValueError):
@@ -241,12 +243,27 @@ class MetricFirstTargetSupervisor:
         if cycle_ids is None:
             return _result(stage="BLOCKED_NO_ACTION", reason="MISSING_SOURCE_WINDOW_CYCLE_ID", cycle_ids=[])
 
-        observations = [
-            prepare_person_depth_live_cycle_observation(
-                cycle, line_number=index, optical_axis_cx_px=self.optical_axis_cx_px,
-                center_tolerance_px=self.center_tolerance_px,
-            ) for index, cycle in enumerate(window, start=1)
-        ]
+        if alignment_observations is None:
+            observations = [
+                prepare_person_depth_live_cycle_observation(
+                    cycle, line_number=index, optical_axis_cx_px=self.optical_axis_cx_px,
+                    center_tolerance_px=self.center_tolerance_px,
+                ) for index, cycle in enumerate(window, start=1)
+            ]
+        else:
+            try:
+                observations = _json_safe(alignment_observations)
+            except (TypeError, ValueError):
+                observations = None
+            if (
+                type(observations) is not list or len(observations) != WINDOW_SIZE
+                or any(type(item) is not dict for item in observations)
+                or any(item.get("source_cycle_id") != cycle_id for item, cycle_id in zip(observations, cycle_ids))
+            ):
+                return _result(
+                    stage="BLOCKED_NO_ACTION", reason="INVALID_PRIMARY_ALIGNMENT_EVIDENCE",
+                    cycle_ids=cycle_ids,
+                )
         temporal = evaluate_temporal_yaw_alignment(observations, now_utc=self.now_utc)
         alignment = _alignment_summary(temporal, cycle_ids)
         evidence_ids = temporal.get("window_evidence_ids")

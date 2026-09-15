@@ -51,13 +51,13 @@ def controls(*_):
     return subprocess.CompletedProcess(_[0], 0, f"{name}: {1 if name == 'white_balance_automatic' else 3}")
 
 
-def runtime(outputs, *, clock=None, threshold=.5):
+def runtime(outputs, *, clock=None, threshold=.5, primary_image_observer=None):
     now = datetime(2026, 9, 2, tzinfo=timezone.utc)
     detector = Detector(outputs, threshold)
     fusion = PersonDepthFusionOffline(PersonLocalizationPipeline(detector, now_utc=lambda: now), Kernel(), calibration())
     ar, stereo = Camera(np.zeros(AR_SHAPE,np.uint8)), Camera(np.zeros(COMBINED_SHAPE,np.uint8))
     values = iter(clock or [0.] * 10000)
-    value = LivePersonDepthFusion(fusion, ar_camera=ar, stereo_camera=stereo, control_runner=controls, now_utc=lambda: now, monotonic=lambda: next(values))
+    value = LivePersonDepthFusion(fusion, ar_camera=ar, stereo_camera=stereo, primary_image_observer=primary_image_observer, control_runner=controls, now_utc=lambda: now, monotonic=lambda: next(values))
     return value, ar, stereo, detector
 
 
@@ -73,6 +73,23 @@ def test_success_json_is_pixel_free_and_reuses_constructed_runtime():
     assert "ndarray" not in payload and "pixels" not in payload and first["temperature_eligibility_evaluated"] is False
     assert first["person_threshold"] == .5 and second["person_threshold"] == .5
     assert ar.closed and stereo.closed
+
+
+def test_optional_primary_image_observation_uses_the_same_live_cycle() -> None:
+    class PrimaryObserver:
+        def observe(self, _frame, *, captured_at_utc, cycle_id):
+            return {
+                "schema_version": "test.primary_image.v1", "source_cycle_id": cycle_id,
+                "captured_at_utc": captured_at_utc.isoformat(), "target_status": "SINGLE_TARGET",
+            }
+
+    value, *_ = runtime([one()], primary_image_observer=PrimaryObserver())
+    value.start()
+    result = value.cycle("shared-cycle")
+    value.close()
+    assert result["primary_person_observation"]["source_cycle_id"] == "shared-cycle"
+    assert result["primary_person_observation"]["target_status"] == "SINGLE_TARGET"
+    json.dumps(result, allow_nan=False)
 
 
 @pytest.mark.parametrize("detections,status", [([], "PERSON_LOST"), ([*one(), *one()], "MULTIPLE_PERSONS")])
