@@ -738,6 +738,29 @@ image overlap отсутствуют. `splits/` содержит lists, `dataset
 SHA-256 split files и report. Это internal held-out split одного capture
 environment, не доказательство generalization, training quality, yaw или
 motion qualification. Training/model creation не выполнялись.
+
+## AR0234 `person_upper_body` ONNX visual preview
+
+Добавлен отдельный local visual-only preview для обученного one-class
+`YOLO11n` ONNX artifact
+`/home/stanislav/dev_ws/model_artifacts/ar0234_person_upper_body_yolo11n_v1/best.onnx`.
+Перед inference runner проверяет SHA-256
+`dde42238b5742f9c0b79c29863c44bc97b678aa75b86a4db5bb602a2d72c259c`.
+Он использует только approved AR0234 stable by-id path, `1920x1200`, `MJPG`,
+`30 FPS`, buffer `1`, делает letterbox в `640x640`, one-class YOLO11 decode и
+NMS. Candidate confidence threshold по умолчанию `0.40`.
+
+Каждый preview frame печатается как JSON-safe JSONL record без raw pixels:
+model SHA, image size, threshold, class `person_upper_body`, bbox,
+`center_x_px`, confidence, `reference_frame=ar0234_image_frame` и `units=px`.
+Overlay существует только в памяти и ничего не сохраняет. Инструмент не
+использует Haar locator, не меняет person-depth pipeline и не создаёт yaw,
+turn, motor, ESP32, HTTP или network action.
+
+`onnxruntime` намеренно вынесен в отдельный preview venv; setup и точная
+команда находятся в
+`docs/datasets/ar0234_close_range_person_alignment_v1/ONNX_PREVIEW_SETUP.md`.
+Этот preview не квалифицирует yaw или движение.
 Отчёт и contact sheet:
 `docs/datasets/ar0234_close_range_person_alignment_v1/labelme_consistency_audit_v1/`.
 Отчёты находятся в
