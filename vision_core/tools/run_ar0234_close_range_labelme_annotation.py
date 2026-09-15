@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from vision_core.close_range_person_alignment_dataset.annotation import (
+    build_derived_label_inventory,
     convert_labelme_to_yolo,
     validate_annotation_package,
 )
@@ -20,9 +21,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--annotations-dir", type=Path, required=True)
     parser.add_argument("--frozen-inventory", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
-    parser.add_argument("--mode", choices=("dry-run", "apply", "validate"), required=True)
+    parser.add_argument("--mode", choices=("dry-run", "apply", "validate", "inventory"), required=True)
     parser.add_argument("--overwrite", action="store_true", help="allow replacement of existing YOLO labels only in apply mode")
     parser.add_argument("--require-complete", action="store_true", help="make incomplete validation report BLOCKED_INCOMPLETE_ANNOTATION")
+    parser.add_argument("--converter-commit", help="required lowercase Git SHA for inventory mode")
     return parser
 
 
@@ -44,9 +46,18 @@ def main() -> int:
                 inventory_path=args.frozen_inventory,
                 require_complete=args.require_complete,
             )
+        elif args.mode == "inventory":
+            if args.overwrite or args.require_complete or not args.converter_commit:
+                raise DatasetCaptureError("inventory mode requires only --converter-commit")
+            report = build_derived_label_inventory(
+                args.dataset_root,
+                annotations_dir=args.annotations_dir,
+                inventory_path=args.frozen_inventory,
+                converter_commit=args.converter_commit,
+            )
         else:
-            if args.require_complete:
-                raise DatasetCaptureError("--require-complete is valid only with --mode validate")
+            if args.require_complete or args.converter_commit:
+                raise DatasetCaptureError("--require-complete and --converter-commit are invalid in this mode")
             report = convert_labelme_to_yolo(
                 args.dataset_root,
                 annotations_dir=args.annotations_dir,

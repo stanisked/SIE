@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from vision_core.close_range_person_alignment_dataset.annotation import (
+    build_derived_label_inventory,
     convert_labelme_to_yolo,
     validate_annotation_package,
 )
@@ -120,6 +121,17 @@ def test_image_path_escape_fails_closed(tmp_path: Path) -> None:
     assert report["status"] == "BLOCKED_ANNOTATION_FAILURES"
     assert report["failure_count"] == 1
     assert "escapes the dataset images directory" in report["failures"][0]["reason"]
+
+
+def test_derived_inventory_hashes_only_complete_valid_yolo_labels(tmp_path: Path) -> None:
+    root, annotations, inventory, names = _prepare_frozen_package(tmp_path)
+    stem = Path(names["positive"]).stem
+    (annotations / f"{stem}.json").write_text(json.dumps(_labelme(names["positive"])), encoding="utf-8")
+    assert convert_labelme_to_yolo(root, annotations_dir=annotations, inventory_path=inventory, dry_run=False, overwrite=False)["status"] == "CONVERTED"
+    report = build_derived_label_inventory(root, annotations_dir=annotations, inventory_path=inventory, converter_commit="27936bd")
+    assert report["positive_label_count"] == 1
+    assert report["negative_images_without_label_count"] == 1
+    assert len(report["labels"][0]["sha256"]) == 64
 
 
 def test_validator_reports_non_yolo_file_in_labels_without_deleting_it(tmp_path: Path) -> None:

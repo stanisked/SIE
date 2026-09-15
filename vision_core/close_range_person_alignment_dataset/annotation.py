@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -155,6 +157,61 @@ def validate_annotation_package(
         "extra_annotation_json": extra_json,
         "extra_yolo_labels": extra_yolo,
         "unexpected_label_files": unexpected_label_files,
+    }
+    _json_safe(report)
+    return report
+
+
+def build_derived_label_inventory(
+    root: Path,
+    *,
+    annotations_dir: Path,
+    inventory_path: Path,
+    converter_commit: str,
+) -> dict[str, Any]:
+    """Hash a complete, validated YOLO label set without changing it."""
+    if not re.fullmatch(r"[0-9a-f]{7,64}", converter_commit):
+        raise DatasetCaptureError("converter_commit must be a lowercase Git SHA")
+    validation = validate_annotation_package(
+        root,
+        annotations_dir=annotations_dir,
+        inventory_path=inventory_path,
+        require_complete=True,
+    )
+    if validation["status"] != "VALID":
+        raise DatasetCaptureError("derived label inventory requires a complete valid annotation package")
+    context = _load_context(root, annotations_dir, inventory_path)
+    labels: list[dict[str, Any]] = []
+    negative_without_label = 0
+    for filename, record in sorted(context["records"].items()):
+        label_path = context["paths"]["labels"] / f"{Path(filename).stem}.txt"
+        if context["contains_person"][record["session_id"]]:
+            if label_path.is_symlink() or not label_path.is_file():
+                raise DatasetCaptureError("validated positive label disappeared before inventory")
+            labels.append(
+                {
+                    "image_filename": filename,
+                    "label_filename": label_path.name,
+                    "sha256": hashlib.sha256(label_path.read_bytes()).hexdigest(),
+                    "bytes": label_path.stat().st_size,
+                }
+            )
+        elif not label_path.exists():
+            negative_without_label += 1
+        else:
+            raise DatasetCaptureError("validated negative image gained a label before inventory")
+    report = {
+        "schema_version": "sie.ar0234_close_range_person_alignment_derived_label_inventory.v1",
+        "dataset_id": DATASET_ID,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "source_snapshot_id": context["snapshot_id"],
+        "converter_commit": converter_commit,
+        "converter_schema_version": ANNOTATION_SCHEMA_VERSION,
+        "converter_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "positive_label_count": len(labels),
+        "negative_images_without_label_count": negative_without_label,
+        "failure_count": 0,
+        "labels": labels,
     }
     _json_safe(report)
     return report
