@@ -664,6 +664,28 @@ Read-only validator обнаружил уже существующий
 `labels/hard-negative-room-objects-artificial-01_000001.json`. Он не удалён,
 не перемещён и не использован как YOLO label; дальнейший apply fail-closed,
 пока этот файл не пройдет отдельный явный аудит.
+
+Read-only audit подтвердил, что это JSON-массив из одного record:
+`image=hard-negative-room-objects-artificial-01_000001.png` и пустой
+`annotations=[]`. Полей LabelMe (`imagePath`, `imageWidth`, `imageHeight`,
+`shapes`, `imageData`) нет, YOLO `.txt` в нём тоже нет. Stem относится к
+существующему `1920x1200` raw/images PNG в session
+`hard-negative-room-objects-artificial-01`, у которой
+`contains_person=false`; запись создана позже capture и по структуре похожа
+на прежний standalone negative-annotation export. Это только origin clue, не
+доказательство инструмента или автора. SHA-256 файла:
+`c08682b3c588da771658c802dcb36f7919358c046da47d751108b099932a2b84`.
+
+Рекомендованное безопасное действие, пока не выполненное: по отдельной явной
+команде сначала сохранить SHA-256 в audit record, затем переместить этот
+не-LabelMe JSON без изменения байтов из `labels/` в отдельный
+`annotations_legacy/` и повторно запустить validator. До такого решения
+исходный файл остаётся неизменным на месте.
+
+Annotation protocol уточнён: единственный class остаётся
+`person_upper_body`; bbox идёт от верхней границы головы до пояса или верхних
+бёдер, всегда исключает ноги и ступни, а нижней границы изображения касается
+только при реально обрезанном торсе.
 Отчёты находятся в
 `docs/datasets/ar0234_close_range_person_alignment_v1/audit_v2/` и
 `docs/datasets/ar0234_close_range_person_alignment_v1/frozen_capture_inventory_v1/`.
