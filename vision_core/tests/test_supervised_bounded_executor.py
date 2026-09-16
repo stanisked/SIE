@@ -276,11 +276,13 @@ def test_static_target_adapter_requires_allowed_capability_and_shared_window() -
             "actuator_capability_gate": {"result": "DRY_RUN_ACTION_ALLOWED"},
         }, cycles=cycles,
         boot_session_id="0123456789ABCDEF",
+        freshness_reference_utc="2026-09-16T12:00:00+00:00",
     )
 
     assert envelope is not None
     assert envelope["decision"] is decision
     assert envelope["evidence_window"] is cycles
+    assert envelope["freshness_reference_utc"] == "2026-09-16T12:00:00+00:00"
     blocked = {
         "result": "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",
         "stage": "BLOCKED_ACTUATOR_CAPABILITY_NOT_QUALIFIED",

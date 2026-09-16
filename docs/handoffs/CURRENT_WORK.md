@@ -12,8 +12,10 @@ depth, decision или planning заново: входом служит толь
   `SUPERVISED_EXPERIMENTAL_TRIAL` и непустую причину; после fresh window
   runner сам получает session, печатает generated `command_id` и ждёт его
   точный ввод в том же процессе;
-- executor делает один `GET /status`, проверяет `READY`, отсутствие latch и
-  совпадение fresh `boot_session_id`, затем отправляет ровно один `POST`;
+- до preflight deadline executor повторяет только read-only `GET /status`:
+  timeout, transport error, non-200 или невалидный ответ не меняют command ID
+  и не создают POST; только валидный `READY` без latch и с совпадающим fresh
+  `boot_session_id` разрешает ровно один `POST`;
 - после принятия команды он до общего deadline повторяет только read-only
   `GET /status`: timeout, transport error, non-200 или временно невалидный
   ответ не создают второй `POST`; terminal state даёт
@@ -37,6 +39,14 @@ five-cycle window через existing live runtime, передаёт exact windo
 старые JSONL, не создаёт decision math и не собирает command ID вручную.
 Переход к HTTP доступен только с `--execute`; CLI сам читает boot session,
 показывает generated command ID и ждёт его точный ручной ввод перед POST.
+
+Bridge freshness оценивает latest measurement по host UTC в точке завершения
+текущей shared-window evaluation, до status HTTP. Это сохраняет TTL `1.0 s` и
+reject действительно stale/future evidence, но не позволяет задержке preflight
+GET искусственно состарить тот же только что сформированный live window.
+`bridge_plan.freshness_diagnostics` хранит clock basis, measured age, latest
+cycle/measurement timestamps, freshness reference и фактическое bridge check
+time. Это observability, не ослабление motion или capability semantics.
 
 ## Actuator Capability Gate dry-run
 

@@ -34,6 +34,7 @@ class PlannedBoundedCommand:
     evidence_measurement_ids: list[str]
     reference_frame: str
     units: str
+    freshness_diagnostics: dict[str, Any] | None
     network_performed: bool = False
     reobserve_required: bool = False
     block_reason: None = None
@@ -55,6 +56,7 @@ class BoundedCommandBlock:
     evidence_measurement_ids: list[str]
     reference_frame: str | None
     units: str | None
+    freshness_diagnostics: dict[str, Any] | None
     network_performed: bool
     reobserve_required: bool
     block_reason: str
@@ -100,6 +102,7 @@ def _block(
     decision: object = None,
     cycle_ids: list[str] | None = None,
     measurement_ids: list[str] | None = None,
+    freshness_diagnostics: dict[str, Any] | None = None,
     reobserve_required: bool = False,
 ) -> BoundedCommandBlock:
     decision_object = decision if type(decision) is dict else {}
@@ -115,6 +118,7 @@ def _block(
         evidence_measurement_ids=measurement_ids or [],
         reference_frame=_text(decision_object.get("reference_frame")),
         units=_text(decision_object.get("units")),
+        freshness_diagnostics=freshness_diagnostics,
         network_performed=False,
         reobserve_required=reobserve_required,
         block_reason=reason,
@@ -138,6 +142,7 @@ def plan_bounded_command(
     window = value.get("evidence_window")
     session = value.get("boot_session_id")
     previous = value.get("previous_terminal_motion_outcome")
+    freshness_reference_raw = value.get("freshness_reference_utc")
     if type(decision) is not dict:
         return _block("INVALID_DECISION")
     if type(window) is not list or len(window) != WINDOW_SIZE:
@@ -150,6 +155,8 @@ def plan_bounded_command(
         terminal = previous.get("command_state", previous.get("last_command_state", previous.get("status")))
         if terminal == "PARTIAL_PROGRESS" and previous.get("reobserve_required") is True:
             return _block("REOBSERVE_REQUIRED_AFTER_PARTIAL_PROGRESS", decision=decision, reobserve_required=True)
+    if freshness_reference_raw is not None and _timestamp(freshness_reference_raw) is None:
+        return _block("INVALID_FRESHNESS_REFERENCE", decision=decision)
 
     cycle_ids: list[str] = []
     measurements: list[tuple[str, str, str, datetime]] = []
@@ -195,12 +202,38 @@ def plan_bounded_command(
     measurement_times = [item[3] for item in measurements]
     if any(later < earlier for earlier, later in zip(measurement_times, measurement_times[1:])):
         return _block("MEASUREMENT_TIMESTAMPS_NOT_MONOTONIC", decision=decision, cycle_ids=cycle_ids, measurement_ids=measurement_ids)
-    now = now_utc()
-    if not isinstance(now, datetime) or now.tzinfo is None:
+    bridge_now = now_utc()
+    if not isinstance(bridge_now, datetime) or bridge_now.tzinfo is None:
         return _block("INVALID_BRIDGE_CLOCK", decision=decision, cycle_ids=cycle_ids, measurement_ids=measurement_ids)
-    age = (now.astimezone(timezone.utc) - measurements[-1][3]).total_seconds()
+    bridge_now = bridge_now.astimezone(timezone.utc)
+    freshness_reference = _timestamp(freshness_reference_raw)
+    if freshness_reference is None:
+        freshness_reference = bridge_now
+        clock_basis = "bridge_host_utc_at_plan_evaluation"
+    else:
+        if freshness_reference > bridge_now:
+            return _block("FRESHNESS_REFERENCE_FROM_FUTURE", decision=decision, cycle_ids=cycle_ids, measurement_ids=measurement_ids)
+        clock_basis = "runner_host_utc_after_shared_window_evaluation"
+    latest_cycle_timestamp = cycle_times[-1]
+    latest_measurement_timestamp = measurements[-1][3]
+    age = (freshness_reference - latest_measurement_timestamp).total_seconds()
+    freshness_diagnostics = {
+        "clock_basis": clock_basis,
+        "freshness_reference_utc": freshness_reference.isoformat(),
+        "bridge_checked_at_utc": bridge_now.isoformat(),
+        "latest_cycle_captured_at_utc": latest_cycle_timestamp.isoformat(),
+        "latest_measurement_timestamp_utc": latest_measurement_timestamp.isoformat(),
+        "measured_age_s": age,
+        "maximum_evidence_age_s": MAX_EVIDENCE_AGE_S,
+    }
     if not math.isfinite(age) or age < 0 or age > MAX_EVIDENCE_AGE_S:
-        return _block("LATEST_CYCLE_STALE_OR_FROM_FUTURE", decision=decision, cycle_ids=cycle_ids, measurement_ids=measurement_ids)
+        return _block(
+            "LATEST_CYCLE_STALE_OR_FROM_FUTURE",
+            decision=decision,
+            cycle_ids=cycle_ids,
+            measurement_ids=measurement_ids,
+            freshness_diagnostics=freshness_diagnostics,
+        )
 
     frames = {item[1] for item in measurements}
     measurement_units = {item[2] for item in measurements}
@@ -250,4 +283,5 @@ def plan_bounded_command(
         evidence_measurement_ids=measurement_ids,
         reference_frame=decision_frame,
         units=command_units,
+        freshness_diagnostics=freshness_diagnostics,
     )

@@ -7,6 +7,7 @@ import json
 import math
 import secrets
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -137,6 +138,7 @@ def supervised_demo_override_allowed(args: argparse.Namespace, supervision: obje
 def bridge_envelope(
     *, supervision: object, cycles: object, boot_session_id: object,
     allow_supervised_demo_override: bool = False,
+    freshness_reference_utc: object | None = None,
 ) -> dict[str, Any] | None:
     """Reuse the metric decision and exact shared window without rewriting either."""
     if type(supervision) is not dict or type(cycles) is not list:
@@ -153,12 +155,15 @@ def bridge_envelope(
         and not (allow_supervised_demo_override and _current_not_qualified_forward_demo(supervision))
     ) or type(decision) is not dict or decision.get("status") != "ADVANCE":
         return None
-    return {
+    envelope = {
         "decision": decision,
         "evidence_window": cycles,
         "boot_session_id": boot_session_id,
         "previous_terminal_motion_outcome": None,
     }
+    if freshness_reference_utc is not None:
+        envelope["freshness_reference_utc"] = freshness_reference_utc
+    return envelope
 
 
 def execution_block_result(
@@ -328,6 +333,10 @@ def main() -> int:
         supervision = supervisor.process_shared_window(
             cycles, alignment_observations=yolo_observations
         )
+        # Capture the host-UTC freshness basis before any status HTTP call.
+        # The bridge records this alongside its later check time, so network
+        # scheduling cannot make this same invocation appear stale.
+        freshness_reference_utc = datetime.now(timezone.utc).isoformat()
         yolo_block = primary_yolo_evidence_block(yolo_evidence)
         if yolo_block is not None:
             print(json.dumps(_combined("BLOCKED_PRIMARY_YOLO_EVIDENCE", yolo_block, supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False), allow_nan=False, sort_keys=True))
@@ -357,6 +366,7 @@ def main() -> int:
             cycles=cycles,
             boot_session_id=boot_session_id,
             allow_supervised_demo_override=demo_override,
+            freshness_reference_utc=freshness_reference_utc,
         )
         if envelope is None:
             print(json.dumps(_combined("BLOCKED_NO_EXECUTION_PLAN", "SUPERVISION_DID_NOT_ALLOW_EXECUTION", supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=True), allow_nan=False, sort_keys=True))

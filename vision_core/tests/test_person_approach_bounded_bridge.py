@@ -63,8 +63,8 @@ def envelope(status: str = "ADVANCE", parameter: float = 0.1) -> dict:
     return {"decision": decision, "evidence_window": records, "boot_session_id": SESSION}
 
 
-def plan(value: dict):
-    return plan_bounded_command(value, now_utc=lambda: NOW).to_dict()
+def plan(value: dict, *, now: datetime = NOW):
+    return plan_bounded_command(value, now_utc=lambda: now).to_dict()
 
 
 def test_valid_advance_and_cli_emit_one_json_record(tmp_path: Path):
@@ -121,13 +121,47 @@ def test_command_id_is_stable_for_retry_and_changes_with_identity_inputs():
     assert len({first, plan(session)["command_id"], plan(decision)["command_id"], plan(payload)["command_id"]}) == 4
 
 
-def test_stale_latest_cycle_blocks():
+def test_current_invocation_freshness_reference_accepts_newly_captured_cycle() -> None:
+    value = envelope()
+    value["freshness_reference_utc"] = (NOW + timedelta(milliseconds=200)).isoformat()
+
+    # The runner's preflight can finish later, but the same shared window was
+    # evaluated while its newest measurement was only 0.2 s old.
+    result = plan(value, now=NOW + timedelta(seconds=2))
+
+    assert result["result"] == "PLANNED_BOUNDED_COMMAND"
+    assert result["freshness_diagnostics"] == {
+        "clock_basis": "runner_host_utc_after_shared_window_evaluation",
+        "freshness_reference_utc": (NOW + timedelta(milliseconds=200)).isoformat(),
+        "bridge_checked_at_utc": (NOW + timedelta(seconds=2)).isoformat(),
+        "latest_cycle_captured_at_utc": NOW.isoformat(),
+        "latest_measurement_timestamp_utc": NOW.isoformat(),
+        "measured_age_s": 0.2,
+        "maximum_evidence_age_s": 1.0,
+    }
+
+
+def test_stale_latest_cycle_blocks_with_freshness_diagnostics():
     value = envelope()
     for index, item in enumerate(value["evidence_window"]):
         stamp = (NOW - timedelta(seconds=2, milliseconds=4-index)).isoformat()
         item["captured_at_utc"] = stamp
         item["measurement"]["timestamp"] = stamp
-    assert plan(value)["block_reason"] == "LATEST_CYCLE_STALE_OR_FROM_FUTURE"
+    result = plan(value)
+    assert result["block_reason"] == "LATEST_CYCLE_STALE_OR_FROM_FUTURE"
+    assert result["freshness_diagnostics"]["clock_basis"] == "bridge_host_utc_at_plan_evaluation"
+    assert result["freshness_diagnostics"]["measured_age_s"] > 1.0
+
+
+def test_genuinely_future_latest_cycle_blocks_with_negative_measured_age():
+    value = envelope()
+    for index, item in enumerate(value["evidence_window"]):
+        stamp = (NOW + timedelta(seconds=2, milliseconds=index)).isoformat()
+        item["captured_at_utc"] = stamp
+        item["measurement"]["timestamp"] = stamp
+    result = plan(value)
+    assert result["block_reason"] == "LATEST_CYCLE_STALE_OR_FROM_FUTURE"
+    assert result["freshness_diagnostics"]["measured_age_s"] < 0.0
 
 
 def test_fewer_than_four_successes_blocks():
