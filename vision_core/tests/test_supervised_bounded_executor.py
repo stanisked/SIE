@@ -81,6 +81,57 @@ def test_preflight_blocks_before_post_when_session_is_not_fresh() -> None:
     assert result["motor_command_performed"] is False
 
 
+def test_preflight_retries_one_transient_read_failure_then_posts_once() -> None:
+    calls: list[tuple[str, str]] = []
+    responses: list[object] = [
+        OSError("temporary preflight timeout"),
+        (200, ready_status()),
+        (202, {"accepted": True, "command_id": "pa-supervised-mvp-001", "command_state": "ACCEPTED"}),
+        (200, ready_status(last_command_id="pa-supervised-mvp-001", last_command_state="PARTIAL_PROGRESS")),
+    ]
+
+    def request(method: str, url: str, timeout_s: float) -> tuple[int, dict]:
+        calls.append((method, url))
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response  # type: ignore[return-value]
+
+    result = execute_one_supervised_command(
+        planned_command=plan(), authorization=authorization("SUPERVISED_EXPERIMENTAL_TRIAL"),
+        base_url="http://127.0.0.1", request=request, sleep=lambda _: None,
+        monotonic=lambda: 0.0,
+    )
+
+    assert result["result"] == "AWAIT_REOBSERVATION"
+    assert [method for method, _ in calls] == ["GET", "GET", "POST", "GET"]
+    assert sum(method == "POST" for method, _ in calls) == 1
+
+
+def test_preflight_deadline_expires_without_post() -> None:
+    calls: list[tuple[str, str]] = []
+    clock = [0.0]
+
+    def request(method: str, url: str, timeout_s: float) -> tuple[int, dict]:
+        calls.append((method, url))
+        raise OSError("temporary preflight timeout")
+
+    def sleep(seconds: float) -> None:
+        clock[0] += seconds
+
+    result = execute_one_supervised_command(
+        planned_command=plan(), authorization=authorization(), base_url="http://127.0.0.1",
+        request=request, sleep=sleep, monotonic=lambda: clock[0],
+        poll_interval_s=0.2, terminal_timeout_s=0.5,
+    )
+
+    assert result["result"] == "BLOCKED_PREFLIGHT"
+    assert result["reason"].startswith("STATUS_READ_ERROR:")
+    assert all(method == "GET" for method, _ in calls)
+    assert sum(method == "POST" for method, _ in calls) == 0
+    assert result["motor_command_performed"] is False
+
+
 def test_executes_one_post_then_requires_reobservation_without_retry() -> None:
     calls: list[tuple[str, str]] = []
     responses = iter(

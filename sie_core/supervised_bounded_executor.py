@@ -252,15 +252,54 @@ def execute_one_supervised_command(
     except ExecutionContractError as error:
         return _record(result="BLOCKED_EXECUTION_CONTRACT", reason=str(error), planned_command=command, authorization=auth)
 
-    try:
-        preflight_code, preflight = fetch_bounded_status(base_url=base_url, request=request, timeout_s=timeout_s)
-    except ExecutionContractError as error:
-        return _record(result="BLOCKED_PREFLIGHT", reason=str(error), planned_command=command, authorization=auth, network_performed=True)
-    if preflight_code != 200:
-        return _record(result="BLOCKED_PREFLIGHT", reason=f"STATUS_HTTP_{preflight_code}", planned_command=command, authorization=auth, preflight_status=preflight, network_performed=True)
-    preflight_reason = _ready_status(preflight, command)
-    if preflight_reason is not None:
-        return _record(result="BLOCKED_PREFLIGHT", reason=preflight_reason, planned_command=command, authorization=auth, preflight_status=preflight, network_performed=True)
+    # Until the existing bounded-status deadline expires, preflight uses only
+    # read-only GET /status. A transient status read must never invalidate an
+    # already confirmed command ID or cause a replacement POST.
+    preflight_deadline = monotonic() + terminal_timeout_s
+    preflight: dict[str, Any] | None = None
+    last_preflight_status: dict[str, Any] | None = None
+    last_preflight_reason = "PREFLIGHT_STATUS_DEADLINE_EXPIRED"
+    while monotonic() < preflight_deadline:
+        try:
+            preflight_code, status = fetch_bounded_status(
+                base_url=base_url, request=request, timeout_s=timeout_s
+            )
+        except (ExecutionContractError, URLError, OSError, ValueError, TypeError) as error:
+            last_preflight_reason = f"STATUS_READ_ERROR: {error}"
+        else:
+            if type(preflight_code) is not int or type(status) is not dict:
+                last_preflight_reason = "STATUS_RESPONSE_INVALID"
+            else:
+                last_preflight_status = status
+                if preflight_code != 200:
+                    last_preflight_reason = f"STATUS_HTTP_{preflight_code}"
+                else:
+                    preflight_reason = _ready_status(status, command)
+                    if preflight_reason is None:
+                        preflight = status
+                        break
+                    # This is a valid status document, but the specific plan
+                    # is unsafe or stale. Retrying cannot make it fresh.
+                    return _record(
+                        result="BLOCKED_PREFLIGHT",
+                        reason=preflight_reason,
+                        planned_command=command,
+                        authorization=auth,
+                        preflight_status=status,
+                        network_performed=True,
+                    )
+        remaining_s = preflight_deadline - monotonic()
+        if remaining_s > 0.0:
+            sleep(min(poll_interval_s, remaining_s))
+    if preflight is None:
+        return _record(
+            result="BLOCKED_PREFLIGHT",
+            reason=last_preflight_reason,
+            planned_command=command,
+            authorization=auth,
+            preflight_status=last_preflight_status,
+            network_performed=True,
+        )
 
     try:
         response_code, response = request("POST", _bounded_url(_text(base_url, "base_url"), command["endpoint"], command["query"]), timeout_s)
