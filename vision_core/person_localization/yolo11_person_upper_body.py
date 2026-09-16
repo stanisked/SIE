@@ -179,12 +179,27 @@ def decode_yolo11_one_class_output(
     if (
         not isinstance(confidence_threshold, (int, float))
         or not math.isfinite(confidence_threshold)
-        or not 0.0 < confidence_threshold <= 1.0
+        or not 0.0 <= confidence_threshold <= 1.0
     ):
-        raise ValueError("confidence_threshold must be finite and in (0, 1]")
+        raise ValueError("confidence_threshold must be finite and in [0, 1]")
+    candidates = decode_yolo11_one_class_candidates(output, transform=transform)
+    eligible = [
+        candidate
+        for candidate in candidates
+        if candidate.confidence >= float(confidence_threshold)
+    ]
+    return nms_detections(eligible, iou_threshold=nms_iou_threshold)
+
+
+def decode_yolo11_one_class_candidates(
+    output: np.ndarray,
+    *,
+    transform: LetterboxTransform,
+) -> list[PersonUpperBodyDetection]:
+    """Decode geometrically valid raw model candidates before confidence policy."""
     candidates: list[PersonUpperBodyDetection] = []
     for center_x, center_y, width, height, confidence in _prediction_rows(output):
-        if float(confidence) < float(confidence_threshold) or width <= 0.0 or height <= 0.0:
+        if width <= 0.0 or height <= 0.0:
             continue
         x1 = (float(center_x) - float(width) / 2.0 - transform.pad_x) / transform.scale
         y1 = (float(center_y) - float(height) / 2.0 - transform.pad_y) / transform.scale
@@ -199,7 +214,7 @@ def decode_yolo11_one_class_output(
         candidates.append(
             PersonUpperBodyDetection((x1, y1, x2, y2), float(confidence))
         )
-    return nms_detections(candidates, iou_threshold=nms_iou_threshold)
+    return candidates
 
 
 def build_preview_record(

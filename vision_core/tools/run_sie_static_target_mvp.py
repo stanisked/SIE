@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import secrets
 import sys
 from pathlib import Path
@@ -50,6 +51,20 @@ DEFAULT_YOLO_MODEL = Path(
 YOLO_CONFIDENCE_THRESHOLD = 0.40
 
 
+def parse_yolo_confidence_threshold(value: str) -> float:
+    try:
+        threshold = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "--yolo-confidence-threshold must be a finite number in [0, 1]"
+        ) from error
+    if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
+        raise argparse.ArgumentTypeError(
+            "--yolo-confidence-threshold must be a finite number in [0, 1]"
+        )
+    return threshold
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", type=Path, required=True)
@@ -60,6 +75,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--yolo-model", type=Path, default=DEFAULT_YOLO_MODEL,
         help="local one-class person_upper_body ONNX; SHA-256 is verified before use",
+    )
+    parser.add_argument(
+        "--yolo-confidence-threshold",
+        type=parse_yolo_confidence_threshold,
+        default=YOLO_CONFIDENCE_THRESHOLD,
+        help="YOLO person_upper_body confidence threshold in [0, 1]; default: 0.40",
     )
     parser.add_argument(
         "--stereo-policy",
@@ -285,7 +306,7 @@ def main() -> int:
         ):
             raise ExecutionContractError("--execute requires SUPERVISED_EXPERIMENTAL_TRIAL and non-empty --experimental-reason")
         primary_observer = OnnxRuntimeYolo11PersonUpperBodyObserver(
-            args.yolo_model, confidence_threshold=YOLO_CONFIDENCE_THRESHOLD
+            args.yolo_model, confidence_threshold=args.yolo_confidence_threshold
         )
         runtime = build_live_runtime(
             model=args.model,

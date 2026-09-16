@@ -17,8 +17,9 @@ from .yolo11_person_upper_body import (
     REFERENCE_FRAME,
     PersonUpperBodyDetection,
     build_preview_record,
-    decode_yolo11_one_class_output,
+    decode_yolo11_one_class_candidates,
     letterbox_bgr,
+    nms_detections,
     verify_model_sha256,
 )
 
@@ -43,9 +44,9 @@ class OnnxRuntimeYolo11PersonUpperBodyObserver:
         if (
             type(confidence_threshold) not in (int, float)
             or not math.isfinite(confidence_threshold)
-            or not 0.0 < confidence_threshold <= 1.0
+            or not 0.0 <= confidence_threshold <= 1.0
         ):
-            raise ValueError("confidence_threshold must be finite and in (0, 1]")
+            raise ValueError("confidence_threshold must be finite and in [0, 1]")
         self.model_path = model_path
         self.model_sha256 = verify_model_sha256(model_path, MODEL_SHA256)
         self.confidence_threshold = float(confidence_threshold)
@@ -72,8 +73,8 @@ class OnnxRuntimeYolo11PersonUpperBodyObserver:
         outputs = self._session.run(None, {self._input_name: tensor})
         if len(outputs) != 1:
             raise RuntimeError(f"YOLO11 model must produce one output, got {len(outputs)}")
-        detections = decode_yolo11_one_class_output(
-            outputs[0], transform=transform, confidence_threshold=self.confidence_threshold
+        detections = decode_yolo11_one_class_candidates(
+            outputs[0], transform=transform
         )
         return build_yolo_primary_observation(
             detections=detections,
@@ -100,14 +101,25 @@ def build_yolo_primary_observation(
     timestamp = _timestamp(captured_at_utc)
     if type(cycle_id) is not str or not cycle_id:
         raise ValueError("cycle_id must be a non-empty string")
+    eligible_detections = nms_detections(
+        [
+            detection
+            for detection in detections
+            if detection.confidence >= float(confidence_threshold)
+        ]
+    )
     preview = build_preview_record(
         model_sha256=model_sha256,
         frame_width=frame_width,
         frame_height=frame_height,
         confidence_threshold=confidence_threshold,
-        detections=detections,
+        detections=eligible_detections,
     )
-    status = NO_TARGET if not detections else SINGLE_TARGET if len(detections) == 1 else MULTIPLE_TARGETS
+    status = (
+        NO_TARGET
+        if not eligible_detections
+        else SINGLE_TARGET if len(eligible_detections) == 1 else MULTIPLE_TARGETS
+    )
     observation_id = f"ar0234-yolo11-person-upper-body:{cycle_id}"
     selected_record = preview["detections"][0] if status == SINGLE_TARGET else None
     result = {
@@ -125,6 +137,8 @@ def build_yolo_primary_observation(
         "model_input_size_px": {"width": MODEL_INPUT_SIZE, "height": MODEL_INPUT_SIZE},
         "confidence_threshold": confidence_threshold,
         "frame_size_px": preview["frame_size_px"],
+        "raw_detection_count": len(detections),
+        "eligible_detection_count": len(eligible_detections),
         "detection_count": preview["detection_count"],
         "detections": preview["detections"],
         "bbox_xyxy_px": None if selected_record is None else selected_record["bbox_xyxy_px"],

@@ -7,12 +7,15 @@ from vision_core.person_approach.bounded_bridge import plan_bounded_command
 from vision_core.person_approach.metric_first_target_supervisor import MetricFirstTargetSupervisor
 from vision_core.person_localization.yolo11_person_upper_body import PersonUpperBodyDetection
 from vision_core.person_localization.yolo11_person_upper_body_runtime import (
+    MULTIPLE_TARGETS,
     NO_TARGET,
+    SINGLE_TARGET,
     build_yolo_primary_observation,
 )
 from vision_core.tools.run_sie_static_target_mvp import (
     _combined,
     bridge_envelope,
+    parse_args,
     primary_yolo_alignment_window,
     primary_yolo_evidence_block,
 )
@@ -104,3 +107,53 @@ def test_yolo_evidence_does_not_change_bounded_forward_payload_or_json_safety() 
     assert plan["method"] == "POST" and plan["endpoint"] == "/move-forward"
     assert plan["query"]["distance_m"] == "0.1"
     json.dumps({"supervision": result, "yolo": cycles[0]["primary_person_observation"]}, allow_nan=False)
+
+
+def test_yolo_threshold_controls_eligible_targets_without_selecting_highest_confidence() -> None:
+    detections = [
+        PersonUpperBodyDetection((100.0, 100.0, 400.0, 1000.0), 0.92),
+        PersonUpperBodyDetection((500.0, 100.0, 800.0, 1000.0), 0.68),
+        PersonUpperBodyDetection((1200.0, 100.0, 1500.0, 1000.0), 0.50),
+    ]
+    strict = build_yolo_primary_observation(
+        detections=detections,
+        model_sha256="d" * 64,
+        confidence_threshold=0.70,
+        frame_width=1920,
+        frame_height=1200,
+        captured_at_utc=NOW,
+        cycle_id="strict",
+    )
+    relaxed = build_yolo_primary_observation(
+        detections=detections,
+        model_sha256="d" * 64,
+        confidence_threshold=0.40,
+        frame_width=1920,
+        frame_height=1200,
+        captured_at_utc=NOW,
+        cycle_id="relaxed",
+    )
+
+    assert strict["confidence_threshold"] == 0.70
+    assert strict["raw_detection_count"] == 3
+    assert strict["eligible_detection_count"] == 1
+    assert strict["target_status"] == SINGLE_TARGET
+    assert relaxed["confidence_threshold"] == 0.40
+    assert relaxed["raw_detection_count"] == 3
+    assert relaxed["eligible_detection_count"] == 3
+    assert relaxed["target_status"] == MULTIPLE_TARGETS
+    assert relaxed["bbox_xyxy_px"] is None
+    assert relaxed["center_x_px"] is None
+    json.dumps({"strict": strict, "relaxed": relaxed}, allow_nan=False)
+
+
+def test_static_target_runner_exposes_default_and_explicit_yolo_threshold() -> None:
+    required = [
+        "--model", "model.tflite",
+        "--reference", "reference.csv",
+        "--project-root", ".",
+        "--ar-intrinsic", "ar.json",
+        "--center-tolerance-px", "40",
+    ]
+    assert parse_args(required).yolo_confidence_threshold == 0.40
+    assert parse_args(required + ["--yolo-confidence-threshold", "0.70"]).yolo_confidence_threshold == 0.70
