@@ -238,13 +238,14 @@ def _command_id(bridge: dict[str, Any] | None) -> str | None:
     return direct if type(direct) is str else nested if type(nested) is str else None
 
 
-def _combined(result: str, reason: str | None, *, supervision: dict[str, Any] | None, bridge: dict[str, Any] | None, executor: dict[str, Any] | None, yolo_primary_evidence: list[dict[str, Any]] | None, network: bool, supervised_demo_override: bool = False) -> dict[str, Any]:
+def _combined(result: str, reason: str | None, *, supervision: dict[str, Any] | None, bridge: dict[str, Any] | None, executor: dict[str, Any] | None, yolo_primary_evidence: list[dict[str, Any]] | None, network: bool, supervised_demo_override: bool = False, metric_acquisition: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
         "schema_version": "sie.static_target_supervised_mvp.v1",
         "result": result,
         "reason": reason,
         "supervision": supervision,
         "yolo_primary_evidence": yolo_primary_evidence,
+        "metric_acquisition": metric_acquisition,
         "bridge_plan": bridge,
         "command_id": _command_id(bridge),
         "executor": executor,
@@ -297,10 +298,137 @@ def primary_yolo_evidence_block(evidence: object) -> str | None:
     return None
 
 
+def _metric_cycle_diagnostic(cycle: object) -> dict[str, Any] | None:
+    """Return compact, JSON-safe evidence for one cycle without image data."""
+    if type(cycle) is not dict:
+        return {
+            "cycle_id": None,
+            "cycle_status": None,
+            "measurement_status": None,
+            "reason": "CYCLE_NOT_OBJECT",
+        }
+    cycle_id = cycle.get("cycle_id") if type(cycle.get("cycle_id")) is str else None
+    cycle_status = cycle.get("status") if type(cycle.get("status")) is str else None
+    measurement = cycle.get("measurement")
+    measurement_status = (
+        measurement.get("status") if type(measurement) is dict and type(measurement.get("status")) is str else None
+    )
+    if cycle_status != "SUCCESS":
+        return {
+            "cycle_id": cycle_id,
+            "cycle_status": cycle_status,
+            "measurement_status": measurement_status,
+            "reason": "CYCLE_STATUS_NOT_SUCCESS",
+        }
+    if type(measurement) is not dict:
+        return {
+            "cycle_id": cycle_id,
+            "cycle_status": cycle_status,
+            "measurement_status": None,
+            "reason": "MEASUREMENT_MISSING",
+        }
+    if measurement_status != "SUCCESS":
+        return {
+            "cycle_id": cycle_id,
+            "cycle_status": cycle_status,
+            "measurement_status": measurement_status,
+            "reason": "MEASUREMENT_STATUS_NOT_SUCCESS",
+        }
+    if measurement.get("units") != "m":
+        reason = "MEASUREMENT_UNITS_NOT_M"
+    elif type(measurement.get("reference_frame")) is not str:
+        reason = "MEASUREMENT_REFERENCE_FRAME_MISSING"
+    elif type(measurement.get("measurement_id")) is not str:
+        reason = "MEASUREMENT_ID_MISSING"
+    elif type(measurement.get("timestamp")) is not str:
+        reason = "MEASUREMENT_TIMESTAMP_MISSING"
+    else:
+        try:
+            timestamp = datetime.fromisoformat(measurement["timestamp"].replace("Z", "+00:00"))
+        except ValueError:
+            timestamp = None
+        if timestamp is None or timestamp.tzinfo is None:
+            reason = "MEASUREMENT_TIMESTAMP_INVALID"
+        elif any(
+            type(measurement.get(field)) not in (int, float)
+            or not math.isfinite(float(measurement[field]))
+            for field in ("x_m", "y_m", "z_m", "range_m")
+        ):
+            reason = "MEASUREMENT_VALUE_NOT_FINITE"
+        else:
+            return None
+    return {
+        "cycle_id": cycle_id,
+        "cycle_status": cycle_status,
+        "measurement_status": measurement_status,
+        "reason": reason,
+    }
+
+
+def current_metric_decision_available(supervision: object) -> bool:
+    if type(supervision) is not dict:
+        return False
+    decision = supervision.get("metric_decision")
+    return type(decision) is dict and decision.get("status") in {
+        "ADVANCE", "HOLD_TARGET_REACHED", "TURN_LEFT", "TURN_RIGHT"
+    }
+
+
+def metric_acquisition_attempt_diagnostic(
+    *, attempt: int, cycles: object, supervision: object,
+) -> dict[str, Any]:
+    """Summarise metric availability for one fresh five-cycle live window."""
+    window = cycles if type(cycles) is list else []
+    invalid_cycles = [_metric_cycle_diagnostic(cycle) for cycle in window]
+    invalid_cycles = [item for item in invalid_cycles if item is not None]
+    cycle_ids = [
+        cycle.get("cycle_id") if type(cycle) is dict and type(cycle.get("cycle_id")) is str else None
+        for cycle in window
+    ]
+    reason = supervision.get("reason") if type(supervision) is dict else None
+    return {
+        "attempt": attempt,
+        "source_window_cycle_ids": cycle_ids,
+        "valid_metric_measurement_count": len(window) - len(invalid_cycles),
+        "invalid_metric_cycles": invalid_cycles,
+        "metric_decision_available": current_metric_decision_available(supervision),
+        "window_result": supervision.get("result") if type(supervision) is dict else None,
+        "window_reason": reason if type(reason) is str else "INVALID_SUPERVISION_RESULT",
+    }
+
+
+def acquire_metric_depth_with_one_retry(
+    acquire_window: Any,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Take at most two independent live windows; never merge their evidence."""
+    attempts: list[dict[str, Any]] = []
+    selected: dict[str, Any] | None = None
+    for attempt in (1, 2):
+        candidate = acquire_window(attempt)
+        if type(candidate) is not dict:
+            raise ValueError("shared live window acquisition did not return an object")
+        cycles = candidate.get("cycles")
+        supervision = candidate.get("supervision")
+        diagnostic = metric_acquisition_attempt_diagnostic(
+            attempt=attempt, cycles=cycles, supervision=supervision
+        )
+        attempts.append(diagnostic)
+        selected = candidate
+        if diagnostic["metric_decision_available"] is True:
+            break
+    assert selected is not None
+    return selected, {
+        "attempt_count": len(attempts),
+        "attempts": attempts,
+        "final_metric_decision_available": attempts[-1]["metric_decision_available"],
+    }
+
+
 def main() -> int:
     args = parse_args()
     runtime = None
     yolo_evidence: list[dict[str, Any]] | None = None
+    metric_acquisition: dict[str, Any] | None = None
     try:
         if args.execute and not args.base_url:
             raise ExecutionContractError("--execute requires --base-url")
@@ -324,22 +452,40 @@ def main() -> int:
         runtime.start()
         optical_axis_cx_px = load_optical_axis_cx(args.ar_intrinsic)
         supervisor = MetricFirstTargetSupervisor(live_runtime=runtime, optical_axis_cx_px=optical_axis_cx_px, center_tolerance_px=args.center_tolerance_px)
-        cycles = [runtime.cycle(f"static-target-mvp-{index:06d}") for index in range(1, WINDOW_SIZE + 1)]
-        yolo_evidence, yolo_observations = primary_yolo_alignment_window(
-            cycles,
-            optical_axis_cx_px=optical_axis_cx_px,
-            center_tolerance_px=args.center_tolerance_px,
+
+        def acquire_window(attempt: int) -> dict[str, Any]:
+            # IDs are attempt-scoped: retry acquires five new co-temporal AR and
+            # stereo cycles instead of combining records from either window.
+            cycles = [
+                runtime.cycle(f"static-target-mvp-a{attempt}-{index:06d}")
+                for index in range(1, WINDOW_SIZE + 1)
+            ]
+            evidence, observations = primary_yolo_alignment_window(
+                cycles,
+                optical_axis_cx_px=optical_axis_cx_px,
+                center_tolerance_px=args.center_tolerance_px,
+            )
+            return {
+                "cycles": cycles,
+                "yolo_evidence": evidence,
+                "supervision": supervisor.process_shared_window(
+                    cycles, alignment_observations=observations
+                ),
+            }
+
+        selected_window, metric_acquisition = acquire_metric_depth_with_one_retry(
+            acquire_window
         )
-        supervision = supervisor.process_shared_window(
-            cycles, alignment_observations=yolo_observations
-        )
+        cycles = selected_window["cycles"]
+        yolo_evidence = selected_window["yolo_evidence"]
+        supervision = selected_window["supervision"]
         # Capture the host-UTC freshness basis before any status HTTP call.
         # The bridge records this alongside its later check time, so network
         # scheduling cannot make this same invocation appear stale.
         freshness_reference_utc = datetime.now(timezone.utc).isoformat()
         yolo_block = primary_yolo_evidence_block(yolo_evidence)
         if yolo_block is not None:
-            print(json.dumps(_combined("BLOCKED_PRIMARY_YOLO_EVIDENCE", yolo_block, supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False), allow_nan=False, sort_keys=True))
+            print(json.dumps(_combined("BLOCKED_PRIMARY_YOLO_EVIDENCE", yolo_block, supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False, metric_acquisition=metric_acquisition), allow_nan=False, sort_keys=True))
             return 0
         demo_override = supervised_demo_override_allowed(args, supervision)
         blocked = execution_block_result(
@@ -348,17 +494,17 @@ def main() -> int:
         if not args.execute:
             if blocked is not None:
                 result, reason = blocked
-                print(json.dumps(_combined(result, reason, supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False), allow_nan=False, sort_keys=True))
+                print(json.dumps(_combined(result, reason, supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False, metric_acquisition=metric_acquisition), allow_nan=False, sort_keys=True))
                 return 0
-            print(json.dumps(_combined("AWAIT_OPERATOR_EXECUTION", "RE-RUN_WITH_--execute_TO_FETCH_FRESH_SESSION_AND_ALLOW_ONE_COMMAND", supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False), allow_nan=False, sort_keys=True))
+            print(json.dumps(_combined("AWAIT_OPERATOR_EXECUTION", "RE-RUN_WITH_--execute_TO_FETCH_FRESH_SESSION_AND_ALLOW_ONE_COMMAND", supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False, metric_acquisition=metric_acquisition), allow_nan=False, sort_keys=True))
             return 0
         if blocked is not None:
             result, reason = blocked
-            print(json.dumps(_combined(result, reason, supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False), allow_nan=False, sort_keys=True))
+            print(json.dumps(_combined(result, reason, supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False, metric_acquisition=metric_acquisition), allow_nan=False, sort_keys=True))
             return 0
         status_code, initial_status = fetch_bounded_status(base_url=args.base_url, timeout_s=args.timeout_s)
         if status_code != 200 or type(initial_status.get("boot_session_id")) is not str:
-            print(json.dumps(_combined("BLOCKED_PREFLIGHT", "STATUS_UNAVAILABLE_AFTER_SUPERVISION", supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=True), allow_nan=False, sort_keys=True))
+            print(json.dumps(_combined("BLOCKED_PREFLIGHT", "STATUS_UNAVAILABLE_AFTER_SUPERVISION", supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=True, metric_acquisition=metric_acquisition), allow_nan=False, sort_keys=True))
             return 0
         boot_session_id = initial_status["boot_session_id"]
         envelope = bridge_envelope(
@@ -369,20 +515,20 @@ def main() -> int:
             freshness_reference_utc=freshness_reference_utc,
         )
         if envelope is None:
-            print(json.dumps(_combined("BLOCKED_NO_EXECUTION_PLAN", "SUPERVISION_DID_NOT_ALLOW_EXECUTION", supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=True), allow_nan=False, sort_keys=True))
+            print(json.dumps(_combined("BLOCKED_NO_EXECUTION_PLAN", "SUPERVISION_DID_NOT_ALLOW_EXECUTION", supervision=supervision, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=True, metric_acquisition=metric_acquisition), allow_nan=False, sort_keys=True))
             return 0
         plan = plan_bounded_command(envelope).to_dict()
         if plan.get("result") != "PLANNED_BOUNDED_COMMAND":
-            print(json.dumps(_combined("BLOCKED_NO_EXECUTION_PLAN", plan.get("block_reason"), supervision=supervision, bridge=plan, executor=None, yolo_primary_evidence=yolo_evidence, network=True), allow_nan=False, sort_keys=True))
+            print(json.dumps(_combined("BLOCKED_NO_EXECUTION_PLAN", plan.get("block_reason"), supervision=supervision, bridge=plan, executor=None, yolo_primary_evidence=yolo_evidence, network=True, metric_acquisition=metric_acquisition), allow_nan=False, sort_keys=True))
             return 0
         plan = fresh_supervised_execution_plan(plan)
         authorization = authorize_generated_demo_plan(
             plan=plan, experimental_reason=args.experimental_reason,
         )
         executor = execute_one_supervised_command(planned_command=plan, authorization=authorization, base_url=args.base_url, timeout_s=args.timeout_s, poll_interval_s=args.poll_interval_s, terminal_timeout_s=args.terminal_timeout_s)
-        print(json.dumps(_combined(executor["result"], executor.get("reason"), supervision=supervision, bridge=plan, executor=executor, yolo_primary_evidence=yolo_evidence, network=True, supervised_demo_override=demo_override), allow_nan=False, sort_keys=True))
+        print(json.dumps(_combined(executor["result"], executor.get("reason"), supervision=supervision, bridge=plan, executor=executor, yolo_primary_evidence=yolo_evidence, network=True, supervised_demo_override=demo_override, metric_acquisition=metric_acquisition), allow_nan=False, sort_keys=True))
     except (ExecutionContractError, LiveFusionError, ValueError, RuntimeError) as error:
-        print(json.dumps(_combined("BLOCKED", str(error), supervision=None, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False), allow_nan=False, sort_keys=True))
+        print(json.dumps(_combined("BLOCKED", str(error), supervision=None, bridge=None, executor=None, yolo_primary_evidence=yolo_evidence, network=False, metric_acquisition=metric_acquisition), allow_nan=False, sort_keys=True))
         return 2
     finally:
         if runtime is not None:

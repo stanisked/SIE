@@ -48,6 +48,29 @@ GET искусственно состарить тот же только что 
 cycle/measurement timestamps, freshness reference и фактическое bridge check
 time. Это observability, не ослабление motion или capability semantics.
 
+## Надёжность metric-depth acquisition в static-target runner
+
+YOLO primary observation и stereo metric depth остаются co-temporal внутри
+одного shared five-cycle window. На live hardware иногда пять таких циклов
+содержат zero valid metric measurements, хотя следующий самостоятельный run
+успешно получает пять и даёт `ADVANCE`.
+
+- `run_sie_static_target_mvp.py` теперь после первого окна без valid current
+  metric decision снимает ровно один новый полный five-cycle window. Cycle IDs
+  attempt-scoped, старые frames, cycles и evidence не переиспользуются и не
+  смешиваются со вторым окном.
+- Final JSON добавляет `metric_acquisition`: для каждого attempt в нём есть
+  source cycle IDs, число valid metric measurements, а для каждого invalid
+  cycle компактные `cycle_status`, `measurement_status` и concrete `reason`.
+  Raw pixels, disparity и depth arrays не логируются.
+- Только окно с valid current metric decision допускает existing bridge,
+  preflight и supervised one POST flow. Если второе окно тоже не даёт decision,
+  runner возвращает existing `RANGE_ACQUISITION_REQUIRED` без plan, command ID,
+  network или motor action.
+- Это acquisition retry, не изменение stereo policy, freshness TTL, YOLO,
+  capability, PWM, firmware или motion semantics. Камеры, ESP32 и моторы не
+  запускались при этой реализации.
+
 ## Actuator Capability Gate dry-run
 
 Ветка `feature/sie-actuator-capability-gate-dry-run-v1` добавляет универсальный
