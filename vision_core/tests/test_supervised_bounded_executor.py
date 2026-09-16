@@ -11,6 +11,7 @@ from vision_core.tools.run_sie_static_target_mvp import (
     authorize_generated_demo_plan,
     bridge_envelope,
     execution_block_result,
+    fresh_supervised_execution_plan,
     supervised_demo_override_allowed,
 )
 
@@ -160,6 +161,58 @@ def test_terminal_read_exhausts_deadline_without_reposting() -> None:
     assert result["reason"] == "STATUS_HTTP_503"
     assert sum(method == "POST" for method, _ in calls) == 1
     assert all(method in {"GET", "POST"} for method, _ in calls)
+
+
+def test_independent_execute_invocations_get_distinct_command_ids() -> None:
+    first = fresh_supervised_execution_plan(plan())
+    second = fresh_supervised_execution_plan(plan())
+
+    assert first["command_id"] != second["command_id"]
+    assert first["query"]["command_id"] == first["command_id"]
+    assert second["query"]["command_id"] == second["command_id"]
+    assert len(first["command_id"]) == 63
+    assert len(second["command_id"]) == 63
+    json.dumps({"first": first, "second": second}, allow_nan=False)
+
+
+def test_one_execution_keeps_command_id_through_terminal_polling_and_posts_once() -> None:
+    execution_plan = fresh_supervised_execution_plan(plan())
+    command_id = execution_plan["command_id"]
+    execution_authorization = authorize_operator_trial(
+        planned_command=execution_plan,
+        confirmation_command_id=command_id,
+        authorization_mode="SUPERVISED_EXPERIMENTAL_TRIAL",
+        experimental_reason="supervised static-target MVP",
+    )
+    calls: list[tuple[str, str]] = []
+    responses: list[object] = [
+        (200, ready_status()),
+        (202, {"accepted": True, "command_id": command_id, "command_state": "ACCEPTED"}),
+        OSError("temporary status read failure"),
+        (200, ready_status(last_command_id=command_id, last_command_state="PARTIAL_PROGRESS")),
+    ]
+
+    def request(method: str, url: str, timeout_s: float) -> tuple[int, dict]:
+        calls.append((method, url))
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response  # type: ignore[return-value]
+
+    result = execute_one_supervised_command(
+        planned_command=execution_plan,
+        authorization=execution_authorization,
+        base_url="http://127.0.0.1",
+        request=request,
+        sleep=lambda _: None,
+        monotonic=lambda: 0.0,
+    )
+
+    assert result["result"] == "AWAIT_REOBSERVATION"
+    assert sum(method == "POST" for method, _ in calls) == 1
+    assert result["planned_command"]["command_id"] == command_id
+    assert result["planned_command"]["query"]["command_id"] == command_id
+    assert result["terminal_status"]["last_command_id"] == command_id
 
 
 def test_static_target_adapter_requires_allowed_capability_and_shared_window() -> None:

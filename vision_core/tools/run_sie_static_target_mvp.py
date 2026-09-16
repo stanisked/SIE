@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import sys
 from pathlib import Path
 from typing import Any
@@ -184,6 +185,24 @@ def authorize_generated_demo_plan(
     )
 
 
+def fresh_supervised_execution_plan(plan: object) -> dict[str, Any]:
+    """Assign one cryptographically-random ID for this execute invocation.
+
+    The deterministic bridge ID remains useful for planning, but an ESP32
+    command ledger must never see the same ID on two independent runs.
+    """
+    if type(plan) is not dict:
+        raise ExecutionContractError("generated bridge plan is not an object")
+    query = plan.get("query")
+    if type(query) is not dict:
+        raise ExecutionContractError("generated bridge plan has no query")
+    execution_plan = json.loads(json.dumps(plan, allow_nan=False))
+    command_id = "pa-" + secrets.token_hex(30)
+    execution_plan["command_id"] = command_id
+    execution_plan["query"]["command_id"] = command_id
+    return execution_plan
+
+
 def _command_id(bridge: dict[str, Any] | None) -> str | None:
     if type(bridge) is not dict:
         return None
@@ -325,6 +344,7 @@ def main() -> int:
         if plan.get("result") != "PLANNED_BOUNDED_COMMAND":
             print(json.dumps(_combined("BLOCKED_NO_EXECUTION_PLAN", plan.get("block_reason"), supervision=supervision, bridge=plan, executor=None, yolo_primary_evidence=yolo_evidence, network=True), allow_nan=False, sort_keys=True))
             return 0
+        plan = fresh_supervised_execution_plan(plan)
         authorization = authorize_generated_demo_plan(
             plan=plan, experimental_reason=args.experimental_reason,
         )
