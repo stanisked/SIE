@@ -22,6 +22,12 @@ BOOT_SESSION_RE = re.compile(r"[0-9A-F]{16}\Z")
 COMMAND_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,64}\Z")
 ALLOWED_ENDPOINTS = frozenset({"/move-forward", "/turn-left", "/turn-right"})
 TERMINAL_COMMAND_STATES = frozenset({"SUCCESS", "PARTIAL_PROGRESS", "FAULT", "STOPPED"})
+SUPERVISED_PERSON_APPROACH_SESSION = "SUPERVISED_PERSON_APPROACH_SESSION"
+AUTHORIZATION_MODES = frozenset({
+    "QUALIFIED",
+    "SUPERVISED_EXPERIMENTAL_TRIAL",
+    SUPERVISED_PERSON_APPROACH_SESSION,
+})
 
 
 class ExecutionContractError(ValueError):
@@ -163,6 +169,38 @@ def authorize_operator_trial(
     )
 
 
+def authorize_person_approach_session_action(
+    *, planned_command: object, session_id: object, operator_session_confirmation: object,
+) -> dict[str, Any]:
+    """Bind one bounded action to an already confirmed approach session.
+
+    This helper deliberately belongs to the person-approach runner contract.
+    It does not create a new operator prompt or mutate capability qualification.
+    """
+    command = validate_planned_bounded_command(planned_command)
+    endpoint = command["endpoint"]
+    if endpoint == "/move-forward":
+        if _bounded_parameter(command["query"]["distance_m"], "planned_command.query.distance_m") != 0.10:
+            raise ExecutionContractError("person-approach session allows only 0.10 m forward steps")
+    elif endpoint not in {"/turn-left", "/turn-right"}:
+        raise ExecutionContractError("person-approach session action endpoint is invalid")
+    session = _text(session_id, "session_id")
+    confirmation = _text(operator_session_confirmation, "operator_session_confirmation")
+    if confirmation != SUPERVISED_PERSON_APPROACH_SESSION:
+        raise ExecutionContractError("person-approach session confirmation is invalid")
+    return _json_safe(
+        {
+            "mode": SUPERVISED_PERSON_APPROACH_SESSION,
+            "session_id": session,
+            "operator_session_confirmation": confirmation,
+            "confirmed_command_id": command["query"]["command_id"],
+            "experimental_reason": None,
+            "automatic_capability_qualification_changed": False,
+        },
+        "person-approach session authorization",
+    )
+
+
 def _http_request(method: str, url: str, timeout_s: float) -> tuple[int, dict[str, Any]]:
     request = Request(url, method=method, headers={"Accept": "application/json"})
     try:
@@ -239,12 +277,18 @@ def execute_one_supervised_command(
         if type(auth) is not dict or auth.get("confirmed_command_id") != command["query"]["command_id"]:
             raise ExecutionContractError("operator authorization does not match plan")
         mode = auth.get("mode")
-        if mode not in {"QUALIFIED", "SUPERVISED_EXPERIMENTAL_TRIAL"}:
+        if mode not in AUTHORIZATION_MODES:
             raise ExecutionContractError("operator authorization mode is invalid")
         if auth.get("automatic_capability_qualification_changed") is not False:
             raise ExecutionContractError("operator authorization must not change capability qualification")
         if mode == "SUPERVISED_EXPERIMENTAL_TRIAL":
             _text(auth.get("experimental_reason"), "experimental_reason")
+        elif mode == SUPERVISED_PERSON_APPROACH_SESSION:
+            _text(auth.get("session_id"), "session_id")
+            if auth.get("operator_session_confirmation") != SUPERVISED_PERSON_APPROACH_SESSION:
+                raise ExecutionContractError("person-approach session confirmation is invalid")
+            if auth.get("experimental_reason") is not None:
+                raise ExecutionContractError("person-approach session authorization must not carry experimental_reason")
         elif auth.get("experimental_reason") is not None:
             raise ExecutionContractError("qualified authorization must not carry experimental_reason")
         if not math.isfinite(timeout_s) or timeout_s <= 0 or not math.isfinite(poll_interval_s) or poll_interval_s <= 0 or not math.isfinite(terminal_timeout_s) or terminal_timeout_s <= 0:

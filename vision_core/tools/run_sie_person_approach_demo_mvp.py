@@ -15,7 +15,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from sie_core.supervised_bounded_executor import (  # noqa: E402
-    ExecutionContractError, authorize_operator_trial, execute_one_supervised_command,
+    ExecutionContractError, SUPERVISED_PERSON_APPROACH_SESSION,
+    authorize_person_approach_session_action, execute_one_supervised_command,
     fetch_bounded_status,
 )
 from vision_core.person_approach.bounded_bridge import plan_bounded_command  # noqa: E402
@@ -33,7 +34,8 @@ from vision_core.tools.run_sie_static_target_mvp import (  # noqa: E402
 )
 
 
-SESSION_CONFIRMATION = "SUPERVISED_PERSON_APPROACH_SESSION"
+SESSION_CONFIRMATION = SUPERVISED_PERSON_APPROACH_SESSION
+EXECUTION_SCOPE = SUPERVISED_PERSON_APPROACH_SESSION
 
 
 def _positive(value: str) -> float:
@@ -66,21 +68,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--person-threshold", type=float, choices=(0.4, 0.5), default=0.5)
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--base-url")
-    parser.add_argument("--authorization-mode", choices=("SUPERVISED_EXPERIMENTAL_TRIAL",), default="SUPERVISED_EXPERIMENTAL_TRIAL")
-    parser.add_argument("--experimental-reason")
+    parser.add_argument(
+        "--authorization-mode", choices=(SUPERVISED_PERSON_APPROACH_SESSION,),
+        default=SUPERVISED_PERSON_APPROACH_SESSION,
+        help="required with --execute; one confirmation authorizes this approach session only",
+    )
     parser.add_argument("--timeout-s", type=_positive, default=2.0)
     parser.add_argument("--poll-interval-s", type=_positive, default=0.2)
     parser.add_argument("--terminal-timeout-s", type=_positive, default=8.0)
     return parser.parse_args(argv)
 
 
-def _record(*, session_id: str, state: str, index: int, navigation: dict[str, Any] | None,
+def _record(*, session_id: str, operator_session_confirmation: str | None,
+            action_command_ids: list[str], state: str, index: int, navigation: dict[str, Any] | None,
             plan: dict[str, Any] | None = None, executor: dict[str, Any] | None = None,
             reason: str | None = None) -> dict[str, Any]:
     return json.loads(json.dumps({
         "schema_version": "sie.person_approach_supervised_demo_mvp.v1",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "session_id": session_id, "state": state, "action_index": index,
+        "authorization_mode": SUPERVISED_PERSON_APPROACH_SESSION,
+        "session_id": session_id,
+        "operator_session_confirmation": operator_session_confirmation,
+        "action_command_ids": list(action_command_ids),
+        "execution_scope": EXECUTION_SCOPE,
+        "automatic_capability_qualification_changed": False,
+        "state": state, "action_index": index,
         "result": navigation.get("result") if type(navigation) is dict else "BLOCKED",
         "reason": reason if reason is not None else navigation.get("reason") if type(navigation) is dict else None,
         "metric_navigation": navigation, "chosen_action": None if type(navigation) is not dict else navigation.get("action"),
@@ -100,11 +112,13 @@ def _write(stream: Any, value: dict[str, Any]) -> None:
     stream.flush()
 
 
-def _session_authorization(plan: dict[str, Any], args: argparse.Namespace, session_id: str) -> dict[str, Any]:
-    return authorize_operator_trial(
-        planned_command=plan, confirmation_command_id=plan["command_id"],
-        authorization_mode=args.authorization_mode,
-        experimental_reason=f"{args.experimental_reason.strip()} [session={session_id}]",
+def _session_authorization(
+    plan: dict[str, Any], *, session_id: str, operator_session_confirmation: str,
+) -> dict[str, Any]:
+    return authorize_person_approach_session_action(
+        planned_command=plan,
+        session_id=session_id,
+        operator_session_confirmation=operator_session_confirmation,
     )
 
 
@@ -112,12 +126,17 @@ def main() -> int:
     args = parse_args()
     runtime = None
     session_id = "session-" + secrets.token_hex(12)
+    operator_session_confirmation: str | None = None
+    action_command_ids: list[str] = []
     try:
-        if not args.execute or not args.base_url or not isinstance(args.experimental_reason, str) or not args.experimental_reason.strip():
-            raise ExecutionContractError("--execute, --base-url and non-empty --experimental-reason are required")
+        if not args.execute or not args.base_url:
+            raise ExecutionContractError("--execute and --base-url are required")
+        if args.authorization_mode != SUPERVISED_PERSON_APPROACH_SESSION:
+            raise ExecutionContractError("--execute requires SUPERVISED_PERSON_APPROACH_SESSION")
         confirmed = input(f"Для supervised session введи {SESSION_CONFIRMATION}:\n> ").strip()
         if confirmed != SESSION_CONFIRMATION:
             raise ExecutionContractError("SUPERVISED_SESSION_NOT_CONFIRMED")
+        operator_session_confirmation = confirmed
         observer = OnnxRuntimeYolo11PersonUpperBodyObserver(args.yolo_model, confidence_threshold=args.yolo_confidence_threshold)
         runtime = build_live_runtime(model=args.model, reference=args.reference, project_root=args.project_root,
                                      person_threshold=args.person_threshold, stereo_policy_path=args.stereo_policy.resolve(),
@@ -131,40 +150,55 @@ def main() -> int:
                     cycles, safe_distance_m=args.safe_distance_m,
                     bearing_deadband_deg=args.bearing_deadband_deg,
                 )
-                _write(stream, _record(session_id=session_id, state=state, index=action_index, navigation=navigation))
+                _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state=state, index=action_index, navigation=navigation))
                 if navigation.get("result") == "ARRIVED":
-                    _write(stream, _record(session_id=session_id, state="ARRIVED", index=action_index, navigation=navigation))
+                    _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state="ARRIVED", index=action_index, navigation=navigation))
                     return 0
                 if navigation.get("result") not in {"TURN_REQUIRED", "FORWARD_REQUIRED"}:
-                    _write(stream, _record(session_id=session_id, state="BLOCKED", index=action_index, navigation=navigation))
+                    _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state="BLOCKED", index=action_index, navigation=navigation))
                     return 2
                 status_code, status = fetch_bounded_status(base_url=args.base_url, timeout_s=args.timeout_s)
                 boot_session_id = status.get("boot_session_id") if status_code == 200 and type(status) is dict else None
                 if type(boot_session_id) is not str:
-                    _write(stream, _record(session_id=session_id, state="BLOCKED", index=action_index, navigation=navigation, reason="STATUS_UNAVAILABLE_BEFORE_COMMAND"))
+                    _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state="BLOCKED", index=action_index, navigation=navigation, reason="STATUS_UNAVAILABLE_BEFORE_COMMAND"))
                     return 2
                 decision_sequence += 1
                 decision = navigation_decision(navigation, sequence=decision_sequence, timestamp=datetime.now(timezone.utc).isoformat())
                 bridge = plan_bounded_command({"decision": decision, "evidence_window": cycles, "boot_session_id": boot_session_id, "previous_terminal_motion_outcome": None, "freshness_reference_utc": datetime.now(timezone.utc).isoformat()}).to_dict()
                 if bridge.get("result") != "PLANNED_BOUNDED_COMMAND":
-                    _write(stream, _record(session_id=session_id, state="BLOCKED", index=action_index, navigation=navigation, plan=bridge, reason=bridge.get("block_reason")))
+                    _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state="BLOCKED", index=action_index, navigation=navigation, plan=bridge, reason=bridge.get("block_reason")))
                     return 2
                 plan = fresh_supervised_execution_plan(bridge)
-                authorization = _session_authorization(plan, args, session_id)
+                authorization = _session_authorization(
+                    plan,
+                    session_id=session_id,
+                    operator_session_confirmation=operator_session_confirmation,
+                )
                 action_state = "TURN_IF_NEEDED" if navigation["result"] == "TURN_REQUIRED" else "FORWARD_STEP"
-                _write(stream, _record(session_id=session_id, state=action_state, index=action_index, navigation=navigation, plan=plan))
+                _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state=action_state, index=action_index, navigation=navigation, plan=plan))
                 executor = execute_one_supervised_command(planned_command=plan, authorization=authorization, base_url=args.base_url,
                                                           timeout_s=args.timeout_s, poll_interval_s=args.poll_interval_s,
                                                           terminal_timeout_s=args.terminal_timeout_s)
                 terminal = executor.get("terminal_status") if type(executor) is dict else None
+                if executor.get("motor_command_performed") is True:
+                    action_command_ids.append(plan["command_id"])
                 if executor.get("result") != "AWAIT_REOBSERVATION" or not isinstance(terminal, dict) or terminal.get("last_command_state") in {"FAULT", "STOPPED"}:
-                    _write(stream, _record(session_id=session_id, state="BLOCKED", index=action_index, navigation=navigation, plan=plan, executor=executor, reason="TERMINAL_OR_HTTP_FAILURE"))
+                    _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state="BLOCKED", index=action_index, navigation=navigation, plan=plan, executor=executor, reason="TERMINAL_OR_HTTP_FAILURE"))
                     return 2
                 state = "REOBSERVE_AFTER_TURN" if navigation["result"] == "TURN_REQUIRED" else "REOBSERVE_AFTER_FORWARD"
-                _write(stream, _record(session_id=session_id, state=state, index=action_index, navigation=navigation, plan=plan, executor=executor))
+                _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state=state, index=action_index, navigation=navigation, plan=plan, executor=executor))
                 action_index += 1
     except (ExecutionContractError, LiveFusionError, RuntimeError, ValueError, OSError) as error:
-        print(json.dumps({"result": "BLOCKED", "reason": str(error), "session_id": session_id, "network_performed": False, "motor_command_performed": False}, allow_nan=False, sort_keys=True))
+        print(json.dumps({
+            "result": "BLOCKED", "reason": str(error),
+            "authorization_mode": SUPERVISED_PERSON_APPROACH_SESSION,
+            "session_id": session_id,
+            "operator_session_confirmation": operator_session_confirmation,
+            "action_command_ids": action_command_ids,
+            "execution_scope": EXECUTION_SCOPE,
+            "automatic_capability_qualification_changed": False,
+            "network_performed": False, "motor_command_performed": False,
+        }, allow_nan=False, sort_keys=True))
         return 2
     finally:
         if runtime is not None:

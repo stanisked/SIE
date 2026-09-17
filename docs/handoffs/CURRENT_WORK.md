@@ -19,10 +19,21 @@ stereo. Решение использует shared five-cycle metric window в
 - `--safe-distance-m` является явной дистанцией прибытия, а не границей
   initial detection range. `ARRIVED` возможен только после valid fresh metric
   observation с `median_z_m <= safe distance`.
-- В начале нужен один explicit local session confirmation. Каждый bounded
-  command получает новый cryptographically random `command_id`; POST ровно
-  один раз для команды. Fault, invalid/stale metric, non-READY status, HTTP
-  error или unknown terminal status завершают session без следующей команды.
+- Выполнение доступно только с `--execute --authorization-mode
+  SUPERVISED_PERSON_APPROACH_SESSION`. В начале нужен один explicit local
+  session confirmation. Он связывается с generated `session_id` и покрывает
+  только последовательность `TURN -> REOBSERVE -> FORWARD_0.10M -> REOBSERVE`
+  для одного наблюдаемого человека. Каждый bounded command получает новый
+  cryptographically random `command_id`; между шагами нового prompt нет, POST
+  ровно один раз для команды. Fault, invalid/stale metric, target loss,
+  non-READY status, HTTP error или unknown terminal status завершают session
+  без следующей команды.
+- Каждый JSONL и final record содержит `authorization_mode`, `session_id`,
+  `operator_session_confirmation`, `action_command_ids`,
+  `execution_scope=SUPERVISED_PERSON_APPROACH_SESSION` и
+  `automatic_capability_qualification_changed=false`. Это не меняет current
+  capability qualification. `SUPERVISED_EXPERIMENTAL_TRIAL` остаётся режимом
+  existing static-target one-step runner и не принимается navigation runner.
 - Это supervised MVP, не autonomous approval. Нет retry POST, correction,
   ack-fault, reverse, изменения PWM или image-centre navigation gate.
 

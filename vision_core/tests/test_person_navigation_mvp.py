@@ -1,12 +1,27 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from inspect import getsource
+import json
 
+import pytest
+
+from sie_core.supervised_bounded_executor import (
+    SUPERVISED_PERSON_APPROACH_SESSION,
+    authorize_person_approach_session_action,
+)
 from vision_core.person_approach.spatial_navigation import (
     evaluate_person_navigation_window,
     navigation_decision,
 )
 from vision_core.tools.run_sie_static_target_mvp import fresh_supervised_execution_plan
+from vision_core.tools.run_sie_static_target_mvp import parse_args as parse_static_target_args
+from vision_core.tools.run_sie_person_approach_demo_mvp import (
+    SESSION_CONFIRMATION,
+    _record,
+    main as person_approach_main,
+    parse_args as parse_person_approach_args,
+)
 
 
 NOW = datetime(2026, 9, 17, 12, 0, tzinfo=timezone.utc)
@@ -93,3 +108,58 @@ def test_no_fixed_start_range_or_image_center_gate() -> None:
     )
     assert result["result"] == "FORWARD_REQUIRED"
     assert result["image_center_used_as_gate"] is False
+
+
+def _person_approach_cli_args(*extra: str) -> list[str]:
+    return [
+        "--model", "model.onnx", "--reference", "reference.txt",
+        "--project-root", ".", "--ar-intrinsic", "ar.json",
+        "--safe-distance-m", "1.0", "--bearing-deadband-deg", "2.0",
+        "--jsonl-output", "session.jsonl", *extra,
+    ]
+
+
+def test_session_mode_is_approach_only_and_static_target_rejects_it() -> None:
+    args = parse_person_approach_args(_person_approach_cli_args())
+    assert args.authorization_mode == SUPERVISED_PERSON_APPROACH_SESSION
+    with pytest.raises(SystemExit):
+        parse_static_target_args([
+            "--model", "model.onnx", "--reference", "reference.txt",
+            "--project-root", ".", "--ar-intrinsic", "ar.json",
+            "--center-tolerance-px", "40",
+            "--authorization-mode", SUPERVISED_PERSON_APPROACH_SESSION,
+        ])
+
+
+def test_one_session_confirmation_binds_multiple_new_action_ids_without_qualification_change() -> None:
+    left_turn = fresh_supervised_execution_plan({
+        "result": "PLANNED_BOUNDED_COMMAND", "method": "POST", "endpoint": "/turn-left",
+        "command_id": "pa-deterministic", "network_performed": False,
+        "query": {"boot_session_id": "0123456789ABCDEF", "command_id": "pa-deterministic", "angle_deg": "4"},
+    })
+    forward = fresh_supervised_execution_plan({
+        "result": "PLANNED_BOUNDED_COMMAND", "method": "POST", "endpoint": "/move-forward",
+        "command_id": "pa-deterministic", "network_performed": False,
+        "query": {"boot_session_id": "0123456789ABCDEF", "command_id": "pa-deterministic", "distance_m": "0.1"},
+    })
+    left_auth = authorize_person_approach_session_action(
+        planned_command=left_turn, session_id="session-test", operator_session_confirmation=SESSION_CONFIRMATION,
+    )
+    forward_auth = authorize_person_approach_session_action(
+        planned_command=forward, session_id="session-test", operator_session_confirmation=SESSION_CONFIRMATION,
+    )
+
+    assert left_turn["command_id"] != forward["command_id"]
+    assert getsource(person_approach_main).count("input(") == 1
+    assert left_auth["mode"] == forward_auth["mode"] == SUPERVISED_PERSON_APPROACH_SESSION
+    assert left_auth["operator_session_confirmation"] == forward_auth["operator_session_confirmation"] == SESSION_CONFIRMATION
+    assert left_auth["automatic_capability_qualification_changed"] is False
+    record = _record(
+        session_id="session-test", operator_session_confirmation=SESSION_CONFIRMATION,
+        action_command_ids=[left_turn["command_id"], forward["command_id"]],
+        state="REOBSERVE_AFTER_FORWARD", index=2, navigation={"result": "FORWARD_REQUIRED", "action": {"status": "ADVANCE"}},
+    )
+    assert record["execution_scope"] == SUPERVISED_PERSON_APPROACH_SESSION
+    assert record["automatic_capability_qualification_changed"] is False
+    assert record["action_command_ids"] == [left_turn["command_id"], forward["command_id"]]
+    json.dumps(record, allow_nan=False, sort_keys=True)
