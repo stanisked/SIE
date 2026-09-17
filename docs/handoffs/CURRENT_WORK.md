@@ -1,5 +1,31 @@
 # Current bounded-motion MVP handoff
 
+## Supervised metric person-approach navigation MVP
+
+`vision_core/tools/run_sie_person_approach_demo_mvp.py` добавляет отдельную
+supervised session, не изменяя existing static-target one-step runner. YOLO
+`SINGLE_TARGET` остаётся primary AR0234 evidence и источником ROI для metric
+stereo. Решение использует shared five-cycle metric window в
+`rectified_left_optical_frame`: `x_m`, `z_m` и
+`bearing_deg = degrees(atan2(x_m, z_m))`.
+
+- Image centre не является gate. Он может оставаться диагностическим evidence,
+  но не запрещает человека слева или справа.
+- Вне явно заданного `--bearing-deadband-deg` session создаёт один existing
+  bounded `/turn-left` или `/turn-right` в диапазоне API `1..10 deg`, затем
+  обязательно получает новый full window.
+- Внутри deadband и пока `median_z_m > --safe-distance-m` выполняется один
+  bounded `/move-forward` на `0.10 m`, затем обязательное новое наблюдение.
+- `--safe-distance-m` является явной дистанцией прибытия, а не границей
+  initial detection range. `ARRIVED` возможен только после valid fresh metric
+  observation с `median_z_m <= safe distance`.
+- В начале нужен один explicit local session confirmation. Каждый bounded
+  command получает новый cryptographically random `command_id`; POST ровно
+  один раз для команды. Fault, invalid/stale metric, non-READY status, HTTP
+  error или unknown terminal status завершают session без следующей команды.
+- Это supervised MVP, не autonomous approval. Нет retry POST, correction,
+  ack-fault, reverse, изменения PWM или image-centre navigation gate.
+
 ## Supervised motion executor MVP
 
 Ветка `codex/sie-supervised-motion-executor-mvp-v1` добавляет отдельный
