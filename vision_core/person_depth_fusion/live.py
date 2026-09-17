@@ -6,6 +6,7 @@ the already validated array fusion core and emits JSON-safe cycle records.
 from __future__ import annotations
 
 import json
+import math
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +15,13 @@ from typing import Any, Callable
 import numpy as np
 
 from vision_core.person_localization.mp_persondet import MPPersonDetOpenCV
+from vision_core.person_localization.models import (
+    BoundingBox,
+    PersonLocalizationResult,
+    PersonLocalizationStatus,
+)
 from vision_core.person_localization.pipeline import PersonLocalizationPipeline
+from vision_core.observation import Observation
 from vision_core.rgb_stereo_extrinsic.capture import (
     AR0234_BY_ID, AR_MODE, STEREO_BY_ID, STEREO_MODE, CheckedCamera,
     ControlRunner, default_control_runner, set_control,
@@ -28,6 +35,10 @@ from .offline import (
 
 MAX_PAIR_SKEW_S = 0.050
 WARMUP_READS = 60
+YOLO_PRIMARY_SCHEMA = "sie.ar0234.yolo11_person_upper_body_observation.v1"
+YOLO_PRIMARY_SINGLE = "SINGLE_TARGET"
+YOLO_PRIMARY_NONE = "NO_TARGET"
+YOLO_PRIMARY_MULTIPLE = "MULTIPLE_TARGETS"
 
 
 class LiveFusionError(RuntimeError):
@@ -44,6 +55,132 @@ def _controls(runner: ControlRunner) -> dict[str, dict[str, int]]:
 
 def _measurement_payload(measurement: PersonMeasurement) -> dict[str, Any] | None:
     return measurement.to_dict() if measurement.status is PersonMeasurementStatus.SUCCESS else None
+
+
+def _primary_yolo_localization(
+    value: object, *, captured_at_utc: datetime, cycle_id: str, frame_shape: tuple[int, ...],
+) -> PersonLocalizationResult | None:
+    """Adapt same-cycle YOLO evidence for metric ROI selection.
+
+    ``None`` means the primary detector saw no target, so the existing
+    MP-PersonDet path remains the fallback. Ambiguous YOLO evidence is never
+    resolved by choosing one bbox: it returns ``MULTIPLE_PERSONS`` instead.
+    """
+    if type(value) is not dict or value.get("schema_version") != YOLO_PRIMARY_SCHEMA:
+        return None
+    timestamp = captured_at_utc.astimezone(timezone.utc).isoformat()
+    status = value.get("target_status")
+    if status == YOLO_PRIMARY_NONE:
+        return None
+    if status == YOLO_PRIMARY_MULTIPLE:
+        return PersonLocalizationResult(
+            status=PersonLocalizationStatus.MULTIPLE_PERSONS,
+            candidate_count=(
+                int(value["eligible_detection_count"])
+                if type(value.get("eligible_detection_count")) is int
+                else 0
+            ),
+            captured_at_utc=timestamp,
+            detail="YOLO primary observation contains multiple eligible targets",
+        )
+    if status != YOLO_PRIMARY_SINGLE:
+        return PersonLocalizationResult(
+            status=PersonLocalizationStatus.MALFORMED_OUTPUT,
+            candidate_count=0,
+            captured_at_utc=timestamp,
+            detail="YOLO primary observation has an invalid target status",
+        )
+    if (
+        value.get("source_cycle_id") != cycle_id
+        or value.get("captured_at_utc") != timestamp
+        or value.get("reference_frame") != "ar0234_image_frame"
+        or value.get("units") != "px"
+        or type(value.get("evidence_id")) is not str
+        or not value["evidence_id"]
+        or type(value.get("confidence")) not in (int, float)
+        or not np.isfinite(float(value["confidence"]))
+        or not 0.0 <= float(value["confidence"]) <= 1.0
+    ):
+        return PersonLocalizationResult(
+            status=PersonLocalizationStatus.MALFORMED_OUTPUT,
+            candidate_count=0,
+            captured_at_utc=timestamp,
+            detail="YOLO primary observation provenance is invalid",
+        )
+    bbox_value = value.get("bbox_xyxy_px")
+    if (
+        type(bbox_value) is not list
+        or len(bbox_value) != 4
+        or any(type(item) not in (int, float) or not np.isfinite(float(item)) for item in bbox_value)
+    ):
+        return PersonLocalizationResult(
+            status=PersonLocalizationStatus.MALFORMED_OUTPUT,
+            candidate_count=0,
+            captured_at_utc=timestamp,
+            detail="YOLO primary observation bbox is invalid",
+        )
+    height, width = frame_shape[:2]
+    x_min, y_min, x_max, y_max = (float(item) for item in bbox_value)
+    if not (0.0 <= x_min < x_max <= width and 0.0 <= y_min < y_max <= height):
+        return PersonLocalizationResult(
+            status=PersonLocalizationStatus.MALFORMED_OUTPUT,
+            candidate_count=0,
+            captured_at_utc=timestamp,
+            detail="YOLO primary observation bbox is outside the AR0234 frame",
+        )
+    try:
+        bbox = BoundingBox(
+            math.floor(x_min), math.floor(y_min), math.ceil(x_max), math.ceil(y_max),
+        )
+    except ValueError:
+        return PersonLocalizationResult(
+            status=PersonLocalizationStatus.MALFORMED_OUTPUT,
+            candidate_count=0,
+            captured_at_utc=timestamp,
+            detail="YOLO primary observation bbox is outside the AR0234 frame",
+        )
+    detector = {
+        "adapter_id": "ar0234_yolo11_person_upper_body_primary",
+        "model_sha256": value.get("model_sha256"),
+        "confidence_threshold": value.get("confidence_threshold"),
+        "roi_source": "YOLO_PRIMARY_PERSON_UPPER_BODY",
+    }
+    observation = Observation(
+        observation_id=(
+            value["observation_id"]
+            if type(value.get("observation_id")) is str
+            else f"observation.person.ar0234.{cycle_id}"
+        ),
+        source_id="ar0234_yolo11_person_upper_body",
+        timestamp=timestamp,
+        cycle_id=cycle_id,
+        observation_type="single_person_upper_body_bbox",
+        payload={
+            "reference_frame": "ar0234_image_frame",
+            "unit": "px",
+            "image_size_px": [width, height],
+            "person_count": 1,
+            "bounding_box_xyxy_px": bbox.to_xyxy(),
+            "detector": detector,
+        },
+        confidence=float(value["confidence"]),
+        quality={
+            "status": "PASS",
+            "single_person_required": True,
+            "candidate_count": 1,
+            "detector_confidence": float(value["confidence"]),
+            "required_confidence_threshold": value.get("confidence_threshold"),
+            "roi_source": "YOLO_PRIMARY_PERSON_UPPER_BODY",
+        },
+        evidence_ids=(value["evidence_id"],),
+    )
+    return PersonLocalizationResult(
+        status=PersonLocalizationStatus.SINGLE_PERSON,
+        candidate_count=1,
+        captured_at_utc=timestamp,
+        observation=observation,
+        bounding_box=bbox,
+    )
 
 
 class LivePersonDepthFusion:
@@ -134,7 +271,16 @@ class LivePersonDepthFusion:
                         measurement_confidence=None, detector_ms=0.0, stereo_fusion_ms=0.0, total_cycle_ms=(self.monotonic()-total_start)*1000.)
             return base
         detector_start = self.monotonic()
-        localization = self.fusion.person_pipeline.process(ar_frame, captured_at_utc=captured, cycle_id=cycle_id)
+        localization = _primary_yolo_localization(
+            primary_observation,
+            captured_at_utc=captured,
+            cycle_id=cycle_id,
+            frame_shape=ar_frame.shape,
+        )
+        if localization is None:
+            localization = self.fusion.person_pipeline.process(
+                ar_frame, captured_at_utc=captured, cycle_id=cycle_id
+            )
         detector_ms = (self.monotonic() - detector_start) * 1000.
         fusion_start = self.monotonic()
         measurement = self.fusion.fuse_localization(localization, stereo_frame, captured_at_utc=captured, cycle_id=cycle_id, measurement_mode="live")
