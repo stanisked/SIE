@@ -139,17 +139,23 @@ def _bridge_envelope(
 
 def _next_action_ready_status(
     *, base_url: str, timeout_s: float, poll_interval_s: float,
-    fetch_status: Callable[..., tuple[int, dict[str, Any]]] = fetch_bounded_status,
+    fetch_status: Callable[..., tuple[int, dict[str, Any]]] | None = None,
     monotonic: Callable[[], float] = time.monotonic,
     sleep: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     """Read only GET /status retry for the next action in one session."""
     deadline = monotonic() + timeout_s
+    reader = fetch_bounded_status if fetch_status is None else fetch_status
     last_reason = "STATUS_READ_DEADLINE_EXPIRED"
     while monotonic() < deadline:
         remaining_s = deadline - monotonic()
         try:
-            status_code, status = fetch_status(base_url=base_url, timeout_s=remaining_s)
+            # Keep one transport wait below the shared retry deadline. A
+            # timeout itself must leave time for another read-only GET.
+            status_code, status = reader(
+                base_url=base_url,
+                timeout_s=min(poll_interval_s, remaining_s),
+            )
         except (ExecutionContractError, OSError, ValueError, TypeError) as error:
             last_reason = f"STATUS_READ_ERROR: {error}"
         else:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import argparse
 from datetime import datetime, timedelta, timezone
 from inspect import getsource
 import json
 
 import pytest
+import vision_core.tools.run_sie_person_approach_demo_mvp as person_approach_runner
 
 from sie_core.supervised_bounded_executor import (
     ExecutionContractError,
@@ -178,60 +180,102 @@ def _session_plan(endpoint: str, parameter_name: str, parameter: str) -> dict:
     })
 
 
-def test_second_action_retries_read_only_status_then_posts_once_in_same_session() -> None:
-    first = _session_plan("/move-forward", "distance_m", "0.1")
-    second = _session_plan("/move-forward", "distance_m", "0.1")
-    first_auth = authorize_person_approach_session_action(
-        planned_command=first, session_id="session-test", operator_session_confirmation=SESSION_CONFIRMATION,
-    )
-    second_auth = authorize_person_approach_session_action(
-        planned_command=second, session_id="session-test", operator_session_confirmation=SESSION_CONFIRMATION,
-    )
-    first_calls: list[str] = []
+def _run_main_with_windows(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object, *, z_by_action: list[float],
+    status_responses: list[object],
+) -> tuple[int, list[float], list[dict], list[str]]:
+    class Runtime:
+        def start(self) -> None:
+            return None
 
-    def first_request(method: str, _url: str, _timeout_s: float) -> tuple[int, dict]:
-        first_calls.append(method)
-        if method == "POST":
-            return 202, {"accepted": True, "command_id": first["command_id"]}
-        return 200, _ready_status(command_id=first["command_id"], terminal="PARTIAL_PROGRESS")
+        def close(self) -> None:
+            return None
 
-    first_result = execute_one_supervised_command(
-        planned_command=first, authorization=first_auth, base_url="http://127.0.0.1",
-        request=first_request, sleep=lambda _: None, monotonic=lambda: 0.0,
-    )
-    read_attempts: list[str] = []
-    responses: list[object] = [OSError("transient timeout"), OSError("transient timeout"), (200, _ready_status())]
+        def cycle(self, cycle_id: str) -> dict:
+            action = int(cycle_id.split("-a", 1)[1].split("-", 1)[0])
+            timestamp = datetime.now(timezone.utc).isoformat()
+            z_m = z_by_action[action]
+            return {
+                "cycle_id": cycle_id, "captured_at_utc": timestamp, "status": "SUCCESS",
+                "primary_person_observation": {"target_status": "SINGLE_TARGET"},
+                "measurement": {
+                    "status": "SUCCESS", "measurement_id": f"measurement-{cycle_id}",
+                    "timestamp": timestamp, "reference_frame": "rectified_left_optical_frame",
+                    "units": "m", "x_m": 0.0, "y_m": 0.0, "z_m": z_m,
+                    "range_m": z_m, "confidence": 0.9,
+                },
+            }
 
-    def second_status(**_kwargs: object) -> tuple[int, dict]:
-        read_attempts.append("GET")
-        response = responses.pop(0)
+    status_timeouts: list[float] = []
+    plans: list[dict] = []
+    confirmations: list[str] = []
+
+    def fetch_status(*, base_url: str, timeout_s: float) -> tuple[int, dict]:
+        assert base_url == "http://127.0.0.1"
+        status_timeouts.append(timeout_s)
+        response = status_responses.pop(0)
         if isinstance(response, Exception):
             raise response
         return response  # type: ignore[return-value]
 
-    second_status_record = _next_action_ready_status(
-        base_url="http://127.0.0.1", timeout_s=1.0, poll_interval_s=0.1,
-        fetch_status=second_status, monotonic=lambda: 0.0, sleep=lambda _: None,
+    def execute(**kwargs: object) -> dict:
+        plan = kwargs["planned_command"]
+        assert isinstance(plan, dict)
+        plans.append(plan)
+        return {
+            "result": "AWAIT_REOBSERVATION",
+            "motor_command_performed": True,
+            "terminal_status": {"last_command_state": "PARTIAL_PROGRESS"},
+        }
+
+    args = argparse.Namespace(
+        model=tmp_path / "model.onnx", reference=tmp_path / "reference.txt",
+        project_root=tmp_path, ar_intrinsic=tmp_path / "ar.json",
+        safe_distance_m=1.0, bearing_deadband_deg=2.0,
+        jsonl_output=tmp_path / "session.jsonl", yolo_model=tmp_path / "yolo.onnx",
+        yolo_confidence_threshold=0.4, stereo_policy=tmp_path / "policy.json",
+        person_threshold=0.5, execute=True, base_url="http://127.0.0.1",
+        authorization_mode=SUPERVISED_PERSON_APPROACH_SESSION,
+        timeout_s=1.0, poll_interval_s=0.1, terminal_timeout_s=1.0,
     )
-    second_calls: list[str] = []
+    monkeypatch.setattr(person_approach_runner, "parse_args", lambda: args)
+    monkeypatch.setattr(person_approach_runner, "build_live_runtime", lambda **_kwargs: Runtime())
+    monkeypatch.setattr(person_approach_runner, "OnnxRuntimeYolo11PersonUpperBodyObserver", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(person_approach_runner, "fetch_bounded_status", fetch_status)
+    monkeypatch.setattr(person_approach_runner, "execute_one_supervised_command", execute)
+    monkeypatch.setattr("builtins.input", lambda _prompt: confirmations.append(SESSION_CONFIRMATION) or SESSION_CONFIRMATION)
+    return person_approach_runner.main(), status_timeouts, plans, confirmations
 
-    def second_request(method: str, _url: str, _timeout_s: float) -> tuple[int, dict]:
-        second_calls.append(method)
-        if method == "POST":
-            return 202, {"accepted": True, "command_id": second["command_id"]}
-        return 200, _ready_status(command_id=second["command_id"], terminal="PARTIAL_PROGRESS")
 
-    second_result = execute_one_supervised_command(
-        planned_command=second, authorization=second_auth, base_url="http://127.0.0.1",
-        request=second_request, sleep=lambda _: None, monotonic=lambda: 0.0,
+def test_first_early_status_read_retries_before_one_forward_post(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object,
+) -> None:
+    result, status_timeouts, plans, confirmations = _run_main_with_windows(
+        monkeypatch, tmp_path, z_by_action=[2.0, 1.0],
+        status_responses=[OSError("timeout"), OSError("timeout"), (200, _ready_status())],
     )
 
-    assert first_result["result"] == second_result["result"] == "AWAIT_REOBSERVATION"
-    assert first["command_id"] != second["command_id"]
-    assert read_attempts == ["GET", "GET", "GET"]
-    assert second_status_record["state"] == "READY"
-    assert first_calls.count("POST") == second_calls.count("POST") == 1
-    assert getsource(person_approach_main).count("input(") == 1
+    assert result == 0
+    assert len(status_timeouts) == 3
+    assert status_timeouts == [0.1, 0.1, 0.1]
+    assert len(plans) == 1 and plans[0]["endpoint"] == "/move-forward"
+    assert confirmations == [SESSION_CONFIRMATION]
+
+
+def test_between_actions_status_read_retries_without_new_confirmation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object,
+) -> None:
+    result, status_timeouts, plans, confirmations = _run_main_with_windows(
+        monkeypatch, tmp_path, z_by_action=[2.0, 2.0, 1.0],
+        status_responses=[(200, _ready_status()), OSError("timeout"), OSError("timeout"), (200, _ready_status())],
+    )
+
+    assert result == 0
+    assert len(status_timeouts) == 4
+    assert status_timeouts == [0.1, 0.1, 0.1, 0.1]
+    assert len(plans) == 2
+    assert len({plan["command_id"] for plan in plans}) == 2
+    assert confirmations == [SESSION_CONFIRMATION]
 
 
 def test_status_read_deadline_expires_without_post() -> None:
