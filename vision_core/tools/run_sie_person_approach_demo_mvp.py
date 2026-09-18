@@ -6,9 +6,10 @@ import argparse
 import json
 import secrets
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
@@ -136,6 +137,46 @@ def _bridge_envelope(
     }
 
 
+def _next_action_ready_status(
+    *, base_url: str, timeout_s: float, poll_interval_s: float,
+    fetch_status: Callable[..., tuple[int, dict[str, Any]]] = fetch_bounded_status,
+    monotonic: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
+    """Read only GET /status retry for the next action in one session."""
+    deadline = monotonic() + timeout_s
+    last_reason = "STATUS_READ_DEADLINE_EXPIRED"
+    while monotonic() < deadline:
+        remaining_s = deadline - monotonic()
+        try:
+            status_code, status = fetch_status(base_url=base_url, timeout_s=remaining_s)
+        except (ExecutionContractError, OSError, ValueError, TypeError) as error:
+            last_reason = f"STATUS_READ_ERROR: {error}"
+        else:
+            if type(status_code) is not int or type(status) is not dict:
+                last_reason = "STATUS_RESPONSE_INVALID"
+            elif status_code != 200:
+                last_reason = f"STATUS_HTTP_{status_code}"
+            elif status.get("motion_api_version") != "v2_bounded_motion_api":
+                raise ExecutionContractError("UNEXPECTED_MOTION_API_VERSION")
+            elif type(status.get("state")) is not str or type(status.get("bounded_fault_latched")) is not bool or "active_command_id" not in status:
+                last_reason = "STATUS_RESPONSE_INVALID"
+            elif status["state"] != "READY":
+                raise ExecutionContractError("CONTROLLER_NOT_READY")
+            elif status["bounded_fault_latched"] is not False:
+                raise ExecutionContractError("BOUNDED_FAULT_LATCHED")
+            elif status["active_command_id"] is not None:
+                raise ExecutionContractError("ACTIVE_COMMAND_PRESENT")
+            elif type(status.get("boot_session_id")) is not str:
+                last_reason = "STATUS_RESPONSE_INVALID"
+            else:
+                return status
+        remaining_s = deadline - monotonic()
+        if remaining_s > 0.0:
+            sleep(min(poll_interval_s, remaining_s))
+    raise ExecutionContractError(last_reason)
+
+
 def main() -> int:
     args = parse_args()
     runtime = None
@@ -175,11 +216,12 @@ def main() -> int:
                 if navigation.get("result") not in {"TURN_REQUIRED", "FORWARD_REQUIRED"}:
                     _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state="BLOCKED", index=action_index, navigation=navigation))
                     return 2
-                status_code, status = fetch_bounded_status(base_url=args.base_url, timeout_s=args.timeout_s)
-                boot_session_id = status.get("boot_session_id") if status_code == 200 and type(status) is dict else None
-                if type(boot_session_id) is not str:
-                    _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state="BLOCKED", index=action_index, navigation=navigation, reason="STATUS_UNAVAILABLE_BEFORE_COMMAND"))
-                    return 2
+                status = _next_action_ready_status(
+                    base_url=args.base_url,
+                    timeout_s=args.timeout_s,
+                    poll_interval_s=args.poll_interval_s,
+                )
+                boot_session_id = status["boot_session_id"]
                 decision_sequence += 1
                 decision = navigation_decision(navigation, sequence=decision_sequence, timestamp=datetime.now(timezone.utc).isoformat())
                 bridge = plan_bounded_command(_bridge_envelope(

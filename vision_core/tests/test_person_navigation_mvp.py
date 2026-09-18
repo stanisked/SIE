@@ -7,8 +7,10 @@ import json
 import pytest
 
 from sie_core.supervised_bounded_executor import (
+    ExecutionContractError,
     SUPERVISED_PERSON_APPROACH_SESSION,
     authorize_person_approach_session_action,
+    execute_one_supervised_command,
 )
 from vision_core.person_approach.bounded_bridge import plan_bounded_command
 from vision_core.person_approach.spatial_navigation import (
@@ -20,6 +22,7 @@ from vision_core.tools.run_sie_static_target_mvp import parse_args as parse_stat
 from vision_core.tools.run_sie_person_approach_demo_mvp import (
     SESSION_CONFIRMATION,
     _bridge_envelope,
+    _next_action_ready_status,
     _record,
     main as person_approach_main,
     parse_args as parse_person_approach_args,
@@ -150,6 +153,131 @@ def test_stale_window_is_blocked_before_bridge_planning() -> None:
     assert result["result"] == "BLOCKED"
     assert result["reason"] == "METRIC_EVIDENCE_STALE_OR_FUTURE"
     assert result.get("action") is None
+
+
+def _ready_status(*, command_id: str | None = None, terminal: str | None = None) -> dict:
+    return {
+        "motion_api_version": "v2_bounded_motion_api",
+        "boot_session_id": "0123456789ABCDEF",
+        "state": "READY",
+        "bounded_fault_latched": False,
+        "active_command_id": None,
+        "last_command_id": command_id,
+        "last_command_state": terminal,
+    }
+
+
+def _session_plan(endpoint: str, parameter_name: str, parameter: str) -> dict:
+    return fresh_supervised_execution_plan({
+        "result": "PLANNED_BOUNDED_COMMAND", "method": "POST", "endpoint": endpoint,
+        "command_id": "pa-deterministic", "network_performed": False,
+        "query": {
+            "boot_session_id": "0123456789ABCDEF", "command_id": "pa-deterministic",
+            parameter_name: parameter,
+        },
+    })
+
+
+def test_second_action_retries_read_only_status_then_posts_once_in_same_session() -> None:
+    first = _session_plan("/move-forward", "distance_m", "0.1")
+    second = _session_plan("/move-forward", "distance_m", "0.1")
+    first_auth = authorize_person_approach_session_action(
+        planned_command=first, session_id="session-test", operator_session_confirmation=SESSION_CONFIRMATION,
+    )
+    second_auth = authorize_person_approach_session_action(
+        planned_command=second, session_id="session-test", operator_session_confirmation=SESSION_CONFIRMATION,
+    )
+    first_calls: list[str] = []
+
+    def first_request(method: str, _url: str, _timeout_s: float) -> tuple[int, dict]:
+        first_calls.append(method)
+        if method == "POST":
+            return 202, {"accepted": True, "command_id": first["command_id"]}
+        return 200, _ready_status(command_id=first["command_id"], terminal="PARTIAL_PROGRESS")
+
+    first_result = execute_one_supervised_command(
+        planned_command=first, authorization=first_auth, base_url="http://127.0.0.1",
+        request=first_request, sleep=lambda _: None, monotonic=lambda: 0.0,
+    )
+    read_attempts: list[str] = []
+    responses: list[object] = [OSError("transient timeout"), OSError("transient timeout"), (200, _ready_status())]
+
+    def second_status(**_kwargs: object) -> tuple[int, dict]:
+        read_attempts.append("GET")
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response  # type: ignore[return-value]
+
+    second_status_record = _next_action_ready_status(
+        base_url="http://127.0.0.1", timeout_s=1.0, poll_interval_s=0.1,
+        fetch_status=second_status, monotonic=lambda: 0.0, sleep=lambda _: None,
+    )
+    second_calls: list[str] = []
+
+    def second_request(method: str, _url: str, _timeout_s: float) -> tuple[int, dict]:
+        second_calls.append(method)
+        if method == "POST":
+            return 202, {"accepted": True, "command_id": second["command_id"]}
+        return 200, _ready_status(command_id=second["command_id"], terminal="PARTIAL_PROGRESS")
+
+    second_result = execute_one_supervised_command(
+        planned_command=second, authorization=second_auth, base_url="http://127.0.0.1",
+        request=second_request, sleep=lambda _: None, monotonic=lambda: 0.0,
+    )
+
+    assert first_result["result"] == second_result["result"] == "AWAIT_REOBSERVATION"
+    assert first["command_id"] != second["command_id"]
+    assert read_attempts == ["GET", "GET", "GET"]
+    assert second_status_record["state"] == "READY"
+    assert first_calls.count("POST") == second_calls.count("POST") == 1
+    assert getsource(person_approach_main).count("input(") == 1
+
+
+def test_status_read_deadline_expires_without_post() -> None:
+    clock = [0.0]
+
+    def unavailable_status(**_kwargs: object) -> tuple[int, dict]:
+        raise OSError("timeout")
+
+    def sleep(seconds: float) -> None:
+        clock[0] += seconds
+
+    with pytest.raises(ExecutionContractError, match="STATUS_READ_ERROR"):
+        _next_action_ready_status(
+            base_url="http://127.0.0.1", timeout_s=0.5, poll_interval_s=0.2,
+            fetch_status=unavailable_status, monotonic=lambda: clock[0], sleep=sleep,
+        )
+    assert "POST" not in getsource(_next_action_ready_status)
+
+
+def test_terminal_status_timeouts_after_post_never_repeat_post() -> None:
+    plan = _session_plan("/move-forward", "distance_m", "0.1")
+    authorization = authorize_person_approach_session_action(
+        planned_command=plan, session_id="session-test", operator_session_confirmation=SESSION_CONFIRMATION,
+    )
+    clock = [0.0]
+    calls: list[str] = []
+
+    def request(method: str, _url: str, _timeout_s: float) -> tuple[int, dict]:
+        calls.append(method)
+        if method == "POST":
+            return 202, {"accepted": True, "command_id": plan["command_id"]}
+        if calls.count("GET") == 1:
+            return 200, _ready_status()
+        raise OSError("terminal timeout")
+
+    def sleep(seconds: float) -> None:
+        clock[0] += seconds
+
+    result = execute_one_supervised_command(
+        planned_command=plan, authorization=authorization, base_url="http://127.0.0.1",
+        request=request, sleep=sleep, monotonic=lambda: clock[0],
+        poll_interval_s=0.2, terminal_timeout_s=0.5,
+    )
+
+    assert result["result"] == "TERMINAL_STATUS_UNKNOWN"
+    assert calls.count("POST") == 1
 
 
 def _person_approach_cli_args(*extra: str) -> list[str]:
