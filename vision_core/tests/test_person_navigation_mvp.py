@@ -10,6 +10,7 @@ from sie_core.supervised_bounded_executor import (
     SUPERVISED_PERSON_APPROACH_SESSION,
     authorize_person_approach_session_action,
 )
+from vision_core.person_approach.bounded_bridge import plan_bounded_command
 from vision_core.person_approach.spatial_navigation import (
     evaluate_person_navigation_window,
     navigation_decision,
@@ -18,6 +19,7 @@ from vision_core.tools.run_sie_static_target_mvp import fresh_supervised_executi
 from vision_core.tools.run_sie_static_target_mvp import parse_args as parse_static_target_args
 from vision_core.tools.run_sie_person_approach_demo_mvp import (
     SESSION_CONFIRMATION,
+    _bridge_envelope,
     _record,
     main as person_approach_main,
     parse_args as parse_person_approach_args,
@@ -38,8 +40,9 @@ def _window(*, x_m: float, z_m: float, yolo: str = "SINGLE_TARGET") -> list[dict
             "measurement": {
                 "status": "SUCCESS", "measurement_id": f"measurement-{index}",
                 "timestamp": timestamp, "reference_frame": "rectified_left_optical_frame",
-                "units": "m", "x_m": x_m, "z_m": z_m,
+                "units": "m", "x_m": x_m, "y_m": 0.0, "z_m": z_m,
                 "range_m": (x_m * x_m + z_m * z_m) ** 0.5,
+                "confidence": 0.9,
             },
         })
     return rows
@@ -108,6 +111,45 @@ def test_no_fixed_start_range_or_image_center_gate() -> None:
     )
     assert result["result"] == "FORWARD_REQUIRED"
     assert result["image_center_used_as_gate"] is False
+
+
+def test_bridge_uses_window_evaluation_freshness_not_later_processing_time() -> None:
+    cycles = _window(x_m=0.0, z_m=2.0)
+    navigation = evaluate_person_navigation_window(
+        cycles, safe_distance_m=1.0, bearing_deadband_deg=2.0, now_utc=lambda: NOW,
+    )
+    decision = navigation_decision(navigation, sequence=1, timestamp=NOW.isoformat())
+    evaluation_reference = NOW + timedelta(milliseconds=900)
+    envelope = _bridge_envelope(
+        decision=decision,
+        cycles=cycles,
+        boot_session_id="0123456789ABCDEF",
+        freshness_reference_utc=evaluation_reference.isoformat(),
+    )
+
+    result = plan_bounded_command(
+        envelope, now_utc=lambda: NOW + timedelta(seconds=2),
+    ).to_dict()
+
+    assert result["result"] == "PLANNED_BOUNDED_COMMAND"
+    assert result["freshness_diagnostics"]["measured_age_s"] < 1.0
+    assert result["freshness_diagnostics"]["bridge_checked_at_utc"] == (NOW + timedelta(seconds=2)).isoformat()
+
+
+def test_stale_window_is_blocked_before_bridge_planning() -> None:
+    cycles = _window(x_m=0.0, z_m=2.0)
+    for cycle in cycles:
+        timestamp = (NOW - timedelta(seconds=2)).isoformat()
+        cycle["captured_at_utc"] = timestamp
+        cycle["measurement"]["timestamp"] = timestamp
+
+    result = evaluate_person_navigation_window(
+        cycles, safe_distance_m=1.0, bearing_deadband_deg=2.0, now_utc=lambda: NOW,
+    )
+
+    assert result["result"] == "BLOCKED"
+    assert result["reason"] == "METRIC_EVIDENCE_STALE_OR_FUTURE"
+    assert result.get("action") is None
 
 
 def _person_approach_cli_args(*extra: str) -> list[str]:

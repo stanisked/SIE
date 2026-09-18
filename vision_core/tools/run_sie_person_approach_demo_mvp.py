@@ -122,6 +122,20 @@ def _session_authorization(
     )
 
 
+def _bridge_envelope(
+    *, decision: dict[str, Any], cycles: list[dict[str, Any]], boot_session_id: str,
+    freshness_reference_utc: str,
+) -> dict[str, Any]:
+    """Keep the freshness basis at the completed shared-window evaluation."""
+    return {
+        "decision": decision,
+        "evidence_window": cycles,
+        "boot_session_id": boot_session_id,
+        "previous_terminal_motion_outcome": None,
+        "freshness_reference_utc": freshness_reference_utc,
+    }
+
+
 def main() -> int:
     args = parse_args()
     runtime = None
@@ -150,6 +164,10 @@ def main() -> int:
                     cycles, safe_distance_m=args.safe_distance_m,
                     bearing_deadband_deg=args.bearing_deadband_deg,
                 )
+                # Capture host UTC immediately after the same five-cycle metric
+                # evaluation. Later status I/O must not age this invocation's
+                # already validated evidence past the bridge TTL.
+                freshness_reference_utc = datetime.now(timezone.utc).isoformat()
                 _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state=state, index=action_index, navigation=navigation))
                 if navigation.get("result") == "ARRIVED":
                     _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state="ARRIVED", index=action_index, navigation=navigation))
@@ -164,7 +182,12 @@ def main() -> int:
                     return 2
                 decision_sequence += 1
                 decision = navigation_decision(navigation, sequence=decision_sequence, timestamp=datetime.now(timezone.utc).isoformat())
-                bridge = plan_bounded_command({"decision": decision, "evidence_window": cycles, "boot_session_id": boot_session_id, "previous_terminal_motion_outcome": None, "freshness_reference_utc": datetime.now(timezone.utc).isoformat()}).to_dict()
+                bridge = plan_bounded_command(_bridge_envelope(
+                    decision=decision,
+                    cycles=cycles,
+                    boot_session_id=boot_session_id,
+                    freshness_reference_utc=freshness_reference_utc,
+                )).to_dict()
                 if bridge.get("result") != "PLANNED_BOUNDED_COMMAND":
                     _write(stream, _record(session_id=session_id, operator_session_confirmation=operator_session_confirmation, action_command_ids=action_command_ids, state="BLOCKED", index=action_index, navigation=navigation, plan=bridge, reason=bridge.get("block_reason")))
                     return 2
