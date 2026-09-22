@@ -1,0 +1,17 @@
+sie_perception_contract:
+  ros__parameters:
+    input_topic: /sie/perception/raw_measurement
+    output_topic: /sie/perception/measurement
+
+sie_navigation_contract:
+  ros__parameters:
+    input_topic: /sie/perception/measurement
+    output_topic: /sie/navigation/decision
+    safe_distance_m: 2.0
+    bearing_deadband_deg: 2.0
+    min_confidence: 0.5
+
+sie_supervisor_contract:
+  ros__parameters:
+    input_topic: /sie/navigation/decision
+    output_topic: /sie/supervisor/state
