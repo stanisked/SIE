@@ -21,6 +21,7 @@ setup(
     entry_points={
         "console_scripts": [
             "perception_contract_node = sie_ros2.perception_node:main",
+            "perception_jsonl_bridge = sie_ros2.jsonl_perception_bridge:main",
             "navigation_contract_node = sie_ros2.navigation_node:main",
             "supervisor_contract_node = sie_ros2.supervisor_node:main",
         ],
