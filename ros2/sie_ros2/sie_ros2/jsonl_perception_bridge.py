@@ -56,14 +56,18 @@ class PerceptionJsonlBridge(Node):
             self.get_logger().warning("JSONL file was truncated; restarting at offset 0")
             self.offset = 0
         try:
-            with self.path.open("r", encoding="utf-8") as stream:
+            with self.path.open("rb") as stream:
                 stream.seek(self.offset)
-                lines = stream.readlines()
-                self.offset = stream.tell()
+                unread = stream.read()
         except OSError as error:
             self.get_logger().warning(f"cannot read JSONL: {error}")
             return
-        for line in lines:
+        boundary = unread.rfind(b"\n")
+        if boundary < 0:
+            return
+        complete = unread[:boundary].decode("utf-8")
+        self.offset += boundary + 1
+        for line in complete.splitlines():
             text = line.strip()
             if not text:
                 continue
