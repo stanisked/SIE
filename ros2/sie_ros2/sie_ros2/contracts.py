@@ -1,4 +1,4 @@
-""""Strict JSON contracts for the first safe SIE ROS 2 pipeline."""
+"""Strict JSON contracts for the first safe SIE ROS 2 pipeline."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from typing import Any
 
 PERCEPTION_SCHEMA = "sie.perception.measurement.v1"
 AR0234_OBSERVATION_SCHEMA = "sie.ar0234.yolo11_person_upper_body_observation.v1"
+AR0234_TARGET_SUITABILITY_SCHEMA = "sie.ar0234.target_suitability.v1"
 NAVIGATION_SCHEMA = "sie.navigation.decision.v1"
 SUPERVISOR_SCHEMA = "sie.supervisor.state.v1"
 
@@ -169,6 +170,38 @@ def validate_ar0234_observation(value: object) -> dict[str, Any]:
         if type(item.get(field)) is not bool:
             raise ContractError(f"{field} must be bool for SINGLE_TARGET")
     return item
+
+
+def ar0234_target_suitability(observation: object) -> dict[str, Any]:
+    """Interpret target geometry without promoting it to a metric Measurement."""
+    item = validate_ar0234_observation(observation)
+    status = item["target_status"]
+    disposition = "REJECTED"
+    reason = status
+    geometry_eligible = False
+    if status == "SINGLE_TARGET":
+        truncated = [
+            edge
+            for edge in ("left", "right", "top", "bottom")
+            if item[f"truncated_${edge}"]
+        ]
+        if truncated:
+            reason = "EDGE_TRUNCATED:" + ",".join(truncated)
+        else:
+            disposition = "ACCEPTED_FOR_FURTHER_INTERPRETATION"
+            reason = "COMPLETE_SINGLE_TARGET"
+            geometry_eligible = True
+    return {
+        "schema_version": AR0234_TARGET_SUITABILITY_SCHEMA,
+        "interpretation_id": f"ar0234-target-suitability:{item['observation_id']}",
+        "timestamp": item["captured_at_utc"],
+        "observation_id": item["observation_id"],
+        "evidence_id": item["evidence_id"],
+        "disposition": disposition,
+        "reason": reason,
+        "geometry_eligible": geometry_eligible,
+        "metric_measurement_authorized": False,
+    }
 
 
 def navigation_decision(
