@@ -157,6 +157,10 @@ def main() -> int:
     parser.add_argument("--stereo-calibration", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--minimum-pairs", type=int, default=40)
+    parser.add_argument(
+        "--captured-second-is-physical-left", action="store_true",
+        help="Use stereo_right/*.png as physical_left and stereo_left/*.png as physical_right.",
+    )
     args = parser.parse_args()
 
     if args.output_dir.exists() and any(args.output_dir.iterdir()):
@@ -188,8 +192,12 @@ def main() -> int:
     for pair in pairs:
         root, filename = Path(pair["root"]), str(pair["filename"])
         ar = read_image(root / "ar0234" / filename, ar_size)
-        left = read_image(root / "stereo_left" / filename, eye_size)
-        right = read_image(root / "stereo_right" / filename, eye_size)
+        captured_first = read_image(root / "stereo_left" / filename, eye_size)
+        captured_second = read_image(root / "stereo_right" / filename, eye_size)
+        if args.captured_second_is_physical_left:
+            left, right = captured_second, captured_first
+        else:
+            left, right = captured_first, captured_second
         ar_corners, left_corners, right_corners = (
             find_corners(ar, board), find_corners(left, board), find_corners(right, board)
         )
@@ -251,6 +259,11 @@ def main() -> int:
             "stereo_calibration_id": calibration_id,
         },
         "input_pair_count": len(records),
+        "captured_stream_identity": (
+            {"captured_first": "physical_right", "captured_second": "physical_left"}
+            if args.captured_second_is_physical_left
+            else {"captured_first": "physical_left", "captured_second": "physical_right"}
+        ),
         "stereo_calibrate_rms_px": float(rms),
         "ar0234_cross_reprojection_rms_px": stats(ar_errors),
         "stereo_right_validation_rms_px": stats(right_errors),
