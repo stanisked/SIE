@@ -58,7 +58,7 @@ def load_image(path: Path, expected_size: tuple[int, int]) -> np.ndarray:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset-root", type=Path, required=True)
+    parser.add_argument("--dataset-root", type=Path, action="append", required=True)\n    parser.add_argument("--report-path", type=Path)
     parser.add_argument("--min-pairs", type=int, default=40)
     parser.add_argument("--max-skew-ms", type=float, default=80.0)
     parser.add_argument("--minimum-sharpness", type=float, default=25.0)
@@ -105,11 +105,11 @@ def main() -> int:
         images: dict[str, np.ndarray] = {}
         for name, path in paths.items():
             if not path.is_file():
-                problems.append(f"{filename}: missing {name}")
+                problems.append(f"{session_label}: missing {name}")
                 continue
             actual_hash = sha256_file(path)
             if actual_hash != expected_hashes[name]:
-                problems.append(f"{filename}: sha256 mismatch {name}")
+                problems.append(f"{session_label}: sha256 mismatch {name}")
                 continue
             images[name] = load_image(path, ar_expected if name == "ar0234" else eye_expected)
 
@@ -118,7 +118,7 @@ def main() -> int:
         for name, image in images.items():
             corners = find_corners(image, board_size)
             if corners is None:
-                problems.append(f"{filename}: corners not found in {name}")
+                problems.append(f"{session_label}: corners not found in {name}")
                 continue
             center_values[name].append(np.mean(corners, axis=0).tolist())
             sharpness_values[name].append(sharpness(image))
@@ -126,7 +126,7 @@ def main() -> int:
         skew = float(pair.get("sequential_skew_ms", float("inf")))
         skew_values.append(skew)
         if skew > args.max_skew_ms:
-            problems.append(f"{filename}: skew {skew:.1f} ms exceeds limit")
+            problems.append(f"{session_label}: skew {skew:.1f} ms exceeds limit")
 
     coverage: dict[str, dict[str, float]] = {}
     for name, values in center_values.items():
@@ -162,7 +162,7 @@ def main() -> int:
         "result": "PASS" if not problems else "REJECT",
         "problems": problems,
     }
-    report_path = root / "capture_audit.json"
+    report_path = args.report_path or (roots[0] / "capture_audit.json" if len(roots) == 1 else Path("capture_audit_combined.json"))
     report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report, indent=2))
     print(f"Saved: {report_path}")
