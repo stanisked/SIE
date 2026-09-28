@@ -214,12 +214,39 @@ def main() -> int:
         object_sets, ar_sets, left_sets, K_ar.copy(), D_ar.copy(), K_left.copy(), D_left.copy(),
         ar_size, criteria=criteria, flags=cv2.CALIB_FIX_INTRINSIC,
     )
+    initial_ar_errors = []
+    for ar, left, right in zip(ar_sets, left_sets, right_sets):
+        ar_error, _ = pair_reprojection_errors(
+            obj, ar, left, right, K_ar, D_ar, K_left, D_left, K_right, D_right,
+            R_ar_left, T_ar_left, R_left_right, T_left_right,
+        )
+        initial_ar_errors.append(ar_error)
+    initial_median = float(np.median(initial_ar_errors))
+    initial_mad = float(np.median(np.abs(np.asarray(initial_ar_errors) - initial_median)))
+    outlier_limit = min(3.0, initial_median + 3.5 * max(initial_mad, 0.1))
+    kept_indices = [index for index, value in enumerate(initial_ar_errors) if value <= outlier_limit]
+    if len(kept_indices) < args.minimum_pairs:
+        raise RuntimeError(
+            f"Too few pairs after robust filtering: {len(kept_indices)} < {args.minimum_pairs}"
+        )
+
+    filtered_obj = [object_sets[index] for index in kept_indices]
+    filtered_ar = [ar_sets[index] for index in kept_indices]
+    filtered_left = [left_sets[index] for index in kept_indices]
+    rms, _, _, _, _, R_ar_left, T_ar_left, _, _ = cv2.stereoCalibrate(
+        filtered_obj, filtered_ar, filtered_left,
+        K_ar.copy(), D_ar.copy(), K_left.copy(), D_left.copy(),
+        ar_size, criteria=criteria, flags=cv2.CALIB_FIX_INTRINSIC,
+    )
+
     ar_errors, right_errors = [], []
-    for record, ar, left, right in zip(records, ar_sets, left_sets, right_sets):
+    kept_index_set = set(kept_indices)
+    for index, (record, ar, left, right) in enumerate(zip(records, ar_sets, left_sets, right_sets)):
         ar_error, right_error = pair_reprojection_errors(
             obj, ar, left, right, K_ar, D_ar, K_left, D_left, K_right, D_right,
             R_ar_left, T_ar_left, R_left_right, T_left_right,
         )
+        record["used_for_solution"] = index in kept_index_set
         record["ar0234_cross_reprojection_rms_px"] = ar_error
         record["stereo_right_validation_rms_px"] = right_error
         ar_errors.append(ar_error)
@@ -259,6 +286,9 @@ def main() -> int:
             "stereo_calibration_id": calibration_id,
         },
         "input_pair_count": len(records),
+        "used_pair_count": len(kept_indices),
+        "robust_outlier_limit_ar0234_cross_reprojection_px": outlier_limit,
+        "initial_ar0234_cross_reprojection_rms_px": stats(initial_ar_errors),
         "captured_stream_identity": (
             {"captured_first": "physical_right", "captured_second": "physical_left"}
             if args.captured_second_is_physical_left
