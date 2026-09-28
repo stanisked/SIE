@@ -22,6 +22,7 @@ setup(
         "console_scripts": [
             "ar0234_observation_node = sie_ros2.ar0234_observation_node:main",
             "ar0234_observation_validation_node = sie_ros2.ar0234_observation_validation_node:main",
+            "ar0234_target_suitability_node = sie_ros2.ar0234_target_suitability_node:main",
             "perception_contract_node = sie_ros2.perception_node:main",
             "perception_jsonl_bridge = sie_ros2.jsonl_perception_bridge:main",
             "navigation_contract_node = sie_ros2.navigation_node:main",
