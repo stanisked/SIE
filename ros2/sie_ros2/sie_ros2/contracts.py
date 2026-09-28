@@ -1,4 +1,4 @@
-"""Strict JSON contracts for the first safe SIE ROS 2 pipeline."""
+""""Strict JSON contracts for the first safe SIE ROS 2 pipeline."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 PERCEPTION_SCHEMA = "sie.perception.measurement.v1"
+AR0234_OBSERVATION_SCHEMA = "sie.ar0234.yolo11_person_upper_body_observation.v1"
 NAVIGATION_SCHEMA = "sie.navigation.decision.v1"
 SUPERVISOR_SCHEMA = "sie.supervisor.state.v1"
 
@@ -37,15 +38,28 @@ def _finite(value: object, name: str, *, minimum: float | None = None) -> float:
     return result
 
 
-def _timestamp(value: object) -> str:
-    text = _text(value, "timestamp")
+def _integer(value: object, name: str, *, minimum: int = 0) -> int:
+    if type(value) is not int or value < minimum:
+        raise ContractError(f"{name} must be an integer >= {minimum}")
+    return value
+
+
+def _timestamp(value: object, field_name: str = "timestamp") -> str:
+    text = _text(value, field_name)
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError as error:
-        raise ContractError("timestamp must be ISO-8601") from error
+        raise ContractError(f"{field_name} must be ISO-8601") from error
     if parsed.tzinfo is None:
-        raise ContractError("timestamp must be timezone-aware")
+        raise ContractError(f"{field_name} must be timezone-aware")
     return text
+
+
+def _sha256(value: object, field_name: str) -> str:
+    sha = _text(value, field_name)
+    if len(sha) != 64 or any(char not in "0123456789abcdef" for char in sha.lower()):
+        raise ContractError(f"{field_name} must be a SHA-256 hex digest")
+    return sha
 
 
 def decode_json(text: str) -> dict[str, Any]:
@@ -76,12 +90,84 @@ def validate_perception(value: object) -> dict[str, Any]:
         raise ContractError("confidence must be <= 1")
     calibration = _object(item.get("calibration"), "calibration")
     _text(calibration.get("calibration_id"), "calibration.calibration_id")
-    sha = _text(calibration.get("sha256"), "calibration.sha256")
-    if len(sha) != 64 or any(char not in "0123456789abcdef" for char in sha.lower()):
-        raise ContractError("calibration.sha256 must be a SHA-256 hex digest")
+    _sha256(calibration.get("sha256"), "calibration.sha256")
     if status == "SUCCESS":
         _finite(item.get("range_m"), "range_m", minimum=0.0)
         _finite(item.get("bearing_deg"), "bearing_deg")
+    return item
+
+
+def _validate_frame_size(value: object, name: str, *, width: int, height: int) -> None:
+    size = _object(value, name)
+    if size.get("width") != width or size.get("height") != height:
+        raise ContractError(f"{name} must be {width}x{height}")
+
+
+def _null_target_fields(item: dict[str, Any]) -> None:
+    for field in ("bbox_xyxy_px", "center_x_px", "confidence"):
+        if item.get(field) is not None:
+            raise ContractError(f"{field} must be null when there is no selected target")
+    for field in ("truncated_left", "truncated_right", "truncated_top", "truncated_bottom"):
+        if item.get(field) is not None and type(item[field]) is not bool:
+            raise ContractError(f"{field} must be bool or null")
+
+
+def validate_ar0234_observation(value: object) -> dict[str, Any]:
+    """Validate an AR0234 YOLO Observation; it is deliberately not a metric Measurement."""
+    item = _object(value, "ar0234 observation")
+    if item.get("schema_version") != AR0234_OBSERVATION_SCHEMA:
+        raise ContractError("unexpected AR0234 observation schema_version")
+    _text(item.get("observation_id"), "observation_id")
+    _text(item.get("evidence_id"), "evidence_id")
+    _text(item.get("source_cycle_id"), "source_cycle_id")
+    _timestamp(item.get("captured_at_utc"), "captured_at_utc")
+    if item.get("reference_frame") != "ar0234_image_frame":
+        raise ContractError("AR0234 observation reference_frame must be ar0234_image_frame")
+    if item.get("units") != "px":
+        raise ContractError("AR0234 observation units must be px")
+    if item.get("entity_type") != "person" or item.get("class_name") != "person_upper_body":
+        raise ContractError("unexpected AR0234 observation entity or class")
+    _sha256(item.get("model_sha256"), "model_sha256")
+    threshold = _finite(item.get("confidence_threshold"), "confidence_threshold", minimum=0.0)
+    if threshold > 1.0:
+        raise ContractError("confidence_threshold must be <= 1")
+    _validate_frame_size(item.get("frame_size_px"), "frame_size_px", width=1920, height=1200)
+    _validate_frame_size(item.get("model_input_size_px"), "model_input_size_px", width=640, height=640)
+    _integer(item.get("raw_detection_count"), "raw_detection_count")
+    _integer(item.get("detection_count"), "detection_count")
+    eligible = _integer(item.get("eligible_detection_count"), "eligible_detection_count")
+    if type(item.get("detections")) is not list:
+        raise ContractError("detections must be a list")
+    status = item.get("target_status")
+    if status not in {"NO_TARGET", "SINGLE_TARGET", "MULTIPLE_TARGETS"}:
+        raise ContractError("unsupported AR0234 target_status")
+    if status == "NO_TARGET":
+        if eligible != 0:
+            raise ContractError("NO_TARGET requires zero eligible detections")
+        _null_target_fields(item)
+        return item
+    if status == "MULTIPLE_TARGETS":
+        if eligible < 2:
+            raise ContractError("MULTIPLE_TARGETS requires at least two eligible detections")
+        _null_target_fields(item)
+        return item
+    if eligible != 1:
+        raise ContractError("SINGLE_TARGET requires exactly one eligible detection")
+    box = item.get("bbox_xyxy_px")
+    if type(box) is not list or len(box) != 4:
+        raise ContractError("bbox_xyxy_px must contain four coordinates")
+    x1, y1, x2, y2 = (_finite(v, "bbox_xyxy_px") for v in box)
+    if not 0 <= x1 < x2 <= 1920 or not 0 <= y1 < y2 <= 1200:
+        raise ContractError("bbox_xyxy_px must lie inside the AR0234 frame")
+    center_x = _finite(item.get("center_x_px"), "center_x_px")
+    if not 0 <= center_x <= 1920:
+        raise ContractError("center_x_px must lie inside the AR0234 frame")
+    confidence = _finite(item.get("confidence"), "confidence", minimum=threshold)
+    if confidence > 1.0:
+        raise ContractError("confidence must be <= 1")
+    for field in ("truncated_left", "truncated_right", "truncated_top", "truncated_bottom"):
+        if type(item.get(field)) is not bool:
+            raise ContractError(f"{field} must be bool for SINGLE_TARGET")
     return item
 
 
