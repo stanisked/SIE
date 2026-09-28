@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Headless checkerboard capture for a fresh AR0234-to-OV9281 extrinsic calibration.
+"""Headless checkerboard capture for fresh AR0234-to-OV9281 extrinsic calibration.
 
-This tool captures raw images only. It does not estimate range, publish ROS messages,
-or activate any calibration. A later solver must validate this dataset independently.
+The tool forces auto_exposure=3 on both UVC cameras, writes diagnostic JPEG previews,
+and captures raw triples only. It never estimates range, publishes ROS messages, or
+activates a calibration.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +32,25 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def configure_auto_exposure(device: str, value: int) -> str:
+    subprocess.run(
+        ["v4l2-ctl", "-d", device, "-c", f"auto_exposure={value}"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    result = subprocess.run(
+        ["v4l2-ctl", "-d", device, "-C", "auto_exposure"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    text = result.stdout.strip()
+    if f": {value}" not in text:
+        raise RuntimeError(f"auto_exposure verification failed for {device}: {text}")
+    return text
+
+
 def find_corners(image: np.ndarray, board_size: tuple[int, int]) -> np.ndarray | None:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     flags = (
@@ -43,12 +64,7 @@ def find_corners(image: np.ndarray, board_size: tuple[int, int]) -> np.ndarray |
     return corners.reshape(-1, 2).astype(np.float32)
 
 
-def open_camera(
-    device: str,
-    width: int,
-    height: int,
-    fps: float,
-) -> cv2.VideoCapture:
+def open_camera(device: str, width: int, height: int, fps: float) -> cv2.VideoCapture:
     capture = cv2.VideoCapture(device, cv2.CAP_V4L2)
     capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
     capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
@@ -73,6 +89,44 @@ def write_metadata(path: Path, metadata: dict) -> None:
     temporary.replace(path)
 
 
+def preview_tile(image: np.ndarray, label: str, detected: bool) -> np.ndarray:
+    tile = cv2.resize(image, (640, 400), interpolation=cv2.INTER_AREA)
+    colour = (40, 200, 40) if detected else (40, 40, 230)
+    status = "corners: YES" if detected else "corners: NO"
+    cv2.rectangle(tile, (0, 0), (640, 42), (0, 0, 0), thickness=-1)
+    cv2.putText(tile, label, (12, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
+    cv2.putText(tile, status, (12, 37), cv2.FONT_HERSHEY_SIMPLEX, 0.55, colour, 1)
+    return tile
+
+
+def save_preview(
+    preview_dir: Path,
+    ar_frame: np.ndarray,
+    left_frame: np.ndarray,
+    right_frame: np.ndarray,
+    ar_found: bool,
+    left_found: bool,
+    right_found: bool,
+) -> None:
+    files = (
+        ("latest_ar0234.jpg", ar_frame),
+        ("latest_stereo_left.jpg", left_frame),
+        ("latest_stereo_right.jpg", right_frame),
+    )
+    for filename, frame in files:
+        if not cv2.imwrite(str(preview_dir / filename), frame):
+            raise RuntimeError(f"Could not save preview {filename}")
+    triplet = np.hstack(
+        (
+            preview_tile(ar_frame, "AR0234", ar_found),
+            preview_tile(left_frame, "OV9281 physical_left", left_found),
+            preview_tile(right_frame, "OV9281 physical_right", right_found),
+        )
+    )
+    if not cv2.imwrite(str(preview_dir / "latest_triplet.jpg"), triplet):
+        raise RuntimeError("Could not save preview triplet")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -84,6 +138,7 @@ def main() -> int:
         "--stereo-device",
         default="/dev/v4l/by-id/usb-TSTC_Web_Camera_TSTC_Web_Camera-video-index0",
     )
+    parser.add_argument("--auto-exposure", type=int, default=3)
     parser.add_argument("--ar-width", type=int, default=1920)
     parser.add_argument("--ar-height", type=int, default=1200)
     parser.add_argument("--ar-fps", type=float, default=30.0)
@@ -97,6 +152,7 @@ def main() -> int:
     parser.add_argument("--min-interval-s", type=float, default=0.75)
     parser.add_argument("--min-motion-px", type=float, default=30.0)
     parser.add_argument("--max-skew-ms", type=float, default=80.0)
+    parser.add_argument("--preview-interval-s", type=float, default=2.0)
     parser.add_argument("--ar-intrinsic", type=Path, required=True)
     args = parser.parse_args()
 
@@ -114,9 +170,12 @@ def main() -> int:
     ar_dir = args.output_dir / "ar0234"
     left_dir = args.output_dir / "stereo_left"
     right_dir = args.output_dir / "stereo_right"
-    for directory in (ar_dir, left_dir, right_dir):
+    preview_dir = args.output_dir / "debug_preview"
+    for directory in (ar_dir, left_dir, right_dir, preview_dir):
         directory.mkdir()
 
+    ar_exposure = configure_auto_exposure(args.ar_device, args.auto_exposure)
+    stereo_exposure = configure_auto_exposure(args.stereo_device, args.auto_exposure)
     metadata = {
         "schema_version": "sie.ar0234_ov9281.extrinsic_capture.v1",
         "capture_started_at_utc": utc_now(),
@@ -125,20 +184,16 @@ def main() -> int:
             "device": args.ar_device,
             "image_size_px": {"width": args.ar_width, "height": args.ar_height},
             "requested_fps": args.ar_fps,
+            "auto_exposure": ar_exposure,
             "intrinsic_path": str(args.ar_intrinsic),
             "intrinsic_sha256": sha256_file(args.ar_intrinsic),
         },
         "ov9281_stereo": {
             "device": args.stereo_device,
-            "combined_image_size_px": {
-                "width": args.stereo_width,
-                "height": args.stereo_height,
-            },
-            "eye_image_size_px": {
-                "width": args.stereo_width // 2,
-                "height": args.stereo_height,
-            },
+            "combined_image_size_px": {"width": args.stereo_width, "height": args.stereo_height},
+            "eye_image_size_px": {"width": args.stereo_width // 2, "height": args.stereo_height},
             "requested_fps": args.stereo_fps,
+            "auto_exposure": stereo_exposure,
             "left_semantics": "physical_left",
             "right_semantics": "physical_right",
         },
@@ -151,23 +206,28 @@ def main() -> int:
             "min_interval_s": args.min_interval_s,
             "min_motion_px": args.min_motion_px,
             "max_sequential_skew_ms": args.max_skew_ms,
+            "preview_interval_s": args.preview_interval_s,
+        },
+        "debug_preview": {
+            "directory": str(preview_dir),
+            "triplet": str(preview_dir / "latest_triplet.jpg"),
         },
         "pairs": [],
     }
     metadata_path = args.output_dir / "capture_metadata.json"
     write_metadata(metadata_path, metadata)
 
-    ar_capture = open_camera(
-        args.ar_device, args.ar_width, args.ar_height, args.ar_fps
-    )
+    ar_capture = open_camera(args.ar_device, args.ar_width, args.ar_height, args.ar_fps)
     stereo_capture = open_camera(
         args.stereo_device, args.stereo_width, args.stereo_height, args.stereo_fps
     )
     last_center: np.ndarray | None = None
     last_saved_at = 0.0
+    last_preview_at = 0.0
 
+    print(f"AR0234 {ar_exposure}; OV9281 {stereo_exposure}")
     print("Capture started. Move the checkerboard through different positions, angles, and distances.")
-    print("Pairs are saved only when all three cameras find the board.")
+    print(f"Preview updates every {args.preview_interval_s:g} s: {preview_dir / 'latest_triplet.jpg'}")
     try:
         while len(metadata["pairs"]) < args.target_pairs:
             ar_frame, ar_time = read_frame(ar_capture, "AR0234")
@@ -180,11 +240,18 @@ def main() -> int:
                 )
 
             split = args.stereo_width // 2
-            left_frame = stereo_frame[:, :split]
-            right_frame = stereo_frame[:, split:]
+            left_frame, right_frame = stereo_frame[:, :split], stereo_frame[:, split:]
             ar_corners = find_corners(ar_frame, board_size)
             left_corners = find_corners(left_frame, board_size)
             right_corners = find_corners(right_frame, board_size)
+            now = time.monotonic()
+            if now - last_preview_at >= args.preview_interval_s:
+                save_preview(
+                    preview_dir, ar_frame, left_frame, right_frame,
+                    ar_corners is not None, left_corners is not None, right_corners is not None,
+                )
+                last_preview_at = now
+
             if any(corners is None for corners in (ar_corners, left_corners, right_corners)):
                 continue
 
@@ -193,7 +260,6 @@ def main() -> int:
                 print(f"SKIP sequential skew={skew_ms:.1f} ms")
                 continue
 
-            now = time.monotonic()
             center = np.mean(ar_corners, axis=0)
             motion = float("inf") if last_center is None else float(np.linalg.norm(center - last_center))
             if now - last_saved_at < args.min_interval_s or motion < args.min_motion_px:
@@ -209,22 +275,22 @@ def main() -> int:
                 if not cv2.imwrite(str(path), frame):
                     raise RuntimeError(f"Could not save {path}")
 
-            pair = {
-                "pair_id": f"ar0234-ov9281-extrinsic:{index:04d}",
-                "filename": filename,
-                "captured_at_utc": utc_now(),
-                "sequential_skew_ms": skew_ms,
-                "ar0234_corner_center_px": center.tolist(),
-                "stereo_left_corner_center_px": np.mean(left_corners, axis=0).tolist(),
-                "stereo_right_corner_center_px": np.mean(right_corners, axis=0).tolist(),
-                "ar0234_sha256": sha256_file(ar_dir / filename),
-                "stereo_left_sha256": sha256_file(left_dir / filename),
-                "stereo_right_sha256": sha256_file(right_dir / filename),
-            }
-            metadata["pairs"].append(pair)
+            metadata["pairs"].append(
+                {
+                    "pair_id": f"ar0234-ov9281-extrinsic:{index:04d}",
+                    "filename": filename,
+                    "captured_at_utc": utc_now(),
+                    "sequential_skew_ms": skew_ms,
+                    "ar0234_corner_center_px": center.tolist(),
+                    "stereo_left_corner_center_px": np.mean(left_corners, axis=0).tolist(),
+                    "stereo_right_corner_center_px": np.mean(right_corners, axis=0).tolist(),
+                    "ar0234_sha256": sha256_file(ar_dir / filename),
+                    "stereo_left_sha256": sha256_file(left_dir / filename),
+                    "stereo_right_sha256": sha256_file(right_dir / filename),
+                }
+            )
             write_metadata(metadata_path, metadata)
-            last_center = center
-            last_saved_at = now
+            last_center, last_saved_at = center, now
             print(
                 f"SAVED {index:02d}/{args.target_pairs}: {filename}; "
                 f"sequential_skew={skew_ms:.1f} ms; motion={motion:.1f} px"
@@ -236,9 +302,7 @@ def main() -> int:
         stereo_capture.release()
 
     metadata["capture_finished_at_utc"] = utc_now()
-    metadata["status"] = (
-        "COMPLETE" if len(metadata["pairs"]) >= args.target_pairs else "INCOMPLETE"
-    )
+    metadata["status"] = "COMPLETE" if len(metadata["pairs"]) >= args.target_pairs else "INCOMPLETE"
     write_metadata(metadata_path, metadata)
     print(f"Capture status: {metadata['status']}; pairs={len(metadata['pairs'])}")
     return 0 if metadata["status"] == "COMPLETE" else 2
