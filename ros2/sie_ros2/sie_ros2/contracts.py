@@ -183,7 +183,7 @@ def ar0234_target_suitability(observation: object) -> dict[str, Any]:
         truncated = [
             edge
             for edge in ("left", "right", "top", "bottom")
-            if item[f"truncated_${edge}"]
+            if item[f"truncated_{edge}"]
         ]
         if truncated:
             reason = "EDGE_TRUNCATED:" + ",".join(truncated)
