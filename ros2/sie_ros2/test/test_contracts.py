@@ -1,5 +1,6 @@
 from sie_ros2.contracts import (
     ContractError,
+    ar0234_target_suitability,
     navigation_decision,
     supervisor_state,
     validate_ar0234_observation,
@@ -109,3 +110,24 @@ def test_ar0234_observation_rejects_invalid_model_hash():
         assert "SHA-256" in str(error)
     else:
         raise AssertionError("invalid model hash was accepted")
+
+
+def test_edge_truncated_target_is_not_eligible_for_measurement():
+    observation = ar0234_no_target(
+        target_status="SINGLE_TARGET",
+        detection_count=1,
+        eligible_detection_count=1,
+        detections=[{"source": "test"}],
+        bbox_xyxy_px=[0.0, 0.0, 124.54, 1032.26],
+        center_x_px=62.27,
+        confidence=0.676108,
+        truncated_left=True,
+        truncated_top=True,
+        truncated_right=False,
+        truncated_bottom=False,
+    )
+    interpretation = ar0234_target_suitability(observation)
+    assert interpretation["disposition"] == "REJECTED"
+    assert interpretation["reason"] == "EDGE_TRUNCATED:left,top"
+    assert interpretation["geometry_eligible"] is False
+    assert interpretation["metric_measurement_authorized"] is False
