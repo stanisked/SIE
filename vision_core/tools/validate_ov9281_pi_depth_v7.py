@@ -90,7 +90,7 @@ def main() -> int:
             valid = disparity > 0.5
             if valid.sum() < len(disparity) * 0.9:
                 continue
-            depth = np.abs(P2[0, 3]) / disparity[valid]
+            depth = (np.abs(P2[0, 3]) / disparity[valid]) / 1000.0
             frame_median = float(np.median(depth))
             depths.extend(depth.tolist())
             per_frame.append({
