@@ -2,6 +2,7 @@ from sie_ros2.contracts import (
     ContractError,
     navigation_decision,
     supervisor_state,
+    validate_ar0234_observation,
     validate_perception,
 )
 
@@ -21,6 +22,38 @@ def measurement(**overrides):
             "calibration_id": "stereo_calibration_v6",
             "sha256": "a" * 64,
         },
+    }
+    value.update(overrides)
+    return value
+
+
+def ar0234_no_target(**overrides):
+    value = {
+        "schema_version": "sie.ar0234.yolo11_person_upper_body_observation.v1",
+        "observation_id": "ar0234-yolo11-person-upper-body:ar0234-ros2-00000312",
+        "evidence_id": "ar0234-yolo11-person-upper-body:ar0234-ros2-00000312",
+        "source_cycle_id": "ar0234-ros2-00000312",
+        "captured_at_utc": "2026-09-28T11:13:36.019926+00:00",
+        "reference_frame": "ar0234_image_frame",
+        "units": "px",
+        "entity_type": "person",
+        "class_name": "person_upper_body",
+        "model_sha256": "d" * 64,
+        "confidence_threshold": 0.4,
+        "frame_size_px": {"width": 1920, "height": 1200},
+        "model_input_size_px": {"width": 640, "height": 640},
+        "raw_detection_count": 6113,
+        "detection_count": 0,
+        "detections": [],
+        "eligible_detection_count": 0,
+        "target_status": "NO_TARGET",
+        "bbox_xyxy_px": None,
+        "center_x_px": None,
+        "confidence": None,
+        "truncated_left": None,
+        "truncated_right": None,
+        "truncated_top": None,
+        "truncated_bottom": None,
     }
     value.update(overrides)
     return value
@@ -61,3 +94,18 @@ def test_low_confidence_blocks_navigation():
     assert decision["result"] == "BLOCKED"
     assert decision["recommended_action"] == "STOP"
     assert decision["reason"] == "LOW_CONFIDENCE"
+
+
+def test_ar0234_no_target_observation_is_valid_but_not_measurement():
+    observation = validate_ar0234_observation(ar0234_no_target())
+    assert observation["target_status"] == "NO_TARGET"
+    assert observation["units"] == "px"
+
+
+def test_ar0234_observation_rejects_invalid_model_hash():
+    try:
+        validate_ar0234_observation(ar0234_no_target(model_sha256="not-a-hash"))
+    except ContractError as error:
+        assert "SHA-256" in str(error)
+    else:
+        raise AssertionError("invalid model hash was accepted")
