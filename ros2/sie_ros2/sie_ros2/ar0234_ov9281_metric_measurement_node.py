@@ -327,12 +327,12 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             left_evidence = self.observer.observe(
                 left_rectified, captured_at_utc=timestamp, cycle_id=f"{cycle_id}:physical_left"
             )
-            association = self._associate(
+            association, association_reason = self._associate(
                 observation, left_evidence, left_rectified, right_rectified
             )
             if association is None:
                 self._publish_refusal(
-                    cycle_id, timestamp, "DEPTH_UNAVAILABLE", "NO_UNIQUE_3D_ASSOCIATION",
+                    cycle_id, timestamp, "DEPTH_UNAVAILABLE", association_reason,
                     skew_ms, observation
                 )
                 return
@@ -348,35 +348,38 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
     def _associate(
         self, ar_observation: dict[str, Any], left_evidence: dict[str, Any],
         left_rectified: Any, right_rectified: Any,
-    ) -> dict[str, Any] | None:
-        if left_evidence.get("target_status") != "SINGLE_TARGET":
-            return None
+    ) -> tuple[dict[str, Any] | None, str]:
+        left_status = left_evidence.get("target_status")
+        if left_status != "SINGLE_TARGET":
+            return None, f"STEREO_PERSON_{left_status}"
         bbox = left_evidence.get("bbox_xyxy_px")
         if type(bbox) is not list or len(bbox) != 4:
-            return None
+            return None, "STEREO_PERSON_INVALID_BBOX"
         x1, y1, x2, y2 = (float(item) for item in bbox)
         width, height = self.stereo_size
-        ix1, ix2 = max(0, int(x1 + 0.30 * (x2 - x1))), min(width, int(x1 + 0.70 * (x2 - x1)))
-        iy1, iy2 = max(0, int(y1 + 0.35 * (y2 - y1))), min(height, int(y1 + 0.85 * (y2 - y1)))
+        ix1 = max(0, int(x1 + 0.30 * (x2 - x1)))
+        ix2 = min(width, int(x1 + 0.70 * (x2 - x1)))
+        iy1 = max(0, int(y1 + 0.35 * (y2 - y1)))
+        iy2 = min(height, int(y1 + 0.85 * (y2 - y1)))
         if ix2 <= ix1 or iy2 <= iy1:
-            return None
+            return None, "STEREO_DEPTH_ROI_EMPTY"
         left_gray = self.cv2.cvtColor(left_rectified, self.cv2.COLOR_BGR2GRAY)
         right_gray = self.cv2.cvtColor(right_rectified, self.cv2.COLOR_BGR2GRAY)
         disparity = self.sgbm.compute(left_gray, right_gray).astype(self.np.float32) / 16.0
         samples = disparity[iy1:iy2, ix1:ix2].reshape(-1)
         samples = samples[self.np.isfinite(samples) & (samples > 0.5)]
         if samples.size < self.min_depth_samples:
-            return None
+            return None, f"DISPARITY_SAMPLES_TOO_FEW:{samples.size}"
         depth_samples = abs(float(self.p2[0, 3])) / samples / 1000.0
         depth_samples = depth_samples[
             (depth_samples >= self.range_min_m) & (depth_samples <= self.range_max_m)
         ]
         if depth_samples.size < self.min_depth_samples:
-            return None
+            return None, f"DEPTH_SAMPLES_OUT_OF_RANGE:{depth_samples.size}"
         depth_m = float(self.np.median(depth_samples))
         mad_m = float(self.np.median(self.np.abs(depth_samples - depth_m)))
         if mad_m > self.max_depth_mad_m:
-            return None
+            return None, f"DEPTH_MAD_EXCEEDED:{mad_m:.4f}m"
         u, v = (ix1 + ix2) / 2.0, (iy1 + iy2) / 2.0
         x_rect = (u - float(self.p1[0, 2])) * depth_m / float(self.p1[0, 0])
         y_rect = (v - float(self.p1[1, 2])) * depth_m / float(self.p1[1, 1])
@@ -389,7 +392,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         ar_x, ar_y = (float(value) for value in projected.reshape(2))
         ax1, ay1, ax2, ay2 = (float(value) for value in ar_observation["bbox_xyxy_px"])
         if not (ax1 <= ar_x <= ax2 and ay1 <= ar_y <= ay2):
-            return None
+            return None, f"AR_REPROJECTION_OUTSIDE_BBOX:{ar_x:.1f},{ar_y:.1f}"
         confidence = min(
             float(ar_observation["confidence"]),
             float(left_evidence["confidence"]),
@@ -406,7 +409,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             "depth_sample_count": int(depth_samples.size),
             "physical_left_bbox_xyxy_px": [x1, y1, x2, y2],
             "projected_ar0234_point_px": [ar_x, ar_y],
-        }
+        }, "SUCCESS"
 
     def _publish_observation(self, observation: dict[str, Any]) -> None:
         message = String()
