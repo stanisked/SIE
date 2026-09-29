@@ -14,6 +14,7 @@ def generate_launch_description() -> LaunchDescription:
     execution_profile = LaunchConfiguration("execution_profile")
     base_url = LaunchConfiguration("base_url")
     confirmation = LaunchConfiguration("operator_session_confirmation")
+    maximum_steps = LaunchConfiguration("maximum_steps")
     return LaunchDescription([
         DeclareLaunchArgument("config", default_value=default_config),
         DeclareLaunchArgument(
@@ -25,6 +26,7 @@ def generate_launch_description() -> LaunchDescription:
             description="Absolute bounded-forward supervised profile path.",
         ),
         DeclareLaunchArgument("base_url", default_value="http://192.168.0.17"),
+        DeclareLaunchArgument("maximum_steps", default_value="1"),
         DeclareLaunchArgument(
             "operator_session_confirmation",
             description="Must equal SUPERVISED_PERSON_APPROACH_SESSION.",
@@ -53,6 +55,7 @@ def generate_launch_description() -> LaunchDescription:
                     "execution_profile": execution_profile,
                     "base_url": base_url,
                     "operator_session_confirmation": confirmation,
+                    "maximum_steps": maximum_steps,
                 },
             ],
         ),
