@@ -90,3 +90,27 @@ New physical-depth evidence, under the same frozen stereo v7 calibration:
 | 4.5 m | 4.7455 m; 4.7824 m | 0.2455 m; 0.2824 m | 0.0238 m; 0.0246 m |
 
 The two independent 4.5 m runs differ by 0.0369 m. The extended activation requires endpoint absolute error at most 0.30 m, depth MAD at most 0.04 m, and repeated-run disagreement at most 0.06 m. 5.0 m remains diagnostic-only and must not emit an approved Measurement.
+
+
+## Static upper-body geometry profile
+
+A future activation created by
+`activate_ar0234_ov9281_upper_body_static_policy_v1.py` is a separate,
+SHA-bound descendant of the 0.5–4.5 m profile. It uses a cleaned JSONL live
+window and refuses activation unless the window has at least 20 complete
+cycles, at least 10 `SUCCESS` cycles, range span at most 0.05 m, bearing span
+at most 0.20°, and maximum depth MAD at most 0.05 m.
+
+This is a narrow geometry exception for the AR0234 upper-body detector:
+
+- it may accept only `truncated_bottom=true`;
+- top, left, or right truncation and multiple targets remain rejected;
+- it remains static / stop-and-measure only, with dynamic fusion prohibited;
+- it retains `execution_authorized=false`,
+  `actuator_bridge=DISABLED_PHASE_1`, and
+  `motor_command_performed=false`.
+
+The strict complete-person gate remains unchanged in the preceding activation
+profiles. The new profile records hashes of both its parent activation and the
+copied live-window evidence, so the exception cannot silently outlive a changed
+calibration or runtime profile.
