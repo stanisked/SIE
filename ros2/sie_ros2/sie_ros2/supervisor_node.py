@@ -57,6 +57,7 @@ class SupervisorContractNode(Node):
         self.declare_parameter("timeout_s", 2.0)
         self.declare_parameter("poll_interval_s", 0.2)
         self.declare_parameter("terminal_timeout_s", 8.0)
+        self.declare_parameter("maximum_steps", 1)
         self.declare_parameter(
             "audit_jsonl",
             "~/.local/state/sie/streams/supervised_bounded_forward_mvp.jsonl",
@@ -106,7 +107,9 @@ class SupervisorContractNode(Node):
         self.execute_one = execute_one_supervised_command
         self.fetch_status = fetch_bounded_status
         self.profile_path = profile_path
-        self.profile = json.loads(profile_path.read_text(encoding="utf-8"))
+        profile_bytes = profile_path.read_bytes()
+        self.profile_sha256 = hashlib.sha256(profile_bytes).hexdigest()
+        self.profile = json.loads(profile_bytes.decode("utf-8"))
         self._validate_profile()
 
         self.base_url = str(self.get_parameter("base_url").value).rstrip("/")
@@ -128,7 +131,10 @@ class SupervisorContractNode(Node):
         if min(self.timeout_s, self.poll_interval_s, self.terminal_timeout_s) <= 0:
             raise RuntimeError("executor timeouts must be positive")
         envelope = self.profile["command_envelope"]
-        self.max_steps = int(envelope["maximum_steps_per_session"])
+        profile_max_steps = int(envelope["maximum_steps_per_session"])
+        self.max_steps = int(self.get_parameter("maximum_steps").value)
+        if self.max_steps < 1 or self.max_steps > profile_max_steps:
+            raise RuntimeError("maximum_steps exceeds the activated profile")
         self.maximum_decision_age_s = float(
             envelope["maximum_decision_age_s"]
         )
@@ -198,6 +204,8 @@ class SupervisorContractNode(Node):
             "recommended_action": decision["recommended_action"],
             "actuator_bridge": "SUPERVISED_BOUNDED_FORWARD_MVP_V1",
             "session_id": self.session_id,
+            "execution_profile": str(self.profile_path),
+            "execution_profile_sha256": self.profile_sha256,
             "command_id": command_id,
             "steps_performed": self.steps_performed,
             "maximum_steps_per_session": self.max_steps,
