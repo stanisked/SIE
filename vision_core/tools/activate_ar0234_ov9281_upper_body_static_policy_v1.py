@@ -139,8 +139,8 @@ def main() -> int:
             "schema_version": "sie.temporal.static_gate.v1",
             "apply_before_stereo_fusion": True,
             "minimum_consecutive_observations": 2,
-            "max_center_delta_px": 24.0,
-            "max_area_relative_change": 0.15,
+            "max_center_delta_px": 12.0,
+            "max_area_relative_change": 0.10,
             "candidate_max_age_s": 5.0,
         },
         "live_static_upper_body_evidence": {
