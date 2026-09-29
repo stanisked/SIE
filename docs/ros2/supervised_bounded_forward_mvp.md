@@ -16,7 +16,7 @@ The supervised profile authorizes only:
 - adapter `esp32_zk5ad_sgm37_520`;
 - ESP32 `v2_bounded_motion_api` at `http://192.168.0.17`;
 - one non-retried `POST /move-forward` with `distance_m=0.1`;
-- at most three steps per launched session;
+- at most three steps per launched session; the launch default is one step;
 - a fresh `FORWARD_REOBSERVE` decision no older than 1.0 s;
 - a new post-terminal Observation before every subsequent step.
 
@@ -68,3 +68,7 @@ The supervised launch requires the absolute repository root, the exact
 source-controlled execution profile, the ESP32 base URL, and the literal
 operator session confirmation. Merely building or sourcing the package cannot
 move the trolley.
+
+
+For the first Pi hardware run, keep `maximum_steps:=1`. Raising it to 2 or 3
+requires a new explicit launch and remains bounded by the same profile.
