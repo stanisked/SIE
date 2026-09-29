@@ -1,0 +1,46 @@
+{
+  "schema_version": "sie.actuator.supervised_bounded_forward_profile.v1",
+  "status": "ACTIVE_SUPERVISED_BOUNDED_FORWARD_MVP",
+  "adapter_id": "esp32_zk5ad_sgm37_520",
+  "capability_id": "bounded_forward_0.10_m",
+  "motion_api_version": "v2_bounded_motion_api",
+  "base_url": "http://192.168.0.17",
+  "authorization": {
+    "mode": "SUPERVISED_PERSON_APPROACH_SESSION",
+    "operator_confirmation": "SUPERVISED_PERSON_APPROACH_SESSION",
+    "automatic_capability_qualification_changed": false,
+    "ros_navigation_execution_authorized": false,
+    "supervisor_session_execution_authorized": true
+  },
+  "command_envelope": {
+    "method": "POST",
+    "endpoint": "/move-forward",
+    "distance_m": 0.1,
+    "maximum_steps_per_session": 3,
+    "post_retry_permitted": false,
+    "reobserve_after_every_step": true,
+    "maximum_decision_age_s": 1.0
+  },
+  "controller_requirements": {
+    "ready_state": "READY",
+    "bounded_fault_latched": false,
+    "active_command_id": null,
+    "active_braking_required": true
+  },
+  "validated_evidence": {
+    "forward_command_m": 0.1,
+    "observed_mean_progress_m": 0.0938,
+    "observed_right_progress_m": 0.094,
+    "observed_left_progress_m": 0.0935,
+    "observed_heading_rad": 0.002,
+    "three_step_supervised_session_completed": true,
+    "session_terminal_reason": "YOLO_MULTIPLE_TARGETS"
+  },
+  "refusals": [
+    "No turn command is authorized by this profile.",
+    "No POST retry is permitted.",
+    "A fresh post-terminal Observation is mandatory before another step.",
+    "Any stale, future, blocked, low-confidence, unavailable-depth, multiple-target, controller-fault, or unknown-terminal state blocks execution.",
+    "Dynamic fusion while moving is not authorized."
+  ]
+}
