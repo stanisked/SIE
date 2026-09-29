@@ -70,3 +70,23 @@ Do **not** repeat this calibration merely because time has passed.  Reuse this a
 - runtime range 0.5 to 2.0 m and stop-and-measure operation.
 
 Create a new calibration and independent holdout gate if any bound SHA changes, camera geometry or resolution changes, a camera is remounted/refocused, or an operating mode outside this conditional scope is required.
+
+## Extended range profile: 0.5–4.5 m
+
+**Activated:** 2026-09-29 as a separate profile. The original 0.5–2.0 m profile above remains frozen and valid for its original scope.
+
+- Activation path: `/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_0p5_to_4p5m_v1/ar0234_ov9281_decision_chain_activation.json`
+- Status: `ACTIVE_CONDITIONAL_SUPERVISED_DECISION_RECOMMENDATION_ONLY`
+- Execution remains forbidden: `execution_authorized=false`, `DISABLED_PHASE_1`, and `motor_command_performed=false`.
+- The stereo and extrinsic SHA-256 bindings are unchanged from the preceding profile.
+
+New physical-depth evidence, under the same frozen stereo v7 calibration:
+
+| Ground truth | Independent runs: median depth | Absolute error | Depth MAD |
+| ---: | ---: | ---: | ---: |
+| 3.0 m | 2.9896 m | 0.0104 m | 0.0120 m |
+| 3.5 m | 3.6184 m; 3.6496 m | 0.1184 m; 0.1496 m | 0.0145 m; 0.0147 m |
+| 4.0 m | 4.1565 m | 0.1565 m | 0.0136 m |
+| 4.5 m | 4.7455 m; 4.7824 m | 0.2455 m; 0.2824 m | 0.0238 m; 0.0246 m |
+
+The two independent 4.5 m runs differ by 0.0369 m. The extended activation requires endpoint absolute error at most 0.30 m, depth MAD at most 0.04 m, and repeated-run disagreement at most 0.06 m. 5.0 m remains diagnostic-only and must not emit an approved Measurement.
