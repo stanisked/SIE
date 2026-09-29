@@ -89,8 +89,8 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.declare_parameter("min_depth_samples", 100)
         self.declare_parameter("max_depth_mad_m", 0.05)
         self.declare_parameter("static_confirmation_count", 2)
-        self.declare_parameter("static_max_center_delta_px", 24.0)
-        self.declare_parameter("static_max_area_relative_change", 0.15)
+        self.declare_parameter("static_max_center_delta_px", 12.0)
+        self.declare_parameter("static_max_area_relative_change", 0.10)
         self.declare_parameter("static_candidate_max_age_s", 5.0)
         self.declare_parameter("auto_exposure", 3)
         self.declare_parameter(
