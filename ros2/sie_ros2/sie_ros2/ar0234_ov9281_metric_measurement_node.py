@@ -88,6 +88,10 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.declare_parameter("confidence_threshold", 0.40)
         self.declare_parameter("min_depth_samples", 100)
         self.declare_parameter("max_depth_mad_m", 0.05)
+        self.declare_parameter("static_confirmation_count", 2)
+        self.declare_parameter("static_max_center_delta_px", 24.0)
+        self.declare_parameter("static_max_area_relative_change", 0.15)
+        self.declare_parameter("static_candidate_max_age_s", 5.0)
         self.declare_parameter("auto_exposure", 3)
         self.declare_parameter(
             "debug_dir", "~/.local/state/sie/debug/ar0234_ov9281_live"
@@ -109,6 +113,20 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.confidence_threshold = float(
             self.get_parameter("confidence_threshold").value
         )
+        self.static_confirmation_count = int(
+            self.get_parameter("static_confirmation_count").value
+        )
+        self.static_max_center_delta_px = float(
+            self.get_parameter("static_max_center_delta_px").value
+        )
+        self.static_max_area_relative_change = float(
+            self.get_parameter("static_max_area_relative_change").value
+        )
+        self.static_candidate_max_age_s = float(
+            self.get_parameter("static_candidate_max_age_s").value
+        )
+        self._static_candidate: dict[str, float] | None = None
+        self._static_confirmation_observations = 0
         self.debug_dir = Path(
             str(self.get_parameter("debug_dir").value)
         ).expanduser()
@@ -119,6 +137,10 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             or self.min_depth_samples < 1
             or self.max_depth_mad_m <= 0
             or not 0 <= self.confidence_threshold <= 1
+            or self.static_confirmation_count < 2
+            or self.static_max_center_delta_px <= 0
+            or not 0 < self.static_max_area_relative_change < 1
+            or self.static_candidate_max_age_s <= 0
         ):
             raise ValueError("invalid live measurement parameters")
 
@@ -222,6 +244,35 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                 raise RuntimeError("invalid upper-body static geometry policy")
             self.allow_static_upper_body_bottom_truncation = True
 
+        temporal_gate = activation.get("temporal_static_gate")
+        if temporal_gate is not None:
+            if (
+                type(temporal_gate) is not dict
+                or temporal_gate.get("schema_version")
+                != "sie.temporal.static_gate.v1"
+                or temporal_gate.get("apply_before_stereo_fusion") is not True
+                or int(temporal_gate.get("minimum_consecutive_observations", 0)) < 2
+            ):
+                raise RuntimeError("invalid temporal static gate")
+            self.static_confirmation_count = int(
+                temporal_gate["minimum_consecutive_observations"]
+            )
+            self.static_max_center_delta_px = float(
+                temporal_gate["max_center_delta_px"]
+            )
+            self.static_max_area_relative_change = float(
+                temporal_gate["max_area_relative_change"]
+            )
+            self.static_candidate_max_age_s = float(
+                temporal_gate["candidate_max_age_s"]
+            )
+            if (
+                self.static_max_center_delta_px <= 0
+                or not 0 < self.static_max_area_relative_change < 1
+                or self.static_candidate_max_age_s <= 0
+            ):
+                raise RuntimeError("invalid temporal static gate limits")
+
         ar_intrinsic = json.loads(self.ar_intrinsic_path.read_text(encoding="utf-8"))
         self.k_ar = self.np.asarray(ar_intrinsic["camera_matrix"], dtype=self.np.float64)
         self.d_ar = self.np.asarray(
@@ -308,6 +359,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         skew_ms = abs(stereo_mono - ar_mono) / 1_000_000.0
         cycle_id = f"ar0234-ov9281-live-{self.sequence:08d}"
         if ar_frame is None or combined is None:
+            self._reset_static_gate()
             self._publish_refusal(
                 cycle_id, timestamp, "DEPTH_UNAVAILABLE", "CAMERA_FRAME_UNAVAILABLE", skew_ms
             )
@@ -316,11 +368,13 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             self.stereo_size[1],
             self.stereo_size[0] * 2,
         ):
+            self._reset_static_gate()
             self._publish_refusal(
                 cycle_id, timestamp, "CALIBRATION_INVALID", "UNEXPECTED_FRAME_SIZE", skew_ms
             )
             return
         if skew_ms > self.max_pair_skew_ms:
+            self._reset_static_gate()
             self._publish_refusal(
                 cycle_id, timestamp, "DEPTH_UNAVAILABLE", "PAIR_SKEW_EXCEEDED", skew_ms
             )
@@ -343,10 +397,17 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                         if observation["target_status"] == "MULTIPLE_TARGETS"
                         else "NO_TARGET"
                     )
+                    self._reset_static_gate()
                     self._publish_refusal(
                         cycle_id, timestamp, status, geometry_reason, skew_ms, observation
                     )
                     return
+            temporal_reason = self._temporal_static_reason(observation)
+            if temporal_reason is not None:
+                self._publish_refusal(
+                    cycle_id, timestamp, "DEPTH_UNAVAILABLE", temporal_reason, skew_ms, observation
+                )
+                return
 
             # Pi stream identity: first combined half is physical_right; second is physical_left.
             physical_right = combined[:, : self.stereo_size[0]]
@@ -374,10 +435,62 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                 geometry_reason,
             )
         except (ContractError, OSError, RuntimeError, ValueError, KeyError) as error:
+            self._reset_static_gate()
             self.get_logger().warning(f"live metric measurement refused: {error}")
             self._publish_refusal(
                 cycle_id, timestamp, "DEPTH_UNAVAILABLE", "PROCESSING_REFUSED", skew_ms
             )
+
+    def _reset_static_gate(self) -> None:
+        self._static_candidate = None
+        self._static_confirmation_observations = 0
+
+    def _temporal_static_reason(self, observation: dict[str, Any]) -> str | None:
+        """Require consecutive, fresh, visually stable AR observations before fusion."""
+        bbox = observation.get("bbox_xyxy_px")
+        if type(bbox) is not list or len(bbox) != 4:
+            self._reset_static_gate()
+            return "TEMPORAL_STABILITY_PENDING"
+        x1, y1, x2, y2 = (float(value) for value in bbox)
+        area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+        if area <= 0:
+            self._reset_static_gate()
+            return "TEMPORAL_STABILITY_PENDING"
+        now = time.monotonic()
+        current = {
+            "center_x": (x1 + x2) / 2.0,
+            "center_y": (y1 + y2) / 2.0,
+            "area": area,
+            "monotonic_s": now,
+        }
+        previous = self._static_candidate
+        if (
+            previous is None
+            or now - previous["monotonic_s"] > self.static_candidate_max_age_s
+        ):
+            self._static_candidate = current
+            self._static_confirmation_observations = 1
+            return "TEMPORAL_STABILITY_PENDING"
+        center_delta = math.hypot(
+            current["center_x"] - previous["center_x"],
+            current["center_y"] - previous["center_y"],
+        )
+        area_relative_change = abs(current["area"] - previous["area"]) / previous["area"]
+        self._static_candidate = current
+        if (
+            center_delta > self.static_max_center_delta_px
+            or area_relative_change > self.static_max_area_relative_change
+        ):
+            self._static_confirmation_observations = 1
+            return (
+                "MOTION_DETECTED:"
+                f"center_delta_px={center_delta:.1f};"
+                f"area_relative_change={area_relative_change:.3f}"
+            )
+        self._static_confirmation_observations += 1
+        if self._static_confirmation_observations < self.static_confirmation_count:
+            return "TEMPORAL_STABILITY_PENDING"
+        return None
 
     def _bottom_truncation_allowed(self, observation: dict[str, Any]) -> bool:
         """Narrow opt-in exception; strict complete-person gate remains default."""
