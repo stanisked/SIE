@@ -3,6 +3,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -55,7 +56,7 @@ def generate_launch_description() -> LaunchDescription:
                     "execution_profile": execution_profile,
                     "base_url": base_url,
                     "operator_session_confirmation": confirmation,
-                    "maximum_steps": maximum_steps,
+                    "maximum_steps": ParameterValue(maximum_steps, value_type=int),
                 },
             ],
         ),
