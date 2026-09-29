@@ -135,6 +135,14 @@ def main() -> int:
             "static_scene_only": True,
             "dynamic_fusion_permitted": False,
         },
+        "temporal_static_gate": {
+            "schema_version": "sie.temporal.static_gate.v1",
+            "apply_before_stereo_fusion": True,
+            "minimum_consecutive_observations": 2,
+            "max_center_delta_px": 24.0,
+            "max_area_relative_change": 0.15,
+            "candidate_max_age_s": 5.0,
+        },
         "live_static_upper_body_evidence": {
             "path": str(evidence_copy),
             "sha256": sha256(evidence_copy),
@@ -161,6 +169,7 @@ def main() -> int:
             "fresh_measurement_with_time_and_reference_frame",
             "single_static_3d_association",
             "upper_body_only_bottom_edge_exception",
+            "two_consecutive_fresh_ar_observations_before_stereo_fusion",
             "metric_range_0.5_to_4.5_m",
             "supervised_operator_review",
         ],
@@ -168,6 +177,7 @@ def main() -> int:
             "Top, left, or right truncation remains rejected.",
             "Multiple targets remain rejected.",
             "No physical actuator command is authorized.",
+            "Motion detected from AR bbox displacement remains rejected.",
             "Dynamic fusion while moving remains prohibited.",
         ],
     }
