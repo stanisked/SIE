@@ -31,6 +31,17 @@ from .contracts import (
 
 DEFAULT_AR_DEVICE = "/dev/v4l/by-id/usb-DECXIN_CAMERA_DECXIN_CAMERA_01.00.00-video-index0"
 DEFAULT_STEREO_DEVICE = "/dev/v4l/by-id/usb-TSTC_Web_Camera_TSTC_Web_Camera-video-index0"
+DEFAULT_STEREO_PERSON_MODEL = (
+    "/home/elwis/dev_ws/model_artifacts/opencv_mp_persondet_2023mar/"
+    "person_detection_mediapipe_2023mar.onnx"
+)
+DEFAULT_STEREO_PERSON_REFERENCE = (
+    "/home/elwis/dev_ws/model_artifacts/opencv_mp_persondet_2023mar/"
+    "mp_persondet.reference.py"
+)
+EXPECTED_STEREO_PERSON_REFERENCE_SHA256 = (
+    "e530a8ebc3c218376d5dd1c13aa8ed39a850fac4dbcd6928144746b33477b9c7"
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -87,6 +98,9 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.declare_parameter("frame_rate_hz", 0.5)
         self.declare_parameter("max_pair_skew_ms", 80.0)
         self.declare_parameter("confidence_threshold", 0.40)
+        self.declare_parameter("stereo_person_model", DEFAULT_STEREO_PERSON_MODEL)
+        self.declare_parameter("stereo_person_reference", DEFAULT_STEREO_PERSON_REFERENCE)
+        self.declare_parameter("stereo_person_threshold", 0.50)
         self.declare_parameter("min_depth_samples", 100)
         self.declare_parameter("max_depth_mad_m", 0.05)
         self.declare_parameter("static_confirmation_count", 2)
@@ -100,6 +114,10 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
 
         self.project_root = absolute_parameter(self, "project_root")
         self.model_path = absolute_parameter(self, "model_path")
+        self.stereo_person_model_path = absolute_parameter(self, "stereo_person_model")
+        self.stereo_person_reference_path = absolute_parameter(
+            self, "stereo_person_reference"
+        )
         self.activation_path = absolute_parameter(self, "activation_profile")
         self.ar_intrinsic_path = absolute_parameter(self, "ar_intrinsic")
         self.stereo_path = absolute_parameter(self, "stereo_calibration")
@@ -113,6 +131,9 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.max_depth_mad_m = float(self.get_parameter("max_depth_mad_m").value)
         self.confidence_threshold = float(
             self.get_parameter("confidence_threshold").value
+        )
+        self.stereo_person_threshold = float(
+            self.get_parameter("stereo_person_threshold").value
         )
         self.static_confirmation_count = int(
             self.get_parameter("static_confirmation_count").value
@@ -138,6 +159,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             or self.min_depth_samples < 1
             or self.max_depth_mad_m <= 0
             or not 0 <= self.confidence_threshold <= 1
+            or not 0 < self.stereo_person_threshold <= 1
             or self.static_confirmation_count < 2
             or self.static_max_center_delta_px <= 0
             or not 0 < self.static_max_area_relative_change < 1
@@ -149,6 +171,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             sys.path.insert(0, str(self.project_root))
         import cv2
         import numpy as np
+        from vision_core.person_localization.mp_persondet import MPPersonDetOpenCV
         from vision_core.person_localization.yolo11_person_upper_body_runtime import (
             OnnxRuntimeYolo11PersonUpperBodyObserver,
         )
@@ -158,6 +181,26 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self._load_profile()
         self.observer = OnnxRuntimeYolo11PersonUpperBodyObserver(
             self.model_path, confidence_threshold=self.confidence_threshold
+        )
+        if not self.stereo_person_model_path.is_file():
+            raise FileNotFoundError("stereo person detector model is missing")
+        if not self.stereo_person_reference_path.is_file():
+            raise FileNotFoundError("stereo person detector reference is missing")
+        if (
+            sha256_file(self.stereo_person_reference_path)
+            != EXPECTED_STEREO_PERSON_REFERENCE_SHA256
+        ):
+            raise RuntimeError("stereo person detector reference SHA-256 mismatch")
+        self.stereo_person_model_sha256 = sha256_file(
+            self.stereo_person_model_path
+        )
+        self.stereo_person_reference_sha256 = sha256_file(
+            self.stereo_person_reference_path
+        )
+        self.stereo_person_detector = MPPersonDetOpenCV(
+            self.stereo_person_model_path,
+            self.stereo_person_reference_path,
+            score_threshold=self.stereo_person_threshold,
         )
         exposure = int(self.get_parameter("auto_exposure").value)
         self._set_auto_exposure(self.ar_device, exposure)
@@ -422,8 +465,8 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             right_rectified = self.cv2.remap(
                 physical_right, self.map_right_1, self.map_right_2, self.cv2.INTER_LINEAR
             )
-            left_evidence = self.observer.observe(
-                left_rectified, captured_at_utc=timestamp, cycle_id=f"{cycle_id}:physical_left"
+            left_evidence = self._observe_stereo_person(
+                left_rectified, cycle_id=f"{cycle_id}:physical_left"
             )
             association, association_reason = self._associate(
                 observation, left_evidence, left_rectified, right_rectified
@@ -506,6 +549,32 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             and observation.get("truncated_left") is False
             and observation.get("truncated_right") is False
         )
+
+    def _observe_stereo_person(
+        self, left_rectified: Any, *, cycle_id: str
+    ) -> dict[str, Any]:
+        """Create the internal OV9281 evidence used only for 3D association."""
+        evidence_id = f"ov9281-mp-persondet:{cycle_id}"
+        detections = self.stereo_person_detector.detect(left_rectified)
+        if not detections:
+            return {
+                "target_status": "NO_TARGET",
+                "evidence_id": evidence_id,
+            }
+        if len(detections) != 1:
+            return {
+                "target_status": "MULTIPLE_TARGETS",
+                "evidence_id": evidence_id,
+            }
+        detection = detections[0]
+        return {
+            "target_status": "SINGLE_TARGET",
+            "bbox_xyxy_px": [
+                float(value) for value in detection.bounding_box.to_xyxy()
+            ],
+            "confidence": float(detection.confidence),
+            "evidence_id": evidence_id,
+        }
 
     def _associate(
         self, ar_observation: dict[str, Any], left_evidence: dict[str, Any],
@@ -639,6 +708,12 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                 "activation_profile_sha256": sha256_file(self.activation_path),
                 "ar0234_intrinsic_sha256": sha256_file(self.ar_intrinsic_path),
                 "ov9281_stereo_sha256": sha256_file(self.stereo_path),
+                "stereo_person_detector": "opencv_mp_persondet_2023mar",
+                "stereo_person_model_sha256": self.stereo_person_model_sha256,
+                "stereo_person_reference_sha256": (
+                    self.stereo_person_reference_sha256
+                ),
+                "stereo_person_threshold": self.stereo_person_threshold,
                 "capture_pair_skew_ms": skew_ms,
                 "stop_and_measure_only": True,
                 "actuator_access": False,
