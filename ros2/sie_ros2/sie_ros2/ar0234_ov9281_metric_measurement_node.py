@@ -89,6 +89,9 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.declare_parameter("min_depth_samples", 100)
         self.declare_parameter("max_depth_mad_m", 0.05)
         self.declare_parameter("auto_exposure", 3)
+        self.declare_parameter(
+            "debug_dir", "~/.local/state/sie/debug/ar0234_ov9281_live"
+        )
 
         self.project_root = absolute_parameter(self, "project_root")
         self.model_path = absolute_parameter(self, "model_path")
@@ -106,6 +109,10 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.confidence_threshold = float(
             self.get_parameter("confidence_threshold").value
         )
+        self.debug_dir = Path(
+            str(self.get_parameter("debug_dir").value)
+        ).expanduser()
+        self.debug_dir.mkdir(parents=True, exist_ok=True)
         if (
             self.frame_rate_hz <= 0
             or self.max_pair_skew_ms <= 0
@@ -366,16 +373,22 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         left_gray = self.cv2.cvtColor(left_rectified, self.cv2.COLOR_BGR2GRAY)
         right_gray = self.cv2.cvtColor(right_rectified, self.cv2.COLOR_BGR2GRAY)
         disparity = self.sgbm.compute(left_gray, right_gray).astype(self.np.float32) / 16.0
+        self._write_stereo_debug(left_rectified, right_rectified, bbox, disparity)
         samples = disparity[iy1:iy2, ix1:ix2].reshape(-1)
         samples = samples[self.np.isfinite(samples) & (samples > 0.5)]
         if samples.size < self.min_depth_samples:
             return None, f"DISPARITY_SAMPLES_TOO_FEW:{samples.size}"
-        depth_samples = abs(float(self.p2[0, 3])) / samples / 1000.0
-        depth_samples = depth_samples[
-            (depth_samples >= self.range_min_m) & (depth_samples <= self.range_max_m)
+        raw_depth_samples = abs(float(self.p2[0, 3])) / samples / 1000.0
+        depth_samples = raw_depth_samples[
+            (raw_depth_samples >= self.range_min_m)
+            & (raw_depth_samples <= self.range_max_m)
         ]
         if depth_samples.size < self.min_depth_samples:
-            return None, f"DEPTH_SAMPLES_OUT_OF_RANGE:{depth_samples.size}"
+            return None, (
+                f"DEPTH_SAMPLES_OUT_OF_RANGE:{depth_samples.size};"
+                f"disp_median_px={float(self.np.median(samples)):.3f};"
+                f"raw_depth_median_m={float(self.np.median(raw_depth_samples)):.3f}"
+            )
         depth_m = float(self.np.median(depth_samples))
         mad_m = float(self.np.median(self.np.abs(depth_samples - depth_m)))
         if mad_m > self.max_depth_mad_m:
@@ -410,6 +423,39 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             "physical_left_bbox_xyxy_px": [x1, y1, x2, y2],
             "projected_ar0234_point_px": [ar_x, ar_y],
         }, "SUCCESS"
+
+    def _write_stereo_debug(
+        self, left: Any, right: Any, bbox: list[float], disparity: Any
+    ) -> None:
+        """Persist headless evidence; diagnostics do not alter Measurement policy."""
+        left_marked = left.copy()
+        x1, y1, x2, y2 = (int(round(value)) for value in bbox)
+        self.cv2.rectangle(left_marked, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        valid = self.np.isfinite(disparity) & (disparity > 0.5)
+        visual = self.np.zeros(disparity.shape, dtype=self.np.uint8)
+        if valid.any():
+            low, high = self.np.percentile(disparity[valid], [2, 98])
+            if high > low:
+                visual[valid] = self.np.clip(
+                    (disparity[valid] - low) * 255.0 / (high - low), 0, 255
+                ).astype(self.np.uint8)
+        colour = self.cv2.applyColorMap(visual, self.cv2.COLORMAP_TURBO)
+        self.cv2.imwrite(str(self.debug_dir / "latest_physical_left_rectified.jpg"), left_marked)
+        self.cv2.imwrite(str(self.debug_dir / "latest_physical_right_rectified.jpg"), right)
+        self.cv2.imwrite(str(self.debug_dir / "latest_disparity.jpg"), colour)
+        roi = disparity[max(0, y1):min(disparity.shape[0], y2), max(0, x1):min(disparity.shape[1], x2)]
+        roi_valid = roi[self.np.isfinite(roi) & (roi > 0.5)]
+        diagnostic = {
+            "roi_bbox_xyxy_px": bbox,
+            "roi_positive_disparity_count": int(roi_valid.size),
+            "roi_disparity_median_px": None if not roi_valid.size else float(self.np.median(roi_valid)),
+            "roi_raw_depth_median_m": None if not roi_valid.size else float(
+                self.np.median(abs(float(self.p2[0, 3])) / roi_valid / 1000.0)
+            ),
+        }
+        (self.debug_dir / "latest_stereo_debug.json").write_text(
+            json.dumps(diagnostic, indent=2) + chr(10), encoding="utf-8"
+        )
 
     def _publish_observation(self, observation: dict[str, Any]) -> None:
         message = String()
