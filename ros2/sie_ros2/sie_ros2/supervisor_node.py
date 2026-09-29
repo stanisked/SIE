@@ -138,6 +138,9 @@ class SupervisorContractNode(Node):
         self.maximum_decision_age_s = float(
             envelope["maximum_decision_age_s"]
         )
+        self.maximum_measurement_age_s = float(
+            envelope["maximum_measurement_age_s"]
+        )
         self.session_id = "ros2-session-" + secrets.token_hex(12)
         self.audit_path = Path(
             str(self.get_parameter("audit_jsonl").value)
@@ -175,6 +178,7 @@ class SupervisorContractNode(Node):
             or envelope.get("post_retry_permitted") is not False
             or envelope.get("reobserve_after_every_step") is not True
             or float(envelope.get("maximum_decision_age_s", -1)) != 1.0
+            or float(envelope.get("maximum_measurement_age_s", -1)) != 5.0
             or controller.get("ready_state") != "READY"
             or controller.get("bounded_fault_latched") is not False
             or controller.get("active_command_id") is not None
@@ -253,14 +257,26 @@ class SupervisorContractNode(Node):
                 decision, result="BLOCKED", reason=self.session_block_reason
             )
         decision_time = _utc(decision["timestamp"])
+        measurement_time = _utc(decision["measurement_timestamp"])
         now = datetime.now(timezone.utc)
-        age_s = (now - decision_time).total_seconds()
-        if age_s < 0 or age_s > self.maximum_decision_age_s:
+        decision_age_s = (now - decision_time).total_seconds()
+        measurement_age_s = (now - measurement_time).total_seconds()
+        if (
+            decision_age_s < 0
+            or decision_age_s > self.maximum_decision_age_s
+        ):
             return self._state(
                 decision, result="BLOCKED", reason="DECISION_STALE_OR_FROM_FUTURE"
             )
+        if (
+            measurement_age_s < 0
+            or measurement_age_s > self.maximum_measurement_age_s
+        ):
+            return self._state(
+                decision, result="BLOCKED", reason="MEASUREMENT_STALE_OR_FROM_FUTURE"
+            )
         if self.reobserve_after_utc is not None:
-            if decision_time <= self.reobserve_after_utc:
+            if measurement_time <= self.reobserve_after_utc:
                 return self._state(
                     decision,
                     result="AWAIT_REOBSERVATION",
@@ -322,8 +338,10 @@ class SupervisorContractNode(Node):
             "reference_frame": "ov9281_physical_left_optical_frame",
             "units": "m",
             "freshness_diagnostics": {
-                "decision_age_s": age_s,
+                "decision_age_s": decision_age_s,
                 "maximum_decision_age_s": self.maximum_decision_age_s,
+                "measurement_age_s": measurement_age_s,
+                "maximum_measurement_age_s": self.maximum_measurement_age_s,
             },
             "network_performed": False,
             "reobserve_required": True,
