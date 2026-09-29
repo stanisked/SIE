@@ -56,7 +56,7 @@ Fresh holdout dataset:
 | Physical-right reprojection median | 0.4697 px | <= 0.5 px |
 | Physical-right reprojection P95 | 0.5096 px | <= 1.0 px |
 | Rectified median absolute dy | 0.3530 px | <= 0.40 px |
-| Rectified median absolute dy P95 | 0.4324 px | <= 0.75 px |
+| Rectified median absolute dy P95 | 0.4312 px | <= 0.75 px |
 
 The initial 0.35 px median dy limit rejected the dataset by 0.0030 px despite a P95 of 0.4324 px.  The final validation report records the explicit 0.40 px median policy limit; the P95 limit remains 0.75 px.
 
@@ -123,7 +123,7 @@ upper-body activation records this as `sie.temporal.static_gate.v1`:
 
 - two consecutive fresh AR0234 observations are required;
 - centre displacement must be at most 24 px and bounding-box area change at
-  most 15% over a candidate age of at most 5 s;
+  most 10% over a candidate age of at most 5 s;
 - the first candidate returns `DEPTH_UNAVAILABLE: TEMPORAL_STABILITY_PENDING`;
 - excessive change returns
   `DEPTH_UNAVAILABLE: MOTION_DETECTED:... `.
