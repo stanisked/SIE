@@ -19,7 +19,8 @@
     "maximum_steps_per_session": 3,
     "post_retry_permitted": false,
     "reobserve_after_every_step": true,
-    "maximum_decision_age_s": 1.0
+    "maximum_decision_age_s": 1.0,
+    "maximum_measurement_age_s": 5.0
   },
   "controller_requirements": {
     "ready_state": "READY",
