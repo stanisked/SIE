@@ -3,7 +3,6 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -49,7 +48,7 @@ def generate_launch_description() -> LaunchDescription:
             parameters=[
                 config,
                 {
-                    "execution_enabled": ParameterValue("true", value_type=bool),
+                    "execution_enabled": True,
                     "project_root": project_root,
                     "execution_profile": execution_profile,
                     "base_url": base_url,
