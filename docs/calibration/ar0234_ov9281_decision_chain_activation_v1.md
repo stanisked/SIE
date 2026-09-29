@@ -114,3 +114,20 @@ The strict complete-person gate remains unchanged in the preceding activation
 profiles. The new profile records hashes of both its parent activation and the
 copied live-window evidence, so the exception cannot silently outlive a changed
 calibration or runtime profile.
+
+
+### Temporal static applicability gate
+
+The live node now applies a temporal gate **before** stereo fusion. The
+upper-body activation records this as `sie.temporal.static_gate.v1`:
+
+- two consecutive fresh AR0234 observations are required;
+- centre displacement must be at most 24 px and bounding-box area change at
+  most 15% over a candidate age of at most 5 s;
+- the first candidate returns `DEPTH_UNAVAILABLE: TEMPORAL_STABILITY_PENDING`;
+- excessive change returns
+  `DEPTH_UNAVAILABLE: MOTION_DETECTED:... `.
+
+This is a conservative visible-motion gate, not a claim of hardware
+synchronisation or approval for dynamic fusion. It is evaluated before the
+AR0234↔OV9281 association, and execution remains disabled.
