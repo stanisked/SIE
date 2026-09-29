@@ -102,16 +102,16 @@ def preview_tile(image: np.ndarray, label: str, detected: bool) -> np.ndarray:
 def save_preview(
     preview_dir: Path,
     ar_frame: np.ndarray,
-    left_frame: np.ndarray,
-    right_frame: np.ndarray,
+    captured_first_frame: np.ndarray,
+    captured_second_frame: np.ndarray,
     ar_found: bool,
-    left_found: bool,
-    right_found: bool,
+    captured_first_found: bool,
+    captured_second_found: bool,
 ) -> None:
     files = (
         ("latest_ar0234.jpg", ar_frame),
-        ("latest_stereo_left.jpg", left_frame),
-        ("latest_stereo_right.jpg", right_frame),
+        ("latest_captured_first_physical_right.jpg", captured_first_frame),
+        ("latest_captured_second_physical_left.jpg", captured_second_frame),
     )
     for filename, frame in files:
         if not cv2.imwrite(str(preview_dir / filename), frame):
@@ -119,8 +119,8 @@ def save_preview(
     triplet = np.hstack(
         (
             preview_tile(ar_frame, "AR0234", ar_found),
-            preview_tile(left_frame, "OV9281 physical_left", left_found),
-            preview_tile(right_frame, "OV9281 physical_right", right_found),
+            preview_tile(captured_first_frame, "OV9281 first / physical_right", captured_first_found),
+            preview_tile(captured_second_frame, "OV9281 second / physical_left", captured_second_found),
         )
     )
     if not cv2.imwrite(str(preview_dir / "latest_triplet.jpg"), triplet):
@@ -194,8 +194,9 @@ def main() -> int:
             "eye_image_size_px": {"width": args.stereo_width // 2, "height": args.stereo_height},
             "requested_fps": args.stereo_fps,
             "auto_exposure": stereo_exposure,
-            "left_semantics": "physical_left",
-            "right_semantics": "physical_right",
+            "captured_first_half_semantics": "physical_right",
+            "captured_second_half_semantics": "physical_left",
+            "storage_note": "stereo_left is captured first; stereo_right is captured second",
         },
         "target": {
             "checkerboard_inner_corners": list(board_size),
@@ -240,19 +241,19 @@ def main() -> int:
                 )
 
             split = args.stereo_width // 2
-            left_frame, right_frame = stereo_frame[:, :split], stereo_frame[:, split:]
+            captured_first_frame, captured_second_frame = stereo_frame[:, :split], stereo_frame[:, split:]
             ar_corners = find_corners(ar_frame, board_size)
-            left_corners = find_corners(left_frame, board_size)
-            right_corners = find_corners(right_frame, board_size)
+            captured_first_corners = find_corners(captured_first_frame, board_size)
+            captured_second_corners = find_corners(captured_second_frame, board_size)
             now = time.monotonic()
             if now - last_preview_at >= args.preview_interval_s:
                 save_preview(
-                    preview_dir, ar_frame, left_frame, right_frame,
-                    ar_corners is not None, left_corners is not None, right_corners is not None,
+                    preview_dir, ar_frame, captured_first_frame, captured_second_frame,
+                    ar_corners is not None, captured_first_corners is not None, captured_second_corners is not None,
                 )
                 last_preview_at = now
 
-            if any(corners is None for corners in (ar_corners, left_corners, right_corners)):
+            if any(corners is None for corners in (ar_corners, captured_first_corners, captured_second_corners)):
                 continue
 
             skew_ms = abs(stereo_time - ar_time) * 1000.0
@@ -269,8 +270,8 @@ def main() -> int:
             filename = f"{index:04d}.png"
             for path, frame in (
                 (ar_dir / filename, ar_frame),
-                (left_dir / filename, left_frame),
-                (right_dir / filename, right_frame),
+                (left_dir / filename, captured_first_frame),
+                (right_dir / filename, captured_second_frame),
             ):
                 if not cv2.imwrite(str(path), frame):
                     raise RuntimeError(f"Could not save {path}")
@@ -282,8 +283,8 @@ def main() -> int:
                     "captured_at_utc": utc_now(),
                     "sequential_skew_ms": skew_ms,
                     "ar0234_corner_center_px": center.tolist(),
-                    "stereo_left_corner_center_px": np.mean(left_corners, axis=0).tolist(),
-                    "stereo_right_corner_center_px": np.mean(right_corners, axis=0).tolist(),
+                    "captured_first_corner_center_px": np.mean(captured_first_corners, axis=0).tolist(),
+                    "captured_second_corner_center_px": np.mean(captured_second_corners, axis=0).tolist(),
                     "ar0234_sha256": sha256_file(ar_dir / filename),
                     "stereo_left_sha256": sha256_file(left_dir / filename),
                     "stereo_right_sha256": sha256_file(right_dir / filename),
