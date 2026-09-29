@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import secrets
 import subprocess
 import sys
 import time
@@ -170,6 +171,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             String, self.observation_topic, 10
         )
         self.sequence = 0
+        self.run_id = secrets.token_hex(8)
         self.timer = self.create_timer(1.0 / self.frame_rate_hz, self._cycle)
         self.get_logger().info(
             "live AR0234+OV9281 metric Measurement -> "
@@ -357,7 +359,9 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         ar_frame, ar_mono = self._read(self.ar_capture)
         combined, stereo_mono = self._read(self.stereo_capture)
         skew_ms = abs(stereo_mono - ar_mono) / 1_000_000.0
-        cycle_id = f"ar0234-ov9281-live-{self.sequence:08d}"
+        cycle_id = (
+            f"ar0234-ov9281-live-{self.run_id}-{self.sequence:08d}"
+        )
         if ar_frame is None or combined is None:
             self._reset_static_gate()
             self._publish_refusal(
