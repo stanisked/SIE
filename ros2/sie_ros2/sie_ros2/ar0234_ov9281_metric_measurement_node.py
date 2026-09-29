@@ -202,6 +202,26 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             raise RuntimeError("activated extrinsic artifact is absent or changed")
         self.extrinsic_sha256 = str(extrinsic["sha256"])
 
+        # The strict complete-person policy is the default.  A separately
+        # activated profile may permit only bottom truncation for a static
+        # upper-body target; it never changes execution authorization.
+        geometry_policy = activation.get("target_geometry_policy")
+        self.allow_static_upper_body_bottom_truncation = False
+        if geometry_policy is not None:
+            if (
+                type(geometry_policy) is not dict
+                or geometry_policy.get("schema_version")
+                != "sie.ar0234.upper_body_static_gate.v1"
+                or geometry_policy.get("allow_bottom_truncation") is not True
+                or geometry_policy.get("require_untruncated_edges")
+                != ["top", "left", "right"]
+                or geometry_policy.get("require_single_target") is not True
+                or geometry_policy.get("static_scene_only") is not True
+                or geometry_policy.get("dynamic_fusion_permitted") is not False
+            ):
+                raise RuntimeError("invalid upper-body static geometry policy")
+            self.allow_static_upper_body_bottom_truncation = True
+
         ar_intrinsic = json.loads(self.ar_intrinsic_path.read_text(encoding="utf-8"))
         self.k_ar = self.np.asarray(ar_intrinsic["camera_matrix"], dtype=self.np.float64)
         self.d_ar = self.np.asarray(
@@ -313,14 +333,20 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             observation = validate_ar0234_observation(observation)
             self._publish_observation(observation)
             suitability = ar0234_target_suitability(observation)
+            geometry_reason = str(suitability["reason"])
             if not suitability["geometry_eligible"]:
-                status = (
-                    "MULTIPLE_TARGETS"
-                    if observation["target_status"] == "MULTIPLE_TARGETS"
-                    else "NO_TARGET"
-                )
-                self._publish_refusal(cycle_id, timestamp, status, suitability["reason"], skew_ms, observation)
-                return
+                if self._bottom_truncation_allowed(observation):
+                    geometry_reason = "UPPER_BODY_BOTTOM_TRUNCATION_STATIC_ALLOWED"
+                else:
+                    status = (
+                        "MULTIPLE_TARGETS"
+                        if observation["target_status"] == "MULTIPLE_TARGETS"
+                        else "NO_TARGET"
+                    )
+                    self._publish_refusal(
+                        cycle_id, timestamp, status, geometry_reason, skew_ms, observation
+                    )
+                    return
 
             # Pi stream identity: first combined half is physical_right; second is physical_left.
             physical_right = combined[:, : self.stereo_size[0]]
@@ -344,13 +370,25 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                 )
                 return
             self._publish_success(
-                cycle_id, timestamp, skew_ms, observation, left_evidence, association
+                cycle_id, timestamp, skew_ms, observation, left_evidence, association,
+                geometry_reason,
             )
         except (ContractError, OSError, RuntimeError, ValueError, KeyError) as error:
             self.get_logger().warning(f"live metric measurement refused: {error}")
             self._publish_refusal(
                 cycle_id, timestamp, "DEPTH_UNAVAILABLE", "PROCESSING_REFUSED", skew_ms
             )
+
+    def _bottom_truncation_allowed(self, observation: dict[str, Any]) -> bool:
+        """Narrow opt-in exception; strict complete-person gate remains default."""
+        return (
+            self.allow_static_upper_body_bottom_truncation
+            and observation.get("target_status") == "SINGLE_TARGET"
+            and observation.get("truncated_bottom") is True
+            and observation.get("truncated_top") is False
+            and observation.get("truncated_left") is False
+            and observation.get("truncated_right") is False
+        )
 
     def _associate(
         self, ar_observation: dict[str, Any], left_evidence: dict[str, Any],
@@ -506,12 +544,13 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
     def _publish_success(
         self, cycle_id: str, timestamp: datetime, skew_ms: float,
         observation: dict[str, Any], left_evidence: dict[str, Any],
-        association: dict[str, Any],
+        association: dict[str, Any], geometry_reason: str,
     ) -> None:
         result = self._base_measurement(
             cycle_id, timestamp, "SUCCESS", "UNIQUE_STATIC_3D_ASSOCIATION", skew_ms, observation
         )
         result.update(association)
+        result["target_geometry_reason"] = geometry_reason
         result["stereo_person_evidence_id"] = left_evidence["evidence_id"]
         message = String()
         message.data = encode(result)
