@@ -70,6 +70,8 @@ def test_forward_is_recommendation_not_authorization():
     assert decision["result"] == "RECOMMENDED"
     assert decision["recommended_action"] == "FORWARD_REOBSERVE"
     assert decision["execution_authorized"] is False
+    assert decision["measurement_timestamp"] == measurement()["timestamp"]
+    assert decision["timestamp"] != decision["measurement_timestamp"]
     state = supervisor_state(decision)
     assert state["actuator_bridge"] == "DISABLED_PHASE_1"
     assert state["motor_command_performed"] is False
