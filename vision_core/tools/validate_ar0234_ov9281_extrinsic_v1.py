@@ -121,7 +121,9 @@ def main() -> int:
 
     k_left, d_left = stereo["K1"], stereo["D1"]
     k_right, d_right = stereo["K2"], stereo["D2"]
-    r_left_to_right, t_left_to_right = stereo["R"], stereo["T"]
+    r_left_to_right = stereo["R"]
+    # v7 was solved with checkerboard coordinates in millimetres; PnP uses metres.
+    t_left_to_right = stereo["T"] / 1000.0
     r1, r2, p1, p2 = stereo["R1"], stereo["R2"], stereo["P1"], stereo["P2"]
     r_ar_to_left = candidate["R_ar0234_to_physical_left"]
     t_ar_to_left = candidate["T_ar0234_to_physical_left_mm"].reshape(3, 1) / 1000.0
