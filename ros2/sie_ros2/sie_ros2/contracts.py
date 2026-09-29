@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 PERCEPTION_SCHEMA = "sie.perception.measurement.v1"
@@ -227,7 +227,8 @@ def navigation_decision(
     return {
         "schema_version": NAVIGATION_SCHEMA,
         "decision_id": f"navigation:{measurement['measurement_id']}",
-        "timestamp": measurement["timestamp"],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "measurement_timestamp": measurement["timestamp"],
         "measurement_id": measurement["measurement_id"],
         "result": result,
         "reason": reason,
@@ -247,6 +248,7 @@ def validate_navigation(value: object) -> dict[str, Any]:
         raise ContractError("unexpected navigation schema_version")
     _text(item.get("decision_id"), "decision_id")
     _timestamp(item.get("timestamp"))
+    _timestamp(item.get("measurement_timestamp"), "measurement_timestamp")
     _text(item.get("measurement_id"), "measurement_id")
     if item.get("result") not in {"BLOCKED", "RECOMMENDED", "ARRIVED"}:
         raise ContractError("unsupported navigation result")
