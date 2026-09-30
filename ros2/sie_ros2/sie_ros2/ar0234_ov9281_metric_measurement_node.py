@@ -613,6 +613,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         selected_bbox = _bbox_xyxy(selected.get("bbox_xyxy_px"))
         if selected_bbox is None:
             raise RuntimeError("selected target-hold candidate has invalid bbox")
+        original_eligible_count = int(observation["eligible_detection_count"])
         observation = dict(observation)
         observation.update(
             {
@@ -638,9 +639,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                         float(item) for item in held["point_physical_left_m"]
                     ],
                     "selected_candidate_index": index,
-                    "original_eligible_detection_count": held[
-                        "original_eligible_detection_count"
-                    ],
+                    "original_eligible_detection_count": original_eligible_count,
                     "center_delta_px": center_delta,
                     "iou_with_confirmed_target": iou,
                 },
