@@ -101,6 +101,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.declare_parameter("stereo_person_model", DEFAULT_STEREO_PERSON_MODEL)
         self.declare_parameter("stereo_person_reference", DEFAULT_STEREO_PERSON_REFERENCE)
         self.declare_parameter("stereo_person_threshold", 0.50)
+        self.declare_parameter("ar_consensus_iou_threshold", 0.30)
         self.declare_parameter("min_depth_samples", 100)
         self.declare_parameter("max_depth_mad_m", 0.05)
         self.declare_parameter("static_confirmation_count", 2)
@@ -135,6 +136,9 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.stereo_person_threshold = float(
             self.get_parameter("stereo_person_threshold").value
         )
+        self.ar_consensus_iou_threshold = float(
+            self.get_parameter("ar_consensus_iou_threshold").value
+        )
         self.static_confirmation_count = int(
             self.get_parameter("static_confirmation_count").value
         )
@@ -160,6 +164,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             or self.max_depth_mad_m <= 0
             or not 0 <= self.confidence_threshold <= 1
             or not 0 < self.stereo_person_threshold <= 1
+            or not 0 < self.ar_consensus_iou_threshold <= 1
             or self.static_confirmation_count < 2
             or self.static_max_center_delta_px <= 0
             or not 0 < self.static_max_area_relative_change < 1
@@ -431,6 +436,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             observation = self.observer.observe(
                 ar_frame, captured_at_utc=timestamp, cycle_id=cycle_id
             )
+            observation = self._apply_ar_person_consensus(observation, ar_frame)
             observation = validate_ar0234_observation(observation)
             self._publish_observation(observation)
             suitability = ar0234_target_suitability(observation)
@@ -487,6 +493,95 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             self._publish_refusal(
                 cycle_id, timestamp, "DEPTH_UNAVAILABLE", "PROCESSING_REFUSED", skew_ms
             )
+
+    @staticmethod
+    def _bbox_iou(left: list[float], right: list[float]) -> float:
+        ax1, ay1, ax2, ay2 = (float(value) for value in left)
+        bx1, by1, bx2, by2 = (float(value) for value in right)
+        intersection = max(0.0, min(ax2, bx2) - max(ax1, bx1)) * max(
+            0.0, min(ay2, by2) - max(ay1, by1)
+        )
+        union = (
+            max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+            + max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+            - intersection
+        )
+        return 0.0 if union <= 0.0 else intersection / union
+
+    def _apply_ar_person_consensus(
+        self, observation: dict[str, Any], ar_frame: Any
+    ) -> dict[str, Any]:
+        """Keep only YOLO candidates confirmed by one independent person box."""
+        verifier_detections = self.stereo_person_detector.detect(ar_frame)
+        result = dict(observation)
+        result["ar_person_consensus"] = {
+            "schema_version": "sie.ar0234.person_consensus.v1",
+            "verifier": "opencv_mp_persondet_2023mar",
+            "verifier_detection_count": len(verifier_detections),
+            "minimum_iou": self.ar_consensus_iou_threshold,
+        }
+        if len(verifier_detections) != 1:
+            selected: list[dict[str, Any]] = []
+            result["ar_person_consensus"]["reason"] = (
+                "VERIFIER_NO_TARGET"
+                if not verifier_detections
+                else "VERIFIER_MULTIPLE_TARGETS"
+            )
+        else:
+            verifier = verifier_detections[0]
+            verifier_box = [
+                float(value) for value in verifier.bounding_box.to_xyxy()
+            ]
+            selected = []
+            for detection in observation.get("detections", []):
+                box = detection.get("bbox_xyxy_px")
+                if type(box) is not list or len(box) != 4:
+                    continue
+                iou = self._bbox_iou(box, verifier_box)
+                if iou < self.ar_consensus_iou_threshold:
+                    continue
+                record = dict(detection)
+                record["yolo_confidence"] = float(record["confidence"])
+                record["confidence"] = min(
+                    float(record["confidence"]), float(verifier.confidence)
+                )
+                record["ar_verifier_iou"] = iou
+                selected.append(record)
+            result["ar_person_consensus"].update(
+                {
+                    "reason": (
+                        "UNIQUE_CONSENSUS_TARGET"
+                        if len(selected) == 1
+                        else "NO_CONSENSUS_TARGET"
+                        if not selected
+                        else "MULTIPLE_CONSENSUS_TARGETS"
+                    ),
+                    "verifier_bbox_xyxy_px": verifier_box,
+                    "verifier_confidence": float(verifier.confidence),
+                }
+            )
+
+        result["detections"] = selected
+        result["detection_count"] = len(selected)
+        result["eligible_detection_count"] = len(selected)
+        if not selected:
+            result["target_status"] = "NO_TARGET"
+        elif len(selected) == 1:
+            result["target_status"] = "SINGLE_TARGET"
+        else:
+            result["target_status"] = "MULTIPLE_TARGETS"
+        chosen = selected[0] if len(selected) == 1 else None
+        for field in (
+            "bbox_xyxy_px",
+            "center_x_px",
+            "confidence",
+            "truncated_left",
+            "truncated_right",
+            "truncated_top",
+            "truncated_bottom",
+        ):
+            result[field] = None if chosen is None else chosen[field]
+        return result
 
     def _reset_static_gate(self) -> None:
         self._static_candidate = None
@@ -714,6 +809,9 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                     self.stereo_person_reference_sha256
                 ),
                 "stereo_person_threshold": self.stereo_person_threshold,
+                "ar_person_consensus_iou_threshold": (
+                    self.ar_consensus_iou_threshold
+                ),
                 "capture_pair_skew_ms": skew_ms,
                 "stop_and_measure_only": True,
                 "actuator_access": False,
