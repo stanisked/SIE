@@ -25,6 +25,7 @@ from std_msgs.msg import String
 from .contracts import (
     ContractError,
     ar0234_target_suitability,
+    ar0234_unique_non_edge_candidate_selection,
     encode,
     validate_ar0234_observation,
 )
@@ -480,12 +481,15 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             return
 
         try:
-            observation = self.observer.observe(
+            raw_observation = self.observer.observe(
                 ar_frame, captured_at_utc=timestamp, cycle_id=cycle_id
             )
+            raw_observation = validate_ar0234_observation(raw_observation)
+            # Preserve unmodified detector evidence on the Observation topic.
+            self._publish_observation(raw_observation)
+            observation = self._select_unique_non_edge_ar_target(raw_observation)
             observation = self._resolve_ambiguous_ar_target(observation)
             observation = validate_ar0234_observation(observation)
-            self._publish_observation(observation)
             suitability = ar0234_target_suitability(observation)
             geometry_reason = str(suitability["reason"])
             if observation["target_status"] == "NO_TARGET":
@@ -547,6 +551,49 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
 
     def _reset_target_hold(self) -> None:
         self._confirmed_target = None
+
+    def _select_unique_non_edge_ar_target(
+        self, raw_observation: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Derive one candidate from raw ambiguity only when geometry is unique.
+
+        The raw detector Observation was already published unchanged. This
+        derived record remains visual evidence and must still pass the existing
+        target-suitability and temporal-static gates before stereo association.
+        """
+        selection = ar0234_unique_non_edge_candidate_selection(raw_observation)
+        if selection["disposition"] != "SELECTED_FOR_FURTHER_INTERPRETATION":
+            derived = dict(raw_observation)
+            derived["target_selection"] = selection
+            return derived
+        candidate = selection["selected_detection"]
+        if type(candidate) is not dict:
+            raise RuntimeError("selected non-edge candidate is not an object")
+        bbox = _bbox_xyxy(candidate.get("bbox_xyxy_px"))
+        if bbox is None:
+            raise RuntimeError("selected non-edge candidate has invalid bbox")
+        original_eligible_count = int(raw_observation["eligible_detection_count"])
+        derived = dict(raw_observation)
+        derived.update(
+            {
+                "target_status": "SINGLE_TARGET",
+                "eligible_detection_count": 1,
+                "detection_count": 1,
+                "detections": [candidate],
+                "bbox_xyxy_px": [float(value) for value in bbox],
+                "center_x_px": float(candidate["center_x_px"]),
+                "confidence": float(candidate["confidence"]),
+                "truncated_left": bool(candidate["truncated_left"]),
+                "truncated_right": bool(candidate["truncated_right"]),
+                "truncated_top": bool(candidate["truncated_top"]),
+                "truncated_bottom": bool(candidate["truncated_bottom"]),
+                "target_selection": {
+                    **selection,
+                    "original_eligible_detection_count": original_eligible_count,
+                },
+            }
+        )
+        return derived
 
     def _resolve_ambiguous_ar_target(
         self, observation: dict[str, Any]
@@ -917,6 +964,17 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                                 if observation.get("target_status") == "SINGLE_TARGET"
                                 else "NOT_APPLICABLE"
                             )
+                        },
+                    )
+                ),
+                "ar0234_target_selection": (
+                    {"mode": "NO_OBSERVATION"}
+                    if observation is None
+                    else observation.get(
+                        "target_selection",
+                        {
+                            "mode": "DIRECT_RAW_OBSERVATION",
+                            "source_target_status": observation.get("target_status"),
                         },
                     )
                 ),
