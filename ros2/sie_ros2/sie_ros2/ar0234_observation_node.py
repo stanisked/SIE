@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -38,6 +39,7 @@ class Ar0234ObservationNode(Node):
         )
         self.declare_parameter("confidence_threshold", 0.40)
         self.declare_parameter("frame_rate_hz", 5.0)
+        self.declare_parameter("auto_exposure", 3)
 
         self.project_root = self._absolute_path("project_root")
         self.model_path = self._absolute_path("model_path")
@@ -69,6 +71,13 @@ class Ar0234ObservationNode(Node):
         self.cv2 = cv2
         self.observer = OnnxRuntimeYolo11PersonUpperBodyObserver(
             self.model_path, confidence_threshold=confidence
+        )
+        exposure = int(self.get_parameter("auto_exposure").value)
+        subprocess.run(
+            ["v4l2-ctl", "-d", self.camera_device, "-c", f"auto_exposure={exposure}"],
+            check=True,
+            text=True,
+            capture_output=True,
         )
         self.capture = cv2.VideoCapture(self.camera_device, cv2.CAP_V4L2)
         self.capture.set(
