@@ -52,6 +52,11 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self.declare_parameter("depth_cluster_gap_m", 0.15)
         self.declare_parameter("depth_cluster_relative_gap", 0.04)
         self.declare_parameter("depth_cluster_min_relative_support", 0.25)
+        self.declare_parameter("lr_consistency_max_delta_px", 1.5)
+        self.declare_parameter("spatial_component_min_relative_support", 0.25)
+        self.declare_parameter("spatial_component_min_footprint_px", 1600)
+        self.declare_parameter("spatial_component_min_width_px", 24)
+        self.declare_parameter("spatial_component_min_height_px", 24)
         self.audit_topic = str(self.get_parameter("audit_topic").value)
         self.frustum_sample_stride_px = int(
             self.get_parameter("frustum_sample_stride_px").value
@@ -77,6 +82,21 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self.depth_cluster_min_relative_support = float(
             self.get_parameter("depth_cluster_min_relative_support").value
         )
+        self.lr_consistency_max_delta_px = float(
+            self.get_parameter("lr_consistency_max_delta_px").value
+        )
+        self.spatial_component_min_relative_support = float(
+            self.get_parameter("spatial_component_min_relative_support").value
+        )
+        self.spatial_component_min_footprint_px = int(
+            self.get_parameter("spatial_component_min_footprint_px").value
+        )
+        self.spatial_component_min_width_px = int(
+            self.get_parameter("spatial_component_min_width_px").value
+        )
+        self.spatial_component_min_height_px = int(
+            self.get_parameter("spatial_component_min_height_px").value
+        )
         if (
             self.frustum_sample_stride_px < 1
             or not 0.0 <= self.ar_inner_roi_x_margin_fraction < 0.5
@@ -87,12 +107,34 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             or self.depth_cluster_gap_m <= 0.0
             or not 0.0 < self.depth_cluster_relative_gap < 1.0
             or not 0.0 < self.depth_cluster_min_relative_support <= 1.0
+            or self.lr_consistency_max_delta_px <= 0.0
+            or not 0.0 < self.spatial_component_min_relative_support <= 1.0
+            or self.spatial_component_min_footprint_px < 1
+            or self.spatial_component_min_width_px < 1
+            or self.spatial_component_min_height_px < 1
         ):
             raise ValueError("invalid AR-frustum association parameters")
+        # Right-to-left disparity has negative sign.  Comparing it to the
+        # ordinary left-to-right map removes one-sided SGBM streaks before any
+        # 3D or depth-cluster reasoning.
+        self.right_sgbm = self.cv2.StereoSGBM_create(
+            minDisparity=-128,
+            numDisparities=128,
+            blockSize=7,
+            P1=8 * 3 * 7 * 7,
+            P2=32 * 3 * 7 * 7,
+            uniquenessRatio=10,
+            speckleWindowSize=100,
+            speckleRange=2,
+            disp12MaxDiff=1,
+            mode=self.cv2.STEREO_SGBM_MODE_SGBM_3WAY,
+        )
         self.audit_publisher = self.create_publisher(String, self.audit_topic, 10)
         self.get_logger().info(
             "dynamic association audit enabled; "
             f"publishing diagnostic-only evidence to {self.audit_topic}; "
+            f"LR consistency=±{self.lr_consistency_max_delta_px:.1f}px; "
+            "connected 3D components required; "
             "AR0234 is the only semantic detector; metric Measurement, navigation, "
             "and actuator access remain disabled"
         )
@@ -242,6 +284,87 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             )
         return clusters
 
+    def _left_right_disparity(
+        self, left_gray: Any, right_gray: Any
+    ) -> tuple[Any, Any]:
+        """Return left disparity and pixels supported by both matching directions."""
+        left = self.sgbm.compute(left_gray, right_gray).astype(self.np.float32) / 16.0
+        right = (
+            self.right_sgbm.compute(right_gray, left_gray).astype(self.np.float32)
+            / 16.0
+        )
+        height, width = left.shape
+        x = self.np.broadcast_to(
+            self.np.arange(width, dtype=self.np.int32), (height, width)
+        )
+        y = self.np.broadcast_to(
+            self.np.arange(height, dtype=self.np.int32).reshape(-1, 1),
+            (height, width),
+        )
+        x_right = self.np.rint(x - left).astype(self.np.int32)
+        left_valid = self.np.isfinite(left) & (left > 0.5)
+        in_right_image = (x_right >= 0) & (x_right < width)
+        right_at_match = self.np.full(left.shape, self.np.nan, dtype=self.np.float32)
+        lookup = left_valid & in_right_image
+        right_at_match[lookup] = right[y[lookup], x_right[lookup]]
+        consistent = (
+            lookup
+            & self.np.isfinite(right_at_match)
+            & (right_at_match < -0.5)
+            & (
+                self.np.abs(left + right_at_match)
+                <= self.lr_consistency_max_delta_px
+            )
+        )
+        return left, consistent
+
+    def _spatial_components(
+        self,
+        u: Any,
+        v: Any,
+        frustum_roi: tuple[int, int, int, int],
+    ) -> list[tuple[Any, dict[str, Any]]]:
+        """Find connected supported regions on the sampled physical-left grid."""
+        ix1, iy1, ix2, iy2 = frustum_roi
+        stride = self.frustum_sample_stride_px
+        grid_width = (ix2 - ix1 + stride - 1) // stride
+        grid_height = (iy2 - iy1 + stride - 1) // stride
+        grid_x = ((u.astype(self.np.int32) - ix1) // stride).clip(0, grid_width - 1)
+        grid_y = ((v.astype(self.np.int32) - iy1) // stride).clip(0, grid_height - 1)
+        occupancy = self.np.zeros((grid_height, grid_width), dtype=self.np.uint8)
+        occupancy[grid_y, grid_x] = 1
+        component_count, labels, stats, _ = self.cv2.connectedComponentsWithStats(
+            occupancy, connectivity=8
+        )
+        labels_at_samples = labels[grid_y, grid_x]
+        components: list[tuple[Any, dict[str, Any]]] = []
+        for label in range(1, component_count):
+            indices = self.np.flatnonzero(labels_at_samples == label)
+            if not int(indices.size):
+                continue
+            left, top, width, height, area_cells = (
+                int(value) for value in stats[label]
+            )
+            components.append(
+                (
+                    indices,
+                    {
+                        "sample_count": int(indices.size),
+                        "coverage_area_px": int(indices.size * stride * stride),
+                        "bbox_xyxy_px": [
+                            int(ix1 + left * stride),
+                            int(iy1 + top * stride),
+                            int(min(ix2, ix1 + (left + width) * stride)),
+                            int(min(iy2, iy1 + (top + height) * stride)),
+                        ],
+                        "bbox_width_px": int(width * stride),
+                        "bbox_height_px": int(height * stride),
+                        "occupied_grid_cells": area_cells,
+                    },
+                )
+            )
+        return components
+
     def _frustum_associate(
         self,
         observation: dict[str, Any],
@@ -259,20 +382,27 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         frustum_roi = self._stereo_frustum_search_roi(ar_inner_roi)
         left_gray = self.cv2.cvtColor(left_rectified, self.cv2.COLOR_BGR2GRAY)
         right_gray = self.cv2.cvtColor(right_rectified, self.cv2.COLOR_BGR2GRAY)
-        disparity = self.sgbm.compute(left_gray, right_gray).astype(self.np.float32) / 16.0
-        self._write_frustum_debug(left_rectified, right_rectified, disparity, frustum_roi)
+        disparity, lr_consistent = self._left_right_disparity(left_gray, right_gray)
+        self._write_frustum_debug(
+            left_rectified, right_rectified, disparity, lr_consistent, frustum_roi
+        )
 
         ix1, iy1, ix2, iy2 = frustum_roi
         stride = self.frustum_sample_stride_px
         grid_y, grid_x = self.np.mgrid[iy1:iy2:stride, ix1:ix2:stride]
         sampled_disparity = disparity[grid_y, grid_x]
-        valid = self.np.isfinite(sampled_disparity) & (sampled_disparity > 0.5)
+        sampled_lr_consistent = lr_consistent[grid_y, grid_x]
+        positive = self.np.isfinite(sampled_disparity) & (sampled_disparity > 0.5)
+        valid = positive & sampled_lr_consistent
+        positive_count = int(positive.sum())
+        lr_consistent_count = int(valid.sum())
         if not valid.any():
-            return None, "FRUSTUM_DISPARITY_UNAVAILABLE", {
+            return None, "FRUSTUM_LR_CONSISTENT_DISPARITY_UNAVAILABLE", {
                 "ar_inner_roi_xyxy_px": list(ar_inner_roi),
                 "physical_left_frustum_roi_xyxy_px": list(frustum_roi),
                 "sample_stride_px": stride,
-                "positive_disparity_sample_count": 0,
+                "positive_disparity_sample_count": positive_count,
+                "lr_consistent_disparity_sample_count": 0,
             }
         u = grid_x[valid].astype(self.np.float64)
         v = grid_y[valid].astype(self.np.float64)
@@ -287,7 +417,8 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                 "ar_inner_roi_xyxy_px": list(ar_inner_roi),
                 "physical_left_frustum_roi_xyxy_px": list(frustum_roi),
                 "sample_stride_px": stride,
-                "positive_disparity_sample_count": int(disparity_values.size),
+                "positive_disparity_sample_count": positive_count,
+                "lr_consistent_disparity_sample_count": lr_consistent_count,
                 "in_range_depth_sample_count": int(in_range.sum()),
             }
         u, v, rectified_depth = u[in_range], v[in_range], rectified_depth[in_range]
@@ -305,10 +436,12 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                 "physical_left_frustum_roi_xyxy_px": list(frustum_roi),
                 "in_range_depth_sample_count": int(rectified_depth.size),
             }
-        points_ar, points_left, rectified_depth = (
+        points_ar, points_left, rectified_depth, u, v = (
             points_ar[in_front_of_ar],
             points_left[in_front_of_ar],
             rectified_depth[in_front_of_ar],
+            u[in_front_of_ar],
+            v[in_front_of_ar],
         )
         projected, _ = self.cv2.projectPoints(
             points_ar.reshape(-1, 1, 3),
@@ -332,32 +465,81 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                 "in_range_depth_sample_count": int(rectified_depth.size),
                 "reprojected_inside_ar_inner_roi_count": int(inside.sum()),
             }
-        points_left, rectified_depth, projected = (
-            points_left[inside], rectified_depth[inside], projected[inside]
+        points_left, rectified_depth, projected, u, v = (
+            points_left[inside],
+            rectified_depth[inside],
+            projected[inside],
+            u[inside],
+            v[inside],
         )
-        clusters = self._depth_clusters(rectified_depth)
+        components = self._spatial_components(u, v, frustum_roi)
         diagnostic = {
             "ar_inner_roi_xyxy_px": list(ar_inner_roi),
             "physical_left_frustum_roi_xyxy_px": list(frustum_roi),
             "sample_stride_px": stride,
             "reprojected_inside_ar_inner_roi_count": int(rectified_depth.size),
-            "depth_clusters": [cluster for _, cluster in clusters],
+            "spatial_components": [component for _, component in components],
         }
-        if not clusters:
-            return None, "FRUSTUM_DEPTH_CLUSTER_TOO_SMALL", diagnostic
-        dominant_count = max(cluster["sample_count"] for _, cluster in clusters)
+        if not components:
+            return None, "NO_SPATIAL_DISPARITY_COMPONENT", diagnostic
+        dominant_count = max(component["sample_count"] for _, component in components)
         support_limit = max(
             self.min_depth_samples,
-            int(math.ceil(dominant_count * self.depth_cluster_min_relative_support)),
+            int(
+                math.ceil(
+                    dominant_count * self.spatial_component_min_relative_support
+                )
+            ),
         )
         plausible = [
-            item for item in clusters if item[1]["sample_count"] >= support_limit
+            item
+            for item in components
+            if (
+                item[1]["sample_count"] >= support_limit
+                and item[1]["coverage_area_px"]
+                >= self.spatial_component_min_footprint_px
+                and item[1]["bbox_width_px"] >= self.spatial_component_min_width_px
+                and item[1]["bbox_height_px"] >= self.spatial_component_min_height_px
+            )
         ]
-        diagnostic["plausible_depth_cluster_count"] = len(plausible)
-        diagnostic["plausible_depth_cluster_min_samples"] = support_limit
+        diagnostic["plausible_spatial_component_count"] = len(plausible)
+        diagnostic["spatial_component_min_samples"] = support_limit
+        diagnostic["spatial_component_min_footprint_px"] = (
+            self.spatial_component_min_footprint_px
+        )
+        diagnostic["spatial_component_min_width_px"] = self.spatial_component_min_width_px
+        diagnostic["spatial_component_min_height_px"] = self.spatial_component_min_height_px
+        if not plausible:
+            return None, "NO_PLAUSIBLE_SPATIAL_COMPONENT", diagnostic
         if len(plausible) != 1:
+            return None, "MULTIPLE_PLAUSIBLE_SPATIAL_COMPONENTS", diagnostic
+        component_indices, component = plausible[0]
+        component_depths = rectified_depth[component_indices]
+        clusters = self._depth_clusters(component_depths)
+        diagnostic["selected_spatial_component"] = component
+        diagnostic["depth_clusters"] = [cluster for _, cluster in clusters]
+        if not clusters:
+            return None, "SPATIAL_COMPONENT_DEPTH_CLUSTER_TOO_SMALL", diagnostic
+        dominant_depth_count = max(cluster["sample_count"] for _, cluster in clusters)
+        depth_support_limit = max(
+            self.min_depth_samples,
+            int(
+                math.ceil(
+                    dominant_depth_count * self.depth_cluster_min_relative_support
+                )
+            ),
+        )
+        plausible_depth = [
+            item for item in clusters if item[1]["sample_count"] >= depth_support_limit
+        ]
+        diagnostic["plausible_depth_cluster_count"] = len(plausible_depth)
+        diagnostic["plausible_depth_cluster_min_samples"] = depth_support_limit
+        if not plausible_depth:
+            return None, "NO_PLAUSIBLE_DEPTH_CLUSTER", diagnostic
+        if len(plausible_depth) != 1:
             return None, "MULTIPLE_PLAUSIBLE_DEPTH_CLUSTERS", diagnostic
-        selected_indices, selected = plausible[0]
+        relative_indices, selected = plausible_depth[0]
+        selected_indices = component_indices[relative_indices]
         selected_depth = float(selected["median_depth_m"])
         selected_points = points_left[selected_indices]
         selected_projected = projected[selected_indices]
@@ -389,25 +571,34 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         return association, "SUCCESS", diagnostic
 
     def _write_frustum_debug(
-        self, left: Any, right: Any, disparity: Any,
+        self, left: Any, right: Any, disparity: Any, lr_consistent: Any,
         frustum_roi: tuple[int, int, int, int],
     ) -> None:
-        """Persist the current geometric search region for headless inspection."""
+        """Persist raw and bilateral-consistent disparity for headless inspection."""
         left_marked = left.copy()
         x1, y1, x2, y2 = frustum_roi
         self.cv2.rectangle(left_marked, (x1, y1), (x2, y2), (0, 255, 255), 2)
-        valid = self.np.isfinite(disparity) & (disparity > 0.5)
-        visual = self.np.zeros(disparity.shape, dtype=self.np.uint8)
-        if valid.any():
-            low, high = self.np.percentile(disparity[valid], [2, 98])
-            if high > low:
-                visual[valid] = self.np.clip(
-                    (disparity[valid] - low) * 255.0 / (high - low), 0, 255
-                ).astype(self.np.uint8)
-        colour = self.cv2.applyColorMap(visual, self.cv2.COLORMAP_TURBO)
+        def colourise(valid: Any) -> Any:
+            visual = self.np.zeros(disparity.shape, dtype=self.np.uint8)
+            if valid.any():
+                low, high = self.np.percentile(disparity[valid], [2, 98])
+                if high > low:
+                    visual[valid] = self.np.clip(
+                        (disparity[valid] - low) * 255.0 / (high - low), 0, 255
+                    ).astype(self.np.uint8)
+            return self.cv2.applyColorMap(visual, self.cv2.COLORMAP_TURBO)
+
+        raw_valid = self.np.isfinite(disparity) & (disparity > 0.5)
+        raw_colour = colourise(raw_valid)
+        consistent_colour = colourise(lr_consistent)
         self.cv2.imwrite(str(self.debug_dir / "latest_physical_left_rectified.jpg"), left_marked)
         self.cv2.imwrite(str(self.debug_dir / "latest_physical_right_rectified.jpg"), right)
-        self.cv2.imwrite(str(self.debug_dir / "latest_disparity.jpg"), colour)
+        self.cv2.imwrite(str(self.debug_dir / "latest_disparity_raw.jpg"), raw_colour)
+        self.cv2.imwrite(str(self.debug_dir / "latest_disparity.jpg"), consistent_colour)
+        self.cv2.imwrite(
+            str(self.debug_dir / "latest_lr_consistency_mask.png"),
+            lr_consistent.astype(self.np.uint8) * 255,
+        )
 
     def _audit_base(
         self, cycle_id: str, timestamp: datetime, skew_ms: float
