@@ -336,12 +336,13 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             raise RuntimeError("activated extrinsic artifact is absent or changed")
         self.extrinsic_sha256 = str(extrinsic["sha256"])
 
-        # The strict complete-person policy is the default.  A separately
-        # activated profile may permit only bottom truncation for a static
-        # upper-body target; it never changes execution authorization.
+        # The static Measurement producer consumes the static geometry policy.
+        # A diagnostic subclass uses this activation only to bind calibration
+        # artifacts and must not accidentally apply a static-world policy.
+        static_policy_required = not getattr(self, "_diagnostic_only", False)
         geometry_policy = activation.get("target_geometry_policy")
         self.allow_static_upper_body_bottom_truncation = False
-        if geometry_policy is not None:
+        if geometry_policy is not None and static_policy_required:
             if (
                 type(geometry_policy) is not dict
                 or geometry_policy.get("schema_version")
@@ -357,7 +358,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             self.allow_static_upper_body_bottom_truncation = True
 
         temporal_gate = activation.get("temporal_static_gate")
-        if temporal_gate is not None:
+        if temporal_gate is not None and static_policy_required:
             if (
                 type(temporal_gate) is not dict
                 or temporal_gate.get("schema_version")
