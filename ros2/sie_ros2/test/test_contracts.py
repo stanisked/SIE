@@ -1,6 +1,7 @@
 from sie_ros2.contracts import (
     ContractError,
     ar0234_target_suitability,
+    ar0234_dynamic_target_candidate,
     ar0234_unique_non_edge_candidate_selection,
     navigation_decision,
     supervisor_state,
@@ -204,6 +205,59 @@ def test_near_right_model_grid_edge_is_not_a_non_edge_candidate():
     assert selection["disposition"] == "SELECTED_FOR_FURTHER_INTERPRETATION"
     assert selection["selected_candidate_index"] == 0
     assert selection["edge_margin_px"] == 3.0
+
+
+def test_dynamic_target_accepts_moving_upper_body_without_static_gate():
+    observation = ar0234_no_target(
+        target_status="SINGLE_TARGET",
+        detection_count=1,
+        eligible_detection_count=1,
+        detections=[{"source": "test"}],
+        bbox_xyxy_px=[739.171143, 30.856796, 1107.146118, 1169.075455],
+        center_x_px=923.15863,
+        confidence=0.918601,
+        truncated_left=False,
+        truncated_right=False,
+        truncated_top=False,
+        truncated_bottom=False,
+    )
+    target = ar0234_dynamic_target_candidate(observation)
+    assert target["disposition"] == "OBSERVED"
+    assert target["reason"] == "DIRECT_SINGLE_TARGET"
+    assert target["metric_measurement_authorized"] is False
+
+
+def test_dynamic_target_uses_unique_non_edge_candidate_without_static_gate():
+    observation = ar0234_no_target(
+        confidence_threshold=0.4,
+        target_status="MULTIPLE_TARGETS",
+        detection_count=2,
+        eligible_detection_count=2,
+        detections=[
+            {
+                "bbox_xyxy_px": [770.946075, 10.91391, 1190.738434, 1149.689117],
+                "center_x_px": 980.8422545,
+                "confidence": 0.927669,
+                "truncated_left": False,
+                "truncated_right": False,
+                "truncated_top": False,
+                "truncated_bottom": False,
+            },
+            {
+                "bbox_xyxy_px": [1772.615295, 220.982346, 1919.851135, 1200.0],
+                "center_x_px": 1846.233215,
+                "confidence": 0.626962,
+                "truncated_left": False,
+                "truncated_right": False,
+                "truncated_top": False,
+                "truncated_bottom": True,
+            },
+        ],
+    )
+    target = ar0234_dynamic_target_candidate(observation)
+    assert target["disposition"] == "OBSERVED"
+    assert target["reason"] == "UNIQUE_NON_EDGE_CANDIDATE"
+    assert target["metric_measurement_authorized"] is False
 
 def test_edge_truncated_target_is_not_eligible_for_measurement():
     observation = ar0234_no_target(
