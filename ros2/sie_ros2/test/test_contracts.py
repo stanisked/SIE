@@ -1,6 +1,7 @@
 from sie_ros2.contracts import (
     ContractError,
     ar0234_target_suitability,
+    ar0234_unique_non_edge_candidate_selection,
     navigation_decision,
     supervisor_state,
     validate_ar0234_observation,
@@ -113,6 +114,63 @@ def test_ar0234_observation_rejects_invalid_model_hash():
     else:
         raise AssertionError("invalid model hash was accepted")
 
+
+
+def test_unique_non_edge_candidate_is_selected_from_raw_multiple_targets():
+    observation = ar0234_no_target(
+        confidence_threshold=0.4,
+        target_status="MULTIPLE_TARGETS",
+        detection_count=2,
+        eligible_detection_count=2,
+        detections=[
+            {
+                "bbox_xyxy_px": [771.023, 110.556, 1570.953, 1087.371],
+                "center_x_px": 1170.988,
+                "confidence": 0.682353,
+                "truncated_left": False,
+                "truncated_right": False,
+                "truncated_top": False,
+                "truncated_bottom": False,
+            },
+            {
+                "bbox_xyxy_px": [0.0, 132.312, 101.043, 1108.576],
+                "center_x_px": 50.5215,
+                "confidence": 0.553209,
+                "truncated_left": True,
+                "truncated_right": False,
+                "truncated_top": False,
+                "truncated_bottom": False,
+            },
+        ],
+    )
+    selection = ar0234_unique_non_edge_candidate_selection(observation)
+    assert selection["disposition"] == "SELECTED_FOR_FURTHER_INTERPRETATION"
+    assert selection["reason"] == "UNIQUE_NON_EDGE_CANDIDATE"
+    assert selection["selected_candidate_index"] == 0
+    assert selection["metric_measurement_authorized"] is False
+
+
+def test_multiple_non_edge_candidates_remain_rejected():
+    candidate = {
+        "bbox_xyxy_px": [500.0, 100.0, 900.0, 1000.0],
+        "center_x_px": 700.0,
+        "confidence": 0.7,
+        "truncated_left": False,
+        "truncated_right": False,
+        "truncated_top": False,
+        "truncated_bottom": False,
+    }
+    observation = ar0234_no_target(
+        confidence_threshold=0.4,
+        target_status="MULTIPLE_TARGETS",
+        detection_count=2,
+        eligible_detection_count=2,
+        detections=[candidate, {**candidate, "bbox_xyxy_px": [1000.0, 100.0, 1400.0, 1000.0], "center_x_px": 1200.0}],
+    )
+    selection = ar0234_unique_non_edge_candidate_selection(observation)
+    assert selection["disposition"] == "REJECTED"
+    assert selection["reason"] == "MULTIPLE_NON_EDGE_CANDIDATES"
+    assert selection["metric_measurement_authorized"] is False
 
 def test_edge_truncated_target_is_not_eligible_for_measurement():
     observation = ar0234_no_target(
