@@ -204,6 +204,89 @@ def ar0234_target_suitability(observation: object) -> dict[str, Any]:
     }
 
 
+def ar0234_unique_non_edge_candidate_selection(observation: object) -> dict[str, Any]:
+    """Select exactly one non-edge candidate from raw ambiguous AR evidence.
+
+    This is an interpretation of an existing visual Observation, not a
+    Measurement and never an execution authorization. A candidate may reach
+    the bottom edge so the separately activated static upper-body policy can
+    decide that case later. Top, left, and right truncation are always
+    rejected here because they do not provide a stable approach target.
+    """
+    item = validate_ar0234_observation(observation)
+    status = item["target_status"]
+    base = {
+        "schema_version": "sie.ar0234.unique_non_edge_target_selection.v1",
+        "selection_id": f"ar0234-target-selection:{item['observation_id']}",
+        "timestamp": item["captured_at_utc"],
+        "observation_id": item["observation_id"],
+        "evidence_id": item["evidence_id"],
+        "source_target_status": status,
+        "original_eligible_detection_count": item["eligible_detection_count"],
+        "metric_measurement_authorized": False,
+    }
+    if status != "MULTIPLE_TARGETS":
+        return {
+            **base,
+            "disposition": "NOT_APPLICABLE",
+            "reason": "SOURCE_NOT_MULTIPLE_TARGETS",
+            "selected_candidate_index": None,
+            "selected_detection": None,
+        }
+
+    candidates: list[tuple[int, dict[str, Any]]] = []
+    threshold = float(item["confidence_threshold"])
+    for index, candidate in enumerate(item["detections"]):
+        if type(candidate) is not dict:
+            continue
+        box = candidate.get("bbox_xyxy_px")
+        if type(box) is not list or len(box) != 4:
+            continue
+        try:
+            x1, y1, x2, y2 = (float(value) for value in box)
+            center_x = float(candidate["center_x_px"])
+            confidence = float(candidate["confidence"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (
+            not all(math.isfinite(value) for value in (x1, y1, x2, y2, center_x, confidence))
+            or not 0.0 <= x1 < x2 <= 1920.0
+            or not 0.0 <= y1 < y2 <= 1200.0
+            or not math.isclose(center_x, (x1 + x2) / 2.0, abs_tol=1e-6)
+            or not threshold <= confidence <= 1.0
+            or any(type(candidate.get(f"truncated_{edge}")) is not bool for edge in ("top", "left", "right", "bottom"))
+            or candidate["truncated_top"]
+            or candidate["truncated_left"]
+            or candidate["truncated_right"]
+        ):
+            continue
+        candidates.append((index, candidate))
+
+    if len(candidates) != 1:
+        return {
+            **base,
+            "disposition": "REJECTED",
+            "reason": (
+                "NO_NON_EDGE_CANDIDATE"
+                if not candidates
+                else "MULTIPLE_NON_EDGE_CANDIDATES"
+            ),
+            "non_edge_candidate_count": len(candidates),
+            "selected_candidate_index": None,
+            "selected_detection": None,
+        }
+
+    index, candidate = candidates[0]
+    return {
+        **base,
+        "disposition": "SELECTED_FOR_FURTHER_INTERPRETATION",
+        "reason": "UNIQUE_NON_EDGE_CANDIDATE",
+        "non_edge_candidate_count": 1,
+        "selected_candidate_index": index,
+        "selected_detection": candidate,
+    }
+
+
 def navigation_decision(
     measurement: dict[str, Any], *, safe_distance_m: float, bearing_deadband_deg: float,
     min_confidence: float,
