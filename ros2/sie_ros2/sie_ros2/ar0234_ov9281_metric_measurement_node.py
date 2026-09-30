@@ -67,6 +67,40 @@ def scalar_text(value: object) -> str:
     return str(array.item() if array.shape == () else array.reshape(-1)[0])
 
 
+def _bbox_xyxy(value: object) -> tuple[float, float, float, float] | None:
+    if type(value) is not list or len(value) != 4:
+        return None
+    try:
+        x1, y1, x2, y2 = (float(item) for item in value)
+    except (TypeError, ValueError):
+        return None
+    if not all(math.isfinite(item) for item in (x1, y1, x2, y2)) or x2 <= x1 or y2 <= y1:
+        return None
+    return x1, y1, x2, y2
+
+
+def _bbox_iou(
+    first: tuple[float, float, float, float],
+    second: tuple[float, float, float, float],
+) -> float:
+    left = max(first[0], second[0])
+    top = max(first[1], second[1])
+    right = min(first[2], second[2])
+    bottom = min(first[3], second[3])
+    intersection = max(0.0, right - left) * max(0.0, bottom - top)
+    first_area = (first[2] - first[0]) * (first[3] - first[1])
+    second_area = (second[2] - second[0]) * (second[3] - second[1])
+    union = first_area + second_area - intersection
+    return 0.0 if union <= 0 else intersection / union
+
+
+def _point_inside_bbox(
+    point: tuple[float, float], bbox: tuple[float, float, float, float]
+) -> bool:
+    return bbox[0] <= point[0] <= bbox[2] and bbox[1] <= point[1] <= bbox[3]
+
+
+
 class Ar0234Ov9281MetricMeasurementNode(Node):
     """Publish fail-closed, SHA-bound metric measurements from a static scene."""
 
@@ -107,6 +141,11 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.declare_parameter("static_max_center_delta_px", 12.0)
         self.declare_parameter("static_max_area_relative_change", 0.10)
         self.declare_parameter("static_candidate_max_age_s", 5.0)
+        # Resolve an ambiguous AR frame only from a recent, confirmed static
+        # 3D association.  It is never an acquisition mechanism.
+        self.declare_parameter("target_hold_max_age_s", 2.5)
+        self.declare_parameter("target_hold_max_center_delta_px", 80.0)
+        self.declare_parameter("target_hold_min_iou", 0.20)
         self.declare_parameter("auto_exposure", 3)
         self.declare_parameter(
             "debug_dir", "~/.local/state/sie/debug/ar0234_ov9281_live"
@@ -149,6 +188,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         )
         self._static_candidate: dict[str, float] | None = None
         self._static_confirmation_observations = 0
+        self._confirmed_target: dict[str, Any] | None = None
         self.debug_dir = Path(
             str(self.get_parameter("debug_dir").value)
         ).expanduser()
@@ -164,6 +204,9 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             or self.static_max_center_delta_px <= 0
             or not 0 < self.static_max_area_relative_change < 1
             or self.static_candidate_max_age_s <= 0
+            or self.target_hold_max_age_s <= 0
+            or self.target_hold_max_center_delta_px <= 0
+            or not 0 < self.target_hold_min_iou <= 1
         ):
             raise ValueError("invalid live measurement parameters")
 
@@ -431,10 +474,13 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             observation = self.observer.observe(
                 ar_frame, captured_at_utc=timestamp, cycle_id=cycle_id
             )
+            observation = self._resolve_ambiguous_ar_target(observation)
             observation = validate_ar0234_observation(observation)
             self._publish_observation(observation)
             suitability = ar0234_target_suitability(observation)
             geometry_reason = str(suitability["reason"])
+            if observation["target_status"] == "NO_TARGET":
+                self._reset_target_hold()
             if not suitability["geometry_eligible"]:
                 if self._bottom_truncation_allowed(observation):
                     geometry_reason = "UPPER_BODY_BOTTOM_TRUNCATION_STATIC_ALLOWED"
@@ -451,6 +497,8 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                     return
             temporal_reason = self._temporal_static_reason(observation)
             if temporal_reason is not None:
+                if temporal_reason.startswith("MOTION_DETECTED"):
+                    self._reset_target_hold()
                 self._publish_refusal(
                     cycle_id, timestamp, "DEPTH_UNAVAILABLE", temporal_reason, skew_ms, observation
                 )
@@ -487,6 +535,146 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             self._publish_refusal(
                 cycle_id, timestamp, "DEPTH_UNAVAILABLE", "PROCESSING_REFUSED", skew_ms
             )
+
+    def _reset_target_hold(self) -> None:
+        self._confirmed_target = None
+
+    def _resolve_ambiguous_ar_target(
+        self, observation: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Select one candidate only by continuity with confirmed static 3D evidence."""
+        if observation.get("target_status") != "MULTIPLE_TARGETS":
+            return observation
+        held = self._confirmed_target
+        if held is None:
+            observation["target_hold"] = {
+                "mode": "UNRESOLVED_NO_CONFIRMED_3D_TARGET",
+                "original_eligible_detection_count": observation.get(
+                    "eligible_detection_count"
+                ),
+            }
+            return observation
+        age_s = time.monotonic() - float(held["monotonic_s"])
+        if age_s > self.target_hold_max_age_s:
+            self._reset_target_hold()
+            observation["target_hold"] = {
+                "mode": "UNRESOLVED_CONFIRMED_TARGET_STALE",
+                "hold_age_s": age_s,
+                "original_eligible_detection_count": observation.get(
+                    "eligible_detection_count"
+                ),
+            }
+            return observation
+        previous_bbox = _bbox_xyxy(held["ar_bbox_xyxy_px"])
+        projected = held["projected_ar0234_point_px"]
+        if previous_bbox is None or type(projected) is not list or len(projected) != 2:
+            self._reset_target_hold()
+            observation["target_hold"] = {
+                "mode": "UNRESOLVED_CONFIRMED_TARGET_INVALID",
+                "original_eligible_detection_count": observation.get(
+                    "eligible_detection_count"
+                ),
+            }
+            return observation
+        projected_point = float(projected[0]), float(projected[1])
+        previous_center = (
+            (previous_bbox[0] + previous_bbox[2]) / 2.0,
+            (previous_bbox[1] + previous_bbox[3]) / 2.0,
+        )
+        matches: list[tuple[int, dict[str, Any], float, float]] = []
+        for index, candidate in enumerate(observation.get("detections", [])):
+            if type(candidate) is not dict:
+                continue
+            bbox = _bbox_xyxy(candidate.get("bbox_xyxy_px"))
+            if bbox is None or not _point_inside_bbox(projected_point, bbox):
+                continue
+            candidate_center = (bbox[0] + bbox[2]) / 2.0, (bbox[1] + bbox[3]) / 2.0
+            center_delta = math.hypot(
+                candidate_center[0] - previous_center[0],
+                candidate_center[1] - previous_center[1],
+            )
+            iou = _bbox_iou(previous_bbox, bbox)
+            if (
+                center_delta <= self.target_hold_max_center_delta_px
+                and iou >= self.target_hold_min_iou
+            ):
+                matches.append((index, candidate, center_delta, iou))
+        if len(matches) != 1:
+            observation["target_hold"] = {
+                "mode": "UNRESOLVED_AMBIGUOUS_CANDIDATES",
+                "hold_age_s": age_s,
+                "original_eligible_detection_count": observation.get(
+                    "eligible_detection_count"
+                ),
+                "matching_candidate_count": len(matches),
+            }
+            return observation
+        index, selected, center_delta, iou = matches[0]
+        selected_bbox = _bbox_xyxy(selected.get("bbox_xyxy_px"))
+        if selected_bbox is None:
+            raise RuntimeError("selected target-hold candidate has invalid bbox")
+        observation = dict(observation)
+        observation.update(
+            {
+                "target_status": "SINGLE_TARGET",
+                "eligible_detection_count": 1,
+                "detection_count": 1,
+                "detections": [selected],
+                "bbox_xyxy_px": [float(item) for item in selected_bbox],
+                "center_x_px": float(selected["center_x_px"]),
+                "confidence": float(selected["confidence"]),
+                "truncated_left": bool(selected["truncated_left"]),
+                "truncated_right": bool(selected["truncated_right"]),
+                "truncated_top": bool(selected["truncated_top"]),
+                "truncated_bottom": bool(selected["truncated_bottom"]),
+                "target_hold": {
+                    "mode": "UNIQUE_PREVIOUS_3D_PROJECTION",
+                    "previous_measurement_id": held["measurement_id"],
+                    "hold_age_s": age_s,
+                    "previous_projected_ar0234_point_px": [
+                        float(item) for item in projected_point
+                    ],
+                    "previous_point_physical_left_m": [
+                        float(item) for item in held["point_physical_left_m"]
+                    ],
+                    "selected_candidate_index": index,
+                    "original_eligible_detection_count": held[
+                        "original_eligible_detection_count"
+                    ],
+                    "center_delta_px": center_delta,
+                    "iou_with_confirmed_target": iou,
+                },
+            }
+        )
+        return observation
+
+    def _remember_confirmed_target(
+        self, observation: dict[str, Any], association: dict[str, Any], measurement_id: str
+    ) -> None:
+        bbox = _bbox_xyxy(observation.get("bbox_xyxy_px"))
+        projected = association.get("projected_ar0234_point_px")
+        if (
+            bbox is None
+            or type(projected) is not list
+            or len(projected) != 2
+            or not all(isinstance(item, (int, float)) and math.isfinite(float(item)) for item in projected)
+        ):
+            self._reset_target_hold()
+            return
+        self._confirmed_target = {
+            "measurement_id": measurement_id,
+            "monotonic_s": time.monotonic(),
+            "ar_bbox_xyxy_px": [float(item) for item in bbox],
+            "projected_ar0234_point_px": [float(item) for item in projected],
+            "point_physical_left_m": [
+                float(association["x_m"]),
+                float(association["y_m"]),
+                float(association["z_m"]),
+            ],
+            "original_eligible_detection_count": int(
+                observation.get("eligible_detection_count", 1)
+            ),
+        }
 
     def _reset_static_gate(self) -> None:
         self._static_candidate = None
@@ -710,6 +898,13 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                 "ov9281_stereo_sha256": sha256_file(self.stereo_path),
                 "ar0234_person_detector": "ar0234_person_upper_body_yolo11n_v1",
                 "ar0234_confidence_threshold": self.confidence_threshold,
+                "ar0234_target_hold": (
+                    {"mode": "DIRECT_SINGLE_TARGET"}
+                    if observation is None
+                    else observation.get(
+                        "target_hold", {"mode": "DIRECT_SINGLE_TARGET"}
+                    )
+                ),
                 "stereo_person_detector": "opencv_mp_persondet_2023mar",
                 "stereo_person_model_sha256": self.stereo_person_model_sha256,
                 "stereo_person_reference_sha256": (
@@ -746,6 +941,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         result.update(association)
         result["target_geometry_reason"] = geometry_reason
         result["stereo_person_evidence_id"] = left_evidence["evidence_id"]
+        self._remember_confirmed_target(observation, association, result["measurement_id"])
         message = String()
         message.data = encode(result)
         self.measurement_publisher.publish(message)
