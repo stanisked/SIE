@@ -37,6 +37,7 @@ setup(
             "ar0234_target_suitability_node = sie_ros2.ar0234_target_suitability_node:main",
             "ar0234_dynamic_target_tracker_node = sie_ros2.ar0234_dynamic_target_tracker_node:main",
             "ar0234_ov9281_metric_measurement_node = sie_ros2.ar0234_ov9281_metric_measurement_node:main",
+            "ar0234_ov9281_dynamic_association_audit_node = sie_ros2.ar0234_ov9281_dynamic_association_audit_node:main",
             "perception_contract_node = sie_ros2.perception_node:main",
             "perception_jsonl_bridge = sie_ros2.jsonl_perception_bridge:main",
             "navigation_contract_node = sie_ros2.navigation_node:main",
