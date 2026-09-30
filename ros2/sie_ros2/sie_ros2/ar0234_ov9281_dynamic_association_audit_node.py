@@ -477,6 +477,8 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "ar_inner_roi_xyxy_px": list(ar_inner_roi),
             "physical_left_frustum_roi_xyxy_px": list(frustum_roi),
             "sample_stride_px": stride,
+            "positive_disparity_sample_count": positive_count,
+            "lr_consistent_disparity_sample_count": lr_consistent_count,
             "reprojected_inside_ar_inner_roi_count": int(rectified_depth.size),
             "spatial_components": [component for _, component in components],
         }
