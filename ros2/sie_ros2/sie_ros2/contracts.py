@@ -236,6 +236,18 @@ def ar0234_unique_non_edge_candidate_selection(observation: object) -> dict[str,
 
     candidates: list[tuple[int, dict[str, Any]]] = []
     threshold = float(item["confidence_threshold"])
+    frame = item["frame_size_px"]
+    model_input = item["model_input_size_px"]
+    model_to_source_scale = min(
+        float(model_input["width"]) / float(frame["width"]),
+        float(model_input["height"]) / float(frame["height"]),
+    )
+    if model_to_source_scale <= 0.0:
+        raise ContractError("invalid model-to-source scale")
+    # Decoder coordinates can finish fractionally inside an image edge even
+    # when the source candidate reached the border. One model-grid pixel,
+    # mapped back through the documented letterbox scale, is the tolerance.
+    edge_margin_px = 1.0 / model_to_source_scale
     for index, candidate in enumerate(item["detections"]):
         if type(candidate) is not dict:
             continue
@@ -258,6 +270,9 @@ def ar0234_unique_non_edge_candidate_selection(observation: object) -> dict[str,
             or candidate["truncated_top"]
             or candidate["truncated_left"]
             or candidate["truncated_right"]
+            or x1 <= edge_margin_px
+            or x2 >= float(frame["width"]) - edge_margin_px
+            or y1 <= edge_margin_px
         ):
             continue
         candidates.append((index, candidate))
@@ -271,6 +286,7 @@ def ar0234_unique_non_edge_candidate_selection(observation: object) -> dict[str,
                 if not candidates
                 else "MULTIPLE_NON_EDGE_CANDIDATES"
             ),
+            "edge_margin_px": edge_margin_px,
             "non_edge_candidate_count": len(candidates),
             "selected_candidate_index": None,
             "selected_detection": None,
@@ -281,6 +297,7 @@ def ar0234_unique_non_edge_candidate_selection(observation: object) -> dict[str,
         **base,
         "disposition": "SELECTED_FOR_FURTHER_INTERPRETATION",
         "reason": "UNIQUE_NON_EDGE_CANDIDATE",
+        "edge_margin_px": edge_margin_px,
         "non_edge_candidate_count": 1,
         "selected_candidate_index": index,
         "selected_detection": candidate,
