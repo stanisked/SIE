@@ -33,6 +33,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
     """Publish fail-closed diagnostic evidence for dynamic RGB/stereo pairing."""
 
     def __init__(self) -> None:
+        self._diagnostic_only = True
         # The parent initializes only calibrated camera capture, rectification,
         # and the two detectors.  This subclass never calls its Measurement
         # publishing methods and never evaluates its static-scene gate.
