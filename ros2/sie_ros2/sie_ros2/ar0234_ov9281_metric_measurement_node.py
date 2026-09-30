@@ -269,11 +269,12 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.sequence = 0
         self.run_id = secrets.token_hex(8)
         self.timer = self.create_timer(1.0 / self.frame_rate_hz, self._cycle)
-        self.get_logger().info(
-            "live AR0234+OV9281 metric Measurement -> "
-            f"{self.output_topic}; range={self.range_min_m:.1f}..{self.range_max_m:.1f} m; "
-            "stop-and-measure only; actuator access disabled"
-        )
+        if not getattr(self, "_diagnostic_only", False):
+            self.get_logger().info(
+                "live AR0234+OV9281 metric Measurement -> "
+                f"{self.output_topic}; range={self.range_min_m:.1f}..{self.range_max_m:.1f} m; "
+                "stop-and-measure only; actuator access disabled"
+            )
 
     def _load_profile(self) -> None:
         if not all(
