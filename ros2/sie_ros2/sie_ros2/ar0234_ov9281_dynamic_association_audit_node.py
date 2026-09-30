@@ -208,28 +208,37 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             raise RuntimeError("calibrated AR frustum has no physical_left overlap")
         return ix1, iy1, ix2, iy2
 
-    def _depth_clusters(self, depths_m: Any) -> list[dict[str, Any]]:
-        """Find separated, sufficiently supported depth hypotheses in one frustum."""
+    def _depth_clusters(
+        self, depths_m: Any
+    ) -> list[tuple[Any, dict[str, Any]]]:
+        """Find separated, sufficiently supported depth hypotheses in one frustum.
+
+        The returned indices preserve each *entire* cluster.  In particular,
+        they prevent a later median-centred crop from making a broad, unreliable
+        disparity layer appear precise merely by discarding its tails.
+        """
         if int(depths_m.size) == 0:
             return []
-        ordered = self.np.sort(depths_m)
+        order = self.np.argsort(depths_m)
+        ordered = depths_m[order]
         gap_m = max(
             self.depth_cluster_gap_m,
             self.depth_cluster_relative_gap * float(self.np.median(ordered)),
         )
         boundaries = self.np.flatnonzero(self.np.diff(ordered) > gap_m) + 1
-        groups = self.np.split(ordered, boundaries)
-        clusters: list[dict[str, Any]] = []
-        for group in groups:
+        groups = self.np.split(order, boundaries)
+        clusters: list[tuple[Any, dict[str, Any]]] = []
+        for indices in groups:
+            group = depths_m[indices]
             if int(group.size) < self.min_depth_samples:
                 continue
             median = float(self.np.median(group))
             clusters.append(
-                {
+                (indices, {
                     "sample_count": int(group.size),
                     "median_depth_m": median,
                     "mad_m": float(self.np.median(self.np.abs(group - median))),
-                }
+                })
             )
         return clusters
 
@@ -332,34 +341,29 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "physical_left_frustum_roi_xyxy_px": list(frustum_roi),
             "sample_stride_px": stride,
             "reprojected_inside_ar_inner_roi_count": int(rectified_depth.size),
-            "depth_clusters": clusters,
+            "depth_clusters": [cluster for _, cluster in clusters],
         }
         if not clusters:
             return None, "FRUSTUM_DEPTH_CLUSTER_TOO_SMALL", diagnostic
-        dominant_count = max(cluster["sample_count"] for cluster in clusters)
+        dominant_count = max(cluster["sample_count"] for _, cluster in clusters)
         support_limit = max(
             self.min_depth_samples,
             int(math.ceil(dominant_count * self.depth_cluster_min_relative_support)),
         )
         plausible = [
-            cluster for cluster in clusters if cluster["sample_count"] >= support_limit
+            item for item in clusters if item[1]["sample_count"] >= support_limit
         ]
         diagnostic["plausible_depth_cluster_count"] = len(plausible)
         diagnostic["plausible_depth_cluster_min_samples"] = support_limit
         if len(plausible) != 1:
             return None, "MULTIPLE_PLAUSIBLE_DEPTH_CLUSTERS", diagnostic
-        selected = plausible[0]
+        selected_indices, selected = plausible[0]
         selected_depth = float(selected["median_depth_m"])
-        cluster_gap = max(
-            self.depth_cluster_gap_m,
-            self.depth_cluster_relative_gap * selected_depth,
-        )
-        selected_mask = self.np.abs(rectified_depth - selected_depth) <= cluster_gap
-        selected_points = points_left[selected_mask]
-        selected_projected = projected[selected_mask]
+        selected_points = points_left[selected_indices]
+        selected_projected = projected[selected_indices]
         if int(selected_points.shape[0]) < self.min_depth_samples:
             return None, "SELECTED_DEPTH_CLUSTER_TOO_FEW", diagnostic
-        mad_m = float(self.np.median(self.np.abs(rectified_depth[selected_mask] - selected_depth)))
+        mad_m = float(selected["mad_m"])
         if mad_m > self.max_depth_mad_m:
             diagnostic["selected_depth_mad_m"] = mad_m
             return None, f"DEPTH_MAD_EXCEEDED:{mad_m:.4f}m", diagnostic
