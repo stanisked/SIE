@@ -172,6 +172,39 @@ def test_multiple_non_edge_candidates_remain_rejected():
     assert selection["reason"] == "MULTIPLE_NON_EDGE_CANDIDATES"
     assert selection["metric_measurement_authorized"] is False
 
+
+def test_near_right_model_grid_edge_is_not_a_non_edge_candidate():
+    observation = ar0234_no_target(
+        confidence_threshold=0.4,
+        target_status="MULTIPLE_TARGETS",
+        detection_count=2,
+        eligible_detection_count=2,
+        detections=[
+            {
+                "bbox_xyxy_px": [770.946075, 10.91391, 1190.738434, 1149.689117],
+                "center_x_px": 980.8422545,
+                "confidence": 0.927669,
+                "truncated_left": False,
+                "truncated_right": False,
+                "truncated_top": False,
+                "truncated_bottom": False,
+            },
+            {
+                "bbox_xyxy_px": [1772.615295, 220.982346, 1919.851135, 1200.0],
+                "center_x_px": 1846.233215,
+                "confidence": 0.626962,
+                "truncated_left": False,
+                "truncated_right": False,
+                "truncated_top": False,
+                "truncated_bottom": True,
+            },
+        ],
+    )
+    selection = ar0234_unique_non_edge_candidate_selection(observation)
+    assert selection["disposition"] == "SELECTED_FOR_FURTHER_INTERPRETATION"
+    assert selection["selected_candidate_index"] == 0
+    assert selection["edge_margin_px"] == 3.0
+
 def test_edge_truncated_target_is_not_eligible_for_measurement():
     observation = ar0234_no_target(
         target_status="SINGLE_TARGET",
