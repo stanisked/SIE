@@ -907,10 +907,17 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                 "ar0234_person_detector": "ar0234_person_upper_body_yolo11n_v1",
                 "ar0234_confidence_threshold": self.confidence_threshold,
                 "ar0234_target_hold": (
-                    {"mode": "DIRECT_SINGLE_TARGET"}
+                    {"mode": "NO_OBSERVATION"}
                     if observation is None
                     else observation.get(
-                        "target_hold", {"mode": "DIRECT_SINGLE_TARGET"}
+                        "target_hold",
+                        {
+                            "mode": (
+                                "DIRECT_SINGLE_TARGET"
+                                if observation.get("target_status") == "SINGLE_TARGET"
+                                else "NOT_APPLICABLE"
+                            )
+                        },
                     )
                 ),
                 "stereo_person_detector": "opencv_mp_persondet_2023mar",
