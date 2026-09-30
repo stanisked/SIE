@@ -304,6 +304,76 @@ def ar0234_unique_non_edge_candidate_selection(observation: object) -> dict[str,
     }
 
 
+def ar0234_dynamic_target_candidate(observation: object) -> dict[str, Any]:
+    """Publish current-frame dynamic target evidence without a static-scene gate.
+
+    The result is a 2D target interpretation only. It never creates a metric
+    Measurement or execution authorization. Bottom truncation is accepted for
+    upper-body tracking; top, left, and right edges remain ineligible because
+    the current image cannot locate that target completely in those axes.
+    """
+    item = validate_ar0234_observation(observation)
+    status = item["target_status"]
+    selection: dict[str, Any] | None = None
+    candidate: dict[str, Any] | None = None
+    reason = status
+    if status == "SINGLE_TARGET":
+        candidate = {
+            "bbox_xyxy_px": list(item["bbox_xyxy_px"]),
+            "center_x_px": item["center_x_px"],
+            "confidence": item["confidence"],
+            "truncated_top": item["truncated_top"],
+            "truncated_left": item["truncated_left"],
+            "truncated_right": item["truncated_right"],
+            "truncated_bottom": item["truncated_bottom"],
+        }
+        reason = "DIRECT_SINGLE_TARGET"
+    elif status == "MULTIPLE_TARGETS":
+        selection = ar0234_unique_non_edge_candidate_selection(item)
+        if selection["disposition"] == "SELECTED_FOR_FURTHER_INTERPRETATION":
+            candidate = selection["selected_detection"]
+            reason = "UNIQUE_NON_EDGE_CANDIDATE"
+
+    base = {
+        "schema_version": "sie.ar0234.dynamic_target_candidate.v1",
+        "interpretation_id": f"ar0234-dynamic-target:{item['observation_id']}",
+        "timestamp": item["captured_at_utc"],
+        "observation_id": item["observation_id"],
+        "evidence_id": item["evidence_id"],
+        "metric_measurement_authorized": False,
+        "source_target_status": status,
+        "selection": selection,
+    }
+    if type(candidate) is not dict:
+        return {
+            **base,
+            "disposition": "UNAVAILABLE",
+            "reason": (
+                str(selection["reason"])
+                if selection is not None
+                else reason
+            ),
+            "candidate": None,
+        }
+    if (
+        candidate.get("truncated_top") is True
+        or candidate.get("truncated_left") is True
+        or candidate.get("truncated_right") is True
+    ):
+        return {
+            **base,
+            "disposition": "UNAVAILABLE",
+            "reason": "EDGE_TRUNCATED_FOR_DYNAMIC_TRACK",
+            "candidate": candidate,
+        }
+    return {
+        **base,
+        "disposition": "OBSERVED",
+        "reason": reason,
+        "candidate": candidate,
+    }
+
+
 def navigation_decision(
     measurement: dict[str, Any], *, safe_distance_m: float, bearing_deadband_deg: float,
     min_confidence: float,
