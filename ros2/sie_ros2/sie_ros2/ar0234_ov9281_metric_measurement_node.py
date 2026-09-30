@@ -97,10 +97,10 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         )
         self.declare_parameter("frame_rate_hz", 0.5)
         self.declare_parameter("max_pair_skew_ms", 80.0)
-        self.declare_parameter("confidence_threshold", 0.40)
+        self.declare_parameter("confidence_threshold", 0.70)
         self.declare_parameter("stereo_person_model", DEFAULT_STEREO_PERSON_MODEL)
         self.declare_parameter("stereo_person_reference", DEFAULT_STEREO_PERSON_REFERENCE)
-        self.declare_parameter("stereo_person_threshold", 0.50)
+        self.declare_parameter("stereo_person_threshold", 0.40)
         self.declare_parameter("min_depth_samples", 100)
         self.declare_parameter("max_depth_mad_m", 0.05)
         self.declare_parameter("static_confirmation_count", 2)
@@ -708,6 +708,8 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
                 "activation_profile_sha256": sha256_file(self.activation_path),
                 "ar0234_intrinsic_sha256": sha256_file(self.ar_intrinsic_path),
                 "ov9281_stereo_sha256": sha256_file(self.stereo_path),
+                "ar0234_person_detector": "ar0234_person_upper_body_yolo11n_v1",
+                "ar0234_confidence_threshold": self.confidence_threshold,
                 "stereo_person_detector": "opencv_mp_persondet_2023mar",
                 "stereo_person_model_sha256": self.stereo_person_model_sha256,
                 "stereo_person_reference_sha256": (
