@@ -154,10 +154,18 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
 
         self.project_root = absolute_parameter(self, "project_root")
         self.model_path = absolute_parameter(self, "model_path")
-        self.stereo_person_model_path = absolute_parameter(self, "stereo_person_model")
-        self.stereo_person_reference_path = absolute_parameter(
-            self, "stereo_person_reference"
+        self._stereo_person_detector_required = not getattr(
+            self, "_disable_stereo_person_detector", False
         )
+        self.stereo_person_model_path: Path | None = None
+        self.stereo_person_reference_path: Path | None = None
+        if self._stereo_person_detector_required:
+            self.stereo_person_model_path = absolute_parameter(
+                self, "stereo_person_model"
+            )
+            self.stereo_person_reference_path = absolute_parameter(
+                self, "stereo_person_reference"
+            )
         self.activation_path = absolute_parameter(self, "activation_profile")
         self.ar_intrinsic_path = absolute_parameter(self, "ar_intrinsic")
         self.stereo_path = absolute_parameter(self, "stereo_calibration")
@@ -224,7 +232,6 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
             sys.path.insert(0, str(self.project_root))
         import cv2
         import numpy as np
-        from vision_core.person_localization.mp_persondet import MPPersonDetOpenCV
         from vision_core.person_localization.yolo11_person_upper_body_runtime import (
             OnnxRuntimeYolo11PersonUpperBodyObserver,
         )
@@ -235,26 +242,32 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.observer = OnnxRuntimeYolo11PersonUpperBodyObserver(
             self.model_path, confidence_threshold=self.confidence_threshold
         )
-        if not self.stereo_person_model_path.is_file():
-            raise FileNotFoundError("stereo person detector model is missing")
-        if not self.stereo_person_reference_path.is_file():
-            raise FileNotFoundError("stereo person detector reference is missing")
-        if (
-            sha256_file(self.stereo_person_reference_path)
-            != EXPECTED_STEREO_PERSON_REFERENCE_SHA256
-        ):
-            raise RuntimeError("stereo person detector reference SHA-256 mismatch")
-        self.stereo_person_model_sha256 = sha256_file(
-            self.stereo_person_model_path
-        )
-        self.stereo_person_reference_sha256 = sha256_file(
-            self.stereo_person_reference_path
-        )
-        self.stereo_person_detector = MPPersonDetOpenCV(
-            self.stereo_person_model_path,
-            self.stereo_person_reference_path,
-            score_threshold=self.stereo_person_threshold,
-        )
+        self.stereo_person_detector = None
+        self.stereo_person_model_sha256: str | None = None
+        self.stereo_person_reference_sha256: str | None = None
+        if self._stereo_person_detector_required:
+            if not self.stereo_person_model_path or not self.stereo_person_model_path.is_file():
+                raise FileNotFoundError("stereo person detector model is missing")
+            if not self.stereo_person_reference_path or not self.stereo_person_reference_path.is_file():
+                raise FileNotFoundError("stereo person detector reference is missing")
+            if (
+                sha256_file(self.stereo_person_reference_path)
+                != EXPECTED_STEREO_PERSON_REFERENCE_SHA256
+            ):
+                raise RuntimeError("stereo person detector reference SHA-256 mismatch")
+            from vision_core.person_localization.mp_persondet import MPPersonDetOpenCV
+
+            self.stereo_person_model_sha256 = sha256_file(
+                self.stereo_person_model_path
+            )
+            self.stereo_person_reference_sha256 = sha256_file(
+                self.stereo_person_reference_path
+            )
+            self.stereo_person_detector = MPPersonDetOpenCV(
+                self.stereo_person_model_path,
+                self.stereo_person_reference_path,
+                score_threshold=self.stereo_person_threshold,
+            )
         exposure = int(self.get_parameter("auto_exposure").value)
         self._set_auto_exposure(self.ar_device, exposure)
         self._set_auto_exposure(self.stereo_device, exposure)
@@ -798,6 +811,8 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self, left_rectified: Any, *, cycle_id: str
     ) -> dict[str, Any]:
         """Create the internal OV9281 evidence used only for 3D association."""
+        if self.stereo_person_detector is None:
+            raise RuntimeError("stereo person detector is disabled for this node")
         evidence_id = f"ov9281-mp-persondet:{cycle_id}"
         detections = self.stereo_person_detector.detect(left_rectified)
         if not detections:
