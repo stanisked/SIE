@@ -186,6 +186,15 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.static_candidate_max_age_s = float(
             self.get_parameter("static_candidate_max_age_s").value
         )
+        self.target_hold_max_age_s = float(
+            self.get_parameter("target_hold_max_age_s").value
+        )
+        self.target_hold_max_center_delta_px = float(
+            self.get_parameter("target_hold_max_center_delta_px").value
+        )
+        self.target_hold_min_iou = float(
+            self.get_parameter("target_hold_min_iou").value
+        )
         self._static_candidate: dict[str, float] | None = None
         self._static_confirmation_observations = 0
         self._confirmed_target: dict[str, Any] | None = None
