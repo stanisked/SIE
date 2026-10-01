@@ -63,7 +63,9 @@ Important invariants:
 
 ## Current product direction
 
-The current MVP is a mobile base that can eventually follow a semantic target while continuously re-observing it. The intended behavior is:
+The long-term product is a mobile base that can eventually follow a semantic target while continuously re-observing it. **The active stage deliberately excludes mobile-base navigation and motor control.** No output of the current dynamic fusion diagnostic may authorize motion.
+
+The intended, future behavior is:
 
 ```text
 RGB semantic target
@@ -88,6 +90,10 @@ The target may be a person today and another object later. The geometry and deci
 | Quality | Left-right disparity consistency, spatial connected component, depth clusters, MAD, ambiguity and temporal checks | Refuse a result when more than one plausible 3D surface, poor disparity, or inadequate evidence remains. |
 
 The current dynamic diagnostic node intentionally does **not** require MediaPipe on OV9281. Earlier live metric code still contains an OV9281 MediaPipe detector; it is legacy static-MVP behavior and must not become a requirement for the intended RGB-semantic + stereo-geometry architecture.
+
+### Required evidence for every fusion diagnostic cycle
+
+A diagnostic result is useful only when it can be audited. Each cycle must either retain the complete evidence set named in the approved next sequence or explicitly identify which source was unavailable. Its outcome must be one of: `ASSOCIATED_DIAGNOSTIC_ONLY`, `TARGET_UNAVAILABLE`, `ASSOCIATION_UNAVAILABLE`, or a more specific evidence-backed rejection. Diagnostic evidence is not a Metric Measurement and must never be silently promoted to World State, navigation, or an actuator command.
 
 ## Hardware and runtime
 
@@ -186,19 +192,25 @@ Until then:
 
 ## Active development stage
 
-SIE is between **dynamic association diagnostics** and **validated dynamic measurement**.
+SIEE is in **evidence-driven AR0234-to-OV9281 fusion validation**, before validated dynamic measurement.
 
-The architecture is accepted. The implementation is being corrected to match it: AR0234 provides semantics; OV9281 provides geometry. The active work is to demonstrate that their calibrated association remains correct when the target and environment move, while rejecting uncertainty honestly.
+The architecture is accepted: AR0234 provides semantics; OV9281 provides geometry. The active work is to demonstrate, rather than assume, that a target detected by AR0234 projects onto the same physical target in the physical-left OV9281 image and has sufficient, connected, metrically correct stereo support across the conditional 0.5 to 4.5 m envelope.
+
+The central question is:
+
+> When AR0234 confidently detects a person, does its projected OV9281 ROI cover that person rather than background or another surface, and does it contain valid depth that remains temporally consistent?
+
+The goal is not to make the robot move. The goal is to establish the validity domain and uncertainty of a 3D target measurement in real scenes, including naturally moving people. A plausible range or bearing is not an approved navigation input until this question is answered experimentally.
 
 ## Approved next sequence
 
-1. **Freeze and document diagnostic evidence.** Run repeatable dynamic scenes with no bridge: lateral movement, approach/recede, clutter, and partial occlusion. Record ground-truth distance markers, association coverage, range error, refusal reasons, and false associations.
-2. **Resolve exposure synchronization.** Establish camera trigger capability and electrical facts safely; preserve the mechanical calibration. Do not promote host-sequential pairing beyond diagnostics.
-3. **Make the contract generic.** Represent the semantic input as `SemanticTarget2D` with class, confidence, region, timestamp, and provenance. Current YOLO bbox is one adapter. A real segmentation mask is a future optional region type.
-4. **Add temporal target tracking after timing is proven.** Track identity and uncertainty across frames, not merely an independently selected bbox every cycle. Loss or ambiguity must stop progression.
-5. **Validate dynamic Measurement.** Compare against fresh physical ground truth and approve a new, versioned dynamic policy only if all quality and timing gates pass.
-6. **Enable motion in stages.** Start with the existing supervised `bounded_forward_0.10_m` primitive, mandatory re-observation after every step, then validate range correction and stop behavior. Do not start with continuous autonomous approach.
-7. **Consider segmentation only when evidence calls for it.** If bbox inclusion of background or other objects is shown to cause false 3D association, collect and label an instance-segmentation dataset, train a backend that returns genuine masks, and compare it against bbox on the same held-out dynamic scenes. Mask is not a repair for noisy disparity or unsynchronized exposure.
+1. **Complete the per-cycle fusion recorder.** For every diagnostic attempt, retain: AR0234 source frame and semantic result; physical-left and physical-right rectified OV9281 frames; disparity before and after left-right validation; projected RGB ROI or mask, stereo frustum, valid-depth mask; connected-component and depth-cluster statistics; calibration IDs/hashes, timestamps, reference frame, confidence, and explicit refusal reason. Do not assume every current diagnostic path already preserves all of this evidence.
+2. **Measure extrinsic geometry rather than trusting it.** Quantify AR0234-to-physical-left OV9281 reprojection error throughout the usable field and depth range. Validate visually and quantitatively that projected target ROIs land on the physical person, not neighbouring background.
+3. **Characterize stereo support inside the projected target ROI.** Test coverage, connected surface support, disparity/depth distribution, outliers, range error, false association, clutter, partial occlusion, lateral movement, and approach/recede across the conditional 0.5 to 4.5 m envelope.
+4. **Define single-frame acceptance and refusal gates.** A valid result must distinguish verified 3D target, ambiguous target, insufficient depth, geometric mismatch, and temporal mismatch. Do not relax MAD, calibration, or range limits merely to increase acceptance.
+5. **Validate temporal consistency.** Establish repeatable target identity, range, bearing, and uncertainty over sequences. An isolated successful frame is not a validated target. Static or slow association remains explicitly uncertain until exposure timing is proven.
+6. **Resolve exposure synchronization safely.** Establish camera trigger capability, pinout, levels, polarity, and common-ground facts without disturbing mechanical calibration. Do not promote host-sequential pairing beyond diagnostics; reliable dynamic fusion remains blocked until temporal applicability is proven.
+7. **Return to motion only after the vision gates pass.** Then, and only then, make the semantic input contract generic as `SemanticTarget2D`, add tracking, validate a versioned dynamic Measurement policy against fresh physical ground truth, and enable the supervised `bounded_forward_0.10_m` primitive with mandatory re-observation. Consider a genuine segmentation backend only if evidence shows that bbox background inclusion causes false 3D association; it is not a repair for noisy disparity or unsynchronized exposure.
 
 ## Rules for the next agent
 
@@ -216,3 +228,4 @@ The architecture is accepted. The implementation is being corrected to match it:
 | --- | --- |
 | 2026-10-01 | Initial consolidated project snapshot: SIE architecture, Pi ROS2 state, RGB-to-stereo direction, dynamic diagnostic evidence, and explicit safety gates. |
 | 2026-10-01 | Project name changed to Spatial Intelligence Evidence Engine (SIEE); existing `sie` technical identifiers explicitly retained for compatibility. |
+| 2026-10-01 | Active scope narrowed to evidence-driven precise vision: AR0234 semantic target to OV9281 3D association, reprojection validation, per-cycle evidence, and temporal validation must be proven before motion returns to scope. |
