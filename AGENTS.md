@@ -2,7 +2,7 @@
 
 ## Scope
 
-This repository is the implementation workspace for SIE. The current active task is the DECXIN dual OV9281 stereo pipeline using `stereo_calibration_v6`.
+This repository is the implementation workspace for SIE. The current cross-project state is recorded in `PROJECT_CONTEXT.md`; it must be read before an engineering task. The active implementation includes DECXIN OV9281 stereo, AR0234 RGB semantics, and ROS 2 integration on Raspberry Pi 5.
 
 Before changing V6 calibration, guard, runtime, capture, or validation code, read:
 
@@ -17,11 +17,12 @@ If that file is not present in the repository, stop and ask for it. Do not recon
 For every engineering task:
 
 1. Read `AI_CONTEXT.md` as the repository entry point.
-2. Read the applicable approved and frozen Engineering Specifications, including the Phase 1 `ES-000` through `ES-006` set when relevant.
-3. Read the applicable canonical architecture, rules, data-model, spatial-model, Evidence Graph, and Data Contract documents.
-4. Read this `AGENTS.md` for operational working rules.
-5. Read the version-specific handoff, such as `V6_HANDOFF.md`.
-6. Inspect the implementation, tests, reports, and current working tree.
+2. Read `PROJECT_CONTEXT.md` for current state, accepted decisions, blockers, and safe continuation.
+3. Read the applicable approved and frozen Engineering Specifications, including the Phase 1 `ES-000` through `ES-006` set when relevant.
+4. Read the applicable canonical architecture, rules, data-model, spatial-model, Evidence Graph, and Data Contract documents.
+5. Read this `AGENTS.md` for operational working rules.
+6. Read the version-specific handoff, such as `V6_HANDOFF.md`.
+7. Inspect the implementation, tests, reports, and current working tree.
 
 Reading order does not change normative precedence. If documents disagree, use the precedence defined below.
 
@@ -96,6 +97,9 @@ Keep durable knowledge separate from session state:
 - label hypotheses, pending measurements, and proposed policy changes explicitly;
 - never rewrite an unverified claim as an established fact;
 - update the handoff in the same change that materially alters a validated implementation, activation state, operating envelope, or next-step sequence.
+
+`PROJECT_CONTEXT.md` is the change-controlled project snapshot. Do not update it
+automatically: edit it only after the user gives the exact command `обновить документ`.
 
 Changes to frozen SIE contracts follow this lifecycle:
 
