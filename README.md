@@ -8,6 +8,11 @@ This README describes the historical pre-consolidation repository baseline forme
 
 It is a descriptive entry point, not a normative replacement for approved Engineering Specifications or `AI_CONTEXT.md`. Later operational calibration, runtime, and validation state is outside the scope of this baseline. Historical calibration results below must not be interpreted as identifying the current operational calibration.
 
+For the active Raspberry Pi 5, ROS 2, AR0234 RGB-to-OV9281 stereo work, read
+[`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md). It is the change-controlled current
+project snapshot and is updated only after the user gives the command
+`обновить документ`.
+
 ## Vision
 
 Robots should reason about the physical world using measurable, verifiable, and traceable information.
