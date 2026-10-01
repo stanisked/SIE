@@ -21,7 +21,7 @@ from .ar0234_ov9281_metric_measurement_node import (
 )
 from .contracts import (
     ContractError,
-    ar0234_dynamic_target_candidate,
+    ar0234_temporal_target_candidate,
     encode,
     validate_ar0234_observation,
 )
@@ -57,6 +57,14 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self.declare_parameter("spatial_component_min_footprint_px", 1600)
         self.declare_parameter("spatial_component_min_width_px", 24)
         self.declare_parameter("spatial_component_min_height_px", 24)
+        # This matcher only disambiguates current RGB detections.  It never
+        # republishes an old box as if it were seen in the current frame.
+        self.declare_parameter("temporal_target_track_max_age_s", 5.0)
+        self.declare_parameter("temporal_target_minimum_iou", 0.20)
+        self.declare_parameter(
+            "temporal_target_maximum_center_displacement_relative", 0.75
+        )
+        self.declare_parameter("temporal_target_minimum_match_margin", 0.10)
         self.audit_topic = str(self.get_parameter("audit_topic").value)
         self.frustum_sample_stride_px = int(
             self.get_parameter("frustum_sample_stride_px").value
@@ -97,6 +105,20 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self.spatial_component_min_height_px = int(
             self.get_parameter("spatial_component_min_height_px").value
         )
+        self.temporal_target_track_max_age_s = float(
+            self.get_parameter("temporal_target_track_max_age_s").value
+        )
+        self.temporal_target_minimum_iou = float(
+            self.get_parameter("temporal_target_minimum_iou").value
+        )
+        self.temporal_target_maximum_center_displacement_relative = float(
+            self.get_parameter(
+                "temporal_target_maximum_center_displacement_relative"
+            ).value
+        )
+        self.temporal_target_minimum_match_margin = float(
+            self.get_parameter("temporal_target_minimum_match_margin").value
+        )
         if (
             self.frustum_sample_stride_px < 1
             or not 0.0 <= self.ar_inner_roi_x_margin_fraction < 0.5
@@ -112,6 +134,10 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             or self.spatial_component_min_footprint_px < 1
             or self.spatial_component_min_width_px < 1
             or self.spatial_component_min_height_px < 1
+            or self.temporal_target_track_max_age_s <= 0.0
+            or not 0.0 <= self.temporal_target_minimum_iou <= 1.0
+            or self.temporal_target_maximum_center_displacement_relative <= 0.0
+            or self.temporal_target_minimum_match_margin < 0.0
         ):
             raise ValueError("invalid AR-frustum association parameters")
         # Right-to-left disparity has negative sign.  Comparing it to the
@@ -130,14 +156,50 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             mode=self.cv2.STEREO_SGBM_MODE_SGBM_3WAY,
         )
         self.audit_publisher = self.create_publisher(String, self.audit_topic, 10)
+        self._confirmed_target_track: dict[str, Any] | None = None
+        self._target_track_epoch = 0
         self.get_logger().info(
             "dynamic association audit enabled; "
             f"publishing diagnostic-only evidence to {self.audit_topic}; "
             f"LR consistency=±{self.lr_consistency_max_delta_px:.1f}px; "
             "connected 3D components required; "
+            "current-frame temporal AR association enabled; "
             "AR0234 is the only semantic detector; metric Measurement, navigation, "
             "and actuator access remain disabled"
         )
+
+    def _confirm_current_target_track(
+        self, candidate: dict[str, Any], observation: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Commit a target only after this frame has passed stereo geometry.
+
+        The persisted state contains no depth and cannot produce a Measurement.
+        It is only a short-lived identity reference for the next frame's RGB
+        candidates.
+        """
+        prior = self._confirmed_target_track
+        if prior is None:
+            self._target_track_epoch += 1
+            track_id = f"ar0234-audit-track:{self.run_id}:{self._target_track_epoch}"
+            previous_bbox: list[float] | None = None
+            previous_at: str | None = None
+        else:
+            track_id = str(prior["track_id"])
+            previous_bbox = list(prior["bbox_xyxy_px"])
+            previous_at = str(prior["confirmed_at_utc"])
+        self._confirmed_target_track = {
+            "track_id": track_id,
+            "bbox_xyxy_px": [float(value) for value in candidate["bbox_xyxy_px"]],
+            "confirmed_at_utc": str(observation["captured_at_utc"]),
+            "previous_bbox_xyxy_px": previous_bbox,
+            "previous_confirmed_at_utc": previous_at,
+            "confirmed_observation_id": str(observation["observation_id"]),
+        }
+        return {
+            "state": "CONFIRMED_BY_CURRENT_RGB_STEREO_ASSOCIATION",
+            "track_id": track_id,
+            "confirmed_observation_id": observation["observation_id"],
+        }
 
     @staticmethod
     def _selected_observation(
@@ -671,8 +733,21 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             )
             # Keep unmodified model evidence visible to the existing tracker.
             self._publish_observation(raw)
-            dynamic = ar0234_dynamic_target_candidate(raw)
+            dynamic = ar0234_temporal_target_candidate(
+                raw,
+                prior_track=self._confirmed_target_track,
+                max_age_s=self.temporal_target_track_max_age_s,
+                minimum_iou=self.temporal_target_minimum_iou,
+                maximum_center_displacement_relative=(
+                    self.temporal_target_maximum_center_displacement_relative
+                ),
+                minimum_match_margin=self.temporal_target_minimum_match_margin,
+            )
             audit["ar0234_dynamic_target"] = dynamic
+            audit["ar_target_track"] = {
+                **dynamic["temporal_track"],
+                "confirmation": "PENDING_CURRENT_RGB_STEREO_ASSOCIATION",
+            }
             if dynamic["disposition"] != "OBSERVED":
                 self._publish_audit(
                     {
@@ -716,9 +791,14 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                         "status": "ASSOCIATION_UNAVAILABLE",
                         "reason": reason,
                         "association": None,
+                        "ar_target_track": {
+                            **audit["ar_target_track"],
+                            "confirmation": "NOT_CONFIRMED_ASSOCIATION_UNAVAILABLE",
+                        },
                     }
                 )
                 return
+            confirmation = self._confirm_current_target_track(candidate, observation)
             self._publish_audit(
                 {
                     **audit,
@@ -729,6 +809,10 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                         "projection_diagnostic": self._projection_diagnostic(
                             observation, association
                         ),
+                    },
+                    "ar_target_track": {
+                        **audit["ar_target_track"],
+                        "confirmation": confirmation,
                     },
                 }
             )
