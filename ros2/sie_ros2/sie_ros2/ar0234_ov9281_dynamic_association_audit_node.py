@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import rclpy
@@ -44,6 +45,12 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self.declare_parameter(
             "audit_topic", "/sie/diagnostics/ar0234_ov9281/dynamic_association"
         )
+        # Evidence capture is opt-in because a full diagnostic cycle stores
+        # multiple images and arrays.  A validation run must enable it.
+        self.declare_parameter("evidence_capture_enabled", False)
+        self.declare_parameter(
+            "evidence_dir", "~/.local/state/sie/evidence/ar0234_ov9281_dynamic_association"
+        )
         self.declare_parameter("frustum_sample_stride_px", 4)
         self.declare_parameter("ar_inner_roi_x_margin_fraction", 0.20)
         self.declare_parameter("ar_inner_roi_top_fraction", 0.30)
@@ -66,6 +73,18 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         )
         self.declare_parameter("temporal_target_minimum_match_margin", 0.10)
         self.audit_topic = str(self.get_parameter("audit_topic").value)
+        self.evidence_capture_enabled = bool(
+            self.get_parameter("evidence_capture_enabled").value
+        )
+        self.evidence_dir = Path(
+            str(self.get_parameter("evidence_dir").value)
+        ).expanduser()
+        self._evidence_run_dir: Path | None = None
+        self._active_evidence_cycle_dir: Path | None = None
+        self._active_evidence_files: list[str] = []
+        if self.evidence_capture_enabled:
+            self._evidence_run_dir = self.evidence_dir / self.run_id
+            self._evidence_run_dir.mkdir(parents=True, exist_ok=True)
         self.frustum_sample_stride_px = int(
             self.get_parameter("frustum_sample_stride_px").value
         )
@@ -445,6 +464,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         left_gray = self.cv2.cvtColor(left_rectified, self.cv2.COLOR_BGR2GRAY)
         right_gray = self.cv2.cvtColor(right_rectified, self.cv2.COLOR_BGR2GRAY)
         disparity, lr_consistent = self._left_right_disparity(left_gray, right_gray)
+        self._persist_disparity_evidence(disparity, lr_consistent)
         self._write_frustum_debug(
             left_rectified, right_rectified, disparity, lr_consistent, frustum_roi
         )
@@ -634,6 +654,83 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         }
         return association, "SUCCESS", diagnostic
 
+    def _evidence_path(self, filename: str) -> Path | None:
+        if self._active_evidence_cycle_dir is None:
+            return None
+        return self._active_evidence_cycle_dir / filename
+
+    def _write_evidence_image(self, filename: str, image: Any) -> None:
+        path = self._evidence_path(filename)
+        if path is None:
+            return
+        if not self.cv2.imwrite(str(path), image):
+            raise OSError(f"could not write evidence image: {path}")
+        self._active_evidence_files.append(filename)
+
+    def _write_evidence_array(self, filename: str, values: Any) -> None:
+        path = self._evidence_path(filename)
+        if path is None:
+            return
+        self.np.save(path, values)
+        self._active_evidence_files.append(filename)
+
+    def _begin_cycle_evidence(
+        self, cycle_id: str, ar_frame: Any, combined: Any
+    ) -> None:
+        self._active_evidence_cycle_dir = None
+        self._active_evidence_files = []
+        if not self.evidence_capture_enabled:
+            return
+        if self._evidence_run_dir is None:
+            raise RuntimeError("evidence capture run directory is unavailable")
+        cycle_dir = self._evidence_run_dir / cycle_id
+        cycle_dir.mkdir(parents=False, exist_ok=False)
+        self._active_evidence_cycle_dir = cycle_dir
+        self._write_evidence_image("ar0234_source.jpg", ar_frame)
+        self._write_evidence_image("ov9281_combined_source.jpg", combined)
+        width = self.stereo_size[0]
+        self._write_evidence_image("ov9281_physical_right_raw.jpg", combined[:, :width])
+        self._write_evidence_image("ov9281_physical_left_raw.jpg", combined[:, width:])
+
+    def _persist_rectified_evidence(self, left: Any, right: Any) -> None:
+        self._write_evidence_image("ov9281_physical_left_rectified.jpg", left)
+        self._write_evidence_image("ov9281_physical_right_rectified.jpg", right)
+
+    def _persist_ar_target_evidence(
+        self, ar_frame: Any, observation: dict[str, Any]
+    ) -> None:
+        if self._active_evidence_cycle_dir is None:
+            return
+        marked = ar_frame.copy()
+        x1, y1, x2, y2 = (int(round(float(value))) for value in observation["bbox_xyxy_px"])
+        self.cv2.rectangle(marked, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        ix1, iy1, ix2, iy2 = (int(round(value)) for value in self._ar_inner_roi(observation))
+        self.cv2.rectangle(marked, (ix1, iy1), (ix2, iy2), (0, 255, 255), 2)
+        self._write_evidence_image("ar0234_target_and_inner_roi.jpg", marked)
+
+    def _persist_disparity_evidence(self, disparity: Any, lr_consistent: Any) -> None:
+        if self._active_evidence_cycle_dir is None:
+            return
+        raw = disparity.astype(self.np.float32)
+        consistent = self.np.where(lr_consistent, raw, self.np.nan).astype(self.np.float32)
+        self._write_evidence_array("disparity_raw_px.npy", raw)
+        self._write_evidence_array("disparity_lr_consistent_px.npy", consistent)
+        self._write_evidence_image(
+            "lr_consistency_mask.png", lr_consistent.astype(self.np.uint8) * 255
+        )
+
+    def _attach_evidence_record(self, audit: dict[str, Any]) -> None:
+        if self._active_evidence_cycle_dir is None:
+            audit["evidence_capture"] = {"enabled": False}
+            return
+        audit["evidence_capture"] = {
+            "enabled": True,
+            "cycle_directory": str(self._active_evidence_cycle_dir),
+            "files": [*self._active_evidence_files, "audit.json"],
+        }
+        audit_path = self._active_evidence_cycle_dir / "audit.json"
+        audit_path.write_text(encode(audit) + "\n", encoding="utf-8")
+
     def _write_frustum_debug(
         self, left: Any, right: Any, disparity: Any, lr_consistent: Any,
         frustum_roi: tuple[int, int, int, int],
@@ -695,9 +792,12 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         }
 
     def _publish_audit(self, audit: dict[str, Any]) -> None:
+        self._attach_evidence_record(audit)
         message = String()
         message.data = encode(audit)
         self.audit_publisher.publish(message)
+        self._active_evidence_cycle_dir = None
+        self._active_evidence_files = []
 
     def _cycle(self) -> None:
         self.sequence += 1
@@ -728,6 +828,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             return
 
         try:
+            self._begin_cycle_evidence(cycle_id, ar_frame, combined)
             raw = validate_ar0234_observation(
                 self.observer.observe(ar_frame, captured_at_utc=timestamp, cycle_id=cycle_id)
             )
@@ -765,6 +866,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             if type(candidate) is not dict:
                 raise ContractError("observed dynamic target has no candidate")
             observation = self._selected_observation(raw, candidate, dynamic)
+            self._persist_ar_target_evidence(ar_frame, observation)
 
             # Pi stream identity is fixed by the validated calibration: first
             # half is physical_right, second half is physical_left.
@@ -776,6 +878,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             right_rectified = self.cv2.remap(
                 physical_right, self.map_right_1, self.map_right_2, self.cv2.INTER_LINEAR
             )
+            self._persist_rectified_evidence(left_rectified, right_rectified)
             # Do not run a second person classifier on OV9281.  The calibrated
             # AR inner ROI defines a 0.5–4.5 m stereo frustum; disparity points
             # survive only if their 3D back-projection lands inside that ROI.
