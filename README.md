@@ -1,4 +1,4 @@
-# SIE - Spatial Intelligence Engine
+# SIEE - Spatial Intelligence Evidence Engine
 
 Engineering architecture for robotic perception, spatial reasoning and decision support.
 
@@ -12,6 +12,10 @@ For the active Raspberry Pi 5, ROS 2, AR0234 RGB-to-OV9281 stereo work, read
 [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md). It is the change-controlled current
 project snapshot and is updated only after the user gives the command
 `обновить документ`.
+
+The project name is **Spatial Intelligence Evidence Engine (SIEE)**. Existing
+`sie` repository, package, ROS 2 topic, schema, and artifact identifiers remain
+unchanged for compatibility; the name update is not an API migration.
 
 ## Vision
 
