@@ -1,6 +1,6 @@
 # AI_CONTEXT.md
 
-# Spatial Intelligence Engine (SIE)
+# Spatial Intelligence Evidence Engine (SIEE)
 
 Version: 0.2
 
@@ -26,6 +26,15 @@ After reading this file, read `PROJECT_CONTEXT.md` for the current cross-project
 `обновить документ`. It records current state and safe continuation but remains
 subordinate to the normative precedence below.
 
+## Project name and technical compatibility
+
+The human-facing project name is **Spatial Intelligence Evidence Engine (SIEE)**.
+Existing `sie` names in repository paths, Python and ROS 2 packages, topics,
+schemas, evidence IDs, calibration artifacts, and frozen documents remain stable
+technical identifiers. This name change does not authorize a code or API rename.
+Historical references to **Spatial Intelligence Engine (SIE)** refer to the same
+project unless they explicitly identify a legacy technical artifact.
+
 ## Normative precedence
 
 When repository artifacts disagree, use this order:
@@ -42,7 +51,8 @@ If a conflict cannot be resolved from repository evidence, stop and report the e
 
 ## Mission
 
-Spatial Intelligence Engine (SIE) is an engineering architecture for Spatial Intelligence.
+Spatial Intelligence Evidence Engine (SIEE) is an engineering architecture for
+Spatial Intelligence.
 
 Its purpose is to transform heterogeneous observations into a continuously evolving, evidence-backed understanding of the physical world and support reliable engineering decisions and safe actions.
 
