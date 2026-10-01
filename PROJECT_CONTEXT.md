@@ -1,4 +1,4 @@
-# SIE Project Context
+# SIEE Project Context
 
 **Snapshot date:** 2026-10-01  
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
@@ -13,6 +13,17 @@ This file is the change-controlled snapshot of the active project state.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
 
+## Project name and compatibility
+
+The project name is **Spatial Intelligence Evidence Engine (SIEE)**.
+
+Existing technical identifiers remain unchanged for compatibility: repository
+history, Python packages, ROS 2 packages, topics such as `/sie/...`, and schema
+names such as `sie.*` continue to use `sie`. This naming decision does not rename
+or invalidate frozen contracts, calibration artifacts, evidence IDs, or prior
+reports. Historic wording `Spatial Intelligence Engine (SIE)` refers to the same
+project unless it explicitly names a legacy technical artifact.
+
 ## Read this first
 
 Read in this order before changing SIE:
@@ -25,9 +36,9 @@ Read in this order before changing SIE:
 
 If these sources conflict, use the precedence in `AI_CONTEXT.md`; do not guess.
 
-## What SIE is
+## What SIEE is
 
-SIE, Spatial Intelligence Engine, is an evidence-based robotics architecture. It turns sensor observations into a traceable model of the physical world and uses that model for safe decisions and actions. It is not a particular neural model, camera, ROS 2 package, or robot base.
+SIEE, Spatial Intelligence Evidence Engine, is an evidence-based robotics architecture. It turns sensor observations into a traceable model of the physical world and uses that model for safe decisions and actions. It is not a particular neural model, camera, ROS 2 package, or robot base.
 
 Canonical flow:
 
@@ -204,3 +215,4 @@ The architecture is accepted. The implementation is being corrected to match it:
 | Date | Change |
 | --- | --- |
 | 2026-10-01 | Initial consolidated project snapshot: SIE architecture, Pi ROS2 state, RGB-to-stereo direction, dynamic diagnostic evidence, and explicit safety gates. |
+| 2026-10-01 | Project name changed to Spatial Intelligence Evidence Engine (SIEE); existing `sie` technical identifiers explicitly retained for compatibility. |
