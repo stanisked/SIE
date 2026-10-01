@@ -2,6 +2,7 @@ from sie_ros2.contracts import (
     ContractError,
     ar0234_target_suitability,
     ar0234_dynamic_target_candidate,
+    ar0234_temporal_target_candidate,
     ar0234_unique_non_edge_candidate_selection,
     navigation_decision,
     supervisor_state,
@@ -258,6 +259,153 @@ def test_dynamic_target_uses_unique_non_edge_candidate_without_static_gate():
     assert target["disposition"] == "OBSERVED"
     assert target["reason"] == "UNIQUE_NON_EDGE_CANDIDATE"
     assert target["metric_measurement_authorized"] is False
+
+
+def _temporal_multiple_target_observation(**overrides):
+    value = ar0234_no_target(
+        observation_id="ar0234:test:temporal-current",
+        evidence_id="ar0234:test:temporal-current",
+        source_cycle_id="temporal-current",
+        captured_at_utc="2026-10-01T10:00:01+00:00",
+        target_status="MULTIPLE_TARGETS",
+        detection_count=2,
+        eligible_detection_count=2,
+        detections=[
+            {
+                "bbox_xyxy_px": [700.0, 100.0, 1100.0, 1100.0],
+                "center_x_px": 900.0,
+                "confidence": 0.90,
+                "truncated_left": False,
+                "truncated_right": False,
+                "truncated_top": False,
+                "truncated_bottom": False,
+            },
+            {
+                "bbox_xyxy_px": [1300.0, 100.0, 1700.0, 1100.0],
+                "center_x_px": 1500.0,
+                "confidence": 0.80,
+                "truncated_left": False,
+                "truncated_right": False,
+                "truncated_top": False,
+                "truncated_bottom": False,
+            },
+        ],
+    )
+    value.update(overrides)
+    return value
+
+
+def _temporal_prior_track(**overrides):
+    value = {
+        "track_id": "ar0234-audit-track:test:1",
+        "bbox_xyxy_px": [690.0, 100.0, 1090.0, 1100.0],
+        "confirmed_at_utc": "2026-10-01T10:00:00+00:00",
+        "previous_bbox_xyxy_px": None,
+        "previous_confirmed_at_utc": None,
+    }
+    value.update(overrides)
+    return value
+
+
+def _temporal_candidate(observation, prior_track):
+    return ar0234_temporal_target_candidate(
+        observation,
+        prior_track=prior_track,
+        max_age_s=5.0,
+        minimum_iou=0.20,
+        maximum_center_displacement_relative=0.75,
+        minimum_match_margin=0.10,
+    )
+
+
+def test_temporal_target_chooses_only_a_matching_current_frame_detection():
+    target = _temporal_candidate(
+        _temporal_multiple_target_observation(), _temporal_prior_track()
+    )
+    assert target["disposition"] == "OBSERVED"
+    assert target["reason"] == "TEMPORAL_CURRENT_FRAME_MATCH"
+    assert target["candidate"]["bbox_xyxy_px"] == [700.0, 100.0, 1100.0, 1100.0]
+    assert target["temporal_track"]["selected_candidate_index"] == 0
+    assert target["metric_measurement_authorized"] is False
+
+
+def test_temporal_target_refuses_a_stale_track():
+    target = _temporal_candidate(
+        _temporal_multiple_target_observation(
+            captured_at_utc="2026-10-01T10:00:07+00:00"
+        ),
+        _temporal_prior_track(),
+    )
+    assert target["disposition"] == "UNAVAILABLE"
+    assert target["reason"] == "TEMPORAL_TRACK_STALE"
+    assert target["candidate"] is None
+
+
+def test_temporal_target_refuses_two_similarly_matching_current_detections():
+    target = _temporal_candidate(
+        _temporal_multiple_target_observation(
+            detections=[
+                {
+                    "bbox_xyxy_px": [700.0, 100.0, 1100.0, 1100.0],
+                    "center_x_px": 900.0,
+                    "confidence": 0.90,
+                    "truncated_left": False,
+                    "truncated_right": False,
+                    "truncated_top": False,
+                    "truncated_bottom": False,
+                },
+                {
+                    "bbox_xyxy_px": [705.0, 100.0, 1105.0, 1100.0],
+                    "center_x_px": 905.0,
+                    "confidence": 0.80,
+                    "truncated_left": False,
+                    "truncated_right": False,
+                    "truncated_top": False,
+                    "truncated_bottom": False,
+                },
+            ]
+        ),
+        _temporal_prior_track(),
+    )
+    assert target["disposition"] == "UNAVAILABLE"
+    assert target["reason"] == "TEMPORAL_CURRENT_FRAME_MATCH_AMBIGUOUS_OR_ABSENT"
+    assert target["candidate"] is None
+
+
+def test_temporal_target_uses_confirmed_bbox_velocity_only_to_rank_current_detections():
+    target = _temporal_candidate(
+        _temporal_multiple_target_observation(
+            detections=[
+                {
+                    "bbox_xyxy_px": [800.0, 100.0, 1200.0, 1100.0],
+                    "center_x_px": 1000.0,
+                    "confidence": 0.90,
+                    "truncated_left": False,
+                    "truncated_right": False,
+                    "truncated_top": False,
+                    "truncated_bottom": False,
+                },
+                {
+                    "bbox_xyxy_px": [1300.0, 100.0, 1700.0, 1100.0],
+                    "center_x_px": 1500.0,
+                    "confidence": 0.80,
+                    "truncated_left": False,
+                    "truncated_right": False,
+                    "truncated_top": False,
+                    "truncated_bottom": False,
+                },
+            ]
+        ),
+        _temporal_prior_track(
+            bbox_xyxy_px=[700.0, 100.0, 1100.0, 1100.0],
+            previous_bbox_xyxy_px=[600.0, 100.0, 1000.0, 1100.0],
+            previous_confirmed_at_utc="2026-10-01T09:59:59+00:00",
+        ),
+    )
+    assert target["disposition"] == "OBSERVED"
+    assert target["candidate"]["center_x_px"] == 1000.0
+    assert target["temporal_track"]["prediction_mode"] == "CONSTANT_VELOCITY_BBOX"
+    assert target["temporal_track"]["predicted_bbox_xyxy_px"] == [800.0, 100.0, 1200.0, 1100.0]
 
 def test_edge_truncated_target_is_not_eligible_for_measurement():
     observation = ar0234_no_target(
