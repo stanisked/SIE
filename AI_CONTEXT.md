@@ -20,7 +20,11 @@ Its purpose is to establish a shared engineering context before generating archi
 
 Every AI assistant shall read this document before performing any engineering task.
 
-After reading this file, read the applicable approved and frozen Engineering Specifications and canonical Data Contracts, then `AGENTS.md`, the relevant version-specific handoff, and the implementation under inspection.
+After reading this file, read `PROJECT_CONTEXT.md` for the current cross-project snapshot, then the applicable approved and frozen Engineering Specifications and canonical Data Contracts, `AGENTS.md`, the relevant version-specific handoff, and the implementation under inspection.
+
+`PROJECT_CONTEXT.md` is updated only after the user gives the exact command
+`обновить документ`. It records current state and safe continuation but remains
+subordinate to the normative precedence below.
 
 ## Normative precedence
 
