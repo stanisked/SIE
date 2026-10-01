@@ -1,4 +1,4 @@
-# SIE project instructions for Codex
+# SIEE project instructions for Codex
 
 ## Scope
 
@@ -26,9 +26,18 @@ For every engineering task:
 
 Reading order does not change normative precedence. If documents disagree, use the precedence defined below.
 
-## SIE project identity and purpose
+## SIEE project identity and purpose
 
-SIE means both **see** and **Spatial Intelligence Engine**. Its purpose is to turn heterogeneous observations of the physical world into a continuously updated, evidence-backed world model and to use that model for reliable engineering decisions and safe actions.
+The project name is **Spatial Intelligence Evidence Engine (SIEE)**. Its purpose
+is to turn heterogeneous observations of the physical world into a continuously
+updated, evidence-backed world model and to use that model for reliable
+engineering decisions and safe actions.
+
+Keep the established `sie` repository, Python, ROS 2, topic, schema, evidence,
+and artifact identifiers unchanged unless the user separately authorizes a
+versioned compatibility migration. Historic references to Spatial Intelligence
+Engine (SIE) refer to this project unless they explicitly identify a legacy
+technical artifact.
 
 The project follows this direction:
 
