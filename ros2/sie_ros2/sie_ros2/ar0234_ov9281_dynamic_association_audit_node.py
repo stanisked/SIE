@@ -699,14 +699,21 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
     def _persist_ar_target_evidence(
         self, ar_frame: Any, observation: dict[str, Any]
     ) -> None:
-        if self._active_evidence_cycle_dir is None:
-            return
         marked = ar_frame.copy()
-        x1, y1, x2, y2 = (int(round(float(value))) for value in observation["bbox_xyxy_px"])
+        x1, y1, x2, y2 = (
+            int(round(float(value))) for value in observation["bbox_xyxy_px"]
+        )
         self.cv2.rectangle(marked, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        ix1, iy1, ix2, iy2 = (int(round(value)) for value in self._ar_inner_roi(observation))
+        ix1, iy1, ix2, iy2 = (
+            int(round(value)) for value in self._ar_inner_roi(observation)
+        )
         self.cv2.rectangle(marked, (ix1, iy1), (ix2, iy2), (0, 255, 255), 2)
-        self._write_evidence_image("ar0234_target_and_inner_roi.jpg", marked)
+        if self._active_evidence_cycle_dir is not None:
+            self._write_evidence_image("ar0234_target_and_inner_roi.jpg", marked)
+        if not self.cv2.imwrite(
+            str(self.debug_dir / "latest_ar0234_target_and_inner_roi.jpg"), marked
+        ):
+            raise OSError("could not write latest AR0234 target debug image")
 
     def _persist_disparity_evidence(self, disparity: Any, lr_consistent: Any) -> None:
         if self._active_evidence_cycle_dir is None:
