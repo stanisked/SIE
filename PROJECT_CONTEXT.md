@@ -1,6 +1,6 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-10-01  
+**Snapshot date:** 2026-10-02  
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
 **Status:** active engineering validation, not autonomous operation.
 
@@ -122,6 +122,18 @@ The following artifacts are bound into the current ROS2 work. Their SHA-256 valu
 
 Independent physical depth checks supported the conditional **0.5 to 4.5 m** profile. This profile binds calibration and range for the static supervised chain. It is not an authorization for dynamic fusion, autonomous navigation, or motors.
 
+### Latest static physical-depth evidence
+
+Recent controlled static-board work materially strengthened the conclusion that the calibrated OV9281 stereo geometry itself can be metrically accurate when the intended target surface is actually selected.
+
+- A final front-facing board test at nominal **1.50 m** produced a 10-cycle series with mean depth about **1.49998 m** and approximately **±5.7 mm** spread.
+- This result does **not** validate arbitrary human surfaces, dynamic fusion, semantic selection, or exposure synchronization. It validates that, under a controlled textured planar target, the active stereo calibration can produce near-ground-truth range at 1.5 m.
+- The experiment did not show a need for the auxiliary laser to achieve this controlled planar range accuracy.
+- A prior low-board run was not a clean planar validation because the projected ROI mixed board and clothing; two cycles had depth MAD about 52.7 and 55.8 mm.
+- A later chest-board run was invalid as a semantic-target test because the AR0234 detector selected a curtain in 31 of 36 cycles, with bbox x approximately 1812..1917. The stereo ROI followed that false semantic target. This is evidence of semantic target-selection failure, **not** evidence of stereo calibration failure.
+
+These results require strict separation of three questions: semantic target selection, RGB-to-stereo association, and stereo surface quality.
+
 ## What is implemented and tested
 
 ### ROS 2 contracts and static supervised chain
@@ -155,11 +167,12 @@ The node:
 - applies left-right disparity consistency;
 - keeps only a sufficiently supported connected spatial component;
 - evaluates depth clusters inside that component without trimming the full cluster to hide spread;
-- reports `ASSOCIATED_DIAGNOSTIC_ONLY`, `ASSOCIATION_UNAVAILABLE`, or `TARGET_UNAVAILABLE`.
+- reports `ASSOCIATED_DIAGNOSTIC_ONLY`, `ASSOCIATION_UNAVAILABLE`, or `TARGET_UNAVAILABLE`;
+- includes fail-closed temporal association logic, but a trustworthy live `TEMPORAL_CURRENT_FRAME_MATCH` has not yet been established as a validated dynamic capability.
 
 It never publishes a Metric Measurement, navigation decision, or motor command. `metric_measurement_authorized` remains `false`.
 
-Latest observed spatial-gate evidence from a 42-cycle diagnostic run:
+Earlier 42-cycle diagnostic evidence:
 
 | Outcome | Count |
 | --- | ---: |
@@ -168,6 +181,69 @@ Latest observed spatial-gate evidence from a 42-cycle diagnostic run:
 | `TARGET_UNAVAILABLE` | 20 |
 
 The five associations had large coherent left-right-consistent spatial components, but many other frames were refused because full selected depth-cluster MAD exceeded the current 0.05 m limit. The correct response is to investigate target surface selection and evidence quality, not silently relax MAD, calibration, or range limits.
+
+### Recent fusion-validation results
+
+A later route-style audit produced **57 diagnostic cycles**. AR0234 produced a target in 12 cycles and stereo association succeeded in 10 of those 12. Representative associated depths included approximately:
+
+- nominal 4 m -> about 4.220 m;
+- nominal 3 m -> about 3.285 to 3.293 m;
+- nominal 2 m -> about 2.259 m.
+
+This run showed that the fusion chain can associate some targets over range, but it also made clear that **semantic target availability/selection was the dominant practical limiter in that run**. These measurements must not be treated as a new calibrated range profile because the route geometry, target surface, and ground-truth procedure were not equivalent to the controlled planar validation.
+
+A later 26-cycle person test produced:
+
+- 9 AR0234 detections with confidence about 0.91 to 0.94;
+- roughly 7.4k to 8.6k left-right-consistent stereo points in detected frames;
+- only 0 to 36 valid in-range depth samples in the projected target ROI in those frames;
+- a later example with 8,683 LR-consistent points and 9,271 positive-disparity samples but only 56 in-range ROI samples, below the current minimum of 100.
+
+The system correctly failed closed. This evidence is important because it shows that a globally healthy disparity field does not guarantee sufficient metric support on the projected human target surface.
+
+### Static target-selection diagnosis
+
+Controlled static-board runs isolated a semantic failure mode:
+
+- `static_board_chest_1p5m` was not valid evidence for human-surface stereo quality because the detector frequently selected the curtain instead of the intended person/board target.
+- The projected OV9281 ROI followed the incorrect AR0234 bbox, as it should under the current architecture.
+- Therefore, the resulting stereo refusals must not be attributed to calibration or disparity until semantic selection is first proven correct on the source RGB frame.
+
+The next controlled human test must first verify that the green AR0234 bbox continuously covers the actual person for the full observation interval before using ROI depth statistics to judge stereo support.
+
+## Current engineering interpretation
+
+The latest evidence requires explicit separation of two independent stereo-quality axes.
+
+### 1. Geometric accuracy
+
+Question:
+
+> When a valid stereo correspondence exists, how accurately does calibrated geometry reconstruct metric depth?
+
+Controlled textured planar tests now provide strong evidence that this can be very good near 1.5 m with the current calibration.
+
+Relevant factors include intrinsic calibration, baseline, extrinsics, rectification, disparity precision, and physical calibration stability.
+
+### 2. Stereo observability / target-surface support
+
+Question:
+
+> Does the intended target surface actually provide enough trustworthy stereo correspondence inside the projected ROI?
+
+Relevant factors include surface texture, local contrast, illumination, exposure, motion blur, occlusion, repetitive patterns, matcher behavior, and semantic ROI placement.
+
+The current human-target evidence suggests this question is now at least as important as calibration accuracy. Good calibration cannot create disparity where the projected human surface has insufficient observable correspondence.
+
+This distinction is an engineering interpretation supported by the latest controlled tests. It does **not** yet approve a new measurement policy, a different matcher, active texture, another sensor modality, or online recalibration.
+
+### External research note: calibration as runtime health
+
+Recent external stereo-depth research reviewed during this work reinforced a useful hypothesis: high-precision stereo systems may need runtime calibration-health monitoring because heat, vibration, mechanical shifts, or impacts can degrade extrinsic alignment after nominal calibration.
+
+For SIEE, a future `Calibration Health Observation` is therefore a candidate concept, for example carrying epipolar residual, drift suspicion, confidence, timestamp, and state such as `VALID`, `SUSPECT`, or `BLOCKED`.
+
+This is **not an accepted architecture rule yet**. Do not implement online recalibration or add a new canonical object solely from vendor literature. First demonstrate an actual runtime calibration-drift failure mode in SIEE evidence.
 
 ## Current blockers and safety boundary
 
@@ -183,6 +259,22 @@ Until then:
 - no dynamic navigation authorization;
 - no actuator command driven by dynamic fusion.
 
+### Semantic target selection is not yet reliable enough
+
+The chest-board diagnostic showed a high-confidence wrong-region failure mode: the RGB detector can select background structure such as a curtain, after which the calibrated projection correctly carries the wrong semantic target into stereo.
+
+Therefore:
+
+- no stereo-quality conclusion is valid for a cycle until the source AR0234 bbox is verified to cover the intended person;
+- do not repair wrong RGB target selection by widening stereo ROI or relaxing stereo acceptance gates;
+- confidence threshold changes must be justified by evidence. A higher threshold may suppress some false targets but is not a substitute for validating target identity.
+
+### Human-surface stereo support is not yet validated
+
+Even with confident AR0234 detections and thousands of globally LR-consistent stereo points, recent person tests often produced fewer than 100 in-range ROI depth samples. The cause is not yet proven. Candidate factors include target-surface observability, ROI placement, stereo matching quality on clothing/skin, occlusion, and timing.
+
+Do not conclude that calibration is bad merely from sparse human ROI depth, because controlled board range accuracy is currently much stronger than human-surface support.
+
 ### Electrical and calibration safety
 
 - Do not connect ESP32 GPIO to camera TRG or STRB pins until pinout, signal levels, polarity, and common ground are verified with safe measurements.
@@ -192,25 +284,32 @@ Until then:
 
 ## Active development stage
 
-SIEE is in **evidence-driven AR0234-to-OV9281 fusion validation**, before validated dynamic measurement.
+SIEE is in **evidence-driven AR0234-to-OV9281 target association and human-surface stereo-support validation**, before validated dynamic measurement.
 
-The architecture is accepted: AR0234 provides semantics; OV9281 provides geometry. The active work is to demonstrate, rather than assume, that a target detected by AR0234 projects onto the same physical target in the physical-left OV9281 image and has sufficient, connected, metrically correct stereo support across the conditional 0.5 to 4.5 m envelope.
+The architecture is accepted: AR0234 provides semantics; OV9281 provides geometry. Controlled planar tests now show that stereo range accuracy can be excellent when the intended textured surface is correctly observed. The active uncertainty has moved toward two practical questions:
 
-The central question is:
+1. does AR0234 continuously select the intended person rather than a false background target; and
+2. when it does, does the projected OV9281 ROI contain a connected, temporally stable, metrically plausible stereo surface belonging to that person?
 
-> When AR0234 confidently detects a person, does its projected OV9281 ROI cover that person rather than background or another surface, and does it contain valid depth that remains temporally consistent?
+The central question is now:
+
+> When AR0234 continuously and correctly detects the person, does the projected OV9281 ROI remain on that person and contain enough trustworthy, connected stereo support to form a stable 3D target surface?
 
 The goal is not to make the robot move. The goal is to establish the validity domain and uncertainty of a 3D target measurement in real scenes, including naturally moving people. A plausible range or bearing is not an approved navigation input until this question is answered experimentally.
 
 ## Approved next sequence
 
-1. **Complete the per-cycle fusion recorder.** For every diagnostic attempt, retain: AR0234 source frame and semantic result; physical-left and physical-right rectified OV9281 frames; disparity before and after left-right validation; projected RGB ROI or mask, stereo frustum, valid-depth mask; connected-component and depth-cluster statistics; calibration IDs/hashes, timestamps, reference frame, confidence, and explicit refusal reason. Do not assume every current diagnostic path already preserves all of this evidence.
-2. **Measure extrinsic geometry rather than trusting it.** Quantify AR0234-to-physical-left OV9281 reprojection error throughout the usable field and depth range. Validate visually and quantitatively that projected target ROIs land on the physical person, not neighbouring background.
-3. **Characterize stereo support inside the projected target ROI.** Test coverage, connected surface support, disparity/depth distribution, outliers, range error, false association, clutter, partial occlusion, lateral movement, and approach/recede across the conditional 0.5 to 4.5 m envelope.
-4. **Define single-frame acceptance and refusal gates.** A valid result must distinguish verified 3D target, ambiguous target, insufficient depth, geometric mismatch, and temporal mismatch. Do not relax MAD, calibration, or range limits merely to increase acceptance.
-5. **Validate temporal consistency.** Establish repeatable target identity, range, bearing, and uncertainty over sequences. An isolated successful frame is not a validated target. Static or slow association remains explicitly uncertain until exposure timing is proven.
-6. **Resolve exposure synchronization safely.** Establish camera trigger capability, pinout, levels, polarity, and common-ground facts without disturbing mechanical calibration. Do not promote host-sequential pairing beyond diagnostics; reliable dynamic fusion remains blocked until temporal applicability is proven.
-7. **Return to motion only after the vision gates pass.** Then, and only then, make the semantic input contract generic as `SemanticTarget2D`, add tracking, validate a versioned dynamic Measurement policy against fresh physical ground truth, and enable the supervised `bounded_forward_0.10_m` primitive with mandatory re-observation. Consider a genuine segmentation backend only if evidence shows that bbox background inclusion causes false 3D association; it is not a repair for noisy disparity or unsynchronized exposure.
+1. **Run the controlled 30-second stationary-person semantic gate.** Keep the person still and observe continuously. First verify that the green AR0234 bbox stays on the actual person for the full interval. Preserve every false-target, target-loss, and truncation event. Do not use stereo support statistics to judge the person surface in cycles where the semantic bbox is wrong.
+2. **Complete the per-cycle fusion recorder.** For every diagnostic attempt, retain: AR0234 source frame and semantic result; physical-left and physical-right rectified OV9281 frames; disparity before and after left-right validation; projected RGB ROI or mask, stereo frustum, valid-depth mask; connected-component and depth-cluster statistics; calibration IDs/hashes, timestamps, reference frame, confidence, and explicit refusal reason. Do not assume every current diagnostic path already preserves all of this evidence.
+3. **Quantify stereo support only on semantically valid person cycles.** Record in-ROI valid-depth count and ratio, LR-consistent support, connected-component size, depth median, MAD, temporal jitter, and rejection reason. Separate globally good disparity from target-ROI support.
+4. **Add a controlled surface-observability benchmark.** At a fixed known distance, compare at least: calibration board / strongly textured planar target, textured fabric/object, plain clothing, and a stationary human torso. Use the same calibration and geometry. The purpose is to distinguish geometric accuracy from poor target-surface observability.
+5. **Add surface-quality metrics beyond a single median depth.** For planar targets, fit a plane and record RMS and robust tail error in addition to range bias. For person targets, measure connected support and temporal surface consistency rather than relying only on an absolute minimum point count.
+6. **Measure extrinsic geometry rather than trusting it.** Quantify AR0234-to-physical-left OV9281 reprojection error throughout the usable field and depth range. Validate visually and quantitatively that projected target ROIs land on the physical person, not neighbouring background.
+7. **Define single-frame acceptance and refusal gates.** A valid result must distinguish verified 3D target, wrong semantic target, ambiguous target, insufficient target-surface depth, geometric mismatch, and temporal mismatch. Do not relax MAD, calibration, range, or point-count limits merely to increase acceptance.
+8. **Validate temporal consistency.** Establish repeatable target identity, range, bearing, connected support, and uncertainty over sequences. An isolated successful frame is not a validated target. Static or slow association remains explicitly uncertain until exposure timing is proven.
+9. **Resolve exposure synchronization safely.** Establish camera trigger capability, pinout, levels, polarity, and common-ground facts without disturbing mechanical calibration. Do not promote host-sequential pairing beyond diagnostics; reliable dynamic fusion remains blocked until temporal applicability is proven.
+10. **Investigate calibration health only if evidence demands it.** Measure vertical epipolar residual and repeat controlled planar tests over time, temperature, or mechanical events. Add online calibration-health logic only if SIEE evidence demonstrates a meaningful drift mode.
+11. **Return to motion only after the vision gates pass.** Then, and only then, make the semantic input contract generic as `SemanticTarget2D`, add tracking, validate a versioned dynamic Measurement policy against fresh physical ground truth, and enable the supervised `bounded_forward_0.10_m` primitive with mandatory re-observation. Consider a genuine segmentation backend only if evidence shows that bbox background inclusion causes false 3D association; it is not a repair for noisy disparity, weak target texture, or unsynchronized exposure.
 
 ## Rules for the next agent
 
@@ -221,6 +320,7 @@ The goal is not to make the robot move. The goal is to establish the validity do
 - Do not add a mandatory OV9281 semantic detector to the RGB + stereo architecture.
 - Do not replace calibrated geometry, relax safety thresholds, widen the range, or enable motors merely because a diagnostic frame looks promising.
 - Preserve raw evidence, calibration hashes, activation profiles, and reference-frame semantics.
+- When diagnosing sparse person depth, first prove the RGB bbox is on the intended person, then separate stereo geometric accuracy from target-surface observability.
 
 ## Revision history
 
@@ -229,3 +329,6 @@ The goal is not to make the robot move. The goal is to establish the validity do
 | 2026-10-01 | Initial consolidated project snapshot: SIE architecture, Pi ROS2 state, RGB-to-stereo direction, dynamic diagnostic evidence, and explicit safety gates. |
 | 2026-10-01 | Project name changed to Spatial Intelligence Evidence Engine (SIEE); existing `sie` technical identifiers explicitly retained for compatibility. |
 | 2026-10-01 | Active scope narrowed to evidence-driven precise vision: AR0234 semantic target to OV9281 3D association, reprojection validation, per-cycle evidence, and temporal validation must be proven before motion returns to scope. |
+| 2026-10-02 | Added latest fusion evidence: 57-cycle route audit, fail-closed person test with globally strong disparity but sparse in-ROI depth, and semantic false-target diagnosis from static chest-board runs. |
+| 2026-10-02 | Added controlled 1.50 m front-board evidence: 10-cycle mean about 1.49998 m with approximately ±5.7 mm spread, strengthening the distinction between stereo geometric accuracy and human-surface observability. |
+| 2026-10-02 | Updated active stage and next sequence: first prove continuous correct person bbox, then benchmark target-surface support; added plane/surface quality metrics and a conditional future calibration-health hypothesis. |
