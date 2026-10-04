@@ -696,10 +696,28 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self._write_evidence_image("ov9281_physical_left_rectified.jpg", left)
         self._write_evidence_image("ov9281_physical_right_rectified.jpg", right)
 
-    def _persist_ar_target_evidence(
-        self, ar_frame: Any, observation: dict[str, Any]
-    ) -> None:
+    def _render_ar_live_preview(
+        self,
+        ar_frame: Any,
+        observation: dict[str, Any] | None = None,
+        status: str | None = None,
+    ) -> Any:
+        """Render the AR0234 live view even when no target is available."""
         marked = ar_frame.copy()
+        if observation is None:
+            message = f"AR0234: {status or 'NO_TARGET'}"
+            self.cv2.putText(
+                marked,
+                message,
+                (24, 48),
+                self.cv2.FONT_HERSHEY_SIMPLEX,
+                1.0,
+                (0, 0, 255),
+                2,
+                self.cv2.LINE_AA,
+            )
+            return marked
+
         x1, y1, x2, y2 = (
             int(round(float(value))) for value in observation["bbox_xyxy_px"]
         )
@@ -708,12 +726,21 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             int(round(value)) for value in self._ar_inner_roi(observation)
         )
         self.cv2.rectangle(marked, (ix1, iy1), (ix2, iy2), (0, 255, 255), 2)
-        if self._active_evidence_cycle_dir is not None:
-            self._write_evidence_image("ar0234_target_and_inner_roi.jpg", marked)
+        return marked
+
+    def _write_live_ar_preview(self, marked: Any) -> None:
         if not self.cv2.imwrite(
             str(self.debug_dir / "latest_ar0234_target_and_inner_roi.jpg"), marked
         ):
             raise OSError("could not write latest AR0234 target debug image")
+
+    def _persist_ar_target_evidence(
+        self, ar_frame: Any, observation: dict[str, Any]
+    ) -> None:
+        marked = self._render_ar_live_preview(ar_frame, observation)
+        if self._active_evidence_cycle_dir is not None:
+            self._write_evidence_image("ar0234_target_and_inner_roi.jpg", marked)
+        self._write_live_ar_preview(marked)
 
     def _persist_disparity_evidence(self, disparity: Any, lr_consistent: Any) -> None:
         if self._active_evidence_cycle_dir is None:
@@ -802,11 +829,18 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self._attach_evidence_record(audit)
         message = String()
         message.data = encode(audit)
-        self.audit_publisher.publish(message)
+        if rclpy.ok():
+            try:
+                self.audit_publisher.publish(message)
+            except Exception:
+                if rclpy.ok():
+                    raise
         self._active_evidence_cycle_dir = None
         self._active_evidence_files = []
 
     def _cycle(self) -> None:
+        if not rclpy.ok():
+            return
         self.sequence += 1
         timestamp = datetime.now(timezone.utc)
         ar_frame, ar_mono = self._read(self.ar_capture)
@@ -840,7 +874,14 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                 self.observer.observe(ar_frame, captured_at_utc=timestamp, cycle_id=cycle_id)
             )
             # Keep unmodified model evidence visible to the existing tracker.
-            self._publish_observation(raw)
+            if not rclpy.ok():
+                return
+            try:
+                self._publish_observation(raw)
+            except Exception:
+                if rclpy.ok():
+                    raise
+                return
             dynamic = ar0234_temporal_target_candidate(
                 raw,
                 prior_track=self._confirmed_target_track,
@@ -857,6 +898,9 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                 "confirmation": "PENDING_CURRENT_RGB_STEREO_ASSOCIATION",
             }
             if dynamic["disposition"] != "OBSERVED":
+                self._write_live_ar_preview(
+                    self._render_ar_live_preview(ar_frame, status=str(dynamic["reason"]))
+                )
                 self._publish_audit(
                     {
                         **audit,
@@ -955,7 +999,8 @@ def main(args: list[str] | None = None) -> None:
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":
