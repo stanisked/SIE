@@ -271,9 +271,10 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         """Reject diagnostic targets whose image geometry is not upper-body-like.
 
         This is a fail-closed interpretation of an existing AR0234 observation,
-        not a detector rewrite.  Bottom-edge truncation remains allowed for the
-        upper-body use case, but top/left/right edge candidates cannot define a
-        stable stereo frustum.
+        not a detector rewrite.  Vertical-edge proximity remains usable for
+        the upper-body use case because the inner ROI removes the head and leg
+        regions.  Left/right edge candidates cannot define a stable stereo
+        frustum.
         """
         bbox = candidate.get("bbox_xyxy_px")
         if type(bbox) is not list or len(bbox) != 4:
@@ -291,8 +292,6 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             rejection_reasons.append("BBOX_NEAR_LEFT_IMAGE_EDGE")
         if x2 >= frame_width - edge_margin:
             rejection_reasons.append("BBOX_NEAR_RIGHT_IMAGE_EDGE")
-        if y1 <= edge_margin:
-            rejection_reasons.append("BBOX_NEAR_TOP_IMAGE_EDGE")
         return {
             "accepted": not rejection_reasons,
             "reason": "GEOMETRY_ACCEPTED"
