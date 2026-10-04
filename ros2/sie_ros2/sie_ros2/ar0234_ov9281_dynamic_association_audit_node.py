@@ -705,17 +705,23 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         """Render the AR0234 live view even when no target is available."""
         marked = ar_frame.copy()
         if observation is None:
-            message = f"AR0234: {status or 'NO_TARGET'}"
-            self.cv2.putText(
-                marked,
-                message,
-                (24, 48),
-                self.cv2.FONT_HERSHEY_SIMPLEX,
-                1.0,
-                (0, 0, 255),
-                2,
-                self.cv2.LINE_AA,
-            )
+            message = f"AR0234 #{self.sequence:08d}: {status or 'NO_TARGET'}"
+            colour = (0, 0, 255)
+        else:
+            message = f"AR0234 #{self.sequence:08d}: TARGET"
+            colour = (0, 255, 0)
+
+        self.cv2.putText(
+            marked,
+            message,
+            (24, 48),
+            self.cv2.FONT_HERSHEY_SIMPLEX,
+            1.0,
+            colour,
+            2,
+            self.cv2.LINE_AA,
+        )
+        if observation is None:
             return marked
 
         x1, y1, x2, y2 = (
