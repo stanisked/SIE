@@ -72,6 +72,12 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "temporal_target_maximum_center_displacement_relative", 0.75
         )
         self.declare_parameter("temporal_target_minimum_match_margin", 0.10)
+        # The AR model is an upper-body detector.  A very narrow, full-height
+        # strip at an image edge is not a usable upper body, even if the model
+        # reports it as a single person.  These checks are intentionally local
+        # to the diagnostic audit and do not alter raw model observations.
+        self.declare_parameter("dynamic_target_min_width_to_height_ratio", 0.30)
+        self.declare_parameter("dynamic_target_edge_margin_px", 24.0)
         self.audit_topic = str(self.get_parameter("audit_topic").value)
         self.evidence_capture_enabled = bool(
             self.get_parameter("evidence_capture_enabled").value
@@ -138,6 +144,12 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self.temporal_target_minimum_match_margin = float(
             self.get_parameter("temporal_target_minimum_match_margin").value
         )
+        self.dynamic_target_min_width_to_height_ratio = float(
+            self.get_parameter("dynamic_target_min_width_to_height_ratio").value
+        )
+        self.dynamic_target_edge_margin_px = float(
+            self.get_parameter("dynamic_target_edge_margin_px").value
+        )
         if (
             self.frustum_sample_stride_px < 1
             or not 0.0 <= self.ar_inner_roi_x_margin_fraction < 0.5
@@ -157,6 +169,8 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             or not 0.0 <= self.temporal_target_minimum_iou <= 1.0
             or self.temporal_target_maximum_center_displacement_relative <= 0.0
             or self.temporal_target_minimum_match_margin < 0.0
+            or self.dynamic_target_min_width_to_height_ratio <= 0.0
+            or self.dynamic_target_edge_margin_px < 0.0
         ):
             raise ValueError("invalid AR-frustum association parameters")
         # Right-to-left disparity has negative sign.  Comparing it to the
@@ -250,6 +264,50 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             }
         )
         return validate_ar0234_observation(selected)
+
+    def _dynamic_target_geometry(
+        self, candidate: dict[str, Any], frame_width: int
+    ) -> dict[str, Any]:
+        """Reject diagnostic targets whose image geometry is not upper-body-like.
+
+        This is a fail-closed interpretation of an existing AR0234 observation,
+        not a detector rewrite.  Bottom-edge truncation remains allowed for the
+        upper-body use case, but top/left/right edge candidates cannot define a
+        stable stereo frustum.
+        """
+        bbox = candidate.get("bbox_xyxy_px")
+        if type(bbox) is not list or len(bbox) != 4:
+            raise ContractError("dynamic candidate has invalid bbox_xyxy_px")
+        x1, y1, x2, y2 = (float(value) for value in bbox)
+        width, height = x2 - x1, y2 - y1
+        if width <= 0.0 or height <= 0.0:
+            raise ContractError("dynamic candidate has non-positive bbox extent")
+        aspect_ratio = width / height
+        edge_margin = self.dynamic_target_edge_margin_px
+        rejection_reasons: list[str] = []
+        if aspect_ratio < self.dynamic_target_min_width_to_height_ratio:
+            rejection_reasons.append("BBOX_TOO_NARROW_FOR_UPPER_BODY")
+        if x1 <= edge_margin:
+            rejection_reasons.append("BBOX_NEAR_LEFT_IMAGE_EDGE")
+        if x2 >= frame_width - edge_margin:
+            rejection_reasons.append("BBOX_NEAR_RIGHT_IMAGE_EDGE")
+        if y1 <= edge_margin:
+            rejection_reasons.append("BBOX_NEAR_TOP_IMAGE_EDGE")
+        return {
+            "accepted": not rejection_reasons,
+            "reason": "GEOMETRY_ACCEPTED"
+            if not rejection_reasons
+            else "+".join(rejection_reasons),
+            "bbox_xyxy_px": [x1, y1, x2, y2],
+            "bbox_width_px": width,
+            "bbox_height_px": height,
+            "width_to_height_ratio": aspect_ratio,
+            "minimum_width_to_height_ratio": (
+                self.dynamic_target_min_width_to_height_ratio
+            ),
+            "edge_margin_px": edge_margin,
+            "confidence": float(candidate["confidence"]),
+        }
 
     @staticmethod
     def _projection_diagnostic(
@@ -701,6 +759,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         ar_frame: Any,
         observation: dict[str, Any] | None = None,
         status: str | None = None,
+        candidate_geometry: dict[str, Any] | None = None,
     ) -> Any:
         """Render the AR0234 live view even when no target is available."""
         marked = ar_frame.copy()
@@ -722,6 +781,29 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             self.cv2.LINE_AA,
         )
         if observation is None:
+            if candidate_geometry is not None:
+                x1, y1, x2, y2 = (
+                    int(round(float(value)))
+                    for value in candidate_geometry["bbox_xyxy_px"]
+                )
+                self.cv2.rectangle(marked, (x1, y1), (x2, y2), (0, 0, 255), 2)
+                detail = (
+                    "REJECTED "
+                    f"conf={candidate_geometry['confidence']:.3f} "
+                    f"box={candidate_geometry['bbox_width_px']:.0f}x"
+                    f"{candidate_geometry['bbox_height_px']:.0f} "
+                    f"ratio={candidate_geometry['width_to_height_ratio']:.2f}"
+                )
+                self.cv2.putText(
+                    marked,
+                    detail,
+                    (24, 88),
+                    self.cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 0, 255),
+                    2,
+                    self.cv2.LINE_AA,
+                )
             return marked
 
         x1, y1, x2, y2 = (
@@ -732,6 +814,21 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             int(round(value)) for value in self._ar_inner_roi(observation)
         )
         self.cv2.rectangle(marked, (ix1, iy1), (ix2, iy2), (0, 255, 255), 2)
+        width, height = x2 - x1, y2 - y1
+        detail = (
+            f"TARGET conf={float(observation['confidence']):.3f} "
+            f"box={width}x{height} ratio={width / height:.2f}"
+        )
+        self.cv2.putText(
+            marked,
+            detail,
+            (24, 88),
+            self.cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (0, 255, 0),
+            2,
+            self.cv2.LINE_AA,
+        )
         return marked
 
     def _write_live_ar_preview(self, marked: Any) -> None:
@@ -922,6 +1019,29 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             candidate = dynamic["candidate"]
             if type(candidate) is not dict:
                 raise ContractError("observed dynamic target has no candidate")
+            candidate_geometry = self._dynamic_target_geometry(
+                candidate, ar_frame.shape[1]
+            )
+            audit["ar0234_candidate_geometry"] = candidate_geometry
+            if not candidate_geometry["accepted"]:
+                self._write_live_ar_preview(
+                    self._render_ar_live_preview(
+                        ar_frame,
+                        status=str(candidate_geometry["reason"]),
+                        candidate_geometry=candidate_geometry,
+                    )
+                )
+                self._publish_audit(
+                    {
+                        **audit,
+                        "status": "TARGET_UNAVAILABLE",
+                        "reason": candidate_geometry["reason"],
+                        "stereo_person": "NOT_USED_AR0234_IS_SEMANTIC_AUTHORITY",
+                        "stereo_geometry": None,
+                        "association": None,
+                    }
+                )
+                return
             observation = self._selected_observation(raw, candidate, dynamic)
             self._persist_ar_target_evidence(ar_frame, observation)
 
