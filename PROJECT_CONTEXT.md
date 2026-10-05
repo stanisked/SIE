@@ -1,6 +1,6 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-10-02  
+**Snapshot date:** 2026-10-05  
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
 **Status:** active engineering validation, not autonomous operation.
 
@@ -334,3 +334,4 @@ The goal is not to make the robot move. The goal is to establish the validity do
 | 2026-10-02 | Added latest fusion evidence: 57-cycle route audit, fail-closed person test with globally strong disparity but sparse in-ROI depth, and semantic false-target diagnosis from static chest-board runs. |
 | 2026-10-02 | Added controlled 1.50 m front-board evidence: 10-cycle mean about 1.49998 m with approximately ±5.7 mm spread, strengthening the distinction between stereo geometric accuracy and human-surface observability. |
 | 2026-10-02 | Updated active stage and next sequence: first prove continuous correct person bbox, then benchmark target-surface support; added plane/surface quality metrics and a conditional future calibration-health hypothesis. |
+| 2026-10-05 | Clarified accepted system scope: SIEE maintains an evidence-backed spatial state of the construction object and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base is one future executor, not the boundary of SIEE. Current Vision Core safety gates are unchanged. |
