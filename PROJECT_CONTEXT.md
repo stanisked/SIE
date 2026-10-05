@@ -38,7 +38,7 @@ If these sources conflict, use the precedence in `AI_CONTEXT.md`; do not guess.
 
 ## What SIEE is
 
-SIEE, Spatial Intelligence Evidence Engine, is an evidence-based robotics architecture. It turns sensor observations into a traceable model of the physical world and uses that model for safe decisions and actions. It is not a particular neural model, camera, ROS 2 package, or robot base.
+SIEE, Spatial Intelligence Evidence Engine, is an evidence-based spatial-intelligence architecture for a construction object. It integrates project and BIM/CAD data, surveying, inspections, sensor observations, material and zone state, work records, and reports from admitted robotic complexes, machines, and mechanisms into a traceable model of the physical world. SIEE uses that model for safe engineering decisions and authorized actions. It is not a particular neural model, camera, ROS 2 package, or robot base.
 
 Canonical flow:
 
@@ -63,21 +63,23 @@ Important invariants:
 
 ## Current product direction
 
-The long-term product is a mobile base that can eventually follow a semantic target while continuously re-observing it. **The active stage deliberately excludes mobile-base navigation and motor control.** No output of the current dynamic fusion diagnostic may authorize motion.
+The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIEE. **The active stage deliberately excludes mobile-base navigation and motor control.** No output of the current dynamic fusion diagnostic may authorize motion.
 
-The intended, future behavior is:
+The intended, future operating model is:
 
 ```text
-RGB semantic target
-  -> calibrated RGB-to-stereo association
-  -> stereo metric range/bearing/uncertainty
-  -> SIE decision
-  -> bounded motion
-  -> mandatory re-observation and correction
-  -> stop at the allowed distance or on uncertainty
+BIM / project / schedule
++ surveying / inspections / sensors
++ material, zone, and quality state
++ reports from admitted robotic complexes, machines, and mechanisms
+  -> evidence-backed SIEE World State
+  -> Task Evaluator and Knowledge Engine
+  -> Decision Engine
+  -> authorized action for a specific executor
+  -> evidence-backed re-observation and state update
 ```
 
-The target may be a person today and another object later. The geometry and decision layers must not be designed around `person_upper_body`.
+The current RGB-to-stereo person experiment is one Vision Core validation path within this broader system. The target may be a person today and another object later. The geometry and decision layers must not be designed around `person_upper_body`.
 
 ### Current RGB + stereo architecture
 
