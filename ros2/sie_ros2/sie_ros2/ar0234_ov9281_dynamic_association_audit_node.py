@@ -456,6 +456,64 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         )
         return left, consistent
 
+    def _depth_range_diagnostic(
+        self, depths_m: Any, disparities_px: Any
+    ) -> dict[str, Any]:
+        """Describe depth rejection without changing any acceptance gate.
+
+        The audit previously retained only the number of samples surviving the
+        configured range.  That cannot distinguish an empty surface from a
+        coherent surface lying beyond the configured 0.5--4.5 m diagnostic
+        frustum.  This record keeps the full pre-range distribution as
+        diagnostic evidence only; no value here is a Measurement.
+        """
+        depth_values = self.np.asarray(depths_m, dtype=self.np.float64).reshape(-1)
+        disparity_values = self.np.asarray(
+            disparities_px, dtype=self.np.float64
+        ).reshape(-1)
+        if depth_values.size != disparity_values.size:
+            raise ValueError("depth and disparity diagnostic sizes differ")
+        finite = self.np.isfinite(depth_values) & self.np.isfinite(disparity_values)
+        depth_values = depth_values[finite]
+        disparity_values = disparity_values[finite]
+        if not int(depth_values.size):
+            return {
+                "configured_depth_range_m": [self.range_min_m, self.range_max_m],
+                "sample_count": 0,
+                "below_range_sample_count": 0,
+                "in_range_sample_count": 0,
+                "above_range_sample_count": 0,
+                "depth_percentiles_m": None,
+                "disparity_percentiles_px": None,
+            }
+
+        in_range = (
+            (depth_values >= self.range_min_m)
+            & (depth_values <= self.range_max_m)
+        )
+        percentile_levels = (0, 5, 25, 50, 75, 95, 100)
+        depth_percentiles = self.np.percentile(depth_values, percentile_levels)
+        disparity_percentiles = self.np.percentile(
+            disparity_values, percentile_levels
+        )
+        focal_baseline_m_px = abs(float(self.p2[0, 3])) / 1000.0
+        return {
+            "configured_depth_range_m": [self.range_min_m, self.range_max_m],
+            "configured_disparity_range_px": [
+                focal_baseline_m_px / self.range_max_m,
+                focal_baseline_m_px / self.range_min_m,
+            ],
+            "sample_count": int(depth_values.size),
+            "below_range_sample_count": int((depth_values < self.range_min_m).sum()),
+            "in_range_sample_count": int(in_range.sum()),
+            "above_range_sample_count": int((depth_values > self.range_max_m).sum()),
+            "percentile_levels": list(percentile_levels),
+            "depth_percentiles_m": [float(value) for value in depth_percentiles],
+            "disparity_percentiles_px": [
+                float(value) for value in disparity_percentiles
+            ],
+        }
+
     def _spatial_components(
         self,
         u: Any,
@@ -547,6 +605,9 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         v = grid_y[valid].astype(self.np.float64)
         disparity_values = sampled_disparity[valid].astype(self.np.float64)
         rectified_depth = abs(float(self.p2[0, 3])) / disparity_values / 1000.0
+        depth_range_diagnostic = self._depth_range_diagnostic(
+            rectified_depth, disparity_values
+        )
         in_range = (
             (rectified_depth >= self.range_min_m)
             & (rectified_depth <= self.range_max_m)
@@ -559,6 +620,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                 "positive_disparity_sample_count": positive_count,
                 "lr_consistent_disparity_sample_count": lr_consistent_count,
                 "in_range_depth_sample_count": int(in_range.sum()),
+                "pre_range_depth_diagnostic": depth_range_diagnostic,
             }
         u, v, rectified_depth = u[in_range], v[in_range], rectified_depth[in_range]
         x_rect = (u - float(self.p1[0, 2])) * rectified_depth / float(self.p1[0, 0])
@@ -618,6 +680,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "sample_stride_px": stride,
             "positive_disparity_sample_count": positive_count,
             "lr_consistent_disparity_sample_count": lr_consistent_count,
+            "pre_range_depth_diagnostic": depth_range_diagnostic,
             "reprojected_inside_ar_inner_roi_count": int(rectified_depth.size),
             "spatial_components": [component for _, component in components],
         }
