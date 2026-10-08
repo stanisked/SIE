@@ -355,6 +355,7 @@ def main() -> int:
     depth_values: list[float] = []
     disparity_values: list[float] = []
     rejections: dict[str, int] = {}
+    last_rejection: dict[str, Any] | None = None
     attempts = 0
     started_monotonic_s = time.monotonic()
     try:
@@ -366,12 +367,14 @@ def main() -> int:
                 print(
                     f"SEARCH attempt={attempts}/{args.max_capture_attempts} "
                     f"accepted={len(accepted)}/{args.frames} "
-                    f"mode={args.corner_detection_mode} rejections={rejections}",
+                    f"mode={args.corner_detection_mode} rejections={rejections} "
+                    f"last_rejection={last_rejection}",
                     flush=True,
                 )
             ok, combined = capture.read()
             if not ok or combined is None or combined.shape[:2] != (size[1], size[0] * 2):
                 rejections["CAPTURE_FRAME_INVALID"] = rejections.get("CAPTURE_FRAME_INVALID", 0) + 1
+                last_rejection = {"reason": "CAPTURE_FRAME_INVALID"}
                 continue
             physical_right = combined[:, :size[0]]
             physical_left = combined[:, size[0]:]
@@ -380,22 +383,43 @@ def main() -> int:
                 rejections["CHECKERBOARD_NOT_FOUND_PHYSICAL_LEFT"] = (
                     rejections.get("CHECKERBOARD_NOT_FOUND_PHYSICAL_LEFT", 0) + 1
                 )
+                last_rejection = {"reason": "CHECKERBOARD_NOT_FOUND_PHYSICAL_LEFT"}
                 continue
             right = find_corners(physical_right, board, detection_flags)
             if right is None:
                 rejections["CHECKERBOARD_NOT_FOUND_PHYSICAL_RIGHT"] = (
                     rejections.get("CHECKERBOARD_NOT_FOUND_PHYSICAL_RIGHT", 0) + 1
                 )
+                last_rejection = {"reason": "CHECKERBOARD_NOT_FOUND_PHYSICAL_RIGHT"}
                 continue
             pose = board_pose_in_rectified_left(left, object_template, k1, d1, r1)
             if pose["lateral_offset_m"] > args.max_lateral_offset_mm / 1000.0:
                 rejections["LATERAL_OFFSET_EXCEEDED"] = rejections.get("LATERAL_OFFSET_EXCEEDED", 0) + 1
+                last_rejection = {
+                    "reason": "LATERAL_OFFSET_EXCEEDED",
+                    "board_center_rectified_left_m": pose["board_center_m"],
+                    "lateral_offset_mm": pose["lateral_offset_m"] * 1000.0,
+                    "limit_mm": args.max_lateral_offset_mm,
+                    "board_normal_misalignment_deg": pose["board_normal_misalignment_deg"],
+                }
                 continue
             if pose["board_normal_misalignment_deg"] > args.max_normal_misalignment_deg:
                 rejections["BOARD_NORMAL_MISALIGNMENT_EXCEEDED"] = rejections.get("BOARD_NORMAL_MISALIGNMENT_EXCEEDED", 0) + 1
+                last_rejection = {
+                    "reason": "BOARD_NORMAL_MISALIGNMENT_EXCEEDED",
+                    "board_center_rectified_left_m": pose["board_center_m"],
+                    "lateral_offset_mm": pose["lateral_offset_m"] * 1000.0,
+                    "board_normal_misalignment_deg": pose["board_normal_misalignment_deg"],
+                    "limit_deg": args.max_normal_misalignment_deg,
+                }
                 continue
             if pose["pnp_reprojection_rms_px"] > args.max_pnp_reprojection_rms_px:
                 rejections["PNP_REPROJECTION_EXCEEDED"] = rejections.get("PNP_REPROJECTION_EXCEEDED", 0) + 1
+                last_rejection = {
+                    "reason": "PNP_REPROJECTION_EXCEEDED",
+                    "pnp_reprojection_rms_px": pose["pnp_reprojection_rms_px"],
+                    "limit_px": args.max_pnp_reprojection_rms_px,
+                }
                 continue
             left_rectified = cv2.undistortPoints(left, k1, d1, R=r1, P=p1).reshape(-1, 2)
             right_rectified = cv2.undistortPoints(right, k2, d2, R=r2, P=p2).reshape(-1, 2)
@@ -403,6 +427,11 @@ def main() -> int:
             valid = disparity > 0.5
             if int(valid.sum()) < math.ceil(0.9 * disparity.size):
                 rejections["INSUFFICIENT_POSITIVE_DISPARITY"] = rejections.get("INSUFFICIENT_POSITIVE_DISPARITY", 0) + 1
+                last_rejection = {
+                    "reason": "INSUFFICIENT_POSITIVE_DISPARITY",
+                    "valid_corner_count": int(valid.sum()),
+                    "corner_count": int(disparity.size),
+                }
                 continue
             depth = abs(float(p2[0, 3])) / disparity[valid] / 1000.0
             frame_index = len(accepted) + 1
