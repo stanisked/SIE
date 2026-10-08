@@ -20,6 +20,7 @@ import hashlib
 import json
 import math
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -44,14 +45,23 @@ def set_auto_exposure(device: str) -> None:
     subprocess.run(["v4l2-ctl", "-d", device, "-c", "auto_exposure=3"], check=True)
 
 
-def find_corners(image: np.ndarray, board: tuple[int, int]) -> np.ndarray | None:
+def corner_detection_flags(mode: str) -> int:
+    """Return an explicit checkerboard-search policy for a live diagnostic."""
+    flags = cv2.CALIB_CB_ACCURACY | cv2.CALIB_CB_NORMALIZE_IMAGE
+    if mode == "sb_exhaustive":
+        flags |= cv2.CALIB_CB_EXHAUSTIVE
+    elif mode != "sb_fast":
+        raise ValueError(f"unsupported corner detection mode: {mode}")
+    return flags
+
+
+def find_corners(
+    image: np.ndarray, board: tuple[int, int], detection_flags: int
+) -> np.ndarray | None:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    flags = (
-        cv2.CALIB_CB_EXHAUSTIVE
-        | cv2.CALIB_CB_ACCURACY
-        | cv2.CALIB_CB_NORMALIZE_IMAGE
+    found, corners = cv2.findChessboardCornersSB(
+        gray, board, flags=detection_flags
     )
-    found, corners = cv2.findChessboardCornersSB(gray, board, flags=flags)
     return None if not found or corners is None else corners.astype(np.float32)
 
 
@@ -195,6 +205,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frames", type=int, default=30)
     parser.add_argument("--warmup-frames", type=int, default=180)
     parser.add_argument("--max-capture-attempts", type=int, default=1800)
+    parser.add_argument(
+        "--corner-detection-mode",
+        choices=("sb_fast", "sb_exhaustive"),
+        default="sb_fast",
+        help=(
+            "sb_fast is the live default; sb_exhaustive is slower and reserved "
+            "for a deliberate recovery attempt"
+        ),
+    )
+    parser.add_argument(
+        "--progress-every-attempts",
+        type=int,
+        default=10,
+        help="print accumulated rejection reasons after this many capture attempts",
+    )
     parser.add_argument("--board-inner-corners", type=int, nargs=2, metavar=("COLUMNS", "ROWS"))
     parser.add_argument("--square-size-mm", type=float, required=True)
     parser.add_argument("--evidence-dir", type=Path)
@@ -281,6 +306,7 @@ def main() -> int:
         args.frames < 5
         or args.warmup_frames < 1
         or args.max_capture_attempts < args.frames
+        or args.progress_every_attempts < 1
         or args.square_size_mm <= 0.0
         or args.max_lateral_offset_mm < 0.0
         or not 0.0 <= args.max_normal_misalignment_deg <= 90.0
@@ -314,6 +340,7 @@ def main() -> int:
     if board[0] < 2 or board[1] < 2:
         raise ValueError("checkerboard inner-corner dimensions must be at least 2x2")
     object_template = object_points(board, args.square_size_mm / 1000.0)
+    detection_flags = corner_detection_flags(args.corner_detection_mode)
 
     set_auto_exposure(args.device)
     capture = cv2.VideoCapture(args.device, cv2.CAP_V4L2)
@@ -329,21 +356,36 @@ def main() -> int:
     disparity_values: list[float] = []
     rejections: dict[str, int] = {}
     attempts = 0
+    started_monotonic_s = time.monotonic()
     try:
         for _ in range(args.warmup_frames):
             capture.read()
         while len(accepted) < args.frames and attempts < args.max_capture_attempts:
             attempts += 1
+            if attempts == 1 or attempts % args.progress_every_attempts == 0:
+                print(
+                    f"SEARCH attempt={attempts}/{args.max_capture_attempts} "
+                    f"accepted={len(accepted)}/{args.frames} "
+                    f"mode={args.corner_detection_mode} rejections={rejections}",
+                    flush=True,
+                )
             ok, combined = capture.read()
             if not ok or combined is None or combined.shape[:2] != (size[1], size[0] * 2):
                 rejections["CAPTURE_FRAME_INVALID"] = rejections.get("CAPTURE_FRAME_INVALID", 0) + 1
                 continue
             physical_right = combined[:, :size[0]]
             physical_left = combined[:, size[0]:]
-            left = find_corners(physical_left, board)
-            right = find_corners(physical_right, board)
-            if left is None or right is None:
-                rejections["CHECKERBOARD_NOT_FOUND"] = rejections.get("CHECKERBOARD_NOT_FOUND", 0) + 1
+            left = find_corners(physical_left, board, detection_flags)
+            if left is None:
+                rejections["CHECKERBOARD_NOT_FOUND_PHYSICAL_LEFT"] = (
+                    rejections.get("CHECKERBOARD_NOT_FOUND_PHYSICAL_LEFT", 0) + 1
+                )
+                continue
+            right = find_corners(physical_right, board, detection_flags)
+            if right is None:
+                rejections["CHECKERBOARD_NOT_FOUND_PHYSICAL_RIGHT"] = (
+                    rejections.get("CHECKERBOARD_NOT_FOUND_PHYSICAL_RIGHT", 0) + 1
+                )
                 continue
             pose = board_pose_in_rectified_left(left, object_template, k1, d1, r1)
             if pose["lateral_offset_m"] > args.max_lateral_offset_mm / 1000.0:
@@ -494,6 +536,8 @@ def main() -> int:
             "device": args.device,
             "requested_mode": "V4L2 MJPG 2560x800@60, auto_exposure=3",
             "warmup_frames": args.warmup_frames,
+            "corner_detection_mode": args.corner_detection_mode,
+            "search_elapsed_s": time.monotonic() - started_monotonic_s,
             "attempts": attempts,
             "accepted_frames": len(accepted),
             "rejections": rejections,
