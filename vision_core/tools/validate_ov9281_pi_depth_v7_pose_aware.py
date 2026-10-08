@@ -122,9 +122,9 @@ def board_pose_in_rectified_left(
     }
 
 
-def reference_definition(args: argparse.Namespace) -> dict[str, Any]:
+def absolute_reference_definition(args: argparse.Namespace) -> dict[str, Any]:
     """Return an explicit board-plane z datum without introducing a correction."""
-    if not args.reference_description.strip():
+    if not args.reference_description or not args.reference_description.strip():
         raise ValueError("--reference-description must describe the physical survey")
     if args.reference_method == "optical_axis_survey":
         if args.reference_z_m is None or args.reference_uncertainty_mm is None:
@@ -199,17 +199,44 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--square-size-mm", type=float, required=True)
     parser.add_argument("--evidence-dir", type=Path)
     parser.add_argument(
+        "--validation-mode",
+        choices=("absolute_optical_z", "relative_axis_translation"),
+        default="absolute_optical_z",
+        help=(
+            "absolute_optical_z requires a surveyed optical-frame datum; "
+            "relative_axis_translation records one axis-aligned point for a "
+            "later delta-z series analysis"
+        ),
+    )
+    parser.add_argument(
         "--reference-method",
         choices=("optical_axis_survey", "front_rim_transform"),
-        required=True,
     )
-    parser.add_argument("--reference-description", required=True)
+    parser.add_argument("--reference-description")
     parser.add_argument("--reference-z-m", type=float)
     parser.add_argument("--reference-uncertainty-mm", type=float)
     parser.add_argument("--front-rim-to-board-plane-m", type=float)
     parser.add_argument("--front-rim-distance-uncertainty-mm", type=float)
     parser.add_argument("--front-rim-to-optical-center-z-mm", type=float)
     parser.add_argument("--front-rim-to-optical-center-uncertainty-mm", type=float)
+    parser.add_argument(
+        "--axis-reference-id",
+        help=(
+            "stable physical datum for all relative points, for example "
+            "physical_left_lens_front_rim_axis"
+        ),
+    )
+    parser.add_argument(
+        "--axis-position-m",
+        type=float,
+        help=(
+            "surveyed board-plane position along the fixed physical-left optical axis "
+            "from --axis-reference-id; its unknown constant offset to the optical "
+            "center is intentionally not estimated"
+        ),
+    )
+    parser.add_argument("--axis-position-uncertainty-mm", type=float)
+    parser.add_argument("--axis-survey-description")
     parser.add_argument("--max-lateral-offset-mm", type=float, default=30.0)
     parser.add_argument("--max-normal-misalignment-deg", type=float, default=3.0)
     parser.add_argument("--max-pnp-reprojection-rms-px", type=float, default=0.50)
@@ -219,6 +246,33 @@ def parse_args() -> argparse.Namespace:
         help="optional declared criterion; no runtime policy is changed by this check",
     )
     return parser.parse_args()
+
+
+def relative_axis_reference_definition(args: argparse.Namespace) -> dict[str, Any]:
+    if not args.axis_reference_id or not args.axis_survey_description:
+        raise ValueError(
+            "relative_axis_translation requires --axis-reference-id and "
+            "--axis-survey-description"
+        )
+    if args.axis_position_m is None or args.axis_position_uncertainty_mm is None:
+        raise ValueError(
+            "relative_axis_translation requires --axis-position-m and "
+            "--axis-position-uncertainty-mm"
+        )
+    if args.axis_position_m <= 0.0 or args.axis_position_uncertainty_mm < 0.0:
+        raise ValueError("invalid relative axis position or uncertainty")
+    return {
+        "reference_frame": LENS_RIM_FRAME,
+        "axis_reference_id": args.axis_reference_id,
+        "board_plane_axis_position_m": args.axis_position_m,
+        "standard_uncertainty_m": args.axis_position_uncertainty_mm / 1000.0,
+        "description": args.axis_survey_description,
+        "interpretation_boundary": (
+            "This is a repeatable physical-axis position, not optical-frame z. "
+            "It may only be compared with other reports sharing this exact axis "
+            "reference; the constant rim-to-optical-center offset is not estimated."
+        ),
+    }
 
 
 def main() -> int:
@@ -237,7 +291,14 @@ def main() -> int:
         )
     ):
         raise ValueError("invalid capture, board, pose, or acceptance argument")
-    reference = reference_definition(args)
+    if args.validation_mode == "absolute_optical_z":
+        if args.reference_method is None:
+            raise ValueError("absolute_optical_z requires --reference-method")
+        reference = absolute_reference_definition(args)
+        relative_axis_reference = None
+    else:
+        reference = None
+        relative_axis_reference = relative_axis_reference_definition(args)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     if args.evidence_dir is not None:
         args.evidence_dir.mkdir(parents=True, exist_ok=True)
@@ -369,14 +430,34 @@ def main() -> int:
     pnp_summary = percentile_summary(
         [float(item["board_pose_capture_gate"]["pnp_reprojection_rms_px"]) for item in accepted], "px"
     )
-    difference_m = float(depth_summary["median_m"]) - float(reference["board_plane_z_m"])
-    relative_error = abs(difference_m) / float(reference["board_plane_z_m"])
-    criterion: dict[str, Any] = {"status": "NOT_DECLARED"}
-    if args.acceptance_max_relative_error is not None:
-        criterion = {
-            "status": "PASS" if relative_error <= args.acceptance_max_relative_error else "FAIL",
-            "maximum_relative_error": args.acceptance_max_relative_error,
-            "observed_absolute_relative_error": relative_error,
+    comparison: dict[str, Any]
+    if reference is not None:
+        difference_m = float(depth_summary["median_m"]) - float(reference["board_plane_z_m"])
+        relative_error = abs(difference_m) / float(reference["board_plane_z_m"])
+        criterion: dict[str, Any] = {"status": "NOT_DECLARED"}
+        if args.acceptance_max_relative_error is not None:
+            criterion = {
+                "status": "PASS" if relative_error <= args.acceptance_max_relative_error else "FAIL",
+                "maximum_relative_error": args.acceptance_max_relative_error,
+                "observed_absolute_relative_error": relative_error,
+            }
+        comparison = {
+            "stereo_minus_reference_z_m": difference_m,
+            "absolute_relative_error": relative_error,
+            "declared_criterion": criterion,
+        }
+    else:
+        if args.acceptance_max_relative_error is not None:
+            raise ValueError(
+                "--acceptance-max-relative-error applies only to absolute_optical_z; "
+                "use the relative-series analyzer for a delta criterion"
+            )
+        comparison = {
+            "status": "AWAITING_RELATIVE_SERIES_ANALYSIS",
+            "reason": (
+                "A single axis-aligned point cannot estimate or cancel the unknown "
+                "constant offset between the front rim and optical center."
+            ),
         }
     report = {
         "schema_version": "sie.ov9281.pi_stereo_pose_aware_planar_depth_diagnostic.v1",
@@ -388,13 +469,13 @@ def main() -> int:
             "camera_1_semantics": "physical_left",
         },
         "depth_reference_frame": DEPTH_FRAME,
+        "validation_mode": args.validation_mode,
         "reference": reference,
+        "relative_axis_reference": relative_axis_reference,
         "stereo_depth_m": depth_summary,
         "frame_median_depth_m": frame_depth_summary,
         "disparity_px": disparity_summary,
-        "stereo_minus_reference_z_m": difference_m,
-        "absolute_relative_error": relative_error,
-        "declared_criterion": criterion,
+        "comparison": comparison,
         "pose_capture_gate": {
             "reference_frame": DEPTH_FRAME,
             "max_lateral_offset_m": args.max_lateral_offset_mm / 1000.0,
@@ -432,11 +513,15 @@ def main() -> int:
     print(
         json.dumps(
             {
-                "reference_z_m": reference["board_plane_z_m"],
+                "validation_mode": args.validation_mode,
+                "reference_z_m": None if reference is None else reference["board_plane_z_m"],
+                "axis_position_m": (
+                    None
+                    if relative_axis_reference is None
+                    else relative_axis_reference["board_plane_axis_position_m"]
+                ),
                 "median_depth_m": depth_summary["median_m"],
-                "stereo_minus_reference_z_m": difference_m,
-                "absolute_relative_error": relative_error,
-                "criterion": criterion,
+                "comparison": comparison,
             },
             indent=2,
         )
