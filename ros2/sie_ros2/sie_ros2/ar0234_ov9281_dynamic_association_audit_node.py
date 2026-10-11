@@ -9,7 +9,12 @@ node cannot authorize navigation or an actuator command.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
+import select
+import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -51,6 +56,10 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self.declare_parameter(
             "evidence_dir", "~/.local/state/sie/evidence/ar0234_ov9281_dynamic_association"
         )
+        self.declare_parameter("shadow_instance_mask_enabled", False)
+        self.declare_parameter("shadow_segmenter_python", "")
+        self.declare_parameter("shadow_segmenter_model", "")
+        self.declare_parameter("shadow_segmenter_timeout_s", 30.0)
         self.declare_parameter("frustum_sample_stride_px", 4)
         self.declare_parameter("ar_inner_roi_x_margin_fraction", 0.20)
         self.declare_parameter("ar_inner_roi_top_fraction", 0.30)
@@ -91,6 +100,17 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         if self.evidence_capture_enabled:
             self._evidence_run_dir = self.evidence_dir / self.run_id
             self._evidence_run_dir.mkdir(parents=True, exist_ok=True)
+        self.shadow_instance_mask_enabled = bool(
+            self.get_parameter("shadow_instance_mask_enabled").value
+        )
+        self.shadow_segmenter_timeout_s = float(
+            self.get_parameter("shadow_segmenter_timeout_s").value
+        )
+        self._shadow_process: subprocess.Popen[str] | None = None
+        self._shadow_mask_file: Path | None = None
+        self._shadow_worker_state: dict[str, Any] = {"status": "DISABLED"}
+        if self.shadow_instance_mask_enabled:
+            self._start_shadow_worker()
         self.frustum_sample_stride_px = int(
             self.get_parameter("frustum_sample_stride_px").value
         )
@@ -684,6 +704,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "reprojected_inside_ar_inner_roi_count": int(rectified_depth.size),
             "spatial_components": [component for _, component in components],
         }
+        diagnostic["shadow_mask_depth"] = self._shadow_mask_depth(projected, rectified_depth)
         if not components:
             return None, "NO_SPATIAL_DISPARITY_COMPONENT", diagnostic
         dominant_count = max(component["sample_count"] for _, component in components)
@@ -791,6 +812,127 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         }
         return association, "SUCCESS", diagnostic
 
+    def _shadow_read(self, timeout_s: float) -> dict[str, Any]:
+        process = self._shadow_process
+        if process is None or process.stdout is None:
+            raise RuntimeError("shadow worker unavailable")
+        readable, _, _ = select.select([process.stdout], [], [], timeout_s)
+        if not readable:
+            raise TimeoutError("shadow worker response timed out")
+        line = process.stdout.readline()
+        if not line:
+            raise RuntimeError("shadow worker closed stdout")
+        response = json.loads(line)
+        if not isinstance(response, dict):
+            raise ValueError("shadow worker response is not an object")
+        return response
+
+    def _stop_shadow_worker(self) -> None:
+        process = self._shadow_process
+        self._shadow_process = None
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=2)
+
+    def _start_shadow_worker(self) -> None:
+        if not self.evidence_capture_enabled or self.shadow_segmenter_timeout_s <= 0:
+            self._shadow_worker_state = {
+                "status": "UNAVAILABLE", "reason": "EVIDENCE_OR_TIMEOUT_INVALID"
+            }
+            return
+        python = Path(str(self.get_parameter("shadow_segmenter_python").value))
+        model = Path(str(self.get_parameter("shadow_segmenter_model").value))
+        script = (self.project_root / "vision_core" / "tools" /
+                  "shadow_ar0234_instance_mask_worker.py")
+        if not python.is_file() or not model.is_file() or not script.is_file():
+            self._shadow_worker_state = {"status": "UNAVAILABLE", "reason": "WORKER_ARTIFACT_MISSING"}
+            return
+        try:
+            self._shadow_process = subprocess.Popen(
+                [str(python), "-u", str(script), "--model", str(model)],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, text=True, bufsize=1,
+            )
+            ready = self._shadow_read(max(60.0, self.shadow_segmenter_timeout_s))
+            if ready.get("status") != "READY":
+                raise RuntimeError(f"worker did not become ready: {ready.get('reason')}")
+            self._shadow_worker_state = ready
+        except (OSError, RuntimeError, ValueError, TimeoutError) as error:
+            self._stop_shadow_worker()
+            self._shadow_worker_state = {
+                "status": "UNAVAILABLE", "reason": type(error).__name__
+            }
+
+    def _shadow_instance_mask(self, cycle_id: str, candidate: dict[str, Any]) -> dict[str, Any]:
+        self._shadow_mask_file = None
+        directory = self._active_evidence_cycle_dir
+        process = self._shadow_process
+        if not self.shadow_instance_mask_enabled:
+            return {"status": "DISABLED"}
+        if directory is None or process is None or process.stdin is None:
+            return {"status": "MASK_UNAVAILABLE", "reason": self._shadow_worker_state["status"]}
+        try:
+            request = {"cycle_id": cycle_id, "candidate": candidate,
+                       "image": str(directory / "ar0234_source.jpg"),
+                       "output_dir": str(directory)}
+            process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+            process.stdin.flush()
+            result = self._shadow_read(self.shadow_segmenter_timeout_s)
+            if result.get("cycle_id") != cycle_id:
+                raise ValueError("shadow worker cycle id mismatch")
+            if result.get("status") == "MASK_SAVED_DIAGNOSTIC_ONLY":
+                mask = directory / f"{cycle_id}.png"
+                metadata_path = directory / f"{cycle_id}.json"
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                source_hash = hashlib.sha256(
+                    (directory / "ar0234_source.jpg").read_bytes()
+                ).hexdigest()
+                if (metadata.get("cycle_id") != cycle_id
+                        or metadata.get("source_ar0234_sha256") != source_hash
+                        or metadata.get("mask_sha256") != hashlib.sha256(
+                            mask.read_bytes()).hexdigest()
+                        or metadata.get("model_sha256") != self._shadow_worker_state.get(
+                            "model_sha256")):
+                    raise ValueError("shadow mask evidence binding mismatch")
+                self._shadow_mask_file = mask
+                self._active_evidence_files.extend([mask.name, metadata_path.name])
+            result["worker_model_sha256"] = self._shadow_worker_state.get("model_sha256")
+            result["worker_load_elapsed_s"] = self._shadow_worker_state.get("load_elapsed_s")
+            return result
+        except (OSError, RuntimeError, ValueError, TimeoutError, KeyError) as error:
+            self._stop_shadow_worker()
+            self._shadow_worker_state = {"status": "UNAVAILABLE",
+                                         "reason": type(error).__name__}
+            return {"status": "MASK_UNAVAILABLE", "reason": type(error).__name__}
+
+    def _shadow_mask_depth(self, projected: Any, rectified_depth: Any) -> dict[str, Any]:
+        if self._shadow_mask_file is None:
+            return {"status": "MASK_UNAVAILABLE"}
+        started = time.monotonic()
+        try:
+            from vision_core.person_localization.instance_mask_stereo_fusion import (
+                masked_depth_hypothesis,
+            )
+            mask = self.cv2.imread(str(self._shadow_mask_file), self.cv2.IMREAD_GRAYSCALE)
+            if (mask is None or mask.shape != (1200, 1920)
+                    or not self.np.isin(mask, (0, 255)).all()):
+                raise ValueError("shadow mask invalid")
+            result = masked_depth_hypothesis(
+                projected, rectified_depth, mask == 255,
+                minimum_samples=self.min_depth_samples,
+                maximum_depth_mad_m=self.max_depth_mad_m,
+            )
+            result["elapsed_s"] = time.monotonic() - started
+            return result
+        except Exception as error:
+            return {"status": "MASK_DEPTH_UNAVAILABLE",
+                    "reason": type(error).__name__,
+                    "elapsed_s": time.monotonic() - started}
+
     def _evidence_path(self, filename: str) -> Path | None:
         if self._active_evidence_cycle_dir is None:
             return None
@@ -816,6 +958,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
     ) -> None:
         self._active_evidence_cycle_dir = None
         self._active_evidence_files = []
+        self._shadow_mask_file = None
         if not self.evidence_capture_enabled:
             return
         if self._evidence_run_dir is None:
@@ -1123,6 +1266,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                 return
             observation = self._selected_observation(raw, candidate, dynamic)
             self._persist_ar_target_evidence(ar_frame, observation)
+            audit["shadow_instance_mask"] = self._shadow_instance_mask(cycle_id, candidate)
 
             # Pi stream identity is fixed by the validated calibration: first
             # half is physical_right, second half is physical_left.
@@ -1184,6 +1328,10 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                     "reason": "PROCESSING_REFUSED",
                 }
             )
+
+    def destroy_node(self) -> bool:
+        self._stop_shadow_worker()
+        return super().destroy_node()
 
     def _load_profile(self) -> None:
         super()._load_profile()
