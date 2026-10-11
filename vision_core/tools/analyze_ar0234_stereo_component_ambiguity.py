@@ -10,10 +10,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 import cv2
 import numpy as np
+
+
+def bbox_gap(a: list[int], b: list[int]) -> float:
+    """Distance between inclusive image rectangles; overlap has zero gap."""
+    dx = max(a[0] - b[2], b[0] - a[2], 0)
+    dy = max(a[1] - b[3], b[1] - a[3], 0)
+    return math.hypot(dx, dy)
 
 
 def sha256(path: Path) -> str:
@@ -52,6 +60,11 @@ def replay(path: Path, calibration: dict, output_dir: Path) -> dict:
     audit = json.loads(path.read_text(encoding="utf-8"))
     result = {"cycle_id": audit["cycle_id"], "source_status": audit["status"],
               "source_reason": audit["reason"], "components": []}
+    if isinstance(audit.get("association"), dict):
+        result["source_association"] = {
+            key: audit["association"].get(key)
+            for key in ("range_m", "depth_mad_m", "depth_sample_count")
+        }
     g = audit.get("stereo_geometry")
     if not isinstance(g, dict) or "spatial_components" not in g:
         result["status"] = "NO_SAVED_COMPONENTS"
@@ -155,6 +168,35 @@ def replay(path: Path, calibration: dict, output_dir: Path) -> dict:
         g["plausible_spatial_component_count"]
     ):
         raise ValueError(f"plausible component count mismatch in {path}")
+    plausible = [i for i, c in enumerate(result["components"])
+                 if c["plausible_by_source_gates"]]
+    if len(plausible) in (1, 2):
+        selected = [reconstructed[i][0] for i in plausible]
+        member_depths = [z[w] for w in selected]
+        union_depth = np.concatenate(member_depths)
+        median = float(np.median(union_depth))
+        candidate = {
+            "status": "SINGLE_COMPONENT_REFERENCE" if len(plausible) == 1
+                      else "DISCONNECTED_PAIR_HYPOTHESIS_UNVERIFIED",
+            "component_ids": [i + 1 for i in plausible],
+            "sample_count": int(union_depth.size),
+            "median_depth_m": median,
+            "depth_mad_m": float(np.median(np.abs(union_depth - median))),
+            "depth_p10_p90_m": [float(v) for v in np.percentile(union_depth, [10, 90])],
+            "semantic_ownership_verified": False,
+        }
+        if len(plausible) == 2:
+            first, second = [result["components"][i] for i in plausible]
+            candidate.update({
+                "component_median_depth_difference_m": abs(
+                    first["median_depth_m"] - second["median_depth_m"]),
+                "projected_ar_bbox_gap_px": bbox_gap(
+                    first["ar_projected_bbox_xyxy_px"],
+                    second["ar_projected_bbox_xyxy_px"]),
+                "rectified_stereo_bbox_gap_px": bbox_gap(
+                    first["stereo_bbox_xyxy_px"], second["stereo_bbox_xyxy_px"]),
+            })
+        result["candidate"] = candidate
     name = f'{audit["cycle_id"][-8:]}_components_ar0234.jpg'
     if not cv2.imwrite(str(output_dir / name), image):
         raise OSError(f"could not write {name}")
@@ -179,16 +221,44 @@ def main() -> None:
     cal = load_calibrations(args.ar_intrinsic, args.stereo_calibration, args.extrinsic)
     args.output_dir.mkdir(parents=True)
     rows = [replay(path, cal, args.output_dir) for path in paths]
+    singleton = [r["candidate"]["median_depth_m"] for r in rows
+                 if r.get("candidate", {}).get("status") == "SINGLE_COMPONENT_REFERENCE"]
+    pairs = [r["candidate"]["median_depth_m"] for r in rows
+             if r.get("candidate", {}).get("status") ==
+             "DISCONNECTED_PAIR_HYPOTHESIS_UNVERIFIED"]
+    series = [r["candidate"]["median_depth_m"] for r in rows if "candidate" in r]
     report = {"status": "DIAGNOSTIC_ONLY_NO_TARGET_SELECTION",
               "source_root": str(args.evidence_root), "calibration_sha256": cal["sha"],
+              "limitations": [
+                  "The source RGB observation has a box, not a person instance mask.",
+                  "Both components projecting inside the box does not prove ownership.",
+                  "A union can contain foreground and background; no gate is changed.",
+                  "Temporal changes can include subject motion and camera pair skew.",
+              ],
+              "temporal_comparison": {
+                  "singleton_count": len(singleton), "pair_count": len(pairs),
+                  "singleton_median_depth_m": float(np.median(singleton)) if singleton else None,
+                  "pair_median_depth_m": float(np.median(pairs)) if pairs else None,
+                  "singleton_depth_span_m": max(singleton)-min(singleton) if singleton else None,
+                  "pair_depth_span_m": max(pairs)-min(pairs) if pairs else None,
+                  "adjacent_candidate_depth_delta_median_m": float(np.median(
+                      np.abs(np.diff(series)))) if len(series) > 1 else None,
+              },
               "cycles": rows}
     (args.output_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n")
     for row in rows:
+        candidate = row.get("candidate", {})
         print(row["cycle_id"][-8:], row["source_reason"],
               "plausible/total=",
               f'{sum(c["plausible_by_source_gates"] for c in row["components"])}/'
               f'{len(row["components"])}',
-              "overlay=", row.get("overlay"))
+              "ids=", candidate.get("component_ids"),
+              "joint_depth_m=", round(candidate["median_depth_m"], 4) if candidate else None,
+              "joint_MAD_mm=", round(candidate["depth_mad_m"] * 1000, 1)
+              if candidate else None,
+              "AR_gap_px=", round(candidate["projected_ar_bbox_gap_px"], 1)
+              if "projected_ar_bbox_gap_px" in candidate else None)
+    print("Temporal comparison:", report["temporal_comparison"])
     print("Saved:", args.output_dir / "report.json")
 
 
