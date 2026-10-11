@@ -35,23 +35,21 @@ def iou(a: np.ndarray, b: np.ndarray) -> float:
     return intersection / union if union > 0 else 0.0
 
 
-def segment_one(path: Path, model: object, model_sha: str, output_dir: Path,
-                minimum_iou: float, minimum_margin: float) -> dict:
-    audit = json.loads(path.read_text(encoding="utf-8"))
-    cycle_id = audit["cycle_id"]
+def segment_frame(image_path: Path, cycle_id: str, candidate: dict, model: object,
+                  model_sha: str, output_dir: Path, minimum_iou: float,
+                  minimum_margin: float) -> dict:
+    """Segment one already captured image, bound to its current RGB candidate."""
     record = {"cycle_id": cycle_id, "status": "MASK_UNAVAILABLE"}
-    candidate = (audit.get("ar0234_dynamic_target") or {}).get("candidate")
     if not isinstance(candidate, dict) or "bbox_xyxy_px" not in candidate:
         record["reason"] = "NO_CURRENT_RGB_TARGET"
         return record
-    image_path = path.parent / "ar0234_source.jpg"
     source = cv2.imread(str(image_path))
     if source is None or source.shape[:2] != (1200, 1920):
         raise ValueError(f"missing or unexpected AR source frame: {image_path}")
     results = model.predict(source=source, imgsz=640, conf=0.25, classes=[0],
                             retina_masks=True, device="cpu", verbose=False)
     if len(results) != 1:
-        raise ValueError(f"unexpected segmentation result count in {path}")
+        raise ValueError(f"unexpected segmentation result count in {image_path}")
     result = results[0]
     if result.boxes is None or result.masks is None or len(result.boxes) == 0:
         record["reason"] = "NO_PERSON_SEGMENTATION"
@@ -60,7 +58,7 @@ def segment_one(path: Path, model: object, model_sha: str, output_dir: Path,
     confidence = result.boxes.conf.cpu().numpy()
     labels = result.boxes.cls.cpu().numpy().astype(int)
     if len(result.masks.data) != len(boxes) or np.any(labels != 0):
-        raise ValueError(f"inconsistent person masks in {path}")
+        raise ValueError(f"inconsistent person masks in {image_path}")
     target_box = np.asarray(candidate["bbox_xyxy_px"], dtype=np.float64)
     scores = np.asarray([iou(target_box, b) for b in boxes])
     ranked = np.argsort(scores)[::-1]
@@ -74,7 +72,7 @@ def segment_one(path: Path, model: object, model_sha: str, output_dir: Path,
         return record
     mask = result.masks.data[best].cpu().numpy()
     if mask.shape != source.shape[:2]:
-        raise ValueError(f"mask was not returned at AR full resolution in {path}")
+        raise ValueError(f"mask was not returned at AR full resolution in {image_path}")
     binary = (mask > 0.5).astype(np.uint8) * 255
     if not binary.any():
         record["reason"] = "PERSON_INSTANCE_MASK_EMPTY"
@@ -101,6 +99,16 @@ def segment_one(path: Path, model: object, model_sha: str, output_dir: Path,
     record.update({"status": "MASK_SAVED_DIAGNOSTIC_ONLY", "mask_file": str(mask_file),
                    "mask_pixel_count": metadata["mask_pixel_count"]})
     return record
+
+
+def segment_one(path: Path, model: object, model_sha: str, output_dir: Path,
+                minimum_iou: float, minimum_margin: float) -> dict:
+    audit = json.loads(path.read_text(encoding="utf-8"))
+    return segment_frame(
+        path.parent / "ar0234_source.jpg", audit["cycle_id"],
+        (audit.get("ar0234_dynamic_target") or {}).get("candidate"),
+        model, model_sha, output_dir, minimum_iou, minimum_margin,
+    )
 
 
 def main() -> None:
