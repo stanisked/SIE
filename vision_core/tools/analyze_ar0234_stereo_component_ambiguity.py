@@ -11,10 +11,16 @@ import argparse
 import hashlib
 import json
 import math
+import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from vision_core.person_localization.instance_mask_stereo_fusion import (  # noqa: E402
+    masked_depth_hypothesis,
+)
 
 
 def bbox_gap(a: list[int], b: list[int]) -> float:
@@ -56,7 +62,8 @@ def load_calibrations(ar: Path, stereo: Path, extrinsic: Path) -> dict:
         }
 
 
-def replay(path: Path, calibration: dict, output_dir: Path) -> dict:
+def replay(path: Path, calibration: dict, output_dir: Path,
+           instance_mask_dir: Path | None = None) -> dict:
     audit = json.loads(path.read_text(encoding="utf-8"))
     result = {"cycle_id": audit["cycle_id"], "source_status": audit["status"],
               "source_reason": audit["reason"], "components": []}
@@ -100,6 +107,28 @@ def replay(path: Path, calibration: dict, output_dir: Path) -> dict:
     inside = ((projected[:, 0] >= ax1) & (projected[:, 0] <= ax2)
               & (projected[:, 1] >= ay1) & (projected[:, 1] <= ay2))
     u, v, z, projected = u[inside], v[inside], z[inside], projected[inside]
+    if instance_mask_dir is not None:
+        mask_file = instance_mask_dir / f'{audit["cycle_id"]}.png'
+        metadata_file = instance_mask_dir / f'{audit["cycle_id"]}.json'
+        if not mask_file.is_file() or not metadata_file.is_file():
+            result["instance_mask_depth"] = {"status": "MASK_MISSING"}
+        else:
+            metadata = json.loads(metadata_file.read_text(encoding="utf-8"))
+            if (metadata.get("cycle_id") != audit["cycle_id"]
+                    or metadata.get("reference_frame") != "ar0234_image_frame"
+                    or metadata.get("source_ar0234_sha256") != sha256(
+                        path.parent / "ar0234_source.jpg")
+                    or metadata.get("mask_sha256") != sha256(mask_file)):
+                raise ValueError(f"instance mask is not bound to source cycle {path}")
+            mask = cv2.imread(str(mask_file), cv2.IMREAD_GRAYSCALE)
+            if mask is None or mask.shape != (1200, 1920) or not np.isin(
+                mask, (0, 255)).all():
+                raise ValueError(f"invalid binary AR instance mask {mask_file}")
+            result["instance_mask_depth"] = {
+                **masked_depth_hypothesis(projected, z, mask == 255),
+                "mask_file": str(mask_file), "mask_sha256": sha256(mask_file),
+                "mask_source": metadata.get("mask_source", "UNDECLARED"),
+            }
     gw = (x2 - x1 + stride - 1) // stride
     gh = (y2 - y1 + stride - 1) // stride
     gx = ((u.astype(np.int32) - x1) // stride).clip(0, gw - 1)
@@ -211,6 +240,8 @@ def main() -> None:
     parser.add_argument("--ar-intrinsic", type=Path, required=True)
     parser.add_argument("--stereo-calibration", type=Path, required=True)
     parser.add_argument("--extrinsic", type=Path, required=True)
+    parser.add_argument("--instance-mask-dir", type=Path,
+                        help="optional cycle-id.png masks with SHA-bound cycle-id.json metadata")
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
     if args.output_dir.exists():
@@ -220,7 +251,7 @@ def main() -> None:
         parser.error("no audit.json in evidence root")
     cal = load_calibrations(args.ar_intrinsic, args.stereo_calibration, args.extrinsic)
     args.output_dir.mkdir(parents=True)
-    rows = [replay(path, cal, args.output_dir) for path in paths]
+    rows = [replay(path, cal, args.output_dir, args.instance_mask_dir) for path in paths]
     singleton = [r["candidate"]["median_depth_m"] for r in rows
                  if r.get("candidate", {}).get("status") == "SINGLE_COMPONENT_REFERENCE"]
     pairs = [r["candidate"]["median_depth_m"] for r in rows
@@ -234,6 +265,7 @@ def main() -> None:
                   "Both components projecting inside the box does not prove ownership.",
                   "A union can contain foreground and background; no gate is changed.",
                   "Temporal changes can include subject motion and camera pair skew.",
+                  "Mask-based status is emitted only for image- and cycle-bound masks.",
               ],
               "temporal_comparison": {
                   "singleton_count": len(singleton), "pair_count": len(pairs),
@@ -259,6 +291,11 @@ def main() -> None:
               "AR_gap_px=", round(candidate["projected_ar_bbox_gap_px"], 1)
               if "projected_ar_bbox_gap_px" in candidate else None)
     print("Temporal comparison:", report["temporal_comparison"])
+    if args.instance_mask_dir is not None:
+        from collections import Counter
+        print("Mask depth statuses:", dict(Counter(
+            row.get("instance_mask_depth", {}).get("status", "NOT_EVALUATED")
+            for row in rows)))
     print("Saved:", args.output_dir / "report.json")
 
 
