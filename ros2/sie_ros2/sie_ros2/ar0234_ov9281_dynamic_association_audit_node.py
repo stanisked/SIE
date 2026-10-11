@@ -718,6 +718,23 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         if len(plausible) != 1:
             return None, "MULTIPLE_PLAUSIBLE_SPATIAL_COMPONENTS", diagnostic
         component_indices, component = plausible[0]
+        if self._active_evidence_cycle_dir is not None:
+            # Preserve precisely the sampled points after LR, depth, AR reprojection,
+            # and connected-component filtering. The bbox alone admits other points.
+            selected_mask = self.np.zeros(
+                (self.stereo_size[1], self.stereo_size[0]), dtype=self.np.uint8
+            )
+            selected_mask[v[component_indices].astype(self.np.int32),
+                          u[component_indices].astype(self.np.int32)] = 1
+            if int(selected_mask.sum()) != component["sample_count"]:
+                raise RuntimeError("selected component evidence mask count mismatch")
+            self._write_evidence_array("selected_spatial_component_mask.npy", selected_mask)
+            diagnostic["selected_spatial_component_mask"] = {
+                "file": "selected_spatial_component_mask.npy",
+                "coordinate_frame": "rectified_physical_left",
+                "sample_count": component["sample_count"],
+                "sample_stride_px": stride,
+            }
         component_depths = rectified_depth[component_indices]
         clusters = self._depth_clusters(component_depths)
         diagnostic["selected_spatial_component"] = component
