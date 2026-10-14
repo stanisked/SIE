@@ -187,3 +187,47 @@ The 2026-10-14 live run completed 12 cycles, with warm host latency about
 The remaining approximately 3 s has not yet been attributed. Profiling does not
 change capture mode, matcher settings, evidence contents, thresholds or gates.
 Optimization is pending measured stage costs from Pi, not an inferred bottleneck.
+
+## Offline SGBM scheduling comparison
+
+The next Pi profile attributed median 1.2891 s to right SGBM and 1.2857 s to
+left SGBM, approximately 65% of the 3.9857 s total. Mask/surface round trips
+were 0.5045/0.3178 s; RGB detection 0.2864 s. Stereo matching is the measured
+priority. This does not imply that a second thread will accelerate it.
+
+`benchmark_stereo_sgbm_parallel.py` reads two saved rectified JPEG pairs and
+compares sequential and concurrent calls on two independent SGBM instances.
+It extracts all constructor parameters from the actual parent and audit-node
+source using a restricted constant AST reader, without importing ROS. Resolution,
+disparity count, penalties, filters and bilateral tolerance (1.5 px) are unchanged.
+It tests initial OpenCV thread count, one thread and two threads. Duplicate thread
+counts are skipped. A persistent two-worker pool excludes startup from measured
+calls; one warmup per mode is excluded. Sequential/parallel order alternates.
+Both signed raw int16 disparity maps and LR-consistency masks must match exactly,
+including warmups. Input/source hashes are recorded and checked after computation.
+No masks, depth estimates, source files or live node are changed.
+
+Run on Pi using the same ROS/ONNX Python as the live node, with the node stopped:
+
+```bash
+cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+git pull --ff-only
+/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python \
+  vision_core/tools/benchmark_stereo_sgbm_parallel.py \
+  --evidence-root /home/elwis/.local/state/sie/evidence/person_live_local_surfaces_20261014_192836 \
+  --output /home/elwis/.local/state/sie/evidence/sgbm_parallel_comparison_20261014.json
+```
+
+No person, cameras, ROS launch or colcon build is needed. Output is one summary
+per mode/thread count plus `ALL_EXACT` and `INPUTS_UNCHANGED`. Existing output is
+refused. The report records every repetition, source/code hashes, constructor
+parameters, OpenCV build and thread environment. This small benchmark compares
+matcher wall time only, excluding reads, conversions, LR comparison and model
+creation. JPEG-decoded inputs are not bit-identical to the original live arrays;
+parity is between modes on the same decoded evidence, not with old saved maps.
+Load and heating can affect timing. Runtime integration remains pending Pi
+parity and speed results; numerical equality is not physical validation.
+
+Four tests cover configuration extraction, real sequential/concurrent SGBM at
+one/two threads, detection of a one-pixel disparity/mask change, and a complete
+synthetic saved-pair CLI with source preservation and overwrite refusal.
