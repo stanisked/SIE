@@ -60,6 +60,19 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self.declare_parameter("shadow_segmenter_python", "")
         self.declare_parameter("shadow_segmenter_model", "")
         self.declare_parameter("shadow_segmenter_timeout_s", 30.0)
+        self.declare_parameter("shadow_local_surfaces_enabled", False)
+        self.declare_parameter("shadow_diagnostic_range_min_m", 0.5)
+        self.declare_parameter("shadow_diagnostic_range_max_m", 4.5)
+        self.shadow_local_surfaces_enabled = bool(
+            self.get_parameter("shadow_local_surfaces_enabled").value
+        )
+        self.shadow_diagnostic_range = [
+            float(self.get_parameter("shadow_diagnostic_range_min_m").value),
+            float(self.get_parameter("shadow_diagnostic_range_max_m").value),
+        ]
+        lo, hi = self.shadow_diagnostic_range
+        if not (math.isfinite(lo) and math.isfinite(hi) and 0 < lo < hi <= 4.5):
+            raise ValueError("invalid shadow-only diagnostic depth range")
         self.declare_parameter("frustum_sample_stride_px", 4)
         self.declare_parameter("ar_inner_roi_x_margin_fraction", 0.20)
         self.declare_parameter("ar_inner_roi_top_fraction", 0.30)
@@ -103,6 +116,10 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self.shadow_instance_mask_enabled = bool(
             self.get_parameter("shadow_instance_mask_enabled").value
         )
+        if self.shadow_local_surfaces_enabled and not (
+            self.shadow_instance_mask_enabled and self.evidence_capture_enabled
+        ):
+            raise ValueError("local surface shadow requires instance masks and evidence capture")
         self.shadow_segmenter_timeout_s = float(
             self.get_parameter("shadow_segmenter_timeout_s").value
         )
@@ -220,6 +237,12 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "AR0234 is the only semantic detector; metric Measurement, navigation, "
             "and actuator access remain disabled"
         )
+        if self.shadow_local_surfaces_enabled:
+            self.get_logger().info(
+                f"local surface shadow diagnostic range={self.shadow_diagnostic_range} m; "
+                f"original activated range={[self.range_min_m, self.range_max_m]} m; "
+                "original association gates unchanged; per-cycle AUDIT logs enabled"
+            )
 
     def _confirm_current_target_track(
         self, candidate: dict[str, Any], observation: dict[str, Any]
@@ -933,6 +956,60 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                     "reason": type(error).__name__,
                     "elapsed_s": time.monotonic() - started}
 
+    def _shadow_local_surfaces(self, audit: dict[str, Any]) -> dict[str, Any]:
+        """Run on frozen full-frame LR evidence, including original range refusals.
+
+        Only this new diagnostic field is returned. Original association,
+        target-track confirmation, activated range and gates are never changed.
+        """
+        if not self.shadow_local_surfaces_enabled:
+            return {"status": "DISABLED"}
+        directory = self._active_evidence_cycle_dir
+        process = self._shadow_process
+        if (directory is None or self._shadow_mask_file is None or process is None
+                or process.stdin is None):
+            return {"status": "LOCAL_SURFACE_UNAVAILABLE", "reason": "CURRENT_MASK_OR_WORKER_ABSENT"}
+        started = time.monotonic()
+        try:
+            snapshot = directory / "shadow_surface_input.json"
+            with snapshot.open("x", encoding="utf-8") as stream:
+                stream.write(encode(audit) + "\n")
+            self._active_evidence_files.append(snapshot.name)
+            def digest(path: Path) -> str:
+                return hashlib.sha256(path.read_bytes()).hexdigest()
+            request = {
+                "operation": "local_surfaces", "cycle_id": audit["cycle_id"],
+                "snapshot": str(snapshot), "snapshot_sha256": digest(snapshot),
+                "disparity_sha256": digest(directory / "disparity_lr_consistent_px.npy"),
+                "diagnostic_depth_range_m": self.shadow_diagnostic_range,
+                "activation": str(self.activation_path),
+                "activation_sha256": digest(self.activation_path),
+                "ar_intrinsic": str(self.ar_intrinsic_path),
+                "stereo_calibration": str(self.stereo_path),
+            }
+            process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+            process.stdin.flush()
+            result = self._shadow_read(self.shadow_segmenter_timeout_s)
+            if result.get("cycle_id") != audit["cycle_id"]:
+                raise ValueError("surface worker cycle mismatch")
+            if result.get("status") != "SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY":
+                raise RuntimeError(f"surface worker refused: {result.get('reason')}")
+            report = directory / "shadow_local_surfaces" / "report.json"
+            if (result.get("report_file") != "shadow_local_surfaces/report.json"
+                    or result.get("report_sha256") != digest(report)):
+                raise ValueError("surface report binding mismatch")
+            self._active_evidence_files.extend(
+                str(p.relative_to(directory)) for p in sorted(report.parent.iterdir()) if p.is_file()
+            )
+            result["parent_round_trip_s"] = time.monotonic() - started
+            return result
+        except Exception as error:
+            # A timeout cannot leave a delayed response for the next cycle.
+            self._stop_shadow_worker()
+            self._shadow_worker_state = {"status": "UNAVAILABLE", "reason": str(error)}
+            return {"status": "LOCAL_SURFACE_UNAVAILABLE", "reason": str(error),
+                    "elapsed_s": time.monotonic() - started}
+
     def _evidence_path(self, filename: str) -> Path | None:
         if self._active_evidence_cycle_dir is None:
             return None
@@ -1151,6 +1228,18 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         }
 
     def _publish_audit(self, audit: dict[str, Any]) -> None:
+        audit.setdefault("shadow_local_surfaces", {
+            "status": "NOT_RUN" if self.shadow_local_surfaces_enabled else "DISABLED",
+            "reason": audit.get("reason"),
+        })
+        # Host processing latency includes reads, detectors, stereo, workers and
+        # intermediate evidence writes. It excludes final audit write/publish;
+        # camera buffering/exposure age is unknown.
+        audit["processing_timing"] = {
+            "host_capture_start_to_result_ready_s": time.monotonic() - self._cycle_started_mono,
+            "endpoint": "BEFORE_FINAL_AUDIT_WRITE_AND_PUBLISH",
+            "exposure_age_known": False,
+        }
         self._attach_evidence_record(audit)
         message = String()
         message.data = encode(audit)
@@ -1162,10 +1251,16 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                     raise
         self._active_evidence_cycle_dir = None
         self._active_evidence_files = []
+        self.get_logger().info(
+            f"AUDIT {audit['cycle_id'][-8:]} old={audit['status']} "
+            f"shadow={audit['shadow_local_surfaces']['status']} "
+            f"host_latency_s={audit['processing_timing']['host_capture_start_to_result_ready_s']:.3f}"
+        )
 
     def _cycle(self) -> None:
         if not rclpy.ok():
             return
+        self._cycle_started_mono = time.monotonic()
         self.sequence += 1
         timestamp = datetime.now(timezone.utc)
         ar_frame, ar_mono = self._read(self.ar_capture)
@@ -1287,6 +1382,12 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             )
             audit["stereo_person"] = "NOT_USED_AR0234_IS_SEMANTIC_AUTHORITY"
             audit["stereo_geometry"] = geometry
+            # Snapshot original outcome before adding independent diagnostics.
+            audit["status"] = ("ASSOCIATION_UNAVAILABLE" if association is None
+                               else "ASSOCIATED_DIAGNOSTIC_ONLY")
+            audit["reason"] = (reason if association is None
+                               else "AR0234_FRUSTUM_STEREO_ASSOCIATION")
+            audit["shadow_local_surfaces"] = self._shadow_local_surfaces(audit)
             if association is None:
                 self._publish_audit(
                     {
@@ -1358,3 +1459,4 @@ def main(args: list[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
+

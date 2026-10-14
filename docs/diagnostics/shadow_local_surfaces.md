@@ -1,7 +1,7 @@
 # Local masked stereo surfaces: NumPy, SciPy and Open3D
 
-Date: 2026-10-14. Status: offline diagnostic implementation tested;
-full 25-cycle Pi results pending. No live quality gate or runtime change.
+Date: 2026-10-14. Status: offline results reviewed; optional live shadow
+implementation tested synthetically. Pi live timing remains pending. No new gate.
 
 ## Reason for the change
 
@@ -76,23 +76,89 @@ isolated desktop environment (do not use a headless Pi session for the window):
 
 ```bash
 python3 -m venv ~/dev_ws/runtime_envs/sie_geometry_viewer
-~/dev_ws/runtime_envs/sie_geometry_viewer/bin/python -m pip install open3d==0.19.0
+~/dev_ws/runtime_envs/sie_geometry_viewer/bin/python -m pip install open3d==0.20.0
 ~/dev_ws/runtime_envs/sie_geometry_viewer/bin/python \
   vision_core/tools/view_shadow_cloud_open3d.py /absolute/local/path/to/exported_cloud.ply
 ```
 
 The viewer reads the original geometry and supports rotation/zoom. It does not
-filter, register or replace points. Open3D installation/GUI on the user's laptop
-has not been performed or tested in this change. Analysis and export do not need it.
+filter, register or replace points. The operator installed Open3D 0.20.0 and viewed both clouds on the laptop.
+Analysis and export do not need it.
 
 ## Validation and continuation
 
 Seven tests pass for a sloped plane, held-out and training outliers, sparse and
 degenerate support, invalid disparity, coherent scale bias, mask-grid replay,
 PLY source-geometry preservation and a full synthetic CLI with calibration hashes.
-Python syntax checks pass. Full 25-cycle results on the Pi are pending.
+Python syntax checks pass. The Pi report reproduced all 25 baseline cycles.
 
 Review local residuals together with bias, absolute p90, coverage and failures
 across all 22 target frames. A favorable subset or lower residual is not a motion
 permission. Decide whether the model provides useful quality evidence before any
-live shadow integration. No new board or human capture is needed for this step.
+live admission. No motion is authorized by this analysis.
+
+## Reviewed offline result
+
+In 22 target cycles, median held-out local MAD was 15.85 mm, compared with
+44.93 mm global raw MAD. Median fitted sample fraction was 96.29%; median
+coarse RGB coverage was 95.63%. Refused cycle 03 had held-out MAD/p90 absolute
+residual 16.66/62.07 mm; accepted cycle 04 had 16.11/61.35 mm. Their overlap
+supports recording shape-aware evidence, not replacing the existing gate.
+These are residuals relative to a fitted model, not physical accuracy.
+
+## Optional live shadow, separate diagnostic range
+
+`shadow_local_surfaces_enabled` defaults to false and requires evidence capture
+and `shadow_instance_mask_enabled`. The two `shadow_diagnostic_range_*_m`
+parameters default to 0.5 and 4.5 m, with an upper limit of 4.5 m. They never
+change `range_min_m`, `range_max_m`, activation or original association gates.
+
+After the original association computes its result, the existing long-lived
+segmentation companion receives a second request. It verifies calibration,
+activation, same-cycle source/mask and full LR disparity hashes; then runs the
+same whole-frame offline replay and local analysis. No additional stereo matcher
+or point filtering is introduced. The diagnostic mask-depth cutoff remains the
+offline 50 mm/100-sample setting, recorded as analysis configuration, independent
+of the parent's configurable gate. Original association and tracking confirmation
+still follow the original result. Worker errors and timeouts produce an explicit
+shadow-unavailable field; they cannot turn a refusal into an association.
+
+Each cycle records `shadow_local_surfaces`, with masked depth, local held-out
+MAD, absolute p90/max, fitted sample fraction, coarse RGB coverage, unfitted
+patch fraction, environment and code hashes. Full patch records and original
+samples are in `shadow_local_surfaces/report.json` and its NPZ. A separate
+immutable `shadow_surface_input.json` preserves the original outcome before
+diagnostics; raw evidence and final `audit.json` are not used as scratch files.
+
+`processing_timing.host_capture_start_to_result_ready_s` includes both camera
+reads, detector, stereo, workers and intermediate file writes. Its endpoint is
+before final audit serialization/write and ROS publication. This is host
+processing latency, not exposure-to-result age; camera buffering is unknown.
+The mask worker and surface worker round trip have separate timings. Cold imports
+are included in the first request. Early refusal/no-target cycles have timing
+and explicit `NOT_RUN`, with no previous mask/depth reused.
+
+On Pi, with a person at the earlier approximately 2.3 m position and the same
+camera geometry and documented warm-up, run once for 60 seconds:
+
+```bash
+cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+git pull --ff-only
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select sie_ros2 --symlink-install
+bash vision_core/tools/run_shadow_local_surfaces_probe.sh
+```
+
+The script uses the existing `sie_mvp` interpreter for ROS/ONNX and
+`sie_seg_offline` for segmentation/SciPy. Each cycle prints `AUDIT`, original
+status, shadow status and host latency. Evidence is written to a new timestamped
+`person_live_local_surfaces_*` root. The active 2 m refusal is expected for this
+scene; evaluate the independent shadow result and timing. Measurement,
+navigation and actuator access remain disabled. Do not change hardware or collect
+another multi-distance series for this check.
+
+Six additional tests exercise independent diagnostic range beyond the original
+2 m gate, unchanged original range refusal, source preservation, corrupt binding,
+invalid range/cycle, worker timeout, disabled mode, and early-refusal timing.
+Tests use the actual node methods with a ROS-free harness; live cameras, YOLO
+performance and ROS publication on Pi are not tested locally.

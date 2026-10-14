@@ -45,8 +45,16 @@ def main() -> None:
     for line in sys.stdin:
         started = time.monotonic()
         cycle_id = None
+        request = {}
         try:
             request = json.loads(line)
+            if request.get("operation") == "local_surfaces":
+                cycle_id = str(request["cycle_id"])
+                with contextlib.redirect_stdout(sys.stderr):
+                    from shadow_local_surface_request import process_surface_request
+                    result = process_surface_request(request)
+                emit(result)
+                continue
             image = Path(request["image"])
             output_dir = Path(request["output_dir"])
             if image.name != "ar0234_source.jpg" or image.parent != output_dir:
@@ -61,9 +69,11 @@ def main() -> None:
             emit(result)
         except Exception as error:
             emit({"cycle_id": cycle_id, "status": "MASK_UNAVAILABLE",
+                  "operation": request.get("operation") if isinstance(request, dict) else None,
                   "reason": type(error).__name__,
                   "elapsed_s": time.monotonic() - started})
 
 
 if __name__ == "__main__":
     main()
+
