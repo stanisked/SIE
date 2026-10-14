@@ -18,6 +18,10 @@ from preview_mask_surface import evaluate
 from benchmark_stereo_resolution import scaled_configs, paired_delta
 from benchmark_stereo_sgbm_parallel import runtime_parameters, compute_pair, consistency
 from preview_mask_client import PreviewMaskClient
+from stereo_pair_executor import StereoPairExecutor
+from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity
+import ast
+import time
 
 
 def calibration(w=128,h=96):
@@ -80,6 +84,44 @@ class PreviewMaskSurfaceTests(unittest.TestCase):
         for s in (.5,.25):
             row=paired_delta(ref,np.full((int(96*s),int(128*s)),32*s),s,75.954)
             self.assertEqual(row['absolute_depth_delta_p90_m'],0)
+
+    def test_live_half_stereo_matches_challenged_offline_and_physical_halves(self):
+        # Execute the actual ROS node computation without importing ROS.
+        path=ROOT/'ros2/sie_ros2/sie_ros2/ar0234_ov9281_control_preview_node.py'
+        tree=ast.parse(path.read_text())
+        cls=next(n for n in tree.body if isinstance(n,ast.ClassDef))
+        cls.bases=[]
+        cls.body=[n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name=='_compute_stereo']
+        scope={'time':time,'half_disparity':half_disparity}
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[cls],type_ignores=[])),str(path),'exec'),scope)
+        node=scope[cls.name]()
+        node.cv2=cv2;node.stereo_size=(1280,800);node._stereo_scale=.5
+        yy,xx=np.indices((800,1280),dtype=np.float32)
+        node.map_left_1=node.map_right_1=xx
+        node.map_left_2=node.map_right_2=yy
+        configs,_=runtime_parameters()
+        parents=[cv2.StereoSGBM_create(**c) for c in configs]
+        matchers,actual=half_matchers(cv2,*parents)
+        expected=scaled_configs(configs,.5)
+        for a,b in zip(actual,expected):
+            for key,value in b.items():
+                self.assertEqual(a[key],value)
+        left=np.random.default_rng(14).integers(0,256,(800,1280,3),dtype=np.uint8)
+        right=np.zeros_like(left);right[:,:-32]=left[:,32:]
+        combined=np.concatenate((right,left),axis=1)
+        old=cv2.getNumThreads();cv2.setNumThreads(1)
+        node._half_executor=StereoPairExecutor(*matchers)
+        try:
+            l,r,(d,lr),elapsed=node._compute_stereo(combined)
+            np.testing.assert_array_equal(l,left);np.testing.assert_array_equal(r,right)
+            pair=[cv2.resize(cv2.cvtColor(a,cv2.COLOR_BGR2GRAY),(640,400),interpolation=cv2.INTER_AREA) for a in (left,right)]
+            other=[cv2.StereoSGBM_create(**c) for c in expected]
+            maps,_=compute_pair(other,*pair)
+            np.testing.assert_array_equal(d,maps[0].astype(np.float32)/16.)
+            np.testing.assert_array_equal(lr,consistency(maps,tolerance=.75))
+            self.assertEqual(d.shape,(400,640))
+        finally:
+            node._half_executor.close();cv2.setNumThreads(old)
 
     def test_offline_cli_verifies_frozen_sources_and_reports_all_three_scales(self):
         from benchmark_stereo_resolution import main

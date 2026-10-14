@@ -174,3 +174,75 @@ remaining available after global-MAD refusal, empty-depth refusal, actual SGBM
 with a known shift at all scales, wrong-cycle worker closure/temp cleanup, and
 the actual callback calling shape analysis despite the old refusal. Pi timings
 and frozen-data numerical comparisons remain pending operator execution.
+
+## Separate 640x400 live diagnostic mode
+
+The saved resolution challenge `stereo_resolution_comparison_20261014_224621.json`
+contains 22 cycles per scale and confirms source hashes unchanged. Median
+match+LR times: full 0.85151 s, half 0.07349 s, quarter 0.01269 s. Half-resolution
+mask median differences from the recomputed full-resolution JPEG reference span
+-21.28 to +10.51 mm. Half global MAD median 26.14 mm, all 22 pass the old MAD
+comparison; local held-out MAD median 9.59 mm. These results establish a useful
+candidate on this saved scene, not physical accuracy or dynamic readiness.
+Quarter mask median difference has median +64.92 mm and reaches +97.81 mm;
+quarter mode is not exposed in the live node.
+
+The challenge also reports whole-frame common-point absolute depth delta p90
+with a median 257 mm for half resolution. This includes the background and
+boundaries, but the report does not establish which pixels cause that difference.
+Small target-median change must not be generalized to all scene points. Coarse
+coverage near 100% means occupied RGB bins, not dense correct depth everywhere.
+
+`preview_stereo_mode=half_640x400` is an explicit diagnostic option; the node
+still defaults to `full_1280x800`. A dedicated launcher selects half mode:
+
+```bash
+cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+git pull --ff-only
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select sie_ros2 --symlink-install
+bash vision_core/tools/run_control_input_preview_640x400.sh
+```
+
+Stop any other camera consumer first. Keep the existing rigid camera geometry
+and use a person in view for this one 30-second live implementation/latency check.
+No new distance sweep or checkerboard run. The script selects the existing
+isolated model interpreter and explicit segmentation model. No new dependency
+installation is required. It writes a new mode-labelled compact journal root.
+
+The camera still captures combined 2560x800, physical RIGHT first and LEFT
+second. Full calibration/remap stays unchanged, then gray rectified images are
+resized with INTER_AREA to 640x400. Two independent persistent matchers use the
+same challenged SGBM parameters, search 64 instead of 128, right min -64, LR
+0.75 small-image px. OpenCV threads=1 is required to match the challenged setup.
+The 7px block/speckle settings retain the support change documented offline.
+
+Small maps go directly to current-frame mask/shape analysis with scale=0.5,
+scaled focal-baseline product and pixel-centre coordinate conversion. No
+upsampling, duplicate points, depth fill, hidden scale/offset correction or
+second full-resolution SGBM pass occurs. Local stride 2/tile 16 small px preserve
+the original sampling density/footprint. Disparity units, sizes, scale, LR
+threshold and half matcher parameters are explicit in every processed journal.
+
+The legacy full-resolution component association is deliberately not called
+with a small map: `original_association.status=NOT_EVALUATED`, reason
+`NOT_EVALUATED_IN_HALF_RESOLUTION_MODE`. It is not described as passing or as
+an observed refusal. Half-mode top-level status describes shape computation;
+`SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY` means diagnostics available, NOT quality
+admission. Inspect nested `shape_diagnostic.mask_depth.status` separately,
+including MAD/layer/support refusals, and local coverage/residuals.
+Missing/ambiguous masks remain unavailable. No old mask/depth is used.
+
+The script summarizes total host time, RGB, stereo, segmentation, local surface
+and complete companion round-trip time, mask-depth statuses and candidate depth
+span. It excludes interrupted cycles from latency statistics. All heavy current
+mask/local work is still included in host timing; 250 ms remains an unachieved
+complete-path target until measured. `Measurement`, navigation and motors stay
+disabled; no activation, calibration or operating envelope is changed.
+
+Regression checks execute the actual live half-stereo method with synthetic
+physical camera halves and compare its maps/mask bitwise to the challenged
+offline configuration. Callback checks verify that no small map reaches legacy
+association, scale reaches the companion, results remain diagnostic and the
+next no-target cycle cannot reuse the preceding maps. Existing geometry and
+worker-provenance tests also apply. Live Pi timings remain pending this launch.

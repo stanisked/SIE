@@ -38,7 +38,7 @@ class PreviewMaskClient:
             raise ValueError('invalid worker response')
         return response
 
-    def evaluate(self, cycle_id, rgb, disparity, cal, candidate, roi, depth_range):
+    def evaluate(self, cycle_id, rgb, disparity, cal, candidate, roi, depth_range, *, scale=1.):
         import numpy as np
         started=time.monotonic()
         try:
@@ -49,7 +49,7 @@ class PreviewMaskClient:
                 np.savez(path,cycle_id=cycle_id,rgb=rgb,disparity=disparity,**cal)
                 sha=hashlib.sha256(path.read_bytes()).hexdigest()
                 request={'cycle_id':cycle_id,'arrays':str(path),'arrays_sha256':sha,
-                         'candidate':candidate,'roi':list(roi),'range':list(depth_range)}
+                         'candidate':candidate,'roi':list(roi),'range':list(depth_range),'scale':scale}
                 if self.process is None or self.process.stdin is None:
                     raise RuntimeError('preview mask worker unavailable')
                 self.process.stdin.write(json.dumps(request,separators=(',',':'))+'\n')

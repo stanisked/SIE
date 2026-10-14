@@ -157,17 +157,33 @@ class ControlPreviewTests(unittest.TestCase):
         maps = (np.ones((4,4),np.float32), np.ones((4,4),bool))
         node._frustum_associate = lambda *args: (None, "DEPTH_MAD_EXCEEDED:0.06m", {})
         calls = []
-        def masked(*args):
-            calls.append(args)
+        def masked(*args, **kwargs):
+            calls.append((args, kwargs))
             return {"status":"SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY"}
         node._mask_client = SimpleNamespace(evaluate=masked)
         with ThreadPoolExecutor(max_workers=1) as worker:
             node._perception_worker = worker
             node._cycle()
         self.assertEqual(len(calls),1)
-        self.assertEqual(calls[0][0],messages[-1]["cycle_id"])
+        self.assertEqual(calls[0][0][0],messages[-1]["cycle_id"])
         self.assertEqual(messages[-1]["original_association"]["reason"],"DEPTH_MAD_EXCEEDED:0.06m")
         self.assertEqual(messages[-1]["shape_diagnostic"]["status"],"SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY")
+        self.assertEqual(messages[-1]["decision_preview"]["status"],"STOP")
+        # Half maps must bypass full-resolution association entirely, while
+        # keeping current masks and the scale explicit in the worker request.
+        node._stereo_scale = .5
+        node._resolution_mode = "half_640x400"
+        def forbidden(*args):
+            raise AssertionError("small disparity entered full-resolution association")
+        node._frustum_associate = forbidden
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker = worker
+            node._cycle()
+        self.assertEqual(calls[-1][1], {"scale":.5})
+        self.assertEqual(messages[-1]["stereo_resolution"]["matching_size_px"],[640,400])
+        self.assertEqual(messages[-1]["original_association"]["reason"],"NOT_EVALUATED_IN_HALF_RESOLUTION_MODE")
+        self.assertEqual(messages[-1]["status"],"SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY")
+        self.assertIsNone(messages[-1]["association"])
         self.assertEqual(messages[-1]["decision_preview"]["status"],"STOP")
         # A later no-target cycle must not reuse the previous association.
         node.observer = SimpleNamespace(observe=lambda *args, **kw: {"disposition": "UNAVAILABLE", "reason": "NO_TARGET"})

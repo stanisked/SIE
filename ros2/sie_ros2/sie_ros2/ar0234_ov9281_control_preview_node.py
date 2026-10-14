@@ -1,7 +1,7 @@
 """Foreground RGB/stereo control-input preview, with deferred compact journaling.
 
-Same full-resolution geometry and association algorithm as the audit. RGB and
-stereo matching run concurrently. Current-frame mask and local shape diagnostics run in an isolated companion.
+Full-resolution reference or explicit half-resolution diagnostic geometry.
+RGB and stereo matching run concurrently. Current-frame mask and local shape diagnostics run in an isolated companion.
 This diagnostic topic is NOT a Measurement, cmd_vel or ESP32 command interface.
 """
 from __future__ import annotations
@@ -19,6 +19,8 @@ from .contracts import validate_ar0234_observation, ar0234_temporal_target_candi
 from .latest_diagnostic_writer import LatestDiagnosticWriter
 from .approach_control_preview import approach_control_preview
 from .preview_mask_client import PreviewMaskClient
+from .stereo_pair_executor import StereoPairExecutor
+from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity
 
 
 class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
@@ -26,7 +28,23 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         super().__init__()
         if self.evidence_capture_enabled or self.shadow_instance_mask_enabled or self.shadow_local_surfaces_enabled:
             raise ValueError("control preview excludes blocking evidence/mask/surface stages; use the audit node for those")
+        self.declare_parameter("preview_stereo_mode", "full_1280x800")
+        self._resolution_mode = str(self.get_parameter("preview_stereo_mode").value)
+        if self._resolution_mode not in ("full_1280x800", "half_640x400"):
+            raise ValueError("unsupported diagnostic stereo mode")
+        self._stereo_scale = .5 if self._resolution_mode == "half_640x400" else 1.
+        self._half_executor = None
+        self._half_configs = None
+        if self._stereo_scale == .5:
+            if self.cv2.getNumThreads() != 1:
+                raise ValueError("half mode requires stereo_opencv_threads=1 as challenged offline")
+            if self.stereo_size != (1280, 800):
+                raise ValueError("half mode requires the challenged 1280x800 calibration")
+            matchers, self._half_configs = half_matchers(self.cv2, self.sgbm, self.right_sgbm)
+            self._half_executor = StereoPairExecutor(*matchers)
         self.declare_parameter("preview_mask_surface_enabled", True)
+        if self._stereo_scale == .5 and not bool(self.get_parameter("preview_mask_surface_enabled").value):
+            raise ValueError("half diagnostic mode requires current-frame mask diagnostics")
         self._mask_client = None
         if bool(self.get_parameter("preview_mask_surface_enabled").value):
             self._mask_client = PreviewMaskClient(
@@ -50,7 +68,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._cached_stereo = None
         self._writer = LatestDiagnosticWriter(self.evidence_dir / ("control-preview-" + self.run_id))
         self.get_logger().info(
-            "control input preview: concurrent RGB/full-resolution stereo; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; concurrent RGB/stereo; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 
@@ -61,6 +79,12 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         left = self.cv2.remap(combined[:, width:], self.map_left_1, self.map_left_2, self.cv2.INTER_LINEAR)
         left_gray = self.cv2.cvtColor(left, self.cv2.COLOR_BGR2GRAY)
         right_gray = self.cv2.cvtColor(right, self.cv2.COLOR_BGR2GRAY)
+        if getattr(self, "_stereo_scale", 1.) == .5:
+            left_gray = self.cv2.resize(left_gray, (640,400), interpolation=self.cv2.INTER_AREA)
+            right_gray = self.cv2.resize(right_gray, (640,400), interpolation=self.cv2.INTER_AREA)
+            a, b, timing = self._half_executor.compute(left_gray, right_gray)
+            self._last_stereo_worker_timings = timing
+            return left, right, half_disparity(a,b), time.monotonic()-started
         # Invoke the original full-resolution LR implementation once. Foreground
         # timers are intentionally absent on this worker thread.
         result = Ar0234Ov9281DynamicAssociationAuditNode._left_right_disparity(self, left_gray, right_gray)
@@ -136,11 +160,25 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             left, right, self._cached_stereo, stereo_s = future.result()
             audit["stereo_worker_s"] = stereo_s
             audit["stereo_execution"]["worker_timings_s"] = self._last_stereo_worker_timings
-            association, reason, geometry = self._frustum_associate(observation, left, right)
+            scale = getattr(self, "_stereo_scale", 1.)
+            audit["stereo_resolution"] = {"mode":getattr(self,"_resolution_mode","full_1280x800"),
+                "scale":scale, "capture_per_camera_size_px":list(self.stereo_size),
+                "matching_size_px":[int(n*scale) for n in self.stereo_size],
+                "disparity_unit":"matching_image_pixel", "lr_tolerance_matching_px":1.5*scale,
+                "pixel_centre_mapping":"u_original=(u_matching+0.5)/scale-0.5",
+                "matcher_parameters":getattr(self,"_half_configs",None),
+                "half_mode_execution":"two independent persistent matchers; OpenCV threads=1" if scale==.5 else None}
+            if scale == .5:
+                # Do not feed small maps to the full-size legacy ROI/component
+                # code or fabricate an upsampled original association.
+                association, reason, geometry = None, "NOT_EVALUATED_IN_HALF_RESOLUTION_MODE", {
+                    "ar_inner_roi_xyxy_px":list(self._ar_inner_roi(observation))}
+            else:
+                association, reason, geometry = self._frustum_associate(observation, left, right)
             audit.update(stereo_geometry=geometry, association=association,
                          status="ASSOCIATED_DIAGNOSTIC_ONLY" if association else "ASSOCIATION_UNAVAILABLE",
                          reason="AR0234_FRUSTUM_STEREO_ASSOCIATION" if association else reason)
-            audit["original_association"] = {"status":audit["status"], "reason":audit["reason"],
+            audit["original_association"] = {"status":"NOT_EVALUATED" if scale==.5 else audit["status"], "reason":audit["reason"],
                                               "association":association}
             # Independent of the old range/component/global-MAD refusal. Never
             # relabel this shape description as admitted depth or an Action.
@@ -153,12 +191,17 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                            "R":self.r_ar_to_left, "T":self.t_ar_to_left_m.reshape(3),
                            "K":self.k_ar, "D":self.d_ar, "size":self.stereo_size}
                     audit["shape_diagnostic"] = client.evaluate(cycle_id, ar, current, cal,
-                        candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m])
+                        candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
+                        **({"scale":scale} if scale != 1. else {}))
                 except Exception as error:
                     audit["shape_diagnostic"] = {"status":"MASK_SURFACE_UNAVAILABLE",
                         "reason":type(error).__name__, "error_detail":str(error)[:400]}
             else:
                 audit["shape_diagnostic"] = {"status":"DISABLED"}
+            if scale == .5:
+                shape = audit["shape_diagnostic"]
+                audit.update(status=shape["status"], reason="HALF_RESOLUTION_SHAPE_DIAGNOSTIC",
+                             association=None)
             if association is not None:
                 self._confirm_current_target_track(candidate, observation)
         except Exception as error:
@@ -191,6 +234,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if elapsed > .25:
                 audit["admission_blockers"].append("HOST_PROCESSING_EXCEEDS_250MS_TARGET")
             candidate_depth = (audit.get("association") or {}).get("range_m")
+            if candidate_depth is None:
+                candidate_depth = audit.get("shape_diagnostic",{}).get("mask_depth",{}).get("candidate_depth_m")
             if candidate_depth is not None and not self._activated_range[0] <= candidate_depth <= self._activated_range[1]:
                 audit["admission_blockers"].append("DIAGNOSTIC_DEPTH_OUTSIDE_ACTIVATED_PROFILE")
             audit["journal"] = {"dropped_pending": self._writer.dropped, "write_errors": self._writer.errors}
@@ -200,10 +245,15 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 self.preview_publisher.publish(message)  # FIRST, before any journal disk write.
             self._writer.submit(audit)
             depth = (audit.get("association") or {}).get("range_m")
+            shape = audit.get("shape_diagnostic",{})
+            masked = shape.get("mask_depth",{})
             self.get_logger().info(f"CONTROL_PREVIEW {self.sequence:08d} status={audit['status']} "
-                f"range_m={depth} host_s={elapsed:.3f} host_within_250ms={elapsed <= .25} motors=DISABLED")
+                f"range_m={depth} mask={masked.get('status')} mask_depth_m={masked.get('candidate_depth_m')} host_s={elapsed:.3f} host_within_250ms={elapsed <= .25} motors=DISABLED")
 
     def destroy_node(self):
+        half_executor = getattr(self, "_half_executor", None)
+        if half_executor is not None:
+            half_executor.close()
         client = getattr(self, "_mask_client", None)
         if client is not None:
             client.close()
@@ -213,6 +263,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         writer = getattr(self, "_writer", None)
         if writer is not None:
             writer.close()
+            shape = audit.get("shape_diagnostic",{})
+            masked = shape.get("mask_depth",{})
             self.get_logger().info(f"CONTROL_PREVIEW_JOURNAL dropped={writer.dropped} errors={writer.errors}")
         return super().destroy_node()
 

@@ -54,7 +54,7 @@ def main():
                     result={'status':'MASK_UNAVAILABLE','mask':info}
                 else:
                     started=time.monotonic()
-                    result=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'])
+                    result=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.))
                     result.update(mask=info,surface_s=time.monotonic()-started,
                                   mask_sha256=hashlib.sha256(mask.tobytes()).hexdigest())
                 result.update(code_sha256=code_sha,mask_s=mask_s,cycle_id=request['cycle_id'],
