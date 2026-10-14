@@ -278,3 +278,62 @@ Four additional tests exercise the actual node LR method with real SGBM in
 both modes, timing without double counting, object independence, completion of
 both tasks after an error, repeat calls and idempotent pool shutdown. Local
 tests do not substitute for the complete camera/ROS cycle on Pi.
+
+## Shape-aware quality criterion: research stage
+
+The optimized live run `person_live_local_surfaces_20261014_201809` recorded
+22 target cycles, three accepted masked hypotheses and 19 global-MAD refusals.
+Local MAD ranged 16.6–22.1 mm, absolute p90 57.0–77.6 mm and coarse coverage
+97.8–100%. A same-series offline check on all 22 JPEG pairs found exact
+sequential/parallel disparity and LR-mask equality; input files were unchanged.
+This rules out scheduling-induced numeric changes on those decoded inputs,
+not changes in live camera timing or physical scene between captures.
+
+Draft criterion structure, with NO new numeric cutoffs or live activation:
+
+1. Require traceable current RGB mask, disparity, calibration and cycle binding.
+   Missing/corrupt evidence remains an explicit refusal/incomplete profile.
+2. Treat supported point count and plausible depth-layer count as support and
+   ambiguity evidence. One plausible layer does not prove physical ownership.
+3. Describe local held-out MAD, absolute p90 AND maximum residual together;
+   retain raw global MAD as surface dispersion rather than a pure noise estimate.
+4. Describe fitted-sample fraction, coarse RGB-bin coverage and sparse/failed
+   patch fraction together. High coverage does not repair high residuals.
+5. Keep activated range, freshness, exposure synchronization, physical range
+   uncertainty and semantic ownership as separate applicability requirements.
+   A local fit cannot satisfy them by itself.
+
+The numeric limits for items 3–4 require an explicit error/availability budget
+and evidence discriminating correct from incorrect target depths. These saved
+unlabelled runs do not establish false-accept rates or physical accuracy. No
+20/50/60 mm cutoff or weighted score is silently substituted for global MAD.
+
+`analyze_shadow_quality_profiles.py` checks the report SHA, same-cycle and
+calibration linkage, original statuses, compact/full metrics, and frozen input
+hashes. It produces complete/incomplete/error profiles without changing any
+original decision. Within a single run and matching calibration/method/code it
+compares six axes: local MAD, p90, maximum, coarse RGB coverage, fitted-sample
+fraction and unfitted-patch fraction. A refused frame dominates an accepted one
+only if it is no worse on EVERY axis and strictly better on at least one. This
+partial ordering introduces no weights or numeric admission thresholds. No
+dominance does not validate global MAD; tradeoffs may simply be inconclusive.
+Profiles are relative to model agreement, not ranked physical accuracy.
+
+Run once on Pi, without cameras or a rebuild:
+
+```bash
+cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+git pull --ff-only
+python3 vision_core/tools/analyze_shadow_quality_profiles.py \
+  --evidence-root /home/elwis/.local/state/sie/evidence/person_live_local_surfaces_20261014_192836 \
+  --evidence-root /home/elwis/.local/state/sie/evidence/person_live_local_surfaces_20261014_201809 \
+  --output /home/elwis/.local/state/sie/evidence/shadow_quality_profiles_20261014.json
+```
+
+Each run is summarized separately; frames from different scenes/runs are not
+ordered against each other. Review grouped residual/coverage distributions and
+`refused_dominates_accepted` before proposing numeric thresholds. No new capture
+or threshold sweep is required for this step. Five tests cover bound profiles,
+tampered evidence, absent targets, conservative dominance and a full offline CLI
+that preserves inputs and refuses an existing output file. Original runtime and
+motor/Measurement restrictions remain unchanged.
