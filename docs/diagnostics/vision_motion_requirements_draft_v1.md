@@ -1,6 +1,7 @@
 # Vision-derived motion requirements, draft v1
 
-Date: 2026-10-14. Status: DRAFT FOR ENGINEERING REVIEW.
+Date: 2026-10-14. Revised to operator-selected working targets.
+Status: DRAFT IMPLEMENTATION REQUIREMENTS; physical admission remains unvalidated.
 This is a proposed experimental operating profile, not a frozen ES, approved
 Measurement policy, activation/range expansion or authorization to move.
 All new numeric targets below are engineering proposals, not camera specifications,
@@ -33,10 +34,10 @@ which semantic target was selected. Target approach depth alone is insufficient.
 
 | ID | Proposed requirement | Present evidence/limit |
 | --- | --- | --- |
-| R1 | Experimental base speed <=0.05 m/s, enforced using measured speed/odometry | Limit proposed; actual speed and braking bound must be established |
-| R2 | Planned stand-off clearance >=1.50 m from forward footprint to target surface | Proposed stand-off, not established current geometry |
-| R3 | Approach depth error bound <=5% of declared target-surface distance over a proposed 1.5–4.5 m characterization interval | 5% was an earlier engineering goal, not a certified envelope; current activation remains 0.5–2.0 m |
-| R4 | Clearance error bound <=0.05 m when estimated clearance is 1.5–2.0 m | Proposed tighter terminal requirement; not established by present diagnostics |
+| R1 | Working base speed <=0.15 m/s, enforced using measured speed/odometry | Limit proposed; actual speed and braking bound must be established |
+| R2 | Planned stand-off clearance >=1.00 m from forward footprint to target surface | Proposed stand-off, not established current geometry |
+| R3 | Approach depth error bound <=5% of declared target-surface distance over a proposed >2.0–4.5 m approach interval | 5% was an earlier engineering goal, not a certified envelope; current activation remains 0.5–2.0 m |
+| R4 | Clearance error bound <=0.10 m when estimated clearance is 1.0–2.0 m | Proposed tighter terminal requirement; not established by present diagnostics |
 | R5 | Oldest contributing exposure-to-command age <=0.25 s AND the dynamic clearance inequality below must hold | Measured host processing median 2.275 s, max 2.366 s over 21 post-first cycles; buffering/exposure age is unknown |
 | R6 | Timing/association error allocation <=0.02 m; at relative surface speed 1.0 m/s this requires exposure-pair timing uncertainty <=0.020 s | Host read timestamps do not prove RGB/stereo or stereo-half exposure timing |
 | R7 | Robot travel from stop trigger, including watchdog/controller delay and braking, <=0.025 m at R1 speed; time to rest <=0.50 s | Allocation proposed; must be measured under relevant load, floor, supply and direction |
@@ -60,7 +61,7 @@ the validity of the path-distance calculation.
 At the instant a command would be issued, define:
 
 - `d_hat`: estimated decision clearance from a target-owned surface observation;
-- `d_stop`: required stand-off, proposed 1.50 m;
+- `d_stop`: required stand-off, selected 1.00 m;
 - `E_d`: applicable physical clearance-error bound, including calibration,
   matching, ownership/geometry, mounting transform and association effects;
 - `A`: age of the oldest contributing exposure, including computation,
@@ -96,17 +97,18 @@ not prevent a person or object from continuing towards it.
 
 Example, conditional on all bounds being independently established:
 
-`d_hat=2.50 m, E_d=0.125 m, v_close_bound=1.0 m/s, A=0.25 s,
-v_target_close_bound=0.95 m/s, T_stop=0.50 s`
+`d_hat=2.50 m, E_d=0.100 m, v_close_bound=1.0 m/s, A=0.25 s,
+v_target_close_bound=0.85 m/s, T_stop=0.50 s`
 
-`required additional clearance = 0.125 + 0.250 + 0.025 + 0.475 + 0.100 = 0.975 m`
+`required additional clearance = 0.100 + 0.250 + 0.025 + 0.425 + 0.100 = 0.900 m`
 
-The corresponding stopping boundary in this example is estimated clearance
-2.475 m, not 1.50 m. At terminal bound 0.05 m the same assumed motion/timing gives
-2.400 m. With a stationary target, robot closing speed 0.05 m/s and the same
-approach error/age/robot-stop/reserve budgets, the boundary would be 1.7625 m. These are calculated examples, not commanded stopping distances or
-new runtime parameters. Error allocations included in `E_d` must not be charged
-again as an independent term. R6 consumes part of `E_d`; it is not extra slack.
+For these assumed bounds, the corresponding estimated stopping boundary is
+1.900 m, not 1.00 m. With a stationary target, robot closing speed 0.15 m/s,
+0.10 m terminal error, 0.25 s age, 0.025 m robot stopping travel and 0.10 m
+reserve, the boundary would be 1.2625 m. These are calculated examples, not
+commanded stopping distances or measured new runtime performance. Error
+allocations already included in `E_d` must not be charged again. R6 consumes
+part of `E_d`; it is not extra slack.
 
 For illustration, if exposure age were 2.275 s, the 1.0 m/s case would have
 2.275 m of age uncertainty. The measured 2.275 s host processing median is
@@ -162,9 +164,9 @@ pairs where the refused frame is no worse on all six declared local axes.
 This demonstrates disagreement with that local profile, not physical correctness.
 Individual model residuals reach about 1.2 m and cannot be hidden by a small MAD.
 
-First review the proposed task budgets and distance definition as one concrete
-draft. The implementation follow-up is an offline admission evaluator with
-explicit UNKNOWN inputs and synthetic age/braking/ownership fault cases, before
-any live Measurement policy or movement. Its expected output with current
-unknown exposure age/physical error/transform bounds is refusal. Do not start
+The selected working targets now guide implementation rather than an invented
+minimum-speed regime. The separate [control-input preview](control_input_preview.md)
+implements overlapping RGB/stereo, deferred compact journaling and a pure
+task-budget decision preview. Current unknown exposure age/physical error/transform
+bounds remain explicit STOP reasons, not invented measurements. Do not start
 another unlabelled multi-distance or stationary-person series to tune thresholds.
