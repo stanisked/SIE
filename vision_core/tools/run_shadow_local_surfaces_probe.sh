@@ -31,3 +31,4 @@ if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 124 ] && [ "$exit_code" -ne 130 
   exit "$exit_code"
 fi
 echo "Saved evidence root: $evidence_root"
+"$runtime" vision_core/tools/summarize_shadow_stage_timing.py "$evidence_root"

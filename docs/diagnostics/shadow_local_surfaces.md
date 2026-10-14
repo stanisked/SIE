@@ -162,3 +162,28 @@ Six additional tests exercise independent diagnostic range beyond the original
 invalid range/cycle, worker timeout, disabled mode, and early-refusal timing.
 Tests use the actual node methods with a ROS-free harness; live cameras, YOLO
 performance and ROS publication on Pi are not tested locally.
+
+## Host stage profiling
+
+The same 60-second runner now adds per-cycle `TIMING` lines and a final
+`TIMING_SUMMARY`. Separate stages cover AR/stereo reads (including decoding),
+RGB detector, mask worker round trip, left/right rectification, left/right SGBM,
+LR validation, association geometry, evidence image/array writes, stereo debug
+render/write and local surface worker round trip. File stages include image
+encoding or array preparation where applicable. Surface-worker file writes are
+included in its round trip, not charged a second time as parent file I/O.
+
+`processing_timing.stages` stores call count, inclusive and exclusive seconds.
+Nested children are subtracted from exclusive parent time, so sum only
+`exclusive_s`. `unattributed_s` exposes control flow and other uninstrumented
+work. Timing records survive raised stage errors; each cycle starts a fresh
+collector. Final audit write and ROS publication remain outside the stated
+latency endpoint. The final summary excludes the first saved cycle per run,
+reports median/max and per-stage sample count, and does not classify it as a
+validated warmed operating regime. Missing stages are absent, not zero cost.
+
+The 2026-10-14 live run completed 12 cycles, with warm host latency about
+3.90–4.00 s. Mask inference was 0.54–0.57 s and surface round trip 0.34–0.38 s.
+The remaining approximately 3 s has not yet been attributed. Profiling does not
+change capture mode, matcher settings, evidence contents, thresholds or gates.
+Optimization is pending measured stage costs from Pi, not an inferred bottleneck.

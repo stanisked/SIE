@@ -18,6 +18,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "vision_core/tools"))
+sys.path.insert(0, str(ROOT / "ros2/sie_ros2/sie_ros2"))
+from diagnostic_timing import timed_stage
 from shadow_local_surface_request import process_surface_request
 from analyze_ar0234_stereo_component_ambiguity import load_calibrations, sha256
 from vision_core.tests.test_shadow_depth_regions import fixture
@@ -28,11 +30,12 @@ def node_methods():
     source = ROOT / "ros2/sie_ros2/sie_ros2/ar0234_ov9281_dynamic_association_audit_node.py"
     tree = ast.parse(source.read_text())
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
-    names = {"_shadow_local_surfaces", "_publish_audit", "_frustum_associate"}
+    names = {"_shadow_local_surfaces", "_publish_audit", "_frustum_associate", "_timed_call"}
     cls.bases = []
     cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in names]
     module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), cls], type_ignores=[])
     scope = {"time": time, "Path": Path, "json": json, "hashlib": hashlib,
+             "timed_stage": timed_stage,
              "encode": json.dumps, "String": SimpleNamespace,
              "rclpy": SimpleNamespace(ok=lambda: True)}
     exec(compile(ast.fix_missing_locations(module), str(source), "exec"), scope)

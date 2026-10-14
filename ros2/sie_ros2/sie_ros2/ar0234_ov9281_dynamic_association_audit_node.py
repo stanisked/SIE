@@ -21,6 +21,7 @@ from typing import Any
 
 import rclpy
 from std_msgs.msg import String
+from .diagnostic_timing import StageTimings, timed_stage
 
 from .ar0234_ov9281_metric_measurement_node import (
     Ar0234Ov9281MetricMeasurementNode,
@@ -465,13 +466,14 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             )
         return clusters
 
+    @timed_stage("stereo_lr_check")
     def _left_right_disparity(
         self, left_gray: Any, right_gray: Any
     ) -> tuple[Any, Any]:
         """Return left disparity and pixels supported by both matching directions."""
-        left = self.sgbm.compute(left_gray, right_gray).astype(self.np.float32) / 16.0
+        left = self._timed_call("stereo_match_left", self.sgbm.compute, left_gray, right_gray).astype(self.np.float32) / 16.0
         right = (
-            self.right_sgbm.compute(right_gray, left_gray).astype(self.np.float32)
+            self._timed_call("stereo_match_right", self.right_sgbm.compute, right_gray, left_gray).astype(self.np.float32)
             / 16.0
         )
         height, width = left.shape
@@ -956,6 +958,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                     "reason": type(error).__name__,
                     "elapsed_s": time.monotonic() - started}
 
+    @timed_stage("shadow_surface_round_trip")
     def _shadow_local_surfaces(self, audit: dict[str, Any]) -> dict[str, Any]:
         """Run on frozen full-frame LR evidence, including original range refusals.
 
@@ -1015,6 +1018,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             return None
         return self._active_evidence_cycle_dir / filename
 
+    @timed_stage("evidence_image_write")
     def _write_evidence_image(self, filename: str, image: Any) -> None:
         path = self._evidence_path(filename)
         if path is None:
@@ -1023,6 +1027,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             raise OSError(f"could not write evidence image: {path}")
         self._active_evidence_files.append(filename)
 
+    @timed_stage("evidence_array_write")
     def _write_evidence_array(self, filename: str, values: Any) -> None:
         path = self._evidence_path(filename)
         if path is None:
@@ -1053,6 +1058,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self._write_evidence_image("ov9281_physical_left_rectified.jpg", left)
         self._write_evidence_image("ov9281_physical_right_rectified.jpg", right)
 
+    @timed_stage("ar_preview_render")
     def _render_ar_live_preview(
         self,
         ar_frame: Any,
@@ -1130,6 +1136,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         )
         return marked
 
+    @timed_stage("ar_preview_write")
     def _write_live_ar_preview(self, marked: Any) -> None:
         if not self.cv2.imwrite(
             str(self.debug_dir / "latest_ar0234_target_and_inner_roi.jpg"), marked
@@ -1144,6 +1151,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             self._write_evidence_image("ar0234_target_and_inner_roi.jpg", marked)
         self._write_live_ar_preview(marked)
 
+    @timed_stage("disparity_evidence_prepare")
     def _persist_disparity_evidence(self, disparity: Any, lr_consistent: Any) -> None:
         if self._active_evidence_cycle_dir is None:
             return
@@ -1167,6 +1175,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         audit_path = self._active_evidence_cycle_dir / "audit.json"
         audit_path.write_text(encode(audit) + "\n", encoding="utf-8")
 
+    @timed_stage("stereo_debug_render_write")
     def _write_frustum_debug(
         self, left: Any, right: Any, disparity: Any, lr_consistent: Any,
         frustum_roi: tuple[int, int, int, int],
@@ -1235,7 +1244,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         # Host processing latency includes reads, detectors, stereo, workers and
         # intermediate evidence writes. It excludes final audit write/publish;
         # camera buffering/exposure age is unknown.
-        audit["processing_timing"] = {
+        audit["processing_timing"] = self._stage_timings.snapshot() if hasattr(self, "_stage_timings") else {
             "host_capture_start_to_result_ready_s": time.monotonic() - self._cycle_started_mono,
             "endpoint": "BEFORE_FINAL_AUDIT_WRITE_AND_PUBLISH",
             "exposure_age_known": False,
@@ -1256,15 +1265,24 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             f"shadow={audit['shadow_local_surfaces']['status']} "
             f"host_latency_s={audit['processing_timing']['host_capture_start_to_result_ready_s']:.3f}"
         )
+        stages = audit["processing_timing"].get("stages", {})
+        self.get_logger().info("TIMING " + audit["cycle_id"][-8:] + " " + " ".join(
+            f"{name}={row['exclusive_s']:.3f}s" for name, row in stages.items()
+        ) + f" other={audit['processing_timing'].get('unattributed_s', 0):.3f}s")
+
+    def _timed_call(self, name: str, function: Any, *args: Any, **kwargs: Any) -> Any:
+        timer = getattr(self, "_stage_timings", None)
+        return timer.call(name, function, *args, **kwargs) if timer is not None else function(*args, **kwargs)
 
     def _cycle(self) -> None:
         if not rclpy.ok():
             return
         self._cycle_started_mono = time.monotonic()
+        self._stage_timings = StageTimings()
         self.sequence += 1
         timestamp = datetime.now(timezone.utc)
-        ar_frame, ar_mono = self._read(self.ar_capture)
-        combined, stereo_mono = self._read(self.stereo_capture)
+        ar_frame, ar_mono = self._timed_call("capture_ar", self._read, self.ar_capture)
+        combined, stereo_mono = self._timed_call("capture_stereo", self._read, self.stereo_capture)
         skew_ms = abs(stereo_mono - ar_mono) / 1_000_000.0
         cycle_id = f"ar0234-ov9281-dynamic-audit-{self.run_id}-{self.sequence:08d}"
         audit = self._audit_base(cycle_id, timestamp, skew_ms)
@@ -1291,7 +1309,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         try:
             self._begin_cycle_evidence(cycle_id, ar_frame, combined)
             raw = validate_ar0234_observation(
-                self.observer.observe(ar_frame, captured_at_utc=timestamp, cycle_id=cycle_id)
+                self._timed_call("rgb_detector", self.observer.observe, ar_frame, captured_at_utc=timestamp, cycle_id=cycle_id)
             )
             # Keep unmodified model evidence visible to the existing tracker.
             if not rclpy.ok():
@@ -1361,23 +1379,23 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
                 return
             observation = self._selected_observation(raw, candidate, dynamic)
             self._persist_ar_target_evidence(ar_frame, observation)
-            audit["shadow_instance_mask"] = self._shadow_instance_mask(cycle_id, candidate)
+            audit["shadow_instance_mask"] = self._timed_call("shadow_mask_round_trip", self._shadow_instance_mask, cycle_id, candidate)
 
             # Pi stream identity is fixed by the validated calibration: first
             # half is physical_right, second half is physical_left.
             physical_right = combined[:, : self.stereo_size[0]]
             physical_left = combined[:, self.stereo_size[0] :]
-            left_rectified = self.cv2.remap(
+            left_rectified = self._timed_call("rectify_left", self.cv2.remap,
                 physical_left, self.map_left_1, self.map_left_2, self.cv2.INTER_LINEAR
             )
-            right_rectified = self.cv2.remap(
+            right_rectified = self._timed_call("rectify_right", self.cv2.remap,
                 physical_right, self.map_right_1, self.map_right_2, self.cv2.INTER_LINEAR
             )
             self._persist_rectified_evidence(left_rectified, right_rectified)
             # Do not run a second person classifier on OV9281.  The calibrated
             # AR inner ROI defines a 0.5–4.5 m stereo frustum; disparity points
             # survive only if their 3D back-projection lands inside that ROI.
-            association, reason, geometry = self._frustum_associate(
+            association, reason, geometry = self._timed_call("stereo_association", self._frustum_associate,
                 observation, left_rectified, right_rectified
             )
             audit["stereo_person"] = "NOT_USED_AR0234_IS_SEMANTIC_AUTHORITY"
