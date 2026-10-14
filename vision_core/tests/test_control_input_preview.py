@@ -147,6 +147,28 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertEqual(messages[0]["decision_preview"]["status"], "STOP")
         self.assertFalse(messages[0]["actuator_access"])
         self.assertIsNone(node._cached_stereo)
+        # A global-MAD refusal must not prevent current-frame shape analysis.
+        node.np = np
+        node.p1 = node.p2 = np.eye(3,4)
+        node.r1 = node.r_ar_to_left = node.k_ar = np.eye(3)
+        node.t_ar_to_left_m = np.zeros((3,1))
+        node.d_ar = np.zeros(5)
+        node._ar_inner_roi = lambda _: [10,10,100,100]
+        maps = (np.ones((4,4),np.float32), np.ones((4,4),bool))
+        node._frustum_associate = lambda *args: (None, "DEPTH_MAD_EXCEEDED:0.06m", {})
+        calls = []
+        def masked(*args):
+            calls.append(args)
+            return {"status":"SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY"}
+        node._mask_client = SimpleNamespace(evaluate=masked)
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker = worker
+            node._cycle()
+        self.assertEqual(len(calls),1)
+        self.assertEqual(calls[0][0],messages[-1]["cycle_id"])
+        self.assertEqual(messages[-1]["original_association"]["reason"],"DEPTH_MAD_EXCEEDED:0.06m")
+        self.assertEqual(messages[-1]["shape_diagnostic"]["status"],"SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY")
+        self.assertEqual(messages[-1]["decision_preview"]["status"],"STOP")
         # A later no-target cycle must not reuse the previous association.
         node.observer = SimpleNamespace(observe=lambda *args, **kw: {"disposition": "UNAVAILABLE", "reason": "NO_TARGET"})
         with ThreadPoolExecutor(max_workers=1) as worker:

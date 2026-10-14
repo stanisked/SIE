@@ -98,3 +98,79 @@ source-copy isolation, journal exceptions, unknown-input STOP, synthetic valid
 APPROACH at working speed, stale/too-close/dynamic-target STOP, actual callback
 overlap using synchronization events, cached-map cycle isolation and publish
 before journal submission. No camera or actuator was exercised locally.
+
+## 2026-10-14 correction after the first preview run
+
+Measured first preview: 21 records, 19 global-MAD refusals (52–65 mm), one
+association and one unfinished/default refusal. Post-first host median 1.3291 s,
+max 1.4365 s, 0/20 within 250 ms. RGB 0.627–1.058 s and stereo worker
+1.194–1.396 s were slower under concurrent CPU load than their prior separate
+stage timings. CPU contention is consistent with this result, not independently
+proven as the sole cause. The default last refusal does not identify an error.
+
+Removing masks and local diagnostics in the first preview reinstated the old
+shape-blind global-MAD bottleneck. The correction supersedes the earlier
+statement that this path excludes mask/local computation:
+
+- `preview_mask_surface_enabled=true` starts a dedicated companion with the
+  existing isolated segmentation/SciPy interpreter and explicit model path.
+- After current RGB/stereo association, `original_association` preserves its
+  exact result, including global MAD and ambiguity refusals. `shape_diagnostic`
+  separately computes same-cycle instance-mask depth and local shape metrics,
+  even after that refusal. No arbitrary new quality gate or accepted Measurement
+  is introduced. Top-level status continues to describe original association;
+  inspect both fields, rather than counting it as the shape result.
+- Temporary uncompressed arrays live in `/dev/shm`, one randomized directory per
+  request, then are removed. No JPEG/PNG/full array evidence is persisted by this
+  path. The journal records cycle, array/model hashes, timings, mask match,
+  depth layers, global MAD, local residuals including maxima and coarse coverage.
+  These hashes bind a current request but do not make discarded arrays replayable.
+- Worker requests bind cycle ID, input SHA and model SHA. Timeout, wrong cycle or
+  invalid provenance closes the worker, so an old mask cannot enter a later cycle.
+  Missing/ambiguous masks remain unavailable, with no bbox or old-mask fallback.
+- Surface fits use all original mask-owned samples, without layer trimming or
+  smoothing. Residuals describe model agreement, never physical depth accuracy.
+- Operator interruption/ROS shutdown is explicitly `CANCELLED_SHUTDOWN` and
+  excluded from script timing counts. Other processing exceptions retain type
+  and bounded detail. The uninformative previous last record is not retroactively
+  classified as a proven shutdown event.
+
+Restoring this computation can increase total latency; it is not a claim that
+250 ms is reached. The existing compact journal remains background/bounded;
+shape result computation must finish before it can be published as current.
+No need to repeat the person run yet.
+
+### Next action: one offline resolution comparison
+
+```bash
+cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+git pull --ff-only
+bash vision_core/tools/run_stereo_resolution_replay.sh
+```
+
+No ROS rebuild, cameras or person are required. The script reads all frozen
+cycles from `person_live_local_surfaces_20261014_201809` in the companion
+interpreter and writes a new report. It does not use the compact preview run,
+which contains no images. Every saved mask/calibration/source binding is checked
+with the existing replay before comparison. Missing masks are explicitly skipped.
+
+Recompute the full JPEG-based reference and candidates at scales 1, 1/2, 1/4,
+with two matchers, OpenCV one thread, scaled disparity search and LR tolerance.
+Disparity/depth units and pixel-centre geometry are transformed explicitly.
+Local tiles/stride scale to preserve original-image footprint/density; no depth
+upsampling or duplicated points enter the mask metrics. The 7px SGBM window and
+speckle parameters remain unchanged, increasing their original-image support at
+smaller scales; this is a changed estimator, not bitwise equivalence.
+
+Report mask median change, global MAD, depth layers, local residuals/coverage,
+LR-valid support, common-point depth differences and match+LR time. Resize,
+segmentation, capture and rectification are outside the stereo timer; it cannot
+be described as complete exposure-to-command age. Full-resolution depth is a
+comparison reference, not physical truth. No scale is automatically selected or
+activated. All source hashes are rechecked after processing.
+
+Local verification covers synthetic plane depth at all scales, shape residuals
+remaining available after global-MAD refusal, empty-depth refusal, actual SGBM
+with a known shift at all scales, wrong-cycle worker closure/temp cleanup, and
+the actual callback calling shape analysis despite the old refusal. Pi timings
+and frozen-data numerical comparisons remain pending operator execution.

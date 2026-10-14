@@ -16,6 +16,8 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p ar_intrinsic:=/home/elwis/dev_ws/runtime_artifacts/ar0234_intrinsic_v5_final_20260910/calibration_fullres.json \
   -p stereo_calibration:=/home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz \
   -p activation_profile:=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json \
+  -p shadow_segmenter_python:=/home/elwis/dev_ws/runtime_envs/sie_seg_offline/bin/python \
+  -p shadow_segmenter_model:=/home/elwis/dev_ws/model_artifacts/yolo11n_seg_coco/yolo11n-seg.pt \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \
   -p frame_rate_hz:=10.0 -p evidence_dir:="$directory" \
   || exit_code=$?
@@ -28,7 +30,9 @@ from collections import Counter
 import json, statistics, sys
 files = sorted(Path(sys.argv[1]).rglob('ar0234-ov9281-control-preview-*.json'))
 rows = [json.loads(p.read_text()) for p in files]
-times = [r['processing_timing']['host_capture_start_to_result_ready_s'] for r in rows[1:]]
+times = [r['processing_timing']['host_capture_start_to_result_ready_s'] for r in rows[1:]
+         if r['status'] != 'CANCELLED_SHUTDOWN']
+print('SHAPE:', dict(Counter(r.get('shape_diagnostic',{}).get('status') for r in rows)))
 print('CONTROL_PREVIEW_SUMMARY', 'records=', len(rows), 'statuses=', dict(Counter(r['status'] for r in rows)))
 if times:
     print('host_median_s=', round(statistics.median(times), 4), 'host_max_s=', round(max(times), 4),
