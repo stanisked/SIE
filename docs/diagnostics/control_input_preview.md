@@ -1,7 +1,8 @@
 # Foreground control-input preview
 
-Date: 2026-10-14. Implementation status: tested with synthetic inputs; live Pi
-timing pending. Working targets: 0.15 m/s, 1.0 m stand-off from robot front,
+Date: 2026-10-14. Latest implementation status: single-segmentation 640x400
+mode exercised on Pi; 25 completed masked-depth cycles, host median 0.8674 s.
+Physical accuracy, exposure age and motion admission remain unvalidated. Working targets: 0.15 m/s, 1.0 m stand-off from robot front,
 100 mm distance error at 1–2 m, 5% above 2 m within a validated range, and
 250 ms exposure-to-command age. These targets are not assumed measured abilities.
 
@@ -330,3 +331,34 @@ worker/client protocol with only inference substituted by a deterministic fixtur
 the fixture records exactly one predict call and refuses second use of the same
 cached result. py_compile for changed Python files and bash -n for both launchers
 passed. Real COCO model outputs and Pi latency remain pending the operator run.
+
+
+## Latest Pi result: single segmentation, 23:12 on 2026-10-14
+
+Journal: `/home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_20261014_231200`.
+Implementation `45007ad5d9850d1126a52903db75a3d3bcb8d714`.
+
+- 26 records: 25 completed shape diagnostics, all 25 nested masked-depth statuses
+  coherent, plus one cancelled shutdown. Journal dropped=0, errors=0; clean exit.
+- Post-first completed timing: 24 cycles, median host 0.8674 s, max 0.9060 s,
+  within 250 ms 0/24. Compared with the preceding two-model live run's 1.2852 s
+  median, the reduction is approximately 32.5%. This is a run-to-run timing
+  comparison, not a controlled physical-depth accuracy comparison.
+- Separate detector median/max 0 s; segmentation round-trip median 0.6318 s,
+  max 0.6639 s, including inference median 0.5925 s / max 0.6270 s. Stereo worker
+  median 0.2116 s / max 0.2212 s overlaps this inference.
+- Subsequent fusion round-trip median 0.2024 s / max 0.2148 s, including local
+  surfaces median 0.1933 s / max 0.2056 s. Do not sum overlapping stereo and
+  segmentation or count nested inference/surface times twice.
+- Candidate median depth 2.7126 m; between-cycle candidate-median span 0.0121 m.
+  This is not physical error, proof of frame freshness or dynamic-scene validation.
+
+The one-model change is functioning on Pi. Segmentation is now the dominant
+measured bottleneck and alone exceeds the complete 250 ms target. Next prepare
+an ONNX export of the same checkpoint and compare with PyTorch on frozen AR
+frames: inference/transport time, bbox/instance selection and mask overlap.
+Record model/export/input hashes and configuration, retain disagreement/refusal
+cases and avoid threshold tuning to force agreement. Use the existing saved
+full-evidence captures rather than the compact latest journals, whose images
+were intentionally not retained. No new person or distance test is required
+for this offline step. Live replacement remains pending those results.

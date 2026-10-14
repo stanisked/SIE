@@ -1,6 +1,6 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-10-11
+**Snapshot date:** 2026-10-14
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
 **Status:** active engineering validation, not autonomous operation.
 
@@ -85,17 +85,128 @@ The current RGB-to-stereo person experiment is one Vision Core validation path w
 
 | Responsibility | Current implementation | Architectural rule |
 | --- | --- | --- |
-| Semantic target | AR0234 RGB camera plus custom YOLO11 ONNX model, currently classed `person_upper_body` | AR0234 is the sole semantic authority in the new fusion path. The model label is a temporary adapter, not a system-wide object definition. |
-| 2D target region | YOLO `bbox_xyxy_px`; a future approved backend may produce a real mask | A bbox is an area of uncertainty, not a depth point. Do not synthesize a mask from a bbox. |
+| Semantic target | AR0234 RGB; current 640x400 preview uses one COCO YOLO11n-seg inference for person bbox and mask; custom `person_upper_body` ONNX remains the reference backend | AR0234 is the sole semantic authority in the new fusion path. The model label is a temporary adapter, not a system-wide object definition. |
+| 2D target region | Current-frame segmentation bbox and exact-index instance mask in the diagnostic preview; bbox-only reference backend remains available | A bbox is an area of uncertainty, not a depth point. Do not synthesize a mask from a bbox. |
 | Geometry and depth | DECXIN dual OV9281 stereo, rectification, disparity, calibrated 3D reconstruction | Stereo provides geometry, not a second mandatory semantic person detector. |
 | Cross-camera association | Validated AR0234-to-OV9281 physical-left extrinsic transform | Project the RGB target region through calibrated geometry into an admissible stereo frustum; do not measure the bbox centre. |
-| Quality | Left-right disparity consistency, spatial connected component, depth clusters, MAD, ambiguity and temporal checks | Refuse a result when more than one plausible 3D surface, poor disparity, or inadequate evidence remains. |
+| Quality | LR consistency, target-mask ownership, depth layers, global MAD comparison and local shape diagnostics in the preview; connected-component gates remain in the reference audit | Refuse a result when more than one plausible 3D surface, poor disparity, or inadequate evidence remains. |
 
 The current dynamic diagnostic node intentionally does **not** require MediaPipe on OV9281. Earlier live metric code still contains an OV9281 MediaPipe detector; it is legacy static-MVP behavior and must not become a requirement for the intended RGB-semantic + stereo-geometry architecture.
 
 ### Required evidence for every fusion diagnostic cycle
 
 A diagnostic result is useful only when it can be audited. Each cycle must either retain the complete evidence set named in the approved next sequence or explicitly identify which source was unavailable. Its outcome must be one of: `ASSOCIATED_DIAGNOSTIC_ONLY`, `TARGET_UNAVAILABLE`, `ASSOCIATION_UNAVAILABLE`, or a more specific evidence-backed rejection. Diagnostic evidence is not a Metric Measurement and must never be silently promoted to World State, navigation, or an actuator command.
+
+## Current continuation checkpoint: 2026-10-14
+
+This checkpoint supersedes older next-step descriptions about repeating manual
+board sweeps, diagnosing the same six saved MAD refusals, or using the old
+range-gated shadow path as the only implementation. Preserve those observations
+as history; do not repeat them without a new concrete question.
+
+### Implemented diagnostic path
+
+- Branch `codex/sie-ros2-integration-v1`, implementation commit
+  `45007ad5d9850d1126a52903db75a3d3bcb8d714`.
+- `ar0234_ov9281_control_preview_node.py`, dedicated launcher
+  `vision_core/tools/run_control_input_preview_640x400.sh`, topic
+  `/sie/diagnostics/ar0234_ov9281/control_preview`. Full runbook:
+  [control_input_preview.md](docs/diagnostics/control_input_preview.md).
+- Actual stereo capture/calibration remain 2560x800 combined, physical RIGHT
+  first and LEFT second. Rectified matching alone is reduced to 640x400 per
+  camera, with independent SGBM64 matchers and LR tolerance 0.75 small pixels.
+  Scale, focal-baseline units and pixel-centre projection are explicit. No
+  upsampled/fill depth, hidden correction or second full-resolution pass.
+- One COCO person segmentation inference on each current AR frame provides bbox
+  and mask. Stereo runs concurrently. The node selects a current target, then
+  fuses the exact model-result mask index, bound to cycle/RGB SHA/model SHA.
+  Ambiguity, confidence, edges, geometry and fresh-track matching remain checked;
+  no prior depth or mask substitutes for current observations.
+- COCO `person` is an internal diagnostic schema, not relabelled as the frozen
+  custom `person_upper_body` Observation. No canonical raw observation is
+  published by this backend. The old ONNX observer is not called per frame;
+  parent startup still checks its artifact before releasing the unused session.
+- The legacy full-resolution component association is marked `NOT_EVALUATED`
+  in half mode. Nested mask-depth status and local shape diagnostics are separate.
+  Shape diagnostics being available does not imply quality admission. Local
+  residuals describe agreement with a shape model, not physical accuracy.
+- Diagnostic range 0.5–4.5 m is separate from the original active 0.5–2.0 m
+  Measurement profile. Calibration/activation/operating authority are unchanged.
+- Compact journals are bounded/background. Temporary arrays are removed, so these
+  journals are not replayable full image evidence. Use older frozen captures for
+  offline model comparisons. Shutdown bug fixed in commit `52086d1`; final
+  shutdown logging does not use an invalid ROS publisher.
+
+### Evidence and measured performance
+
+The saved resolution challenge
+`stereo_resolution_comparison_20261014_224621.json` processed 22 cycles per scale,
+with source hashes unchanged. Median stereo+LR: 851.51 ms at 1280x800,
+73.49 ms at 640x400, 12.69 ms at 320x200. Half mask median differences from the
+full JPEG-based reference were -21.28 to +10.51 mm; all 22 half mask diagnostics
+passed the existing 50 mm global-MAD comparison. This is numerical agreement
+on one scene, not physical-depth certification. Whole-frame common-point depth
+delta p90 has median 257 mm; the responsible regions have not been isolated.
+Quarter resolution shifted mask medians by a median +64.92 mm and is not exposed
+in the live mode. Do not generalize person-median agreement to all scene points.
+
+Pi live comparison, post-first completed cycles:
+
+| Path | Completed cycles | Host median | Host max | Mask-depth coherent |
+| --- | ---: | ---: | ---: | ---: |
+| 640x400, detector plus segmentation | 17 | 1.2852 s | 1.3324 s | 17/17 |
+| 640x400, single segmentation | 25 | 0.8674 s | 0.9060 s | 25/25 |
+
+Latest journal:
+`/home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_20261014_231200`.
+There are 26 records: 25 completed and one `CANCELLED_SHUTDOWN`; warm latency
+statistics use 24 completed post-first cycles. Zero journal drops/errors.
+
+| Latest stage | Median | Meaning |
+| --- | ---: | --- |
+| Separate RGB detector | 0 s | No per-frame call |
+| Segmentation round trip | 0.6318 s | Includes one model inference and request/response |
+| Segmentation inference | 0.5925 s | Included in that round trip |
+| Stereo worker | 0.2116 s | Overlaps segmentation; includes rectify/resize/matching/LR |
+| Local surfaces | 0.1933 s | Included in subsequent fusion round trip |
+| Subsequent fusion round trip | 0.2024 s | No second model inference |
+
+Host latency improved about 32.5% relative to the preceding two-model live run.
+No completed timed cycle meets 250 ms (0/24). Segmentation alone exceeds the
+whole target budget. Candidate median depth 2.71265 m, cycle-median span
+12.1 mm; neither physical accuracy nor exposure freshness follows from that
+span. Global MAD 50 mm remains a team-selected comparison parameter, not a
+camera specification or physical error bound. No local-residual cutoff has been
+invented to promote these results.
+
+### Working motion targets and next step
+
+Operator-selected implementation targets: base speed up to 0.15 m/s; stand-off
+at least 1.0 m from robot front to target surface; distance error <=100 mm in
+1–2 m and <=5% above 2 m within a validated range; exposure-to-command age
+<=250 ms; stop travel <=25 mm and stop time <=0.5 s. These are targets, not
+proven abilities. A proposed extra 100 mm reserve is not a measured value.
+See [requirements draft](docs/diagnostics/vision_motion_requirements_draft_v1.md).
+
+Next: export the SAME segmentation model to ONNX in an isolated environment,
+then compare PyTorch/ONNX on already saved AR frames for inference/round-trip
+time, detection/selection changes, bbox agreement and mask overlap. Preserve
+model/export hashes and settings, input hashes and failures; do not change
+thresholds to obtain agreement. No new person/distance run is needed for this
+comparison. Do not switch the live backend until results are reviewed.
+
+Retain half-resolution stereo. No need to repeat a checkerboard or multi-range
+series merely to tune MAD. Every proposed restriction/change must name the
+measured deficiency or explicitly unknown prerequisite it addresses and what
+removes it. Each next action should advance camera-derived robot operation.
+
+The current output remains diagnostic: no admitted robot-front clearance/error
+bound, established exposure age, validated generic dynamic-scene performance,
+or qualified 0.15 m/s drive/stopping interface is claimed. The existing bounded
+ESP32 distance command is not a velocity setpoint. `Measurement`, navigation
+and motor commands remain disabled. Last implementation verification: 27 targeted
+tests, changed-file py_compile and launcher bash -n passed; this live run adds
+real Pi evidence but does not validate physical accuracy or dynamic safety.
 
 ## Hardware and runtime
 
@@ -239,7 +350,7 @@ Earlier 42-cycle diagnostic evidence:
 
 The five associations had large coherent left-right-consistent spatial components, but many other frames were refused because full selected depth-cluster MAD exceeded the current 0.05 m limit. The correct response is to investigate target surface selection and evidence quality, not silently relax MAD, calibration, or range limits.
 
-The later dynamic diagnostic also has an opt-in shadow instance-mask worker. It records a YOLO11n-seg person mask from the same AR0234 frame and a separate masked-depth hypothesis without changing the original association decision, publishing a Metric Measurement, or accessing motors. Its `0.05 m` MAD cutoff is a team-selected software threshold for this diagnostic, not a camera specification, measured absolute error bound, or approved motion tolerance. The current implementation computes live masked depth only after the original frustum range gate; when that gate returns early, masked depth must be replayed offline from saved evidence.
+The later dynamic diagnostic also has an opt-in shadow instance-mask worker. It records a YOLO11n-seg person mask from the same AR0234 frame and a separate masked-depth hypothesis without changing the original association decision, publishing a Metric Measurement, or accessing motors. Its `0.05 m` MAD cutoff is a team-selected software threshold for this diagnostic, not a camera specification, measured absolute error bound, or approved motion tolerance. That older shadow implementation computes live masked depth only after the original frustum range gate. The separate 2026-10-14 control-preview path below removes this diagnostic dependency; it does not expand the activated Measurement range.
 
 ### Controlled AR0234 framing and stationary semantic range gate (2026-10-05)
 
@@ -456,14 +567,25 @@ This is an MVP direction, not an approved change to the current motor-disabled s
 
 ## Approved next sequence
 
-1. **Preserve active v7 unchanged.** Keep its artifact, activation profiles, camera geometry, and thresholds as evidence references. Do not overwrite it or insert a scale/offset correction.
-2. **Characterize the reproduced startup shift without moving the board.** Keep the camera open continuously across timed checkpoints; preserve per-frame raw left/right images, disparity, PnP pose, camera controls, elapsed time, and rejection reasons. Repeat with independently recorded module temperatures if sensors can be mounted without perturbing camera geometry. Compare left/right image geometry and correspondence before assigning thermal causality or designing a correction.
-3. **Defer a certifying multi-range envelope until the physical setup supports it.** Use a repeatable axial fixture or independent optical-frame survey for 1.5, 2.0, 3.0, and 4.0 m points, including uncertainty and repeatability. The earlier relative-translation 5% passes are screening evidence only. Establish an absolute optical-frame error criterion and a separate tighter terminal-zone criterion before admitting depth to Measurement.
-4. **Keep v8 and v8b rejected.** Their solver metrics are useful evidence but no activation follows from them. Do not start another calibration candidate unless the pose-aware v7 test identifies a geometry problem that a recapture can address.
-5. **Analyze the six saved masked-depth refusals before collecting more frames.** Compare their mask coverage, depth distributions, disparity support and local regions with the 16 passed cycles. Determine whether the 50 mm MAD reflects visible human surface shape, background leakage or stereo instability. Preserve the refusals; do not tune the software cutoff to obtain a pass.
-6. **Make diagnostic range and latency explicit.** The live shadow path currently stops before masked depth when the activated 2.0 m gate rejects the frame, and mask inference costs about 0.5 s on the Pi after warm-up. Keep the activated range unchanged; if improving the diagnostic path, expose a separate declared range and record complete capture-to-result latency, image/frame identity and failure reasons. Test from frozen replay before another short live run.
-7. **Specify the bounded-motion decision from validated evidence.** Define a versioned generic semantic target interface, a fresh target-owned metric range with independent accuracy/uncertainty evidence, base speed and braking-distance bound, obstacle response, and stop-on-stale/refusal behavior. Validate the estimator and decision in replay/simulation and then with wheels lifted. LiDAR, odometry and higher-grade hardware are replaceable inputs, not silent repairs to an unvalidated camera range.
-8. **Only then return to supervised ground motion.** Preserve the existing `bounded_forward_0.10_m` primitive with explicit authorization, low speed and mandatory re-observation. Dynamic exposure synchronization and operational range policy still need their own evidence and review. The present shadow diagnostic emits no Metric Measurement or motor command.
+1. **Keep the demonstrated path.** Preserve v7 calibration and capture geometry,
+   explicit 640x400 diagnostic matching and the single-segmentation frontend.
+   Keep full-resolution/two-model paths as named references, not mandatory stages.
+2. **Optimize the measured bottleneck offline.** Compare the same segmentation
+   model in PyTorch and ONNX on saved AR frames; record timing, bbox/mask/selection
+   agreement, hashes and refusals. Segmentation round trip is currently 632 ms.
+3. **Review before switching runtime.** Preserve exact-index/cycle/RGB ownership,
+   missing/ambiguous-target refusals and explicit backend provenance. Then use one
+   short live check for the changed implementation, not another distance sweep.
+4. **Close actual movement-input gaps.** Establish complete exposure age,
+   camera-to-base/front geometry, physical depth error and fresh target ownership.
+   Local shape residuals and an attractive median are not physical error bounds.
+5. **Build the remaining control connection against working targets.** Reuse
+   prior motor evidence; the ESP32 distance primitive does not implement a
+   validated 0.15 m/s velocity setpoint or the 25 mm/0.5 s stopping bounds. Explain
+   each constraint with measured deficiency or explicitly missing evidence.
+6. **Preserve authorization boundaries.** Diagnostic previews cannot emit
+   admitted Measurement, navigation or motor commands. Return to supervised
+   camera-driven ground motion through an explicit reviewed control path.
 
 ## Rules for the next agent
 
@@ -480,6 +602,7 @@ This is an MVP direction, not an approved change to the current motor-disabled s
 
 | Date | Change |
 | --- | --- |
+| 2026-10-14 | Recorded shape-aware mask diagnostics, 22-cycle resolution replay, 640x400 live mode, one segmentation inference for bbox/mask and latest 25 completed Pi cycles (867 ms host median, 25/25 coherent mask-depth diagnostics). Adopted the operator-selected motion targets as implementation requirements, preserved disabled movement and unvalidated physical/exposure bounds, and prioritized offline ONNX segmentation comparison over repeated scene trials. |
 | 2026-10-11 | Recorded the 21-cycle component/mask replay and 25-cycle live shadow capture, diagnosed the active 2.0 m range refusal, and added explicit 0.5 to 4.5 m offline masked-depth results (16/22 passed, six MAD refusals, three no target). Kept activation, Measurement and motors unchanged; prioritized saved-failure analysis and replaceable hardware interfaces before bounded motion. |
 | 2026-10-01 | Initial consolidated project snapshot: SIE architecture, Pi ROS2 state, RGB-to-stereo direction, dynamic diagnostic evidence, and explicit safety gates. |
 | 2026-10-01 | Project name changed to Spatial Intelligence Evidence Engine (SIEE); existing `sie` technical identifiers explicitly retained for compatibility. |
