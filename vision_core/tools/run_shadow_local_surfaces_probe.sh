@@ -7,6 +7,9 @@ source install/setup.bash
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 companion=/home/elwis/dev_ws/runtime_envs/sie_seg_offline/bin/python
 runtime=/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python
+# Explicit opt-in launch profile; baseline can be restored without editing code.
+stereo_execution="${SIE_STEREO_EXECUTION:-parallel}"
+opencv_threads="${SIE_OPENCV_THREADS:-1}"
 "$companion" -c 'import scipy, cv2, ultralytics; print("Companion SciPy:", scipy.__version__, "OpenCV:", cv2.__version__, flush=True)'
 "$runtime" -c 'import rclpy, onnxruntime, sie_ros2; print("ROS / ONNX ready", flush=True)'
 evidence_root="/home/elwis/.local/state/sie/evidence/person_live_local_surfaces_$(date +%Y%m%d_%H%M%S)"
@@ -15,6 +18,7 @@ exit_code=0
 timeout --signal=INT --kill-after=10s 60s "$runtime" \
   install/sie_ros2/lib/sie_ros2/ar0234_ov9281_dynamic_association_audit_node \
   --ros-args \
+  -p stereo_match_execution:="$stereo_execution" -p stereo_opencv_threads:="$opencv_threads" \
   -p project_root:="$PWD" \
   -p model_path:=/home/elwis/dev_ws/model_artifacts/ar0234_person_upper_body_yolo11n_v1/best.onnx \
   -p ar_intrinsic:=/home/elwis/dev_ws/runtime_artifacts/ar0234_intrinsic_v5_final_20260910/calibration_fullres.json \

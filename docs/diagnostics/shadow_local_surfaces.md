@@ -231,3 +231,50 @@ parity and speed results; numerical equality is not physical validation.
 Four tests cover configuration extraction, real sequential/concurrent SGBM at
 one/two threads, detection of a one-pixel disparity/mask change, and a complete
 synthetic saved-pair CLI with source preservation and overwrite refusal.
+
+## Optional parallel execution in the live diagnostic node
+
+The Pi offline report `sgbm_parallel_comparison_20261014.json` tested two pairs
+with two measured repeats per mode. Both int16 maps and the LR mask matched
+exactly in every mode and warmup; source inputs were unchanged. Median pair
+times were: sequential/parallel with four OpenCV threads 1.9637/1.7131 s;
+with one thread 0.8863/0.6552 s; with two threads 0.7011/1.4769 s. These are
+offline JPEG-input matcher timings, not the earlier live 2.57 s pair cost.
+
+The audit node now exposes `stereo_match_execution` (`sequential` by default,
+or `parallel`) and `stereo_opencv_threads` (0 by default, preserving the initial
+OpenCV setting). The existing 60-second probe explicitly selects `parallel`
+and 1. Node defaults preserve the prior scheduling. Both modes use the same
+matcher instances/configuration, original resolution and LR validation. No
+gate, range, disparity correction, mask ownership or Measurement behavior changes.
+
+Parallel mode owns a persistent two-worker pool and two distinct matcher objects.
+The callback waits for BOTH tasks before reusing matchers or frames, including
+on a matcher error, which becomes processing refusal. Shutdown drains the pool
+before restoring the process's initial OpenCV thread count. There is no silent
+fallback or concurrent reconfiguration of OpenCV. One callback owns the pool.
+
+The thread setting affects the entire main ROS process, including OpenCV image
+operations, but not the isolated segmentation companion process. Each audit
+records requested/effective/initial thread counts and execution mode in
+`stereo_execution`. Worker left/right durations are recorded separately with a
+warning that they overlap. The stage profiler counts only
+`stereo_match_pair_parallel` wall time; sequential mode retains its separate
+left/right stage timings. Each new cycle clears previous worker timings.
+
+After pulling and rebuilding, run the same probe once with a person and preserve
+the previous camera geometry/warm-up. Inspect `TIMING_SUMMARY`, including total
+latency and mask/surface costs. Actual full-cycle speed on Pi remains pending;
+offline speedup is not claimed as live performance or motion authorization.
+
+To explicitly run the prior scheduling instead:
+
+```bash
+SIE_STEREO_EXECUTION=sequential SIE_OPENCV_THREADS=0 \
+  bash vision_core/tools/run_shadow_local_surfaces_probe.sh
+```
+
+Four additional tests exercise the actual node LR method with real SGBM in
+both modes, timing without double counting, object independence, completion of
+both tasks after an error, repeat calls and idempotent pool shutdown. Local
+tests do not substitute for the complete camera/ROS cycle on Pi.

@@ -30,7 +30,7 @@ def node_methods():
     source = ROOT / "ros2/sie_ros2/sie_ros2/ar0234_ov9281_dynamic_association_audit_node.py"
     tree = ast.parse(source.read_text())
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
-    names = {"_shadow_local_surfaces", "_publish_audit", "_frustum_associate", "_timed_call"}
+    names = {"_shadow_local_surfaces", "_publish_audit", "_frustum_associate", "_timed_call", "_left_right_disparity"}
     cls.bases = []
     cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in names]
     module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), cls], type_ignores=[])

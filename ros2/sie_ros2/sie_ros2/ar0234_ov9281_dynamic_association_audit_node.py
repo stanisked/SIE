@@ -22,6 +22,7 @@ from typing import Any
 import rclpy
 from std_msgs.msg import String
 from .diagnostic_timing import StageTimings, timed_stage
+from .stereo_pair_executor import StereoPairExecutor
 
 from .ar0234_ov9281_metric_measurement_node import (
     Ar0234Ov9281MetricMeasurementNode,
@@ -48,6 +49,15 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         # and the two detectors.  This subclass never calls its Measurement
         # publishing methods and never evaluates its static-scene gate.
         super().__init__()
+        self.declare_parameter("stereo_match_execution", "sequential")
+        self.declare_parameter("stereo_opencv_threads", 0)
+        self.stereo_match_execution = str(self.get_parameter("stereo_match_execution").value)
+        self.stereo_opencv_threads = int(self.get_parameter("stereo_opencv_threads").value)
+        if self.stereo_match_execution not in ("sequential", "parallel") or self.stereo_opencv_threads < 0:
+            raise ValueError("invalid stereo execution mode or OpenCV thread count")
+        self._stereo_pair_executor = None
+        self._last_stereo_worker_timings = None
+        self._opencv_threads_before = self.cv2.getNumThreads()
         self.declare_parameter(
             "audit_topic", "/sie/diagnostics/ar0234_ov9281/dynamic_association"
         )
@@ -226,7 +236,19 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             disp12MaxDiff=1,
             mode=self.cv2.STEREO_SGBM_MODE_SGBM_3WAY,
         )
+        # Set once, while no stereo tasks are running. OpenCV's setting applies
+        # to this whole ROS process, including rectification and debug rendering.
+        # The isolated segmentation worker is a different process.
+        if self.stereo_opencv_threads:
+            self.cv2.setNumThreads(self.stereo_opencv_threads)
+        if self.stereo_match_execution == "parallel":
+            self._stereo_pair_executor = StereoPairExecutor(self.sgbm, self.right_sgbm)
         self.audit_publisher = self.create_publisher(String, self.audit_topic, 10)
+        self.get_logger().info(
+            f"stereo execution={self.stereo_match_execution}; "
+            f"OpenCV threads={self.cv2.getNumThreads()} "
+            f"(initial={self._opencv_threads_before}); matcher parameters unchanged"
+        )
         self._confirmed_target_track: dict[str, Any] | None = None
         self._target_track_epoch = 0
         self.get_logger().info(
@@ -471,11 +493,19 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         self, left_gray: Any, right_gray: Any
     ) -> tuple[Any, Any]:
         """Return left disparity and pixels supported by both matching directions."""
-        left = self._timed_call("stereo_match_left", self.sgbm.compute, left_gray, right_gray).astype(self.np.float32) / 16.0
-        right = (
-            self._timed_call("stereo_match_right", self.right_sgbm.compute, right_gray, left_gray).astype(self.np.float32)
-            / 16.0
-        )
+        if getattr(self, "_stereo_pair_executor", None) is not None:
+            raw_left, raw_right, worker_timings = self._timed_call(
+                "stereo_match_pair_parallel", self._stereo_pair_executor.compute, left_gray, right_gray
+            )
+            self._last_stereo_worker_timings = worker_timings
+            left = raw_left.astype(self.np.float32) / 16.0
+            right = raw_right.astype(self.np.float32) / 16.0
+        else:
+            left = self._timed_call("stereo_match_left", self.sgbm.compute, left_gray, right_gray).astype(self.np.float32) / 16.0
+            right = (
+                self._timed_call("stereo_match_right", self.right_sgbm.compute, right_gray, left_gray).astype(self.np.float32)
+                / 16.0
+            )
         height, width = left.shape
         x = self.np.broadcast_to(
             self.np.arange(width, dtype=self.np.int32), (height, width)
@@ -1215,6 +1245,13 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "timestamp": timestamp.isoformat(),
             "cycle_id": cycle_id,
             "reference_frame": "ov9281_physical_left_optical_frame",
+            "stereo_execution": {
+                "mode": self.stereo_match_execution,
+                "requested_opencv_threads": self.stereo_opencv_threads,
+                "effective_opencv_threads": self.cv2.getNumThreads(),
+                "initial_opencv_threads": self._opencv_threads_before,
+                "thread_setting_scope": "MAIN_ROS_PROCESS",
+            },
             "calibration": {
                 "ar0234_intrinsic_sha256": self.ar_intrinsic_sha256,
                 "ov9281_stereo_sha256": self.stereo_calibration_sha256,
@@ -1237,6 +1274,9 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         }
 
     def _publish_audit(self, audit: dict[str, Any]) -> None:
+        audit.setdefault("stereo_execution", {})["worker_timings_s"] = getattr(
+            self, "_last_stereo_worker_timings", None
+        )
         audit.setdefault("shadow_local_surfaces", {
             "status": "NOT_RUN" if self.shadow_local_surfaces_enabled else "DISABLED",
             "reason": audit.get("reason"),
@@ -1279,6 +1319,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             return
         self._cycle_started_mono = time.monotonic()
         self._stage_timings = StageTimings()
+        self._last_stereo_worker_timings = None
         self.sequence += 1
         timestamp = datetime.now(timezone.utc)
         ar_frame, ar_mono = self._timed_call("capture_ar", self._read, self.ar_capture)
@@ -1449,6 +1490,12 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             )
 
     def destroy_node(self) -> bool:
+        executor = getattr(self, "_stereo_pair_executor", None)
+        if executor is not None:
+            executor.close()
+            self._stereo_pair_executor = None
+        if hasattr(self, "_opencv_threads_before") and self.stereo_opencv_threads:
+            self.cv2.setNumThreads(self._opencv_threads_before)
         self._stop_shadow_worker()
         return super().destroy_node()
 
