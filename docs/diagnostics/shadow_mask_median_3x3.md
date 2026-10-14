@@ -1,6 +1,7 @@
 # Shadow instance-mask depth: offline median 3x3 comparison
 
-Date: 2026-10-14. Status: diagnostic implementation tested; 25-cycle Pi results pending.
+Date: 2026-10-14. Status: 25-cycle Pi median comparison completed;
+spatial near/far visualization prepared, Pi images pending.
 
 ## Purpose and evidence
 
@@ -83,4 +84,46 @@ comparison. The earlier manual board series remains deferred.
 - An algorithm-only smoke check on the two locally available earlier 800x1280
   disparity maps preserved invalid pixels and source files. It does not evaluate
   person masks or the six target refusals and is not a Pi performance benchmark.
-- Full comparison on the 25-cycle Pi evidence is pending the command above.
+- Full comparison on the 25-cycle Pi evidence completed with
+  `BASELINE_REPLAY_VERIFIED 25/25`. The operator-provided output reports unchanged
+  statuses (16 coherent, six MAD refusals, three no target), unchanged displayed
+  per-frame median depths and unchanged selected-point counts. Around 450 to
+  580 grid points changed per target frame. MAD decreased in already-passing
+  cycles 15 (43.60 to 41.99 mm) and 25 (48.23 to 46.28 mm); no refused cycle
+  became coherent. Source report on Pi: `median3x3_comparison.json` in the same
+  `person_shadow_mask_20261011` evidence directory. Thus isolated spatial spikes
+  suppressed by this filter do not explain the six refusals; the output does
+  not identify a unique physical surface or stereo-error cause.
+
+## Next spatial inspection, prepared 2026-10-14
+
+`vision_core/tools/visualize_shadow_depth_regions.py` replays original, unfiltered
+points for adjacent cycles 03 (MAD refusal, 58.10 mm) and 04 (coherent, 40.53 mm).
+Both baseline support and candidate-layer statistics must reproduce before
+rendering. The figures use a shared signed color scale: blue is nearer than
+the frame's candidate median, white is the median and red is farther. Colors
+saturate at +/-200 mm; they represent relative depth, not ground-truth error.
+Other unsupported masked depth layers are gray. All plots retain the original
+RGB image, mask outline and inner ROI; no interpolation or smoothing is applied.
+
+```bash
+/home/elwis/dev_ws/runtime_envs/sie_seg_offline/bin/python \
+  vision_core/tools/visualize_shadow_depth_regions.py \
+  --baseline-report /home/elwis/.local/state/sie/evidence/person_shadow_mask_20261011/replay_0p5_to_4p5m.json \
+  --ar-intrinsic /home/elwis/dev_ws/runtime_artifacts/ar0234_intrinsic_v5_final_20260910/calibration_fullres.json \
+  --stereo-calibration /home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz \
+  --activation /home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json \
+  --cycles 00000003 00000004 \
+  --output-dir /home/elwis/.local/state/sie/evidence/person_shadow_mask_20261011/depth_regions_03_04
+```
+
+Primary figure: `depth_regions_pair.jpg`. Separate figures and `report.json`
+retain exact source hashes, layer counts, depth percentiles and upper/middle/lower
+image-height band statistics. These bands are image regions, not inferred
+anatomical labels. Review whether near/far values form coherent surfaces or
+irregular regions before assigning causality. Two frames cannot validate general
+reliability or distinguish all motion, geometry and correspondence effects.
+
+The visualization passed four tests for signed color scale, exact layer/support
+reconstruction, nonoverlapping band statistics and source preservation. A synthetic
+render was inspected for label and color correctness. Real Pi figures are pending.
