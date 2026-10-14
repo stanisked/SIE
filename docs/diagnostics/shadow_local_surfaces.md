@@ -337,3 +337,14 @@ or threshold sweep is required for this step. Five tests cover bound profiles,
 tampered evidence, absent targets, conservative dominance and a full offline CLI
 that preserves inputs and refuses an existing output file. Original runtime and
 motor/Measurement restrictions remain unchanged.
+
+## Task-derived motion budgets, draft only
+
+See [vision_motion_requirements_draft_v1.md](vision_motion_requirements_draft_v1.md)
+for the proposed distance meaning, speed/age/error budgets, target motion during
+latency AND robot braking, stop conditions and remaining unknowns. It is a draft
+for review, not a numeric residual policy or motion activation. The quality-profile
+analysis found five refused/accepted dominance pairs in 34 complete profiles;
+that observation motivates separating shape dispersion from physical uncertainty.
+The proposed 250 ms exposure-to-command age target is not met by the current
+multi-second diagnostic path. Further unlabelled repeats do not resolve this.
