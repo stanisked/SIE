@@ -82,3 +82,55 @@ def segment_array(source, candidate, model):
     if mask.shape!=source.shape[:2] or not mask.any():
         raise ValueError('invalid full resolution mask')
     return mask, {**info,'status':'CURRENT_FRAME_MASK_DIAGNOSTIC_ONLY'}
+
+
+def infer_instances(source, model):
+    """One model invocation returns matching boxes/masks with stable result indices."""
+    if source.shape!=(1200,1920,3) or source.dtype!=np.uint8:
+        raise ValueError('invalid current RGB frame')
+    results=model.predict(source=source,imgsz=640,conf=.25,classes=[0],
+                          retina_masks=True,device='cpu',verbose=False)
+    if len(results)!=1:
+        raise ValueError('unexpected segmentation batch')
+    result=results[0]
+    if result.boxes is None or not len(result.boxes):
+        return [],[]
+    if result.masks is None or len(result.masks.data)!=len(result.boxes):
+        raise ValueError('missing box/mask correspondence')
+    boxes=result.boxes.xyxy.cpu().numpy();scores=result.boxes.conf.cpu().numpy()
+    labels=result.boxes.cls.cpu().numpy()
+    if np.any(labels!=0):
+        raise ValueError('unexpected semantic class')
+    instances=[];masks=[]
+    for index,(box,confidence) in enumerate(zip(boxes,scores)):
+        mask=result.masks.data[index].cpu().numpy()>.5
+        if mask.shape!=source.shape[:2] or not mask.any():
+            raise ValueError('invalid instance mask')
+        x1,y1,x2,y2=map(float,box)
+        instances.append({'instance_index':index,'bbox_xyxy_px':[x1,y1,x2,y2],
+                          'center_x_px':(x1+x2)/2,'confidence':float(confidence),
+                          'truncated_left':x1<=3,'truncated_right':x2>=1917,
+                          'truncated_top':y1<=3,'truncated_bottom':y2>=1197})
+        masks.append(mask)
+    return instances,masks
+
+
+class CurrentInstanceMasks:
+    """One inference result, consumed once for exactly its RGB cycle and index."""
+    def __init__(self):
+        self.current=None
+
+    def infer(self, cycle_id, rgb_sha, source, model):
+        self.current=None  # clear even if the next inference fails
+        instances,masks=infer_instances(source,model)
+        self.current=(cycle_id,rgb_sha,instances,masks)
+        return instances
+
+    def take(self, cycle_id, rgb_sha, index, bbox):
+        current,self.current=self.current,None
+        if current is None or current[0]!=cycle_id or current[1]!=rgb_sha:
+            raise ValueError('no matching current RGB segmentation')
+        instances,masks=current[2:]
+        if type(index) is not int or not 0<=index<len(instances) or instances[index]['bbox_xyxy_px']!=bbox:
+            raise ValueError('selected box and mask index disagree')
+        return masks[index]

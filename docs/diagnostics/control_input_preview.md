@@ -268,3 +268,65 @@ executes the actual cleanup method with no cycle audit and a false ROS context,
 checks resource-close order and confirms parent cleanup runs. No new camera
 trial is required to check this fix. Six callback/journal/control tests and
 py_compile pass; completed records of the previous run remain useful.
+
+## Single segmentation model for current bbox and mask
+
+The dedicated 640x400 launcher now selects `preview_rgb_backend=single_segmentation`.
+The general launcher retains `two_model_reference` by default for explicit
+comparison. Both continue to be non-actuating diagnostics.
+
+One worker model invocation on the current AR frame supplies COCO person boxes,
+confidence and masks with exact model-result indices. Stereo runs concurrently
+with this inference. The node selects the current target, then requests local
+fusion of that exact index and box. The worker holds only its last inference
+result and consumes the selected mask once. It checks cycle ID and original
+RGB-input SHA, and rejects a changed box/index. A new inference or any protocol
+error clears older masks. No second segment inference, bbox-IoU rematching,
+previous-frame depth, nearest-person fallback or old-mask reuse occurs.
+
+The previous ONNX observer is never called in this backend and its session is
+released after parent startup. Existing parent artifact checks still load/check
+that historical model at construction, so its configured path/dependencies
+remain required until a separate startup refactor. This is startup overhead,
+not an additional per-frame inference.
+
+Selection preserves the configured target confidence threshold (default 0.70),
+current-frame top/left/right edge exclusion, and the existing geometry checks
+including width/height and horizontal edge margin. Inference returns raw COCO
+person instances down to 0.25, but that does not lower target admission confidence.
+One eligible current instance may proceed; multiple eligible instances require
+an unambiguous match to a fresh confirmed diagnostic bbox track, with the
+existing IoU, normalized centre distance, score margin and optional constant
+velocity prediction. No current candidate means unavailable even if a past track
+exists. Track confirmation follows a coherent current masked stereo diagnostic;
+it stores identity/bbox only, never depth for later substitution.
+
+COCO `person` boxes differ semantically from the prior custom `person_upper_body`
+boxes. The node records a new internal diagnostic schema
+`sie.ar0234.instance_segmentation_preview.v1`, model SHA, timestamp, current
+instances and selection. It does not relabel COCO detections as upper-body or
+publish them through that frozen raw-observation contract. The existing central
+ROI fractions are applied to the selected COCO person bbox; changed support and
+accuracy must not be presumed equivalent to the two-model reference. This
+backend changes no canonical contract, activation or Measurement authority.
+
+The journal reports `rgb_detector_s=0`, `rgb_segmentation_round_trip_s`, the
+worker's one-inference `mask_s`, and the subsequent fusion-only round trip with
+`round_trip_scope=FUSION_ONLY_AFTER_SEGMENTATION`. Stereo overlaps the inference;
+these two durations must not be added as sequential time. Complete host timing
+still includes capture, requests, selection, mask fusion and local fits.
+Removing the earlier measured 452 ms detector stage is the purpose, not a claim
+of a guaranteed 452 ms saving or 250 ms total. CPU competition may change costs.
+
+Use the same 30-second launch command above, with a person in view. No new
+calibration or distance sweep. Test coverage checks one invocation for boxes
+and masks, exact-index ownership, one-time consumption, clearing on inference
+failure/wrong cycle/wrong box, zero/one/multiple targets, stale/tied temporal
+matches and the actual callback never calling the old observer/adapter or
+second segmentation path. Existing geometry and shutdown checks remain relevant.
+
+Validation of this change: 27 targeted tests passed, including the production
+worker/client protocol with only inference substituted by a deterministic fixture;
+the fixture records exactly one predict call and refuses second use of the same
+cached result. py_compile for changed Python files and bash -n for both launchers
+passed. Real COCO model outputs and Pi latency remain pending the operator run.

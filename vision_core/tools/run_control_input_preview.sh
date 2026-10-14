@@ -6,8 +6,9 @@ source install/setup.bash
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 runtime=/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python
 mode="${SIE_PREVIEW_STEREO_MODE:-full_1280x800}"
+backend="${SIE_PREVIEW_RGB_BACKEND:-two_model_reference}"
 case "$mode" in full_1280x800|half_640x400) ;; *) echo "Unsupported diagnostic mode: $mode" >&2; exit 2 ;; esac
-directory="/home/elwis/.local/state/sie/evidence/control_input_preview_${mode}_$(date +%Y%m%d_%H%M%S)"
+directory="/home/elwis/.local/state/sie/evidence/control_input_preview_${mode}_${backend}_$(date +%Y%m%d_%H%M%S)"
 echo "Journal root: $directory"
 exit_code=0
 timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
@@ -20,6 +21,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p activation_profile:=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json \
   -p shadow_segmenter_python:=/home/elwis/dev_ws/runtime_envs/sie_seg_offline/bin/python \
   -p shadow_segmenter_model:=/home/elwis/dev_ws/model_artifacts/yolo11n_seg_coco/yolo11n-seg.pt \
+  -p preview_rgb_backend:="$backend" \
   -p preview_stereo_mode:="$mode" \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \
   -p frame_rate_hz:=10.0 -p evidence_dir:="$directory" \
@@ -37,7 +39,7 @@ times = [r['processing_timing']['host_capture_start_to_result_ready_s'] for r in
          if r['status'] != 'CANCELLED_SHUTDOWN']
 print('SHAPE:', dict(Counter(r.get('shape_diagnostic',{}).get('status') for r in rows)))
 print('MASK_DEPTH:', dict(Counter(r.get('shape_diagnostic',{}).get('mask_depth',{}).get('status') for r in rows)))
-for key in ('rgb_detector_s','stereo_worker_s'):
+for key in ('rgb_detector_s','rgb_segmentation_round_trip_s','stereo_worker_s'):
     values=[r[key] for r in rows[1:] if r.get(key) is not None and r['status']!='CANCELLED_SHUTDOWN']
     if values: print(key,'median_s=',round(statistics.median(values),4),'max_s=',round(max(values),4))
 print('CONTROL_PREVIEW_SUMMARY', 'records=', len(rows), 'statuses=', dict(Counter(r['status'] for r in rows)))

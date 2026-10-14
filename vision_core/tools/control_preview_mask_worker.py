@@ -24,7 +24,7 @@ def main():
     with contextlib.redirect_stdout(sys.stderr):
         import numpy as np
         from ultralytics import YOLO
-        from preview_mask_surface import evaluate, segment_array
+        from preview_mask_surface import evaluate, segment_array, CurrentInstanceMasks
         model=YOLO(str(args.model),task='segment')
         if model.task!='segment' or model.names.get(0)!='person':
             raise ValueError('expected COCO person segmentation model')
@@ -34,6 +34,7 @@ def main():
         Path(__file__).resolve().parents[1]/'person_localization/local_surface_diagnostic.py',
         Path(__file__).resolve().parents[1]/'person_localization/instance_mask_stereo_fusion.py')}
     emit({'status':'READY','model_sha256':model_sha})
+    current_masks=CurrentInstanceMasks()
     for line in sys.stdin:
         request={}
         try:
@@ -44,12 +45,30 @@ def main():
             with np.load(path,allow_pickle=False) as bundle:
                 if str(bundle['cycle_id'].item())!=request['cycle_id']:
                     raise ValueError('array cycle mismatch')
-                source=bundle['rgb']
+                if request.get('operation')=='infer_instances':
+                    started=time.monotonic()
+                    with contextlib.redirect_stdout(sys.stderr):
+                        instances=current_masks.infer(request['cycle_id'],request['arrays_sha256'],bundle['rgb'],model)
+                    emit({'status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY','instances':instances,
+                          'mask_s':time.monotonic()-started,'cycle_id':request['cycle_id'],
+                          'arrays_sha256':request['arrays_sha256'],'model_sha256':model_sha,
+                          'code_sha256':code_sha,'class_name':'person','inference_count':1})
+                    continue
+                source=bundle['rgb'] if 'rgb' in bundle else None
                 cal={k:bundle[k] for k in ('P1','P2','R1','R','T','K','D','size')}
                 started=time.monotonic()
-                with contextlib.redirect_stdout(sys.stderr):
-                    mask,info=segment_array(source,request['candidate'],model)
-                mask_s=time.monotonic()-started
+                if request.get('operation')=='evaluate_selected_instance':
+                    mask=current_masks.take(request['cycle_id'],request['rgb_arrays_sha256'],
+                                            request['instance_index'],request['bbox_xyxy_px'])
+                    info={'status':'CURRENT_FRAME_MASK_DIAGNOSTIC_ONLY',
+                          'instance_index':request['instance_index'],
+                          'source_rgb_arrays_sha256':request['rgb_arrays_sha256'],
+                          'selection':'EXACT_SAME_MODEL_RESULT_INDEX'}
+                    mask_s=0.  # inference was already timed in the preceding response
+                else:
+                    with contextlib.redirect_stdout(sys.stderr):
+                        mask,info=segment_array(source,request['candidate'],model)
+                    mask_s=time.monotonic()-started
                 if mask is None:
                     result={'status':'MASK_UNAVAILABLE','mask':info}
                 else:
@@ -61,6 +80,7 @@ def main():
                               arrays_sha256=request['arrays_sha256'],model_sha256=model_sha)
                 emit(result)
         except Exception as error:
+            current_masks.current=None
             emit({'cycle_id':request.get('cycle_id'),'status':'MASK_SURFACE_UNAVAILABLE',
                   'reason':type(error).__name__,'error_detail':str(error)[:400]})
 

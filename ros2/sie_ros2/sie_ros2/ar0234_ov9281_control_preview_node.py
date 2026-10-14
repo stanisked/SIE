@@ -21,6 +21,7 @@ from .approach_control_preview import approach_control_preview
 from .preview_mask_client import PreviewMaskClient
 from .stereo_pair_executor import StereoPairExecutor
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity
+from vision_core.person_localization.diagnostic_instance_selection import select_instance
 
 
 class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
@@ -52,6 +53,16 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 self.project_root / "vision_core/tools/control_preview_mask_worker.py",
                 self.get_parameter("shadow_segmenter_model").value,
                 self.shadow_segmenter_timeout_s)
+        self.declare_parameter("preview_rgb_backend", "two_model_reference")
+        self._rgb_backend = str(self.get_parameter("preview_rgb_backend").value)
+        if self._rgb_backend not in ("two_model_reference", "single_segmentation"):
+            raise ValueError("invalid preview RGB backend")
+        if self._rgb_backend == "single_segmentation":
+            if self._stereo_scale != .5 or self._mask_client is None:
+                raise ValueError("single segmentation requires half resolution and mask worker")
+            # Parent startup still verifies its historical detector artifact;
+            # release the unused ONNX session and never run it in this backend.
+            self.observer = None
         self.declare_parameter("control_preview_topic", "/sie/diagnostics/ar0234_ov9281/control_preview")
         self.declare_parameter("preview_diagnostic_range_min_m", .5)
         self.declare_parameter("preview_diagnostic_range_max_m", 4.5)
@@ -68,7 +79,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._cached_stereo = None
         self._writer = LatestDiagnosticWriter(self.evidence_dir / ("control-preview-" + self.run_id))
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; concurrent RGB/stereo; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; concurrent RGB/stereo; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 
@@ -137,26 +148,50 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 audit.update(status="PAIR_SKEW_EXCEEDED", reason="PAIR_SKEW_EXCEEDED")
                 return
             future = self._perception_worker.submit(self._compute_stereo, combined)
-            detector_start = time.monotonic()
-            raw = validate_ar0234_observation(self.observer.observe(ar, captured_at_utc=stamp, cycle_id=cycle_id))
-            audit["rgb_detector_s"] = time.monotonic() - detector_start
-            self._publish_observation(raw)
-            dynamic = ar0234_temporal_target_candidate(
-                raw, prior_track=self._confirmed_target_track,
-                max_age_s=self.temporal_target_track_max_age_s,
-                minimum_iou=self.temporal_target_minimum_iou,
-                maximum_center_displacement_relative=self.temporal_target_maximum_center_displacement_relative,
-                minimum_match_margin=self.temporal_target_minimum_match_margin)
+            single = getattr(self,"_rgb_backend","two_model_reference") == "single_segmentation"
+            segmentation = None
+            audit["rgb_backend"] = getattr(self,"_rgb_backend","two_model_reference")
+            if single:
+                segmentation = self._mask_client.infer(cycle_id, ar)
+                audit["segmentation_observation"] = {
+                    **segmentation, "schema_version":"sie.ar0234.instance_segmentation_preview.v1",
+                    "class_name":"person", "reference_frame":"ar0234_image_frame", "units":"px",
+                    "captured_at_utc":stamp.isoformat(), "canonical_observation_published":False,
+                    "target_confidence_threshold":self.confidence_threshold, "inference_confidence_floor":.25}
+                audit["rgb_detector_s"] = 0.
+                audit["rgb_segmentation_round_trip_s"] = segmentation.get("round_trip_s")
+                if segmentation.get("status") != "CURRENT_INSTANCES_DIAGNOSTIC_ONLY":
+                    audit.update(status="TARGET_UNAVAILABLE", reason="CURRENT_SEGMENTATION_UNAVAILABLE")
+                    return
+                dynamic = select_instance(segmentation["instances"], prior_track=self._confirmed_target_track,
+                    captured_at_utc=stamp.isoformat(), max_age_s=self.temporal_target_track_max_age_s,
+                    minimum_iou=self.temporal_target_minimum_iou,
+                    maximum_center_displacement_relative=self.temporal_target_maximum_center_displacement_relative,
+                    minimum_match_margin=self.temporal_target_minimum_match_margin, minimum_confidence=self.confidence_threshold)
+            else:
+                detector_start = time.monotonic()
+                raw = validate_ar0234_observation(self.observer.observe(ar, captured_at_utc=stamp, cycle_id=cycle_id))
+                audit["rgb_detector_s"] = time.monotonic() - detector_start
+                self._publish_observation(raw)
+                dynamic = ar0234_temporal_target_candidate(
+                    raw, prior_track=self._confirmed_target_track,
+                    max_age_s=self.temporal_target_track_max_age_s,
+                    minimum_iou=self.temporal_target_minimum_iou,
+                    maximum_center_displacement_relative=self.temporal_target_maximum_center_displacement_relative,
+                    minimum_match_margin=self.temporal_target_minimum_match_margin)
             audit["ar0234_dynamic_target"] = dynamic
             if dynamic["disposition"] != "OBSERVED":
                 audit.update(status="TARGET_UNAVAILABLE", reason=dynamic["reason"])
                 return
             candidate = dynamic["candidate"]
             geometry = self._dynamic_target_geometry(candidate, ar.shape[1])
+            audit["target_geometry"] = geometry
             if not geometry["accepted"]:
                 audit.update(status="TARGET_UNAVAILABLE", reason=geometry["reason"])
                 return
-            observation = self._selected_observation(raw, candidate, dynamic)
+            observation = ({**candidate, "captured_at_utc":stamp.isoformat(),
+                "observation_id":f"segmentation-preview:{cycle_id}:{candidate['instance_index']}"}
+                if single else self._selected_observation(raw, candidate, dynamic))
             left, right, self._cached_stereo, stereo_s = future.result()
             audit["stereo_worker_s"] = stereo_s
             audit["stereo_execution"]["worker_timings_s"] = self._last_stereo_worker_timings
@@ -190,9 +225,14 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     cal = {"P1":self.p1, "P2":self.p2, "R1":self.r1,
                            "R":self.r_ar_to_left, "T":self.t_ar_to_left_m.reshape(3),
                            "K":self.k_ar, "D":self.d_ar, "size":self.stereo_size}
-                    audit["shape_diagnostic"] = client.evaluate(cycle_id, ar, current, cal,
-                        candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
-                        **({"scale":scale} if scale != 1. else {}))
+                    if single:
+                        audit["shape_diagnostic"] = client.evaluate_selected(cycle_id, current, cal,
+                            candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
+                            segmentation, scale=scale)
+                    else:
+                        audit["shape_diagnostic"] = client.evaluate(cycle_id, ar, current, cal,
+                            candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
+                            **({"scale":scale} if scale != 1. else {}))
                 except Exception as error:
                     audit["shape_diagnostic"] = {"status":"MASK_SURFACE_UNAVAILABLE",
                         "reason":type(error).__name__, "error_detail":str(error)[:400]}
@@ -202,7 +242,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 shape = audit["shape_diagnostic"]
                 audit.update(status=shape["status"], reason="HALF_RESOLUTION_SHAPE_DIAGNOSTIC",
                              association=None)
-            if association is not None:
+            if association is not None or (single and audit["shape_diagnostic"].get("mask_depth",{}).get("status")
+                                           == "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY"):
                 self._confirm_current_target_track(candidate, observation)
         except Exception as error:
             audit.update(status="PROCESSING_REFUSED", reason=type(error).__name__, error_detail=str(error)[:400], association=None)

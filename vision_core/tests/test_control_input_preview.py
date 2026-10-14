@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "ros2/sie_ros2/sie_ros2"))
 from latest_diagnostic_writer import LatestDiagnosticWriter
 from approach_control_preview import approach_control_preview
+from vision_core.person_localization.diagnostic_instance_selection import select_instance
 
 
 def preview_node_class(ros_ok=True):
@@ -33,7 +34,7 @@ def preview_node_class(ros_ok=True):
              "String": SimpleNamespace, "encode": json.dumps,
              "validate_ar0234_observation": lambda v: v,
              "ar0234_temporal_target_candidate": lambda raw, **kw: raw,
-             "approach_control_preview": approach_control_preview}
+             "approach_control_preview": approach_control_preview, "select_instance":select_instance}
     exec(compile(ast.fix_missing_locations(ast.Module(body=[cls], type_ignores=[])), str(path), "exec"), scope)
     return scope[cls.name]
 
@@ -204,6 +205,40 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertEqual(messages[-1]["status"],"SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY")
         self.assertIsNone(messages[-1]["association"])
         self.assertEqual(messages[-1]["decision_preview"]["status"],"STOP")
+        # The single-model backend must never run the old detector, its
+        # observation adapter or the second segmentation/evaluate route.
+        node._rgb_backend="single_segmentation"
+        node.confidence_threshold=.70
+        node.observer=SimpleNamespace(observe=forbidden)
+        node._selected_observation=forbidden
+        node._publish_observation=forbidden
+        candidate={"instance_index":0,"bbox_xyxy_px":[500.,300.,850.,1000.],
+                   "center_x_px":675.,"confidence":.9,
+                   "truncated_left":False,"truncated_right":False,
+                   "truncated_top":False,"truncated_bottom":False}
+        single_calls=[]
+        def infer(cid,rgb):
+            single_calls.append("infer")
+            return {"cycle_id":cid,"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY",
+                    "instances":[candidate],"model_sha256":"a"*64,
+                    "arrays_sha256":"b"*64,"mask_s":.1,"round_trip_s":.11}
+        def fuse(cid,disparity,cal,chosen,roi,interval,segmentation,**kwargs):
+            single_calls.append("fuse")
+            self.assertEqual(cid,segmentation["cycle_id"])
+            self.assertEqual(chosen["instance_index"],0)
+            self.assertEqual(kwargs,{"scale":.5})
+            return {"status":"SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY",
+                    "mask_depth":{"status":"COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY"}}
+        node._mask_client=SimpleNamespace(infer=infer,evaluate_selected=fuse,evaluate=forbidden)
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker=worker
+            node._cycle()
+        self.assertEqual(single_calls,["infer","fuse"])
+        self.assertEqual(messages[-1]["rgb_detector_s"],0.)
+        self.assertEqual(messages[-1]["segmentation_observation"]["class_name"],"person")
+        self.assertFalse(messages[-1]["segmentation_observation"]["canonical_observation_published"])
+        self.assertEqual(messages[-1]["decision_preview"]["status"],"STOP")
+        node._mask_client.infer=lambda cid,rgb:{"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY","instances":[]}
         # A later no-target cycle must not reuse the previous association.
         node.observer = SimpleNamespace(observe=lambda *args, **kw: {"disposition": "UNAVAILABLE", "reason": "NO_TARGET"})
         with ThreadPoolExecutor(max_workers=1) as worker:

@@ -67,6 +67,46 @@ class PreviewMaskClient:
             self.close()
             raise
 
+    def _array_request(self, cycle_id, arrays, fields):
+        import numpy as np
+        started=time.monotonic()
+        try:
+            with tempfile.TemporaryDirectory(prefix='sie-preview-',dir='/dev/shm') as directory:
+                path=Path(directory)/'current.npz'
+                np.savez(path,cycle_id=cycle_id,**arrays)
+                sha=hashlib.sha256(path.read_bytes()).hexdigest()
+                request={**fields,'cycle_id':cycle_id,'arrays':str(path),'arrays_sha256':sha}
+                if self.process is None or self.process.stdin is None:
+                    raise RuntimeError('preview worker unavailable')
+                self.process.stdin.write(json.dumps(request,separators=(',',':'))+'\n')
+                self.process.stdin.flush()
+                result=self._read(self.timeout)
+                if result.get('cycle_id')!=cycle_id:
+                    raise ValueError('preview worker cycle mismatch')
+                if result.get('status')!='MASK_SURFACE_UNAVAILABLE':
+                    if result.get('arrays_sha256')!=sha or result.get('model_sha256')!=self.model_sha256:
+                        raise ValueError('preview worker input/model mismatch')
+                result['round_trip_s']=time.monotonic()-started
+                return result
+        except BaseException:
+            self.close()
+            raise
+
+    def infer(self, cycle_id, rgb):
+        return self._array_request(cycle_id,{'rgb':rgb},{'operation':'infer_instances'})
+
+    def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale):
+        if segmentation.get('cycle_id')!=cycle_id or segmentation.get('model_sha256')!=self.model_sha256:
+            raise ValueError('segmentation cycle/model mismatch')
+        result=self._array_request(cycle_id,{'disparity':disparity,**cal},{
+            'operation':'evaluate_selected_instance','instance_index':candidate['instance_index'],
+            'bbox_xyxy_px':candidate['bbox_xyxy_px'],'rgb_arrays_sha256':segmentation['arrays_sha256'],
+            'roi':list(roi),'range':list(depth_range),'scale':scale})
+        result['mask_s']=segmentation.get('mask_s')
+        result['inference_round_trip_s']=segmentation.get('round_trip_s')
+        result['round_trip_scope']='FUSION_ONLY_AFTER_SEGMENTATION'
+        return result
+
     def close(self):
         process,self.process=self.process,None
         if process is not None:
