@@ -1,5 +1,7 @@
 """Control-path scheduling, journal backpressure and task-budget preview tests."""
 import ast
+import contextlib
+import io
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import json
@@ -19,13 +21,14 @@ from latest_diagnostic_writer import LatestDiagnosticWriter
 from approach_control_preview import approach_control_preview
 
 
-def preview_node_class():
+def preview_node_class(ros_ok=True):
     path = ROOT / "ros2/sie_ros2/sie_ros2/ar0234_ov9281_control_preview_node.py"
     tree = ast.parse(path.read_text())
     cls = next(x for x in tree.body if isinstance(x, ast.ClassDef))
-    cls.bases = []
-    cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in ("_cycle", "_left_right_disparity")]
-    scope = {"rclpy": SimpleNamespace(ok=lambda: True), "time": time,
+    cls.bases = [ast.Name(id="PreviewParent", ctx=ast.Load())]
+    cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in ("_cycle", "_left_right_disparity", "_log_preview", "destroy_node")]
+    scope = {"PreviewParent":type("PreviewParent",(),{"destroy_node":lambda self: True}),
+             "rclpy": SimpleNamespace(ok=lambda: ros_ok), "time": time,
              "datetime": datetime, "timezone": timezone,
              "String": SimpleNamespace, "encode": json.dumps,
              "validate_ar0234_observation": lambda v: v,
@@ -36,6 +39,22 @@ def preview_node_class():
 
 
 class ControlPreviewTests(unittest.TestCase):
+    def test_shutdown_without_ros_context_closes_all_resources_and_no_cycle_audit(self):
+        node=preview_node_class(ros_ok=False)()
+        calls=[]
+        node._perception_worker=SimpleNamespace(shutdown=lambda **kw:calls.append("perception"))
+        node._half_executor=SimpleNamespace(close=lambda:calls.append("stereo"))
+        node._mask_client=SimpleNamespace(close=lambda:calls.append("mask"))
+        node._writer=SimpleNamespace(close=lambda:calls.append("writer"),dropped=2,errors=0)
+        def forbidden():
+            raise AssertionError("ROS logger called after shutdown")
+        node.get_logger=forbidden
+        output=io.StringIO()
+        with contextlib.redirect_stdout(output):
+            self.assertTrue(node.destroy_node())
+        self.assertEqual(calls,["perception","stereo","mask","writer"])
+        self.assertIn("dropped=2 errors=0",output.getvalue())
+
     def test_slow_writer_drops_pending_record_without_blocking_producer(self):
         started, release = threading.Event(), threading.Event()
         recorded = []

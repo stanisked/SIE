@@ -246,3 +246,25 @@ offline configuration. Callback checks verify that no small map reaches legacy
 association, scale reaches the companion, results remain diagnostic and the
 next no-target cycle cannot reuse the preceding maps. Existing geometry and
 worker-provenance tests also apply. Live Pi timings remain pending this launch.
+
+### First half-mode live check and shutdown correction
+
+Run `control_input_preview_half_640x400_20261014_230140`: 17 completed shape
+cycles, every nested mask-depth status coherent; one cancelled shutdown cycle.
+Post-first completed host median 1.2852 s, max 1.3324 s, 0/16 within 250 ms.
+RGB median 0.4515 s, stereo worker 0.3073 s (includes full rectify/resize and
+concurrent CPU load), segmentation 0.5456 s, surfaces 0.2113 s, companion round
+trip 0.8025 s. RGB and stereo overlap: do not sum their durations. The restored
+mask/surface computation explains why reducing stereo alone did not bring the
+complete path close to 250 ms. Constant candidate median 2.71265 m is not proof
+of zero physical error, zero drift or source-frame freshness; disparity
+quantization can preserve a median across different frames.
+
+A shutdown-only `NameError` was caused by stray references to callback-local
+`audit` in `destroy_node`. Remove those references, drain the perception worker
+before closing its stereo resources, and send final log lines to stdout after
+ROS context shutdown rather than publishing to invalid rosout. A regression
+executes the actual cleanup method with no cycle audit and a false ROS context,
+checks resource-close order and confirms parent cleanup runs. No new camera
+trial is required to check this fix. Six callback/journal/control tests and
+py_compile pass; completed records of the previous run remain useful.

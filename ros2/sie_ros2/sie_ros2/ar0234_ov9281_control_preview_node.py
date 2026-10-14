@@ -247,25 +247,30 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             depth = (audit.get("association") or {}).get("range_m")
             shape = audit.get("shape_diagnostic",{})
             masked = shape.get("mask_depth",{})
-            self.get_logger().info(f"CONTROL_PREVIEW {self.sequence:08d} status={audit['status']} "
+            self._log_preview(f"CONTROL_PREVIEW {self.sequence:08d} status={audit['status']} "
                 f"range_m={depth} mask={masked.get('status')} mask_depth_m={masked.get('candidate_depth_m')} host_s={elapsed:.3f} host_within_250ms={elapsed <= .25} motors=DISABLED")
 
+    def _log_preview(self, message):
+        if rclpy.ok():
+            self.get_logger().info(message)
+        else:
+            # SIGINT can already have invalidated rosout's publisher context.
+            print(message, flush=True)
+
     def destroy_node(self):
+        worker = getattr(self, "_perception_worker", None)
+        if worker is not None:
+            worker.shutdown(wait=True, cancel_futures=True)
         half_executor = getattr(self, "_half_executor", None)
         if half_executor is not None:
             half_executor.close()
         client = getattr(self, "_mask_client", None)
         if client is not None:
             client.close()
-        worker = getattr(self, "_perception_worker", None)
-        if worker is not None:
-            worker.shutdown(wait=True, cancel_futures=True)
         writer = getattr(self, "_writer", None)
         if writer is not None:
             writer.close()
-            shape = audit.get("shape_diagnostic",{})
-            masked = shape.get("mask_depth",{})
-            self.get_logger().info(f"CONTROL_PREVIEW_JOURNAL dropped={writer.dropped} errors={writer.errors}")
+            self._log_preview(f"CONTROL_PREVIEW_JOURNAL dropped={writer.dropped} errors={writer.errors}")
         return super().destroy_node()
 
 
