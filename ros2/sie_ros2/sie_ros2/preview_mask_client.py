@@ -146,16 +146,24 @@ class PreviewMaskClient:
         from vision_core.person_localization.rgb_shared_buffer import publish_rgb
         started=time.monotonic()
         with publish_rgb(cycle_id,rgb) as (descriptor,sha):
+            stamps={'shared_publish_s':time.monotonic()-started}
             try:
+                stage=time.monotonic()
                 request={'operation':'infer_instances','rgb_transport':'mmap','rgb_shared':descriptor,
                     'cycle_id':cycle_id,'arrays_sha256':sha,'diagnostic_mask_hashes':diagnostic_mask_hashes}
                 if self.process is None:raise RuntimeError('preview worker unavailable')
                 self.process.stdin.write(json.dumps(request,separators=(',',':'))+'\n');self.process.stdin.flush()
+                stamps['control_prepare_send_s']=time.monotonic()-stage
+                stage=time.monotonic()
                 result=self._read(self.timeout)
+                stamps['response_wait_decode_s']=time.monotonic()-stage
+                stage=time.monotonic()
                 if result.get('cycle_id')!=cycle_id:raise ValueError('shared RGB result cycle mismatch')
                 if result.get('status')!='MASK_SURFACE_UNAVAILABLE' and (result.get('arrays_sha256')!=sha or result.get('model_sha256')!=self.model_sha256):
                     raise ValueError('shared RGB input/model mismatch')
                 result['round_trip_s']=time.monotonic()-started
+                stamps['validate_response_s']=time.monotonic()-stage
+                result['rpc_timing_s']=stamps
                 result['rgb_transport']='mmap'
                 return result
             except BaseException:

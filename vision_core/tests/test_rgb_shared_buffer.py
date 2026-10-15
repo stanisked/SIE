@@ -33,6 +33,22 @@ class SharedRgbTests(unittest.TestCase):
             with open(descriptor['path'],'r+b') as stream:stream.truncate(1)
             with self.assertRaisesRegex(ValueError,'size/type'):receive_rgb(descriptor,'one',sha)
 
+    def test_client_validates_ack_and_records_shared_transport_timing(self):
+        client=PreviewMaskClient.__new__(PreviewMaskClient);client.model_sha256='model';client.timeout=1
+        sent=[]
+        client.process=SimpleNamespace(stdin=SimpleNamespace(write=lambda line:sent.append(json.loads(line)),flush=lambda:None))
+        client._read=lambda timeout:{'cycle_id':'one','arrays_sha256':sent[-1]['arrays_sha256'],
+            'model_sha256':'model','status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY'}
+        result=client._shared_rgb_request('one',np.zeros((1200,1920,3),'uint8'),False)
+        self.assertEqual(result['rgb_transport'],'mmap')
+        self.assertIn('shared_publish_s',result['rpc_timing_s'])
+        self.assertFalse(Path(sent[-1]['rgb_shared']['path']).exists())
+        client._read=lambda timeout:{'cycle_id':'old'}
+        closed=[];client.close=lambda:closed.append(True)
+        with self.assertRaisesRegex(ValueError,'cycle mismatch'):
+            client._shared_rgb_request('one',np.zeros((1200,1920,3),'uint8'),False)
+        self.assertEqual(closed,[True])
+
     def test_client_failure_stops_worker_before_owner_cleanup(self):
         client=PreviewMaskClient.__new__(PreviewMaskClient);client.model_sha256='model'
         client.process=SimpleNamespace(stdin=SimpleNamespace(write=lambda line:None,flush=lambda:None))

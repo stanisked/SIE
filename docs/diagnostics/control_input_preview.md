@@ -1093,3 +1093,23 @@ quality shadow and local sampling remain unchanged; neither Measurement nor moto
 commands are enabled. Sixteen targeted tests passed, including current-target crop
 scheduling, missing-target no-submit, global LR rounding and lookup binding. Pi live
 latency/quality are pending.
+
+
+Live target-crop NPZ result (`20261015_171831`): host median/max 287.0/377.9 ms,
+0/52 steady cycles within 250 ms. Current masked depth coherent 47/53, MAD refused
+6/53; local results 11 without errors and journal without loss/errors. RGB RPC
+154.7 ms, stereo worker 68.9 ms, fusion RPC 27.4 ms. Foreground RGB serialization
+12.45 ms plus input file hash 10.66 ms; worker hash/open 10.82 ms and RGB load
+6.71 ms are nested within RGB RPC, not extra host time.
+
+`preview_rgb_transport` defaults to `npz`. Explicit opt-in launcher
+`run_control_input_preview_target_crop_mmap.sh` reuses the previously tested mmap
+transport in the new current-target serial schedule. Parent-owned /dev/shm input
+is retained until validated response or worker shutdown. Cycle/token/descriptor/
+payload SHA/model checks and receiver-owned RGB copy remain. No integrity checks,
+selection or depth thresholds are removed. `shared_publish_s` includes allocation,
+copy, payload hashing and descriptor binding; response wait and validation are
+recorded separately. Parent timing excludes teardown as the existing RPC timing
+did; full foreground RGB and host timers include it. Prior concurrent benchmark
+showed only ~2 ms improvement; current scheduling benefit is unmeasured pending
+this run. Previous NPZ launcher remains available.

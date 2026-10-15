@@ -64,6 +64,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         engine=str(self.get_parameter("preview_segmentation_engine").value)
         if engine not in ("pytorch","onnxruntime"):
             raise ValueError("invalid segmentation engine")
+        self.declare_parameter("preview_rgb_transport", "npz")
+        self._rgb_transport=str(self.get_parameter("preview_rgb_transport").value)
+        if self._rgb_transport not in ("npz","mmap"):
+            raise ValueError("unsupported preview RGB transport")
         self._mask_client = None
         if bool(self.get_parameter("preview_mask_surface_enabled").value):
             self._mask_client = PreviewMaskClient(
@@ -71,6 +75,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 self.project_root / "vision_core/tools/control_preview_mask_worker.py",
                 self.get_parameter("shadow_segmenter_model").value,
                 self.shadow_segmenter_timeout_s,
+                rgb_transport=self._rgb_transport,
                 **({"engine":engine,
                     "comparison_report":str(self.get_parameter("preview_onnx_comparison_report").value),
                     "ort_threads":int(self.get_parameter("preview_onnx_threads").value)}
@@ -123,7 +128,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             self._surface_diagnostics=LatestSurfaceDiagnostics(local_client,
                 self._writer.directory/"local-surfaces",self._publish_surface_result)
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; target_crop={self._target_crop}; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 

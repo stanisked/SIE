@@ -36,6 +36,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p preview_local_surface_every_n_cycles:="${SIE_PREVIEW_LOCAL_EVERY_N:-1}" \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \
+  -p preview_rgb_transport:="${SIE_PREVIEW_RGB_TRANSPORT:-npz}" \
   -p preview_target_crop:="${SIE_PREVIEW_TARGET_CROP:-false}" \
   -p preview_stereo_mode:="$mode" \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \
@@ -52,6 +53,7 @@ files = sorted(Path(sys.argv[1]).rglob('ar0234-ov9281-control-preview-*.json'))
 rows = [json.loads(p.read_text()) for p in files]
 times = [r['processing_timing']['host_capture_start_to_result_ready_s'] for r in rows[1:]
          if r['status'] != 'CANCELLED_SHUTDOWN']
+print('RGB_TRANSPORT:',dict(Counter(r.get('segmentation_observation',{}).get('input_transport') for r in rows)))
 print('SHAPE:', dict(Counter(r.get('shape_diagnostic',{}).get('status') for r in rows)))
 print('MASK_DEPTH:', dict(Counter(r.get('shape_diagnostic',{}).get('mask_depth',{}).get('status') for r in rows)))
 for key in ('rgb_detector_s','rgb_segmentation_round_trip_s','stereo_worker_s'):
