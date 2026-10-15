@@ -1113,3 +1113,21 @@ recorded separately. Parent timing excludes teardown as the existing RPC timing
 did; full foreground RGB and host timers include it. Prior concurrent benchmark
 showed only ~2 ms improvement; current scheduling benefit is unmeasured pending
 this run. Previous NPZ launcher remains available.
+
+
+Target-crop mmap live result (`20261015_172330`): host median/max 249.2/338.5 ms,
+41/76 steady cycles within host 250 ms; 77/77 masked-depth coherent, candidate
+median 2.7126 m, span 12.1 mm. Sixteen local results, no worker/write errors or
+journal loss. RGB RPC median 116.8 ms, stereo 68.2 ms, fusion 25.2 ms. These are
+different live captures from NPZ; observed ~37.8 ms host improvement does not
+isolate transport causation. The host target is not established exposure age.
+
+`analyze_local_rgb_overlap.py` reads existing primary and local JSON journals.
+It reconstructs local request intervals from UTC completion, submit-to-result
+and queue-wait values; intersects them with timestamp plus RGB timeline offsets
+in the same run. Reports per-cycle source IDs and per-group host/RGB/prediction
+medians/maxima, excluding first cycle per run and cancellation. Duplicate IDs,
+orphan/binding errors and invalid durations refuse analysis. Source files are
+hashed before/after. UTC reconstruction is approximate, not a CPU execution trace;
+clock changes and unrecorded work remain limitations. Association alone does not
+prove interference. No capture, runtime settings, thresholds or motion changes.
