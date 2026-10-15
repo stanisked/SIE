@@ -946,3 +946,46 @@ projection, local-array identity, real worker prepared RPC and wrong-cycle
 refusal, original geometry/backend lifecycle and quality diagnostics. Python
 compile and launcher syntax pass. Next action is the offline Pi comparison,
 not another live person capture. Existing live launcher remains unchanged.
+
+## Target-specific stereo crop area/support estimate
+
+Early geometry comparison closed without rollout: current joint median 319.5 ms
+vs early geometry 318.9 ms, RGB 220.4/262.9 ms and final fusion 57.9/18.2 ms.
+44/44 exact; sources unchanged. Work moved between stages but no material
+whole-path gain was demonstrated. Stop rescheduling this work between threads.
+
+Next step is an offline area/support estimate, not cropped matching:
+`run_target_crop_analysis.sh`. For all 22 frozen cycles, replay verifies existing
+mask/model/RGB/calibration bindings. Unchanged full-frame half-resolution SGBM
+and LR checks reconstruct baseline point support from saved rectified JPEGs.
+No cropped matcher, new detector, camera or live pipeline is activated.
+
+Two RGB regions are assessed: saved inner ROI and saved segmentation-model bbox.
+Their dense <=1-pixel sampled rays are transformed through the existing
+AR-to-left extrinsic and rectification for rectified-left optical z=0.5..4.5 m.
+Nonforward/singular geometry falls back to a full-frame plan. Sampled ray bounds
+are not a formal continuous distortion/calibration/motion uncertainty bound.
+The existing diagnostic margin is read from the node parameter declaration;
+additional horizontal support follows both signed disparity-search intervals,
+block radius and LR rounding. Both image crops use a common origin. The search
+range is not narrowed and camera halves are not swapped.
+
+Report records core/common crop, area fraction and getValidDisparityROI support
+in each direction. Every observed mask-owned point is checked at its left pixel
+and actual rounded right lookup. Counts distinguish points outside the crop,
+already outside full-frame local support, and additional local-support loss
+caused by cropping. Empty support does not become success. Full bbox and inner
+ROI counts are separate and are not summed as independent target evidence.
+
+Even zero observed loss does not prove cropped disparity equality: SGBM paths
+and speckle components can change with cropped context. Also, a current-frame
+RGB crop is available after selection, whereas current full-frame stereo starts
+concurrently with RGB. Area savings alone cannot predict total latency. If the
+area estimate is useful, only a subsequent same-input cropped-matcher comparison
+can assess changed disparities/quality and the sequential scheduling cost.
+No previous-frame ROI/track fallback is introduced here.
+
+11 targeted tests pass: identity/translated frustum, bidirectional support,
+clipping/empty/no-overlap behavior and nonforward fallback, plus existing
+projection/prepared geometry tests. Python/shell checks pass. Actual recorded
+scene areas and point-loss counts await this one offline Pi command.
