@@ -849,3 +849,21 @@ No camera/exposure/physical accuracy validation or full live-latency claim.
 an outer shadow untouched, active-setting mismatch/SHA refusal, profiling
 coverage, helper settings, worker protocol, mmap ownership and reviewed adapter.
 Actual Pi comparison is pending. Immediate action is offline, no ROS rebuild.
+
+### Preserve active-session numerical differences
+
+First actual active-session challenge stopped on a strict equality difference
+without retaining its size/type. This is a benchmark reporting defect; the
+error alone does not establish a mask/depth change or merely float rounding.
+The comparison now saves every row and reports exact instance records separately
+from exact mask hashes, detection counts, per-index bbox/confidence deltas,
+selection disposition and geometry changes. Per-index deltas are explicitly
+model result order, not asserted object identity. Full instances/selections and
+mask hashes remain in the report for review. Exact stereo comparison continues.
+`EXACT` now prints the true count; `all_exact` and runtime authorization=false
+are explicit. Numerical differences do not abort collection; invalid source
+bytes/provenance or worker failures still refuse. No tolerance or acceptance
+threshold is introduced, and no candidate is rolled out automatically.
+Eight targeted tests pass, including a confidence-only tiny difference with
+unchanged mask vs a changed mask. Rerun the same offline benchmark to obtain the
+previously missing evidence; no camera or live run is needed.

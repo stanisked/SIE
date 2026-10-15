@@ -10,7 +10,7 @@ import sys
 import time
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT));sys.path.insert(0,str(ROOT/'ros2/sie_ros2/sie_ros2'))
-from benchmark_segmentation_onnx import load_cases,sha256
+from benchmark_segmentation_onnx import load_cases,sha256,selection,geometry_checker
 
 
 def signature(result):
@@ -18,6 +18,26 @@ def signature(result):
     hashes=result.get('instance_mask_sha256')
     if not isinstance(hashes,list) or len(hashes)!=len(result['instances']):raise ValueError('missing mask evidence')
     return {'instances':result['instances'],'mask_sha256':hashes, 'rgb_payload_sha256':result.get('rgb_payload_sha256')}
+
+
+def numerical_difference(reference,candidate,stamp):
+    a,b=signature(reference),signature(candidate)
+    pairs=list(zip(a['instances'],b['instances']))
+    box=[abs(float(x)-float(y)) for first,second in pairs for x,y in zip(first['bbox_xyxy_px'],second['bbox_xyxy_px'])]
+    confidence=[abs(first['confidence']-second['confidence']) for first,second in pairs]
+    first,second=selection(a['instances'],stamp),selection(b['instances'],stamp)
+    geometry=geometry_checker()
+    return {'instance_count_reference':len(a['instances']),'instance_count_candidate':len(b['instances']),
+        'instances_exact':a['instances']==b['instances'],'mask_hashes_exact':a['mask_sha256']==b['mask_sha256'],
+        'mask_hash_mismatches_in_result_order':sum(x!=y for x,y in zip(a['mask_sha256'],b['mask_sha256']))+abs(len(a['mask_sha256'])-len(b['mask_sha256'])),
+        'max_bbox_coordinate_delta_px_in_result_order':max(box) if box else None,
+        'max_confidence_delta_in_result_order':max(confidence) if confidence else None,
+        'selection_disposition_changed':first['disposition']!=second['disposition'],
+        'geometry_status_changed':(geometry(first.get('candidate')) or {}).get('accepted')!=(geometry(second.get('candidate')) or {}).get('accepted'),
+        'reference_selection':first,'candidate_selection':second,
+        'reference_instances':a['instances'],'candidate_instances':b['instances'],
+        'reference_mask_sha256':a['mask_sha256'],'candidate_mask_sha256':b['mask_sha256'],
+        'comparison_basis':'Model result order; no object identity inferred from index.'}
 
 
 def main():
@@ -81,9 +101,10 @@ def main():
                     if any(r.get('rgb_payload_sha256')!=expected_rgb_sha for r in results.values()):raise ValueError('RGB payload changed')
                     exact=all(signature(results[labels[0]])==signature(results[label]) for label in labels[1:])
                     stereo_exact=all(np.array_equal(a,b) for label in labels[1:] for a,b in zip(maps[labels[0]],maps[label]))
+                    differences={label:numerical_difference(results[labels[0]],results[label],case['timestamp']) for label in labels[1:]}
                     rows.append({'cycle_id':case['cycle_id'],'repeat':repeat,'order':order,'timing':timing,
-                        'rgb_instances_and_masks_exact':exact,'stereo_maps_exact':stereo_exact})
-                    if not exact or not stereo_exact:raise ValueError('numerical difference; do not change live threads')
+                        'rgb_instances_and_masks_exact':exact,'stereo_maps_exact':stereo_exact,'differences':differences})
+                    # Preserve differences as experimental evidence, never activate a candidate.
         unchanged=all(sha256(path)==digest for path,digest in sources.items())
         if not unchanged:raise ValueError('inputs changed')
         for label in clients:
@@ -91,7 +112,18 @@ def main():
                 'joint_median_s=',round(statistics.median(r['timing'][label]['joint_s'] for r in rows),4),
                 'rgb_median_s=',round(statistics.median(r['timing'][label]['rgb_round_trip_s'] for r in rows),4),
                 'stereo_median_s=',round(statistics.median(r['timing'][label]['stereo_s'] for r in rows),4),flush=True)
-        report={'status':'OFFLINE_ACTIVE_ORT_COMPARISON_ONLY' if args.experiment=='active_ort' else 'OFFLINE_CONCURRENT_TRANSPORT_COMPARISON_ONLY' if args.experiment=='rgb_transport' else 'OFFLINE_CONCURRENT_THREAD_COMPARISON_ONLY','experiment':args.experiment,'rows':rows,'metadata':metadata,
+        for label in labels[1:]:
+            differences=[r['differences'][label] for r in rows]
+            summary={'instance_different_rows':sum(not d['instances_exact'] for d in differences),
+                'mask_different_rows':sum(not d['mask_hashes_exact'] for d in differences),
+                'count_different_rows':sum(d['instance_count_reference']!=d['instance_count_candidate'] for d in differences),
+                'selection_status_changes':sum(d['selection_disposition_changed'] for d in differences),
+                'geometry_status_changes':sum(d['geometry_status_changed'] for d in differences),
+                'max_bbox_delta_px_in_result_order':max((d['max_bbox_coordinate_delta_px_in_result_order'] or 0) for d in differences),
+                'max_confidence_delta_in_result_order':max((d['max_confidence_delta_in_result_order'] or 0) for d in differences)}
+            print('NUMERICAL_DIFF',label,json.dumps(summary),flush=True)
+        all_exact=all(r['rgb_instances_and_masks_exact'] and r['stereo_maps_exact'] for r in rows)
+        report={'all_exact':all_exact,'runtime_switch_authorized':False,'status':'OFFLINE_ACTIVE_ORT_COMPARISON_ONLY' if args.experiment=='active_ort' else 'OFFLINE_CONCURRENT_TRANSPORT_COMPARISON_ONLY' if args.experiment=='rgb_transport' else 'OFFLINE_CONCURRENT_THREAD_COMPARISON_ONLY','experiment':args.experiment,'rows':rows,'metadata':metadata,
             'source_sha256':sources,'inputs_unchanged':unchanged,'runtime_source_sha256':code,
             'code_sha256':{str(f):sha256(f) for f in (Path(__file__),ROOT/'vision_core/tools/control_preview_mask_worker.py',ROOT/'ros2/sie_ros2/sie_ros2/preview_mask_client.py',ROOT/'vision_core/person_localization/rgb_shared_buffer.py',ROOT/'vision_core/tools/active_ort_session.py')},
             'actuator_access':False,'limitations':['No capture, local fits, projection or depth calculation in joint timer.',
@@ -100,7 +132,7 @@ def main():
                 'Exact masks/boxes/stereo on this scene are not universal accuracy validation.']}
         args.output.parent.mkdir(parents=True,exist_ok=True)
         with args.output.open('x') as stream:json.dump(report,stream,indent=2,allow_nan=False)
-        print('EXACT:',len(rows),'/',len(rows),'INPUTS_UNCHANGED:',unchanged,'Saved:',args.output)
+        print('EXACT:',sum(r['rgb_instances_and_masks_exact'] and r['stereo_maps_exact'] for r in rows),'/',len(rows),'INPUTS_UNCHANGED:',unchanged,'Saved:',args.output)
     finally:
         for client in clients.values():client.close()
 

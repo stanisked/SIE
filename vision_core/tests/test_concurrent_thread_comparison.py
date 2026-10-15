@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
 from control_preview_mask_worker import configure_helper_threads,verify_helper_threads
-from benchmark_concurrent_segmentation_threads import signature
+from benchmark_concurrent_segmentation_threads import signature,numerical_difference
 
 
 class ThreadComparisonTests(unittest.TestCase):
@@ -30,6 +30,16 @@ class ThreadComparisonTests(unittest.TestCase):
                 calls[n.func.id].append(n.lineno)
         self.assertGreater(calls['configure_helper_threads'][0],max(calls['OnnxSegmentationBackend']+calls['YOLO']))
         self.assertGreater(max(calls['verify_helper_threads']),calls['configure_helper_threads'][0])
+
+    def test_tiny_floats_and_mask_changes_are_reported_separately(self):
+        a={'status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY','instances':[{'instance_index':0,'bbox_xyxy_px':[500.,200.,1000.,1100.],'confidence':.9}],'instance_mask_sha256':['same']}
+        b={**a,'instances':[{**a['instances'][0],'confidence':.9000001}]}
+        d=numerical_difference(a,b,'2026-10-15T08:00:00+00:00')
+        self.assertFalse(d['instances_exact']);self.assertTrue(d['mask_hashes_exact'])
+        self.assertLess(d['max_confidence_delta_in_result_order'],.000001)
+        self.assertFalse(d['selection_disposition_changed'])
+        b={**b,'instance_mask_sha256':['different']}
+        self.assertFalse(numerical_difference(a,b,'2026-10-15T08:00:00+00:00')['mask_hashes_exact'])
 
     def test_mask_and_detection_differences_are_not_hidden(self):
         a={'status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY','instances':[{'bbox':[1,2,3,4]}],'instance_mask_sha256':['mask1']}
