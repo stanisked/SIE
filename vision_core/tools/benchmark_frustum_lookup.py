@@ -17,11 +17,12 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     for key in ('evidence-root','ar-intrinsic','stereo-calibration','activation','output'):
         p.add_argument('--'+key,type=Path,required=True)
+    p.add_argument("--compare-blocks",action="store_true",help="compare the same lookup grid with/without exact block extrema")
     args=p.parse_args()
     if args.output.exists():p.error('new output required')
     from analyze_ar0234_stereo_component_ambiguity import load_calibrations,sha256
     from analyze_target_stereo_crop import crop_plan,runtime_frustum_margin,support_loss
-    from stereo_frustum_lookup import FrustumLookup
+    from stereo_frustum_lookup import FrustumLookup,BlockFrustumLookup
     from replay_shadow_mask_depth_range import replay
     from preview_mask_surface import prepare_stereo_points
     from compare_shadow_mask_depth_median import owned
@@ -36,6 +37,11 @@ def main():
     cv2.setNumThreads(1)
     start=time.perf_counter();lookup=FrustumLookup(cal);startup_s=time.perf_counter()-start
     print('LOOKUP_STARTUP seconds=',round(startup_s,4),'table_bytes=',lookup.table.nbytes,flush=True)
+    reference_lookup=lookup if args.compare_blocks else None
+    block_startup_s=None
+    if args.compare_blocks:
+        start=time.perf_counter();lookup=BlockFrustumLookup(lookup);block_startup_s=time.perf_counter()-start
+        print('BLOCK_INDEX_STARTUP seconds=',round(block_startup_s,6),'index_bytes=',lookup.index_bytes,flush=True)
     hashes={str(f):sha256(f) for f in (args.ar_intrinsic,args.stereo_calibration,args.activation,extrinsic)};rows=[]
     matchers=[cv2.StereoSGBM_create(**c) for c in configs]
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -60,17 +66,18 @@ def main():
                 plans={};timing={};order=('dense','lookup') if repeat==0 else ('lookup','dense')
                 for label in order:
                     start=time.perf_counter();plans[label]=crop_plan(roi,cal,configs,diagnostic_margin_full_px=margin,
-                        frustum_lookup=lookup if label=='lookup' else None)
+                        frustum_lookup=lookup if label=='lookup' else reference_lookup)
                     timing[label]=time.perf_counter()-start
                 a,b=(plans[k]['common_crop_xyxy_px'] for k in ('dense','lookup'))
                 losses={k:support_loss(plans[k],u,v,d) for k in plans}
                 rows.append({'cycle_id':cid,'repeat':repeat,'order':order,'timing_s':timing,'plans':plans,
-                    'crop_bounds_exact':a==b,'lookup_contains_dense_crop':b[0]<=a[0] and b[1]<=a[1] and b[2]>=a[2] and b[3]>=a[3],
+                    'plans_exact':plans['dense']==plans['lookup'],'crop_bounds_exact':a==b,'lookup_contains_dense_crop':b[0]<=a[0] and b[1]<=a[1] and b[2]>=a[2] and b[3]>=a[3],
                     'max_crop_coordinate_delta_px':max(abs(x-y) for x,y in zip(a,b)),'observed_support':losses})
     if not rows:raise ValueError('no saved cycles')
     unchanged=all(sha256(Path(f))==digest for f,digest in hashes.items())
     if not unchanged:raise ValueError('source inputs changed')
     summary={'comparisons':len(rows),'exact_crop_bounds':sum(r['crop_bounds_exact'] for r in rows),
+        'exact_complete_plans':sum(r['plans_exact'] for r in rows),
         'lookup_contains_dense_crop':sum(r['lookup_contains_dense_crop'] for r in rows),
         'max_crop_coordinate_delta_px':max(r['max_crop_coordinate_delta_px'] for r in rows),
         'lookup_outside_crop_total':sum(r['observed_support']['lookup']['outside_crop_count'] for r in rows),
@@ -78,15 +85,19 @@ def main():
         'target_samples_total':sum(r['observed_support']['lookup']['target_sample_count'] for r in rows),
         'lookup_area_fraction_median':statistics.median(r['plans']['lookup']['area_fraction'] for r in rows)}
     for label in ('dense','lookup'):
-        print('FRUSTUM_TIMING',label,'median_s=',round(statistics.median(r['timing_s'][label] for r in rows),6),
+        print('BLOCK_PLAN_TIMING' if args.compare_blocks else 'FRUSTUM_TIMING',('reference' if label=='dense' else 'blocked') if args.compare_blocks else label,'median_s=',round(statistics.median(r['timing_s'][label] for r in rows),6),
             'max_s=',round(max(r['timing_s'][label] for r in rows),6),flush=True)
-    print('FRUSTUM_SUMMARY',json.dumps(summary),flush=True)
+    if args.compare_blocks:
+        summary['comparison_basis']='same integer lookup, exact tile reductions versus whole-region reductions'
+        summary['lookup_contains_reference_crop']=summary.pop('lookup_contains_dense_crop')
+    print('BLOCK_PLAN_SUMMARY' if args.compare_blocks else 'FRUSTUM_SUMMARY',json.dumps(summary),flush=True)
     paths=(Path(__file__),ROOT/'vision_core/tools/stereo_frustum_lookup.py',ROOT/'vision_core/tools/analyze_target_stereo_crop.py')
     report={'status':'OFFLINE_STARTUP_FRUSTUM_LOOKUP_COMPARISON_ONLY','rows':rows,'summary':summary,'startup_s':startup_s,
-        'table_bytes':lookup.table.nbytes,'source_sha256':hashes,'inputs_unchanged':unchanged,
+        'block_comparison':args.compare_blocks,'block_index_startup_s':block_startup_s,
+        'block_index_bytes':getattr(lookup,'index_bytes',0),'table_bytes':lookup.table.nbytes,'source_sha256':hashes,'inputs_unchanged':unchanged,
         'calibration_sha256':cal['sha'],'runtime_source_sha256':code,'code_sha256':{str(f):sha256(f) for f in paths},
         'actuator_access':False,'limitations':['Lookup integer lattice covers RGB cells touched by ROI, but is not a continuous distortion/uncertainty bound.',
-            'Dense reference uses a different fractional sample grid; bounds may differ and are recorded, not hidden.',
+            'Block comparison uses exactly the same integer lattice and padding; ordinary dense mode uses a different fractional sample grid.',
             'Observed support on this scene is not cropped-disparity equivalence.',
             'If crop boundaries differ, previous cropped-matcher results cannot be assumed unchanged.',
             'Startup cost/memory recorded separately; no cached prior-frame target, no runtime switch.']}

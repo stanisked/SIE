@@ -1146,3 +1146,22 @@ local absence as DISABLED_BY_EXPLICIT_PREVIEW_CONFIGURATION. Quality shadow stil
 cannot admit without local evidence; neither skipped nor older local data becomes
 permission. Mask support/layer/global-MAD/selection gates are unchanged. Existing
 local-diagnostic launcher remains available. Live no-local latency pending.
+
+
+No-local live result (`20261015_173449`): host median/max 245.7/260.6 ms,
+77/83 steady cycles within 250 ms; 84/84 current masked depths coherent, median
+2.7126 m, span 24.2 mm. No journal errors/loss. RGB RPC 116.4 ms, stereo 68.5 ms,
+fusion 24.8 ms. Local process explicitly disabled. This does not establish exposure
+to command freshness or authorize motors. Prior ESP32 supervised bounded evidence
+remains a 0.10 m request / ~0.0938 m actual step, not a qualified .15 m/s setpoint.
+
+`run_frustum_block_benchmark.sh` compares exact block reductions with the previous
+whole-region lookup on the same frozen pairs/ROIs. Immutable 32x32 tile extrema
+and finite flags index the same immutable float64 table. Each query uses only
+fully enclosed tiles and the exact remaining edge strips; no outward tile
+rounding, interpolation, dtype change, previous ROI or threshold change. Invalid
+cells retain full-frame fallback. Startup/index memory and per-plan timings are
+separate. Full plan equality, crop-bound equality and observed support are recorded.
+No live switch or automatic acceptance is introduced. Four lookup tests include
+320 arbitrary rectangle/index comparisons with interior invalid cells, tile borders,
+small rectangles and fractional ROI bounds. Pi performance/equality pending.

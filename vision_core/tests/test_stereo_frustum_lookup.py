@@ -3,12 +3,33 @@ from pathlib import Path
 import unittest
 import numpy as np
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from stereo_frustum_lookup import FrustumLookup
+from stereo_frustum_lookup import FrustumLookup,BlockFrustumLookup
 from analyze_target_stereo_crop import frustum_core,crop_plan
 from vision_core.tests.test_preview_mask_surface import calibration
 
 
 class FrustumLookupTests(unittest.TestCase):
+    def test_block_extrema_preserve_arbitrary_rectangles_and_invalid_cells(self):
+        cal=calibration();reference=FrustumLookup(cal,rgb_size=(128,96))
+        rng=np.random.default_rng(4)
+        table=rng.normal(size=reference.table.shape)
+        # Include non-forward cells and extrema inside tiles, not just corners.
+        table[:,40,40]=np.nan;table.setflags(write=False);reference.table=table
+        for block in (1,7,32,256):
+            candidate=BlockFrustumLookup(reference,block)
+            for _ in range(80):
+                x=sorted(rng.choice(129,2,replace=False));y=sorted(rng.choice(97,2,replace=False))
+                a=reference._extrema(x[0],y[0],x[1]+1,y[1]+1)
+                b=candidate._extrema(x[0],y[0],x[1]+1,y[1]+1)
+                if a is None:self.assertIsNone(b)
+                else:
+                    np.testing.assert_array_equal(a[0],b[0]);np.testing.assert_array_equal(a[1],b[1])
+        reference=FrustumLookup(cal,rgb_size=(128,96));candidate=BlockFrustumLookup(reference,16)
+        for roi in ([0,0,128,96],[1.2,3.4,120.8,90.1],[32,32,64,64],[1,1,2,2]):
+            self.assertEqual(reference.core(roi,cal,.5),candidate.core(roi,cal,.5))
+        self.assertIs(candidate.table,reference.table)
+        self.assertFalse(candidate.block_min.flags.writeable)
+
     def test_integer_reference_bounds_and_fractional_outward_coverage(self):
         cal=calibration();lookup=FrustumLookup(cal,rgb_size=(128,96),chunk_rows=17)
         roi=[10,10,80,60]

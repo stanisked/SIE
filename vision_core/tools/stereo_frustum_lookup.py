@@ -50,11 +50,54 @@ class FrustumLookup:
         x1,y1,x2,y2=map(float,roi);w,h=self.rgb_size
         if not (0<=x1<x2<=w and 0<=y1<y2<=h):raise ValueError('invalid lookup ROI')
         # Outward integer coverage includes all cells touched by this ROI.
-        region=self.table[:,math.floor(y1):math.ceil(y2)+1,math.floor(x1):math.ceil(x2)+1,:]
-        if not np.isfinite(region).all():return [0,0,*self.stereo_size],'FULL_FRAME_LOOKUP_NON_FORWARD'
-        low=region.min(axis=(0,1,2));high=region.max(axis=(0,1,2))
+        bounds=self._extrema(math.floor(x1),math.floor(y1),math.ceil(x2)+1,math.ceil(y2)+1)
+        if bounds is None:return [0,0,*self.stereo_size],'FULL_FRAME_LOOKUP_NON_FORWARD'
+        low,high=bounds
         sw,sh=self.stereo_size
         core=[max(0,min(sw,math.floor(low[0]))),max(0,min(sh,math.floor(low[1]))),
               max(0,min(sw,math.ceil(high[0])+1)),max(0,min(sh,math.ceil(high[1])+1))]
         if core[2]<=core[0] or core[3]<=core[1]:raise ValueError('lookup ROI has no stereo overlap')
         return core,'STARTUP_INTEGER_GRID_ENVELOPE_DIAGNOSTIC_ONLY'
+
+
+    def _extrema(self,x1,y1,x2,y2):
+        region=self.table[:,y1:y2,x1:x2,:]
+        if not np.isfinite(region).all():return None
+        return region.min(axis=(0,1,2)),region.max(axis=(0,1,2))
+
+
+class BlockFrustumLookup(FrustumLookup):
+    """Exact integer-grid extrema via full tiles plus unrounded edge strips."""
+    def __init__(self,reference,block_size=32):
+        if type(block_size) is not int or block_size<1:raise ValueError('invalid block size')
+        self.__dict__.update(reference.__dict__)
+        self.block_size=block_size
+        h,w=self.table.shape[1:3];b=block_size
+        self.block_min=np.empty(((h+b-1)//b,(w+b-1)//b,2))
+        self.block_max=np.empty_like(self.block_min)
+        self.block_valid=np.empty(self.block_min.shape[:2],dtype=bool)
+        for by in range(self.block_min.shape[0]):
+            for bx in range(self.block_min.shape[1]):
+                region=self.table[:,by*b:min((by+1)*b,h),bx*b:min((bx+1)*b,w),:]
+                self.block_valid[by,bx]=np.isfinite(region).all()
+                self.block_min[by,bx]=region.min(axis=(0,1,2))
+                self.block_max[by,bx]=region.max(axis=(0,1,2))
+        for array in (self.block_min,self.block_max,self.block_valid):array.setflags(write=False)
+        self.index_bytes=sum(a.nbytes for a in (self.block_min,self.block_max,self.block_valid))
+
+    def _extrema(self,x1,y1,x2,y2):
+        b=self.block_size
+        ix1=(x1+b-1)//b*b;ix2=x2//b*b
+        iy1=(y1+b-1)//b*b;iy2=y2//b*b
+        if ix1>=ix2 or iy1>=iy2:return super()._extrema(x1,y1,x2,y2)
+        selection=(slice(iy1//b,iy2//b),slice(ix1//b,ix2//b))
+        if not self.block_valid[selection].all():return None
+        lows=[self.block_min[selection].min(axis=(0,1))]
+        highs=[self.block_max[selection].max(axis=(0,1))]
+        # Disjoint strips: do not round the queried rectangle to tile boundaries.
+        for box in ((x1,y1,x2,iy1),(x1,iy2,x2,y2),(x1,iy1,ix1,iy2),(ix2,iy1,x2,iy2)):
+            if box[0]>=box[2] or box[1]>=box[3]:continue
+            bounds=super()._extrema(*box)
+            if bounds is None:return None
+            lows.append(bounds[0]);highs.append(bounds[1])
+        return np.min(lows,axis=0),np.max(highs,axis=0)
