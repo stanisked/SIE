@@ -761,3 +761,32 @@ model inference and actual projection/fitting, one-use cache, exact raw bytes,
 wrong cycle/hash, corrupt/truncated input, strided source, ownership lifetime,
 cleanup on timeout and prior preview/backend tests. Actual ML timings are
 pending Pi execution. This step needs no camera or person and no ROS rebuild.
+
+## Segmentation stage profile on frozen frames
+
+RGB transport challenge: NPZ joint median 0.2018 s vs mmap 0.1998 s; RGB RPC
+0.2004/0.1980 s, stereo 0.1147/0.1312 s. Exact 44/44, sources unchanged.
+No robust/material improvement established; mmap remains optional/offline and
+is not selected by live launchers. The former 48 ms live RPC difference cannot
+be attributed wholesale to NPZ packing.
+
+`run_segmentation_stage_profile.sh` profiles the reviewed 256x384 adapter on the
+same 22 saved RGB frames, twice with alternating reference/profile order.
+Actual predictor preprocess/inference/postprocess, ORT session.run,
+ops.process_mask_native and nested ops.scale_masks are timed without replacing
+calculation implementations. Required call coverage is checked; changed library
+paths refuse the run rather than reporting missing mask work as zero. Original
+installed predictor/ops source paths and SHA hashes are recorded.
+
+Nested durations must not be summed as exclusive stages. Derived per-cycle
+outside-predictor, inference-outside-ORT, postprocess-outside-mask-native and
+mask-native-outside-scale values are explicitly separate. Scale includes resize
+and unpadding; native mask processing also covers prototype reconstruction,
+cropping and thresholding. Final original-size masks, exact instances and target
+selection are compared to the uninstrumented path. Reference timings record
+profiling overhead; no code/math/threshold change is intended.
+
+This is isolated CPU inference, not the 207 ms live concurrent condition.
+No camera/IPC/stereo/local fitting is timed here. Current helper defaults and
+ORT=2 remain unchanged and actual counts are recorded. Two wrapper/accounting
+unit tests and Python/shell syntax checks passed; actual Pi timings pending.
