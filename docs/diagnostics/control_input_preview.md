@@ -1181,3 +1181,31 @@ startup logs and per-cycle stereo_resolution. Both backends use identical lattic
 extrema, calibration binding, padding and invalid-ray fallback. All selection,
 mask depth and quality-shadow gates remain unchanged; no motion/Measurement.
 Live total latency is pending, not inferred from the sum of median savings.
+
+Blocked live result (`20261015_175659`): host median/max 228.1/238.2 ms,
+88/88 steady non-cancelled cycles within host 250 ms. Current masked depth coherent
+89/89, median 2.7248 m, span 36.8 mm. Journal no errors/loss. First cycle and
+cancelled shutdown excluded from latency summary. This closes this run's host
+processing target, not exposure-to-command latency, physical error or motion admission.
+
+Next engineering stage: inspect frame origin/freshness. Current OpenCV `_read`
+stamps monotonic time AFTER read; CAP_PROP_BUFFERSIZE=1 does not prove frame age.
+`probe_camera_frame_clocks.py` compiles a small native V4L2 metadata probe against
+the Pi's own Linux headers (no manually packed ABI), opens cameras sequentially,
+verifies current MJPEG dimensions, requests one MMAP buffer and records actual
+buffer allocation, sequence, flags, driver timestamp and host dequeue monotonic.
+It collects 8 warmup / 16 recorded frames, including one deliberate 250 ms read
+pause. No image is persisted or decoded; no exposure/gain/FPS/format is written.
+Existing camera applications must be stopped. Native resources are released on
+normal/error exits; Python enforces a timeout. Probe failure and stderr remain
+in the saved report, not presented as successful timing evidence.
+
+Linux source: https://www.kernel.org/doc/html/v6.0/userspace-api/media/v4l/buffer.html
+MONOTONIC permits clock-domain comparison. Timestamp source EOF describes end
+of frame; SOE describes start of exposure. Unknown/copy clocks are not compared
+to host monotonic. Flags are driver declarations, not independent sensor timing
+validation. Queue-pause observations apply to this probe, not automatically to
+OpenCV or paired cameras. `exposure_age_established=false` remains explicit.
+No motion interface, Measurement, confidence policy or quality gates changed.
+Native compilation with -Wall -Wextra -Werror and two summary tests passed;
+actual driver metadata on Pi pending.
