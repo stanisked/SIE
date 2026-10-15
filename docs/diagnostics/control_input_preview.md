@@ -699,3 +699,24 @@ printing misleading comparison statistics. Default unspecified helper behavior
 is unchanged. Rerun the same offline command; expect helper1 torch=1/OpenCV=1.
 Tests include configuration/reset rejection and initialization/inference order;
 19 targeted tests passed. Actual corrected Pi performance remains pending.
+
+## Existing compact-journal timing analysis
+
+`analyze_control_preview_timing.py` reads primary JSONs without captures or
+code-path changes. It reports per-cycle raw timers and their direct differences:
+RGB RPC minus inference/extraction, fusion RPC minus depth/local preparation,
+and stereo worker minus longest matcher task. These differences include
+serialization/loading/hashing/scheduling or non-matcher geometry; they are not
+isolated pure IPC or rectification measurements.
+
+RGB and stereo overlap. `host - max(RGB RPC, stereo worker) - fusion RPC` is
+explicitly an unallocated proxy, not exact exclusive time. Capture durations,
+branch start offsets and exact future wait are absent from older journals.
+The analyzer cannot reconstruct those timers and never labels the proxy capture
+or waiting. Negative differences are retained for inspection. First recorded
+cycle per run and cancelled shutdowns are excluded explicitly; missing timers
+retain their identity/count instead of becoming zeros. Schedule-group summaries
+are saved to compare background-fit contention without claiming causation.
+Source SHA hashes and unchanged checks preserve provenance; output is a new
+file. Standard-library tests exercise parallel accounting and missing/negative
+values. Immediate next step: apply to existing 131005 run, no new live trial.
