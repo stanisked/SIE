@@ -1131,3 +1131,18 @@ orphan/binding errors and invalid durations refuse analysis. Source files are
 hashed before/after. UTC reconstruction is approximate, not a CPU execution trace;
 clock changes and unrecorded work remain limitations. Association alone does not
 prove interference. No capture, runtime settings, thresholds or motion changes.
+
+
+Saved overlap analysis: 16 RGB/local-request overlap cycles had host median
+300.10 ms and prediction median 147.00 ms, none within 250 ms. Sixty cycles with
+no recorded overlap had host median/max 246.38/277.37 ms, prediction median
+95.21 ms, 41 within 250 ms. UTC reconstruction is observational, not causal proof.
+
+Explicit opt-in `run_control_input_preview_target_crop_mmap_no_local.sh` sets
+`preview_local_surfaces_enabled=false` (default true). Requires deferred single
+segmentation path, requests current masked depth with prepare_local=false on every
+cycle; no local process starts, no samples/job are prepared or submitted. Reports
+local absence as DISABLED_BY_EXPLICIT_PREVIEW_CONFIGURATION. Quality shadow still
+cannot admit without local evidence; neither skipped nor older local data becomes
+permission. Mask support/layer/global-MAD/selection gates are unchanged. Existing
+local-diagnostic launcher remains available. Live no-local latency pending.

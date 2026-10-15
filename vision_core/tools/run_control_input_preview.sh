@@ -33,6 +33,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p shadow_segmenter_python:="$segmenter_python" \
   -p shadow_segmenter_model:="$segmenter_model" \
   "${engine_args[@]}" \
+  -p preview_local_surfaces_enabled:="${SIE_PREVIEW_LOCAL_ENABLED:-true}" \
   -p preview_local_surface_every_n_cycles:="${SIE_PREVIEW_LOCAL_EVERY_N:-1}" \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \

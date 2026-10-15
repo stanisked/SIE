@@ -117,8 +117,12 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._local_every_n=int(self.get_parameter("preview_local_surface_every_n_cycles").value)
         if self._local_every_n<1:
             raise ValueError("local diagnostic interval must be positive")
+        self.declare_parameter("preview_local_surfaces_enabled", True)
+        self._local_enabled=bool(self.get_parameter("preview_local_surfaces_enabled").value)
+        if not self._local_enabled and (not self._defer_local or self._rgb_backend!="single_segmentation"):
+            raise ValueError("disabled local surfaces require deferred single-segmentation path")
         self._surface_diagnostics=None
-        if self._defer_local:
+        if self._defer_local and self._local_enabled:
             if self._rgb_backend!="single_segmentation":
                 raise ValueError("deferred local fits require single segmentation")
             self._surface_publisher=self.create_publisher(String,
@@ -128,7 +132,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             self._surface_diagnostics=LatestSurfaceDiagnostics(local_client,
                 self._writer.directory/"local-surfaces",self._publish_surface_result)
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 
@@ -220,7 +224,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                      shape_diagnostic={"status":"NOT_EVALUATED_NO_CURRENT_TARGET"})
         future = None
         surface_job = None
-        local_scheduled=(self.sequence-1)%getattr(self,"_local_every_n",1)==0
+        local_scheduled=getattr(self,"_local_enabled",True) and (self.sequence-1)%getattr(self,"_local_every_n",1)==0
         try:
             if ar is None or combined is None:
                 audit.update(status="CAMERA_FRAME_UNAVAILABLE", reason="CAMERA_FRAME_UNAVAILABLE")
@@ -337,6 +341,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                             **({"defer_local":True, **({"prepare_local":False} if not local_scheduled else {})}
                                if getattr(self,"_defer_local",False) else {}))
                         surface_job=audit["shape_diagnostic"].pop("_surface_job",None)
+                        if not getattr(self,"_local_enabled",True):
+                            if surface_job is not None:raise RuntimeError("unexpected disabled local job")
+                            audit["shape_diagnostic"]["local_surface"]={"status":"DISABLED_BY_EXPLICIT_PREVIEW_CONFIGURATION"}
                     else:
                         audit["shape_diagnostic"] = client.evaluate(cycle_id, ar, current, cal,
                             candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
@@ -412,6 +419,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     "phase":"cycle 1, then 1+N, 1+2N",
                     "replaced_pending_count":deferred.dropped,"completed":deferred.completed,
                     "compute_errors":deferred.errors,"write_errors":deferred.write_errors}
+            if not getattr(self,"_local_enabled",True):
+                audit["local_surface_async"]={"status":"DISABLED_BY_EXPLICIT_PREVIEW_CONFIGURATION",
+                    "scheduled_cycle":False,"admission_authorized":False}
             audit["control_depth_quality_shadow"] = assess_control_depth(audit)
             message = String()
             message.data = encode(audit)

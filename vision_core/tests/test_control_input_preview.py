@@ -305,13 +305,24 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertEqual(len(crop_calls),1)
         self.assertEqual(messages[-1]['crop_target_binding']['cycle_id'],messages[-1]['cycle_id'])
         self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
+        node._local_enabled=False
+        node._surface_diagnostics=None
+        before=len(submitted)
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker=worker
+            node._cycle()
+        self.assertFalse(sampled[-1])
+        self.assertEqual(len(submitted),before)
+        self.assertEqual(messages[-1]['shape_diagnostic']['local_surface']['status'],'DISABLED_BY_EXPLICIT_PREVIEW_CONFIGURATION')
+        self.assertEqual(messages[-1]['local_surface_async']['scheduled_cycle'],False)
+        self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
         node._mask_client.infer=lambda cid,rgb:{"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY","instances":[]}
         # A later no-target cycle must not reuse the previous association.
         node.observer = SimpleNamespace(observe=lambda *args, **kw: {"disposition": "UNAVAILABLE", "reason": "NO_TARGET"})
         with ThreadPoolExecutor(max_workers=1) as worker:
             node._perception_worker = worker
             node._cycle()
-        self.assertEqual(len(crop_calls),1)  # no stereo job for missing current target
+        self.assertEqual(len(crop_calls),2)  # no stereo job for missing current target
         self.assertEqual(messages[-1]["status"], "TARGET_UNAVAILABLE")
         self.assertIsNone(messages[-1]["association"])
         self.assertIsNone(node._cached_stereo)
