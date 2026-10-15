@@ -11,6 +11,8 @@ def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def verify_report(model, report_path, threads):
     report=json.loads(Path(report_path).read_text())
+    if report.get('status')=='OFFLINE_INPUT_SIZE_CHALLENGE_ONLY':
+        return verify_size_report(model,report,threads)
     if (report.get('status')!='OFFLINE_SEGMENTATION_COMPARISON_ONLY'
             or report.get('inputs_unchanged') is not True
             or report.get('all_input_tensors_equal') is not True):
@@ -37,6 +39,51 @@ def verify_report(model, report_path, threads):
                 or (row['pytorch_geometry'] or {}).get('accepted')!=(row['onnx_geometry'] or {}).get('accepted')):
             raise ValueError('report differs from reviewed exact-mask/selection result')
     return report,shape
+
+
+def verify_size_report(model,report,threads):
+    """Bind only the operator-reviewed 256x384 diagnostic experiment.
+
+    These checks describe recorded evidence, not new per-frame quality gates.
+    The exact-mask PyTorch/ONNX reference verifier remains unchanged.
+    """
+    from benchmark_segmentation_input_size import summarize
+    if threads!=2 or report.get('inputs_unchanged') is not True:
+        raise ValueError('input-size challenge requires verified sources and two threads')
+    reference=report['reference']
+    reference_path=reference['comparison_file']
+    if digest(reference_path)!=reference['comparison_sha256']:
+        raise ValueError('reference comparison SHA mismatch')
+    original=json.loads(Path(reference_path).read_text())
+    reviewed,_=verify_report(original['export']['file'],reference_path,2)
+    if reference['model_sha256']!=reviewed['export']['sha256'] or reference['source_checkpoint_sha256']!=reviewed['source_model_sha256']:
+        raise ValueError('reference model/checkpoint mismatch')
+    exports=[e for e in report['exports'] if e['size']==[256,384]]
+    if len(exports)!=1 or digest(model)!=exports[0]['sha256']:
+        raise ValueError('reviewed smaller export SHA mismatch')
+    export=exports[0];arguments=export['arguments']
+    expected={'format':'onnx','imgsz':[256,384],'batch':1,'dynamic':False,'half':False,
+              'simplify':False,'opset':17,'nms':False,'device':'cpu'}
+    if arguments!=expected:raise ValueError('smaller export configuration mismatch')
+    rows=[r for r in report['rows'] if r['size']==[256,384]]
+    from collections import Counter
+    counts=Counter(r['cycle_id'] for r in rows)
+    if len(rows)!=44 or len(counts)!=22 or set(counts.values())!={2}:
+        raise ValueError('expected reviewed 22 cycles, two repetitions')
+    for row in rows:
+        if row['input_tensor']['shape']!=[1,3,256,384] or row['input_tensor']['dtype']!='float32':
+            raise ValueError('smaller preprocessing differs from review')
+        if row['depth_delta_m']!=0 or row['reference_depth']['status']!='COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY' or row['candidate_depth']['status']!=row['reference_depth']['status']:
+            raise ValueError('depth differs from reviewed smaller-input comparison')
+    summary=summarize(rows)
+    if (any(summary[k] for k in ('selection_disposition_changes','selected_correspondence_failures','geometry_status_changes','unmatched_instances'))
+            or summary['mask_iou_min']!=0.9458133917729704
+            or summary['mask_iou_median']!=0.9539935499009282):
+        raise ValueError('report differs from operator-reviewed smaller-input result')
+    if any(report['environment']['packages'][p]!=reviewed['environment']['packages'][p] for p in ('ultralytics','onnxruntime','torch','numpy')):
+        raise ValueError('size/reference environments differ')
+    # Common adapter metadata, without relabelling this as exact-mask equality.
+    return {**report,'source_model_sha256':reviewed['source_model_sha256']},[1,3,256,384]
 
 
 class OnnxSegmentationBackend:
@@ -71,6 +118,7 @@ class OnnxSegmentationBackend:
         if list(tensor.shape)!=shape or str(tensor.dtype)!='float32':
             raise ValueError('ONNX preprocessing input mismatch')
         self.metadata={'engine':'onnxruntime','threads':threads,'providers':backend.session.get_providers(),
+                       'review_kind':report['status'],
                        'input_shape':shape,'comparison_sha256':digest(report_path),
                        'comparison_file':str(report_path),'model_sha256':digest(model_path),
                        'source_checkpoint_sha256':report['source_model_sha256'],

@@ -217,3 +217,28 @@ Run on Pi with other perception processes stopped, without a person or camera
 capture. Review `SIZE` summaries and `comparison.json`; there is no automatic
 winner or runtime switch. Agreement with the baseline is not physical accuracy
 or validation for moving targets or arbitrary scenes.
+
+### Reviewed 256x384 result and explicit live diagnostic
+
+Operator result `segmentation_input_size_20261015_123033/comparison.json`:
+44 comparisons / 22 cycles, baseline median 0.209170 s vs candidate 0.096535 s;
+mask IoU median 0.9539935499009282, minimum 0.9458133917729704. No unmatched
+instances, selection-disposition/correspondence or geometry changes. All 44
+depth statuses remained coherent, with exactly zero median-depth delta. This
+is agreement on one frozen scene, not physical accuracy or universal detection.
+
+The separate launcher `run_control_input_preview_640x400_onnx_256x384.sh` uses
+that report and its `input_256x384/checkpoint.onnx`. Original 416x640 launcher
+and exact-mask reference verifier remain available unchanged. The adapter has
+a distinct size-review verification path: candidate export SHA/configuration,
+reference report SHA and original checkpoint, 22x2 rows, FP32 input shape,
+reviewed mask statistics, selection/geometry and depth agreement. These are
+artifact-review checks, not new online mask-IoU or depth thresholds. Runtime
+still verifies matching package versions and actual CPU session input shape.
+Metadata records review kind and both report/model hashes. No model fallback.
+
+Run one 30-second diagnostic with a person after rebuilding ROS. Stereo stays
+640x400, current masked depth every eligible frame, local fits every five cycles,
+MAD unchanged, Measurement and motor commands disabled. Compare complete host
+latency against 0.5327 s, and inspect statuses, not inference time alone. Frozen
+JPEG timing excludes live CPU contention, IPC and capture freshness.

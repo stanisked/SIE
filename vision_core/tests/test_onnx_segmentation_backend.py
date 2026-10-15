@@ -29,7 +29,49 @@ def fixture(folder):
     return model,path,report
 
 
+def size_fixture(folder):
+    model,reference,review=fixture(folder)
+    review['export']['file']=str(model)
+    reference.write_text(json.dumps(review))
+    candidate=folder/'small.onnx';candidate.write_bytes(b'small')
+    rows=[]
+    for index in range(44):
+        rows.append({'cycle_id':str(index//2),'repeat':index%2,'size':[256,384],
+            'input_tensor':{'shape':[1,3,256,384],'dtype':'float32'},
+            'reference_s':.2,'candidate_s':.1,'depth_delta_m':0.,
+            'reference_depth':{'status':'COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY'},
+            'candidate_depth':{'status':'COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY'},
+            'reference_geometry':{'accepted':True},'candidate_geometry':{'accepted':True},
+            'matching':{'pairs':[{'mask_iou':.9458133917729704 if index==0 else .9539935499009282}],
+                       'unmatched_reference_count':0,'unmatched_candidate_count':0},
+            'selection_comparison':{'same_disposition':True,'both_unavailable':False,'selected_correspondence_unambiguous':True}})
+    report={'status':'OFFLINE_INPUT_SIZE_CHALLENGE_ONLY','inputs_unchanged':True,
+            'reference':{'comparison_file':str(reference),'comparison_sha256':digest(reference),
+                         'model_sha256':digest(model),'source_checkpoint_sha256':review['source_model_sha256']},
+            'environment':review['environment'],'exports':[{'size':[256,384],'sha256':digest(candidate),
+                'arguments':{'format':'onnx','imgsz':[256,384],'batch':1,'dynamic':False,'half':False,
+                             'simplify':False,'opset':17,'nms':False,'device':'cpu'}}],'rows':rows}
+    path=folder/'size-comparison.json';path.write_text(json.dumps(report))
+    return candidate,path,report
+
+
 class OnnxBackendTests(unittest.TestCase):
+    def test_smaller_report_is_separate_and_binds_reference_and_observed_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            model,path,report=size_fixture(Path(directory))
+            self.assertEqual(verify_report(model,path,2)[1],[1,3,256,384])
+            for mutation in ('depth','selection','shape','missing','mask','export','reference'):
+                current=json.loads(json.dumps(report))
+                if mutation=='depth':current['rows'][0]['depth_delta_m']=.001
+                if mutation=='selection':current['rows'][0]['selection_comparison']['same_disposition']=False
+                if mutation=='shape':current['rows'][0]['input_tensor']['shape']=[1,3,320,512]
+                if mutation=='missing':current['rows'].pop()
+                if mutation=='mask':current['rows'][0]['matching']['pairs'][0]['mask_iou']=.94
+                if mutation=='export':current['exports'][0]['sha256']='wrong'
+                if mutation=='reference':current['reference']['comparison_sha256']='wrong'
+                path.write_text(json.dumps(current))
+                with self.assertRaises(ValueError,msg=mutation):verify_report(model,path,2)
+
     def test_exact_report_export_threads_and_original_checkpoint_are_bound(self):
         with tempfile.TemporaryDirectory() as directory:
             model,path,report=fixture(Path(directory))
