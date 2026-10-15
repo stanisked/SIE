@@ -11,7 +11,7 @@ from vision_core.person_localization.instance_mask_stereo_fusion import masked_d
 from vision_core.person_localization.local_surface_diagnostic import analyze_local_surfaces
 
 
-def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False):
+def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True):
     if scale not in (1., .5, .25) or not 0 < lower < upper <= 4.5:
         raise ValueError('invalid diagnostic scale/range')
     width, height = cal['size']
@@ -34,6 +34,9 @@ def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_
                  (v.astype(float)+.5)/scale-.5, z, cal)
     in_box = in_roi(xy, roi)
     depth = masked_depth_hypothesis(xy[in_box], z[in_box], mask)
+    if defer_local and not prepare_local:
+        return diagnostic_result(depth,scale,lower,upper,
+            {'status':'SKIPPED_BY_DIAGNOSTIC_SAMPLING'},True),None
     interior = cv2.erode(mask.astype(np.uint8), np.ones((5,5),np.uint8),
                          borderType=cv2.BORDER_CONSTANT, borderValue=0)
     selected = owned(xy, interior, roi)
@@ -41,7 +44,11 @@ def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_
     samples={'u':u,'v':v,'d':d,'xy':xy,'interior':interior,
              'roi':np.asarray(roi),'fb':np.asarray(fb),'stride':np.asarray(stride),'scale':np.asarray(scale)}
     local = {'status':'DEFERRED_NOT_YET_COMPUTED'} if defer_local else local_surface_stats(samples)
-    # Compact result preserves maxima and all failed/sparse support counters.
+    result=diagnostic_result(depth,scale,lower,upper,local,defer_local)
+    return (result,samples) if defer_local else result
+
+
+def diagnostic_result(depth,scale,lower,upper,local,defer_local):
     result={'status':'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY' if defer_local else 'SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY',
             'mask_depth':depth, 'local_surface':local,
             'reference_frame':'rectified_left_optical_frame', 'unit':'m',
@@ -52,9 +59,7 @@ def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_
             'sample_stride_original_px':4,
             'limitations':['Local fit residuals are not physical distance error.',
                           'Global MAD remains a comparison metric, not shape-aware admission.']}
-
-
-    return (result,samples) if defer_local else result
+    return result
 
 
 def local_surface_stats(samples):

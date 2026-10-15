@@ -33,6 +33,15 @@ class AsyncSurfaceTests(unittest.TestCase):
         self.assertEqual(local_surface_stats(samples),original['local_surface'])
         self.assertEqual(fast['status'],'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY')
 
+    def test_unscheduled_cycle_keeps_depth_without_preparing_a_local_job(self):
+        d,mask,cal,roi=inputs()
+        reference=evaluate(d,mask,cal,roi,scale=.5)
+        with patch('preview_mask_surface.owned',side_effect=AssertionError('unneeded local input')):
+            skipped,job=evaluate(d,mask,cal,roi,scale=.5,defer_local=True,prepare_local=False)
+        self.assertIsNone(job)
+        self.assertEqual(skipped['mask_depth'],reference['mask_depth'])
+        self.assertEqual(skipped['local_surface']['status'],'SKIPPED_BY_DIAGNOSTIC_SAMPLING')
+
     def test_one_pending_replaces_old_job_and_preserves_identity_and_array_copy(self):
         started,release=threading.Event(),threading.Event();seen=[]
         class Client:

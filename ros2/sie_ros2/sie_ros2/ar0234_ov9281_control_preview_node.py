@@ -93,6 +93,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._writer = LatestDiagnosticWriter(self.evidence_dir / ("control-preview-" + self.run_id))
         self.declare_parameter("preview_defer_local_surfaces", False)
         self._defer_local=bool(self.get_parameter("preview_defer_local_surfaces").value)
+        self.declare_parameter("preview_local_surface_every_n_cycles", 1)
+        self._local_every_n=int(self.get_parameter("preview_local_surface_every_n_cycles").value)
+        if self._local_every_n<1:
+            raise ValueError("local diagnostic interval must be positive")
         self._surface_diagnostics=None
         if self._defer_local:
             if self._rgb_backend!="single_segmentation":
@@ -104,7 +108,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             self._surface_diagnostics=LatestSurfaceDiagnostics(local_client,
                 self._writer.directory/"local-surfaces",self._publish_surface_result)
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; concurrent RGB/stereo; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; concurrent RGB/stereo; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 
@@ -163,6 +167,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                      shape_diagnostic={"status":"NOT_EVALUATED_NO_CURRENT_TARGET"})
         future = None
         surface_job = None
+        local_scheduled=(self.sequence-1)%getattr(self,"_local_every_n",1)==0
         try:
             if ar is None or combined is None:
                 audit.update(status="CAMERA_FRAME_UNAVAILABLE", reason="CAMERA_FRAME_UNAVAILABLE")
@@ -255,7 +260,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                         audit["shape_diagnostic"] = client.evaluate_selected(cycle_id, current, cal,
                             candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
                             segmentation, scale=scale,
-                            **({"defer_local":True} if getattr(self,"_defer_local",False) else {}))
+                            **({"defer_local":True, **({"prepare_local":False} if not local_scheduled else {})}
+                               if getattr(self,"_defer_local",False) else {}))
                         surface_job=audit["shape_diagnostic"].pop("_surface_job",None)
                     else:
                         audit["shape_diagnostic"] = client.evaluate(cycle_id, ar, current, cal,
@@ -311,7 +317,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             deferred=getattr(self,"_surface_diagnostics",None)
             if deferred is not None:
                 audit["local_surface_async"]={"status":("NOT_SUBMITTED_CANCELLED" if audit["status"]=="CANCELLED_SHUTDOWN" else
-                        "PENDING_SUBMIT_AFTER_PRIMARY_PUBLISH" if surface_job is not None else "NO_CURRENT_SURFACE_INPUT"),
+                        "PENDING_SUBMIT_AFTER_PRIMARY_PUBLISH" if surface_job is not None else
+                        "SKIPPED_BY_DIAGNOSTIC_SAMPLING" if audit.get("shape_diagnostic",{}).get("local_surface",{}).get("status")=="SKIPPED_BY_DIAGNOSTIC_SAMPLING" else "NO_CURRENT_SURFACE_INPUT"),
+                    "every_n_cycles":getattr(self,"_local_every_n",1),"scheduled_cycle":local_scheduled,
+                    "phase":"cycle 1, then 1+N, 1+2N",
                     "replaced_pending_count":deferred.dropped,"completed":deferred.completed,
                     "compute_errors":deferred.errors,"write_errors":deferred.write_errors}
             message = String()
@@ -323,6 +332,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 shape=audit["shape_diagnostic"]
                 deferred.submit(cycle_id,surface_job,{
                     "source_cycle_id":cycle_id,"captured_at_utc":stamp.isoformat(),
+                    "local_every_n_cycles":getattr(self,"_local_every_n",1),
                     "calibration":audit.get("calibration"),"stereo_resolution":audit.get("stereo_resolution"),
                     "diagnostic_depth_range_m":shape.get("diagnostic_depth_range_m"),
                     "mask_sha256":shape.get("mask_sha256"),"mask_depth":shape.get("mask_depth"),

@@ -33,6 +33,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p shadow_segmenter_python:="$segmenter_python" \
   -p shadow_segmenter_model:="$segmenter_model" \
   "${engine_args[@]}" \
+  -p preview_local_surface_every_n_cycles:="${SIE_PREVIEW_LOCAL_EVERY_N:-1}" \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \
   -p preview_stereo_mode:="$mode" \
@@ -68,6 +69,7 @@ depths=[d for d in depths if d is not None]
 if depths: print('MASK_CANDIDATE_DEPTH median_m=',round(statistics.median(depths),4),'span_m=',round(max(depths)-min(depths),4))
 local_files=sorted(Path(sys.argv[1]).rglob('local-surface-*.json'))
 local_rows=[json.loads(p.read_text()) for p in local_files]
+print('LOCAL_SAMPLING:',dict(Counter(r.get('local_surface_async',{}).get('status') for r in rows)))
 print('LOCAL_SURFACE_ASYNC records=',len(local_rows),'statuses=',dict(Counter(r['status'] for r in local_rows)))
 for key in ('queue_wait_s','local_processing_s','submit_to_result_s'):
     values=[r[key] for r in local_rows if r.get(key) is not None]

@@ -93,12 +93,13 @@ def main():
                 else:
                     started=time.monotonic()
                     deferred=bool(request.get('defer_local',False))
-                    evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred)
+                    evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)))
                     if deferred:
                         result,samples=evaluated
-                        job=path.parent/'surface_job.npz'
-                        np.savez(job,cycle_id=request['cycle_id'],**samples)
-                        result['deferred_surface']={'file':job.name,'sha256':digest(job),'retained':False,'transport':'TEMPORARY_RAM_ONLY'}
+                        if samples is not None:
+                            job=path.parent/'surface_job.npz'
+                            np.savez(job,cycle_id=request['cycle_id'],**samples)
+                            result['deferred_surface']={'file':job.name,'sha256':digest(job),'retained':False,'transport':'TEMPORARY_RAM_ONLY'}
                         result['mask_depth_prepare_s']=time.monotonic()-started
                     else:
                         result=evaluated

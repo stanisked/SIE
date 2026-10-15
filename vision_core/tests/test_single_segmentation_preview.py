@@ -110,6 +110,15 @@ class YOLO:
                     self.assertEqual(deferred['mask_depth'],result['mask_depth'])
                     self.assertEqual(local_surface_stats(deferred['_surface_job']),result['local_surface'])
                     self.assertNotIn('surface_s',deferred)
+                    skip_seg=client.infer('skip',np.zeros((1200,1920,3),np.uint8))
+                    skipped=client.evaluate_selected('skip',np.full((48,64),16,np.float32),cal,
+                        skip_seg['instances'][0],[4,4,120,88],[.5,4.5],skip_seg,scale=.5,
+                        defer_local=True,prepare_local=False)
+                    self.assertEqual(skipped['mask_depth'],result['mask_depth'])
+                    self.assertEqual(skipped['local_surface']['status'],'SKIPPED_BY_DIAGNOSTIC_SAMPLING')
+                    self.assertNotIn('_surface_job',skipped)
+                    self.assertNotIn('deferred_surface',skipped)
+
 
                 finally:
                     client.close()

@@ -260,6 +260,30 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertNotIn("_surface_job",messages[-1]["shape_diagnostic"])
         self.assertEqual(submitted[0][0],messages[-1]["cycle_id"])
         self.assertEqual(submitted[0][2]["source_cycle_id"],messages[-1]["cycle_id"])
+        # Six consecutive cycles: fit only 1 and 6, depth on all six.
+        node._local_every_n=5
+        node.sequence=0
+        sampled=[]
+        def sampled_fuse(*args,**kwargs):
+            scheduled=kwargs.get("prepare_local",True)
+            sampled.append(scheduled)
+            result={"status":"MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY",
+                    "mask_depth":{"status":"DEPTH_MAD_EXCEEDED"},
+                    "local_surface":{"status":"DEFERRED_NOT_YET_COMPUTED" if scheduled else "SKIPPED_BY_DIAGNOSTIC_SAMPLING"}}
+            if scheduled:result["_surface_job"]={"u":np.array([4,8])}
+            return result
+        node._mask_client.evaluate_selected=sampled_fuse
+        submitted.clear()
+        first_message=len(messages)
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker=worker
+            for _ in range(6):node._cycle()
+        self.assertEqual(sampled,[True,False,False,False,False,True])
+        self.assertEqual([job[0][-8:] for job in submitted],["00000001","00000006"])
+        new=messages[first_message:]
+        self.assertEqual(len(new),6)
+        self.assertTrue(all(row["shape_diagnostic"]["mask_depth"]["status"]=="DEPTH_MAD_EXCEEDED" for row in new))
+        self.assertEqual([row["local_surface_async"]["status"] for row in new][1:5],["SKIPPED_BY_DIAGNOSTIC_SAMPLING"]*4)
         node._mask_client.infer=lambda cid,rgb:{"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY","instances":[]}
         # A later no-target cycle must not reuse the previous association.
         node.observer = SimpleNamespace(observe=lambda *args, **kw: {"disposition": "UNAVAILABLE", "reason": "NO_TARGET"})

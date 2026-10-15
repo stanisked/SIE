@@ -11,6 +11,7 @@ export SIE_PREVIEW_ONNX_REPORT=/home/elwis/.local/state/sie/evidence/segmentatio
 export SIE_PREVIEW_SEGMENTER_MODEL=/home/elwis/.local/state/sie/evidence/segmentation_onnx_comparison_20261015_105936/source_checkpoint.onnx
 export SIE_PREVIEW_ORT_THREADS=2
 export SIE_PREVIEW_DEFER_LOCAL=true
+export SIE_PREVIEW_LOCAL_EVERY_N=5
 "$SIE_PREVIEW_SEGMENTER_PYTHON" - "$SIE_PREVIEW_SEGMENTER_MODEL" "$SIE_PREVIEW_ONNX_REPORT" <<'PY'
 import sys
 from onnx_segmentation_backend import verify_report

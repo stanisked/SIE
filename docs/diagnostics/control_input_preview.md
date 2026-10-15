@@ -485,3 +485,58 @@ publishes and journals before local submission, including MAD-refused frames.
 Existing ONNX, selection, stereo, protocol and shutdown regressions remain in
 scope. Numerical checks are not physical-depth validation; new Pi concurrent
 timing remains pending the command above.
+
+## 2026-10-15: sample local diagnostics every five capture cycles
+
+The every-cycle asynchronous Pi run
+`control_input_preview_half_640x400_single_segmentation_onnxruntime_20261015_114555`
+completed 33 primary mask-depth and 33 local results, with no replacements,
+compute/write errors or journal loss. Post-first host median 0.6335 s / max
+0.6694 s, 0/32 within 250 ms. Segmentation round trip 0.4727 s, overlapping
+stereo 0.3015 s, masked-depth preparation 0.1064 s, fusion round trip 0.1240 s.
+Local fit median 0.4058 s, submit-to-result 0.4215 s; queue wait 0.0003 s.
+Only 2/33 passed the existing global-MAD comparison; the other 31 retained
+`DEPTH_MAD_EXCEEDED`. Different scene frames do not establish that the async
+change worsened physical depth. Source-frame depth parity is checked in tests.
+
+Host latency improved only about 6% over the previous synchronous 0.6758 s run.
+Segmentation, stereo and fits all took longer; this is consistent with CPU
+competition, not proof that it is the only cause. A background queue removed a
+wait but did not remove the fit's CPU cost.
+
+The accepted next implementation sets
+`preview_local_surface_every_n_cycles=5` in the ONNX launcher. General node
+and synchronous/PyTorch reference defaults stay at 1. The phase is explicit:
+cycles 1, 6, 11, ... based on captured callback sequence, independent of depth
+pass/fail. If a scheduled cycle lacks a valid current target, no old frame is
+substituted and there is no unscheduled catch-up fit. A cancelled cycle does not
+submit a fit. Interval 5 is a diagnostic load-sampling choice, not a camera,
+accuracy, freshness or motion-admission threshold.
+
+Every frame still runs current segmentation, target selection, stereo and the
+unchanged masked-depth/layer/MAD checks. On the four unscheduled cycles the
+worker returns that depth immediately with local status
+`SKIPPED_BY_DIAGNOSTIC_SAMPLING`; it prepares/transfers no sparse local job and
+performs no local fit. On scheduled cycles the existing deferred process/queue
+remains unchanged, with at most one active plus one latest pending job.
+
+Primary journals declare interval, phase, whether that cycle was scheduled and
+its actual local status. Auxiliary results carry the original cycle ID and
+interval in provenance. There is no interpolation, cached local result or
+implicit quality pass for unsampled frames. These sparse diagnostics cannot be
+claimed as per-frame physical quality certification or movement authority.
+The launcher summary adds `LOCAL_SAMPLING` counts beside actual local completed/
+replaced/errors and latency. A 30-cycle all-target run would request six fits
+instead of 30; real counts depend on current target availability and shutdown.
+
+Use the same ONNX 30-second command above after pull/build. Compare complete
+host timing, segmentation/stereo and mask preparation against 0.6335 s, not just
+local task count. About 80% fewer fit calls is intended; a specific latency gain
+or attainment of 250 ms is not assumed. Model/export, thread counts, calibration,
+range, all depth/selection thresholds and disabled actuator state are unchanged.
+
+Tests verify exact masked-depth parity on an unsampled cycle, no local-input
+preparation on that path, real worker RPC returning no local payload, and the
+actual callback performing six current-depth calls but only two fit submissions
+for cycles 1 and 6. Skips are explicit and no previous local result enters a new
+frame. Existing bounded-queue, local-fit, ONNX and shutdown tests remain relevant.
