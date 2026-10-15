@@ -1026,3 +1026,30 @@ Current-frame crop scheduling after RGB still needs a whole-path assessment.
 Sources/model-mask/calibration bindings are checked and inputs hashed before /
 after. No saved evidence is altered. 14 targeted tests and Python/shell syntax
 checks passed. Actual Pi cropped-match timing/quality differences are pending.
+
+Cropped-match Pi result (2026-10-15, `target_crop_match_20261015_165636.json`):
+44 comparisons retained coherent masked-depth disposition; only 10 complete
+reports were exact. Reference owned samples totaled 176,936 across repetitions,
+with 68 lost / 52 gained and 54,636 changed common disparities. Maximum median
+depth difference from full matching was 10.51 mm, not an absolute accuracy claim.
+Crop matcher pair / restore-LR / geometry-ownership medians were 16.60 / 9.53 /
+14.42 ms; combined match-LR-depth was 40.66 ms. Dense ROI planning separately
+cost 83.72 ms. These results do not authorize a live crop switch.
+
+`run_frustum_lookup_benchmark.sh` compares dense planning with a calibration-bound
+startup lookup on these same 22 cycles, two alternating repetitions. Near/far
+rectified-z ray projections are precomputed in float64 for the integer RGB grid
+(including image boundaries), about 74 MB. Startup time/memory are reported
+separately; per-ROI operations reduce the relevant table region to bounds.
+Calibration, scale and diagnostic range must match; invalid rays fall back to
+full frame. Existing search/block/LR padding is retained.
+
+The lookup covers outward-rounded integer lattice points. It is not a certified
+continuous distortion or calibration-uncertainty bound. Dense reference samples
+can have fractional coordinates, so bounds are compared explicitly, including
+containment, largest coordinate difference, area and observed target/support
+loss. This benchmark does not rerun cropped matching: if bounds differ, the
+previous cropped-match numerical results cannot automatically be attributed to
+the lookup. Frozen inputs are hashed before/after. No live launch, quality
+threshold, calibration or motion admission changes. Ten targeted tests and
+Python/shell syntax checks passed; actual Pi lookup performance is pending.

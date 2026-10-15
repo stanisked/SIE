@@ -70,8 +70,8 @@ def frustum_core(roi,cal,scale,lower=.5,upper=4.5):
     return core,'DENSE_SAMPLED_DIAGNOSTIC_FRUSTUM'
 
 
-def crop_plan(roi,cal,configs,scale=.5,diagnostic_margin_full_px=32):
-    core,method=frustum_core(roi,cal,scale)
+def crop_plan(roi,cal,configs,scale=.5,diagnostic_margin_full_px=32,*,frustum_lookup=None):
+    core,method=frustum_core(roi,cal,scale) if frustum_lookup is None else frustum_lookup.core(roi,cal,scale)
     size=tuple(int(v*scale) for v in cal['size'])
     # Same x origin in both images. Include all disparity hypotheses in both
     # directions and block/LR-rounding support; do not narrow disparity search.
