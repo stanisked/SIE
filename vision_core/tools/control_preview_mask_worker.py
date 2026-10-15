@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import time
@@ -20,20 +21,38 @@ def emit(record):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--model',type=Path,required=True)
+    parser.add_argument('--engine',choices=['pytorch','onnxruntime'],default='pytorch')
+    parser.add_argument('--comparison-report',type=Path)
+    parser.add_argument('--ort-threads',type=int,default=2)
     args=parser.parse_args()
-    with contextlib.redirect_stdout(sys.stderr):
-        import numpy as np
-        from ultralytics import YOLO
-        from preview_mask_surface import evaluate, segment_array, CurrentInstanceMasks
-        model=YOLO(str(args.model),task='segment')
-        if model.task!='segment' or model.names.get(0)!='person':
-            raise ValueError('expected COCO person segmentation model')
+    os.environ['YOLO_AUTOINSTALL']='false' 
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            import numpy as np
+            from ultralytics import YOLO
+            from preview_mask_surface import evaluate, segment_array, CurrentInstanceMasks
+            if args.engine=='onnxruntime':
+                if args.comparison_report is None or args.ort_threads<1:
+                    raise ValueError('ONNX requires comparison report and positive threads')
+                from onnx_segmentation_backend import OnnxSegmentationBackend
+                model=OnnxSegmentationBackend(args.model,args.comparison_report,args.ort_threads)
+                engine_metadata=model.metadata
+            else:
+                model=YOLO(str(args.model),task='segment')
+                engine_metadata={'engine':'pytorch'}
+            if model.task!='segment' or model.names.get(0)!='person':
+                raise ValueError('expected COCO person segmentation model')
+    except Exception as error:
+        emit({'status':'UNAVAILABLE','reason':type(error).__name__,'error_detail':str(error)[:400]})
+        return
     model_sha=digest(args.model)
     code_sha={str(path.name):digest(path) for path in (
         Path(__file__),Path(__file__).with_name('preview_mask_surface.py'),
         Path(__file__).resolve().parents[1]/'person_localization/local_surface_diagnostic.py',
         Path(__file__).resolve().parents[1]/'person_localization/instance_mask_stereo_fusion.py')}
-    emit({'status':'READY','model_sha256':model_sha})
+    if args.engine=='onnxruntime':
+        code_sha['onnx_backend']=digest(Path(__file__).with_name('onnx_segmentation_backend.py'))
+    emit({'status':'READY','model_sha256':model_sha,'segmentation_engine':engine_metadata})
     current_masks=CurrentInstanceMasks()
     for line in sys.stdin:
         request={}
@@ -52,7 +71,7 @@ def main():
                     emit({'status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY','instances':instances,
                           'mask_s':time.monotonic()-started,'cycle_id':request['cycle_id'],
                           'arrays_sha256':request['arrays_sha256'],'model_sha256':model_sha,
-                          'code_sha256':code_sha,'class_name':'person','inference_count':1})
+                          'code_sha256':code_sha,'class_name':'person','inference_count':1,'segmentation_engine':engine_metadata})
                     continue
                 source=bundle['rgb'] if 'rgb' in bundle else None
                 cal={k:bundle[k] for k in ('P1','P2','R1','R','T','K','D','size')}
@@ -76,7 +95,7 @@ def main():
                     result=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.))
                     result.update(mask=info,surface_s=time.monotonic()-started,
                                   mask_sha256=hashlib.sha256(mask.tobytes()).hexdigest())
-                result.update(code_sha256=code_sha,mask_s=mask_s,cycle_id=request['cycle_id'],
+                result.update(segmentation_engine=engine_metadata,code_sha256=code_sha,mask_s=mask_s,cycle_id=request['cycle_id'],
                               arrays_sha256=request['arrays_sha256'],model_sha256=model_sha)
                 emit(result)
         except Exception as error:

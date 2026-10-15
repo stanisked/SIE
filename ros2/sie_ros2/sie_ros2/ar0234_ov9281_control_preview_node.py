@@ -46,13 +46,23 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self.declare_parameter("preview_mask_surface_enabled", True)
         if self._stereo_scale == .5 and not bool(self.get_parameter("preview_mask_surface_enabled").value):
             raise ValueError("half diagnostic mode requires current-frame mask diagnostics")
+        self.declare_parameter("preview_segmentation_engine", "pytorch")
+        self.declare_parameter("preview_onnx_comparison_report", "")
+        self.declare_parameter("preview_onnx_threads", 2)
+        engine=str(self.get_parameter("preview_segmentation_engine").value)
+        if engine not in ("pytorch","onnxruntime"):
+            raise ValueError("invalid segmentation engine")
         self._mask_client = None
         if bool(self.get_parameter("preview_mask_surface_enabled").value):
             self._mask_client = PreviewMaskClient(
                 self.get_parameter("shadow_segmenter_python").value,
                 self.project_root / "vision_core/tools/control_preview_mask_worker.py",
                 self.get_parameter("shadow_segmenter_model").value,
-                self.shadow_segmenter_timeout_s)
+                self.shadow_segmenter_timeout_s,
+                **({"engine":engine,
+                    "comparison_report":str(self.get_parameter("preview_onnx_comparison_report").value),
+                    "ort_threads":int(self.get_parameter("preview_onnx_threads").value)}
+                   if engine=="onnxruntime" else {}))
         self.declare_parameter("preview_rgb_backend", "two_model_reference")
         self._rgb_backend = str(self.get_parameter("preview_rgb_backend").value)
         if self._rgb_backend not in ("two_model_reference", "single_segmentation"):
@@ -63,6 +73,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             # Parent startup still verifies its historical detector artifact;
             # release the unused ONNX session and never run it in this backend.
             self.observer = None
+        if engine=="onnxruntime" and self._rgb_backend!="single_segmentation":
+            raise ValueError("ONNX preview requires single segmentation backend")
         self.declare_parameter("control_preview_topic", "/sie/diagnostics/ar0234_ov9281/control_preview")
         self.declare_parameter("preview_diagnostic_range_min_m", .5)
         self.declare_parameter("preview_diagnostic_range_max_m", 4.5)
@@ -79,7 +91,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._cached_stereo = None
         self._writer = LatestDiagnosticWriter(self.evidence_dir / ("control-preview-" + self.run_id))
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; concurrent RGB/stereo; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; concurrent RGB/stereo; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 

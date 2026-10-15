@@ -7,8 +7,19 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 runtime=/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python
 mode="${SIE_PREVIEW_STEREO_MODE:-full_1280x800}"
 backend="${SIE_PREVIEW_RGB_BACKEND:-two_model_reference}"
+engine="${SIE_PREVIEW_SEGMENTATION_ENGINE:-pytorch}"
+segmenter_python="${SIE_PREVIEW_SEGMENTER_PYTHON:-/home/elwis/dev_ws/runtime_envs/sie_seg_offline/bin/python}"
+segmenter_model="${SIE_PREVIEW_SEGMENTER_MODEL:-/home/elwis/dev_ws/model_artifacts/yolo11n_seg_coco/yolo11n-seg.pt}"
+engine_args=(-p preview_segmentation_engine:="$engine")
+case "$engine" in
+  pytorch) ;;
+  onnxruntime)
+    : "${SIE_PREVIEW_ONNX_REPORT:?Set exact reviewed comparison report}"
+    engine_args+=(-p preview_onnx_comparison_report:="$SIE_PREVIEW_ONNX_REPORT" -p preview_onnx_threads:="${SIE_PREVIEW_ORT_THREADS:-2}") ;;
+  *) echo "Unsupported segmentation engine: $engine" >&2; exit 2 ;;
+esac
 case "$mode" in full_1280x800|half_640x400) ;; *) echo "Unsupported diagnostic mode: $mode" >&2; exit 2 ;; esac
-directory="/home/elwis/.local/state/sie/evidence/control_input_preview_${mode}_${backend}_$(date +%Y%m%d_%H%M%S)"
+directory="/home/elwis/.local/state/sie/evidence/control_input_preview_${mode}_${backend}_${engine}_$(date +%Y%m%d_%H%M%S)"
 echo "Journal root: $directory"
 exit_code=0
 timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
@@ -19,8 +30,9 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p ar_intrinsic:=/home/elwis/dev_ws/runtime_artifacts/ar0234_intrinsic_v5_final_20260910/calibration_fullres.json \
   -p stereo_calibration:=/home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz \
   -p activation_profile:=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json \
-  -p shadow_segmenter_python:=/home/elwis/dev_ws/runtime_envs/sie_seg_offline/bin/python \
-  -p shadow_segmenter_model:=/home/elwis/dev_ws/model_artifacts/yolo11n_seg_coco/yolo11n-seg.pt \
+  -p shadow_segmenter_python:="$segmenter_python" \
+  -p shadow_segmenter_model:="$segmenter_model" \
+  "${engine_args[@]}" \
   -p preview_rgb_backend:="$backend" \
   -p preview_stereo_mode:="$mode" \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \

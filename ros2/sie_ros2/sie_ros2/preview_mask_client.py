@@ -9,17 +9,29 @@ import time
 
 
 class PreviewMaskClient:
-    def __init__(self, python, script, model, timeout=30.):
+    def __init__(self, python, script, model, timeout=30., *, engine="pytorch", comparison_report=None, ort_threads=2):
         self.timeout=timeout
         self.process=None
         self.model_sha256=hashlib.sha256(Path(model).read_bytes()).hexdigest()
+        command=[str(python),'-u',str(script),'--model',str(model)]
+        if engine not in ('pytorch','onnxruntime'):
+            raise ValueError('unsupported preview engine')
+        report_sha=None
+        if engine=='onnxruntime':
+            report_sha=hashlib.sha256(Path(comparison_report).read_bytes()).hexdigest()
+            command+=['--engine',engine,'--comparison-report',str(comparison_report),'--ort-threads',str(ort_threads)]
         try:
-            self.process=subprocess.Popen([str(python),'-u',str(script),'--model',str(model)],
+            self.process=subprocess.Popen(command,
                 stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,
                 text=True,bufsize=1)
             ready=self._read(60.)
-            if ready.get('status')!='READY' or ready.get('model_sha256')!=self.model_sha256:
+            if ready.get('status')!='READY':
+                raise RuntimeError(f"preview worker startup failed: {ready.get('reason')}: {ready.get('error_detail')}")
+            if ready.get('model_sha256')!=self.model_sha256:
                 raise ValueError('preview mask worker model mismatch')
+            self.engine_metadata=ready.get('segmentation_engine',{'engine':'pytorch'})
+            if engine=='onnxruntime' and (self.engine_metadata.get('engine')!=engine or self.engine_metadata.get('threads')!=ort_threads or self.engine_metadata.get('comparison_sha256')!=report_sha):
+                raise ValueError('preview engine/report mismatch')
         except BaseException:
             self.close()
             raise

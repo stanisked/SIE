@@ -127,3 +127,63 @@ before choosing a backend or requesting another short live check.
 - https://onnxruntime.ai/docs/api/python/api_summary.html (CPU session API)
 - https://onnxruntime.ai/docs/performance/tune-performance/threading.html
   (thread settings; no assumed speedup from a thread count)
+
+## 2026-10-15 Pi results and separate live ONNX backend
+
+Completed report:
+`/home/elwis/.local/state/sie/evidence/segmentation_onnx_comparison_20261015_105936/comparison.json`.
+ONNX: `source_checkpoint.onnx` beside that report. All three CPU thread settings
+reported 44/44 identical input tensors, mask IoU median/min 1.0, zero selection
+status changes and zero geometry-status changes on the saved frames.
+
+| ONNX intra-op threads | PT median | ONNX median |
+| --- | ---: | ---: |
+| 1 | 0.4369 s | 0.2699 s |
+| 2 | 0.4314 s | 0.2636 s |
+| 4 | 0.4317 s | 0.2629 s |
+
+Two threads are selected for this explicit live diagnostic rollout: the measured
+four-thread benefit is only 0.7 ms while stereo also consumes CPU. No claim that
+two threads are universally optimal. Report/model hashes and exact compared
+Ultralytics/ORT/Torch/NumPy versions are checked before this adapter starts;
+thread rows must reproduce the reviewed exact-mask/selection/geometry result.
+This binds the tested artifact, rather than defining a general mask-IoU policy.
+
+`onnx_segmentation_backend.py` uses the same fixed-input Ultralytics wrapper and
+CPU-session replacement as the completed challenge. One current inference still
+produces all boxes/masks. Exact-index, cycle and RGB-hash ownership, confidence,
+geometry, ambiguity checks and one-time mask consumption remain unchanged.
+ONNX engine/provider/thread/input/export/report/source-checkpoint provenance is
+included in the segmentation and shape journal records. Warm-up uses blank
+frames during startup and never establishes a live target or cached mask.
+
+The existing `run_control_input_preview_640x400.sh` remains the PyTorch reference.
+A new explicit launcher uses the existing ONNX benchmark environment and these
+exact report/export paths, at two CPU threads:
+
+```bash
+cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+git pull --ff-only
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select sie_ros2 --symlink-install
+bash vision_core/tools/run_control_input_preview_640x400_onnx.sh
+```
+
+Stop another camera consumer; person in view for one 30-second implementation
+check. No calibration/distance sweep. No dependency installation or checkpoint
+copy/activation is performed by this launch. Model/runtime/manifest mismatch
+refuses startup with a reason; there is no silent PyTorch or provider fallback.
+
+Compare host median/max, segmentation round-trip and inference, stereo worker,
+local surfaces/fusion and mask-depth statuses with the preceding 0.8674 s host
+median. The local ONNX 0.2636 s excludes IPC and concurrent stereo. Even that
+alone exceeds 250 ms; a successful export is not a claim that the complete age
+target is met. Local shape residuals still are not physical accuracy, and no
+Measurement, navigation or actuator commands are enabled.
+
+Local checks: 19 targeted tests passed before the startup-error reporting
+refinement; tests cover artifact/environment mismatches, reviewed-result
+mismatches, CPU thread/shape/rect arguments, current mask protocol, selection,
+callback isolation and shutdown. CPU adapter execution is mocked locally;
+real ONNX inference was demonstrated by the operator's saved comparison, and
+new concurrent live timing remains pending the command above.

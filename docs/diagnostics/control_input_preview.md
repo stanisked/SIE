@@ -373,3 +373,15 @@ export, uses identical tensor hashes for fair ONNX comparison, checks CPU thread
 variants 1/2/4, bbox/mask matching and selection/geometry outcomes. It does not
 switch the live backend or modify the existing runtime environments. Real model
 export/timing remains pending Pi execution. No new person run is requested.
+
+### 2026-10-15 live ONNX rollout prepared
+
+Offline comparison completed with identical input tensors and matched masks,
+no selection/geometry-status changes; at two CPU threads, local ONNX median
+0.2636 s versus PyTorch 0.4314 s. A separate explicit ONNX launcher now binds
+that reviewed export/report, versions, shape and CPU-session settings:
+`vision_core/tools/run_control_input_preview_640x400_onnx.sh`.
+The existing 640x400 launcher remains PyTorch. Same one-inference target/index/
+mask ownership and diagnostic-only motor boundary. See the ONNX runbook for the
+exact paths, checks, results and live command. Concurrent Pi latency is pending;
+no new 250 ms or physical accuracy claim follows from the offline result.
