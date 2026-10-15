@@ -101,9 +101,41 @@ def freshness_report(metadata,ready,executable_sha256):
     paired=set(ages)=={'ar0234','ov9281'}
     return {"capture_backend":"latest_v4l2","frames":metadata,"native_executable_sha256":executable_sha256,
         "driver_declared_soe_to_result_s":ages,
+        "driver_declared_soe_to_pair_selection_s":{name:data['pair_selected_monotonic_s']-data['driver_timestamp_s'] for name,data in metadata.items() if 'pair_selected_monotonic_s' in data and 'driver_timestamp_s' in data},
+        "pair_selection_to_result_s":{name:ready-data['pair_selected_monotonic_s'] for name,data in metadata.items() if 'pair_selected_monotonic_s' in data},
         "maximum_driver_declared_age_s":max(ages.values()) if paired else None,
         "driver_declared_pair_skew_s":abs(metadata['ar0234']['driver_timestamp_s']-metadata['ov9281']['driver_timestamp_s']) if paired else None,
         "within_250ms_by_driver_metadata":paired and all(math.isfinite(v) and 0<=v<=.25 for v in ages.values()),
         "observation_timestamp_basis":"HOST_CYCLE_START_UTC; driver stamps provided separately",
         "physical_exposure_timing_independently_verified":False,"command_issued":False,
         "endpoint":"RESULT_READY_BEFORE_PUBLICATION; not a motor command"}
+
+
+def select_latest_pair(ar_capture,stereo_capture,last_sequences):
+    """Freeze both compressed snapshots before any image decode; no history search."""
+    ar=ar_capture.snapshot(last_sequences.get('ar0234'))
+    stereo=stereo_capture.snapshot(last_sequences.get('ov9281'))
+    # Return only a complete pair. Metadata/payload snapshots are independently owned.
+    selected=time.monotonic()
+    return {name:(packet[0],{**packet[1],'pair_selected_monotonic_s':selected}) for name,packet in (('ar0234',ar),('ov9281',stereo))}
+
+
+def diagnostic_freshness_groups(rows):
+    """Keep fast refusals out of coherent-depth age/latency success counts."""
+    import statistics
+    groups={}
+    for label in ('COHERENT_DEPTH','OTHER_RESULTS'):
+        selected=[]
+        for row in rows:
+            coherent=(row.get('status') in ('MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY','SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY')
+                and row.get('shape_diagnostic',{}).get('mask_depth',{}).get('status')=='COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY')
+            if coherent==(label=='COHERENT_DEPTH'):selected.append(row)
+        fresh=[row['frame_freshness'] for row in selected if row.get('frame_freshness')]
+        durations=[row.get('processing_timing',{}).get('host_capture_start_to_result_ready_s') for row in selected]
+        durations=[v for v in durations if type(v) in (float,int) and math.isfinite(v) and v>=0]
+        groups[label]={'cycles':len(selected),'with_driver_metadata':len(fresh),
+            'driver_age_within_250ms':sum(f.get('within_250ms_by_driver_metadata') is True for f in fresh),
+            'host_median_s':statistics.median(durations) if durations else None,
+            'host_max_s':max(durations) if durations else None,
+            'host_within_250ms':sum(v<=.25 for v in durations),'host_timed_cycles':len(durations)}
+    return groups

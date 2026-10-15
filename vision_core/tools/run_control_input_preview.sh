@@ -94,10 +94,15 @@ show_stages('TIMELINE',[{k:v for k,v in r.get('perception_timeline_s',{}).items(
 show_stages('RGB_WORKER',[{k:r.get('segmentation_observation',{}).get(k) for k in ('worker_input_open_verify_s','worker_rgb_load_s','prediction_extract_s')} for r in steady])
 if steady:
     print('ACTIVE_ORT_SETTINGS:',steady[0].get('segmentation_observation',{}).get('segmentation_engine',{}).get('active_ort_session'))
-show_stages('FRAME_AGE',[r.get('frame_freshness',{}).get('driver_declared_soe_to_result_s',{}) for r in steady])
-show_stages('FRAME_PAIR',[{'driver_skew_s':r.get('frame_freshness',{}).get('driver_declared_pair_skew_s')} for r in steady])
-fresh=[r.get('frame_freshness',{}) for r in steady if r.get('frame_freshness')]
-if fresh:print('DRIVER_FRESHNESS within_250ms=',sum(f.get('within_250ms_by_driver_metadata',False) for f in fresh),'/',len(fresh),'physical_exposure_independently_verified=False')
+from sie_ros2.latest_v4l2_capture import diagnostic_freshness_groups
+coherent=[r for r in steady if r.get('status') in ('MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY','SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY') and r.get('shape_diagnostic',{}).get('mask_depth',{}).get('status')=='COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY']
+show_stages('FRAME_AGE_COHERENT',[r.get('frame_freshness',{}).get('driver_declared_soe_to_result_s',{}) for r in coherent])
+show_stages('FRAME_AGE_AT_SELECTION',[r.get('frame_freshness',{}).get('driver_declared_soe_to_pair_selection_s',{}) for r in coherent])
+show_stages('FRAME_SELECTION_TO_RESULT',[r.get('frame_freshness',{}).get('pair_selection_to_result_s',{}) for r in coherent])
+show_stages('FRAME_PAIR_COHERENT',[{'driver_skew_s':r.get('frame_freshness',{}).get('driver_declared_pair_skew_s')} for r in coherent])
+for label,group in diagnostic_freshness_groups(steady).items():
+    print('RESULT_FRESHNESS',label,json.dumps(group))
+print('FRESHNESS_NOTE: first/cancelled excluded; coherent diagnostics are not admitted Measurement; driver SOE not independently verified.')
 print('TIMING_NOTE: FOREGROUND durations exclusive per cycle; RPC/worker/timeline are nested or overlapping; do not sum across groups.')
 print('Journal root:', sys.argv[1])
 PY

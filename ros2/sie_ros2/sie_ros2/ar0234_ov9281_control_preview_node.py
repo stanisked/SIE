@@ -20,7 +20,7 @@ from .latest_diagnostic_writer import LatestDiagnosticWriter
 from .approach_control_preview import approach_control_preview
 from .preview_mask_client import PreviewMaskClient
 from .stereo_pair_executor import StereoPairExecutor
-from .latest_v4l2_capture import LatestV4L2Capture, freshness_report
+from .latest_v4l2_capture import LatestV4L2Capture, freshness_report, select_latest_pair
 from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity, restore_crop
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
@@ -173,7 +173,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             return super()._read(capture)
         name="ar0234" if capture is self.ar_capture else "ov9281"
         try:
-            payload,metadata=capture.snapshot(self._last_capture_sequences.get(name))
+            payload,metadata=self._selected_native_packets.pop(name)
             self._last_capture_sequences[name]=metadata['sequence']
             frame=self.cv2.imdecode(self.np.frombuffer(payload,dtype=self.np.uint8),self.cv2.IMREAD_COLOR)
             if frame is None or frame.shape!=(capture.height,capture.width,3):
@@ -250,6 +250,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         started = time.monotonic()
         foreground={};events={}
         self._native_capture_metadata={}
+        self._selected_native_packets={}
         self._last_stereo_start=self._last_stereo_end=None
         self._cached_stereo = None
         self._last_stereo_worker_timings = None
@@ -257,6 +258,14 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         # timing collector across its worker and the foreground.
         self._stage_timings = None
         stamp = datetime.now(timezone.utc)
+        if isinstance(self.ar_capture,LatestV4L2Capture):
+            stage=time.monotonic()
+            try:
+                self._selected_native_packets=select_latest_pair(self.ar_capture,self.stereo_capture,self._last_capture_sequences)
+                self._last_capture_sequences.update({name:value[1]['sequence'] for name,value in self._selected_native_packets.items()})
+            except Exception as error:
+                self._native_capture_metadata={name:{"status":"PAIR_CAPTURE_UNAVAILABLE","reason":type(error).__name__,"detail":str(error)[:300]} for name in ('ar0234','ov9281')}
+            foreground['capture_pair_select_s']=time.monotonic()-stage
         stage=time.monotonic()
         ar, ar_mono = self._read(self.ar_capture)
         foreground['capture_ar_s']=time.monotonic()-stage

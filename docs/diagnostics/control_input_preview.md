@@ -1251,3 +1251,27 @@ stream quality are pending. Sixteen targeted tests passed (latest-slot ownership
 new-sequence wait, failure invalidation, flags, truncated protocol, driver ages,
 cycle binding, unchanged STOP and existing scheduling). Native strict compiler
 checks passed; no camera hardware is available in the development container.
+
+
+First native live run (`20261015_182412`): 82 coherent masked-depth outputs, six
+pair-skew refusals and one cancellation. Whole steady summary mixed 81 depth
+outputs with six quick refusals: host median/max 232.0/267.4 ms. Driver age across
+that mixed set: AR median/max 293.07/335.52 ms, OV 250.66/285.06 ms; pair skew
+52.20/104.24 ms. Reported 6/87 driver-age successes include fast refusals and are
+not evidence of fresh usable depth. Actual coherent-only counts were not supplied.
+
+Native selection order now freezes BOTH latest compressed snapshots before
+foreground JPEG decoding. Per-camera previous sequence requirements remain; no
+history search, wider skew gate, changed camera settings or prior-pair fallback.
+Only a complete selected pair is returned; selection failure cannot reuse a
+previous payload. Decoding consumes frozen packets once, not another camera read.
+Selection timestamp and source-stamp-to-selection / selection-to-result ages are
+recorded separately. Selection is software pairing, not hardware synchronization.
+
+Summary now separates COHERENT_DEPTH and OTHER_RESULTS in RESULT_FRESHNESS, with
+host medians/maxima and driver-age success counts per group. FRAME_AGE_COHERENT and
+FRAME_PAIR_COHERENT exclude quick refusals; first cycle/cancellation remain
+excluded. Coherent means existing diagnostic status, never admitted Measurement.
+Sixteen targeted tests passed, including complete-pair snapshot order, retained
+compressed payloads, no partial-pair return and fast-refusal count separation.
+Pi corrected pairing/age results pending; no 250 ms exposure-age success claimed.

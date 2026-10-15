@@ -6,7 +6,7 @@ import threading
 import unittest
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'ros2/sie_ros2/sie_ros2'))
-from latest_v4l2_capture import LatestV4L2Capture,read_exact,validate_packet,freshness_report
+from latest_v4l2_capture import LatestV4L2Capture,read_exact,validate_packet,freshness_report,select_latest_pair,diagnostic_freshness_groups
 
 
 def metadata(sequence):return {'kind':'frame','payload_bytes':3,'sequence':sequence,'flags':0x12000,
@@ -27,6 +27,34 @@ class FakeProcess:
     def wait(self,timeout):return self.code
 
 class LatestCaptureTests(unittest.TestCase):
+    def test_fast_refusals_do_not_count_as_coherent_fresh_depth(self):
+        rows=[{'status':'PAIR_SKEW_EXCEEDED','frame_freshness':{'within_250ms_by_driver_metadata':True},
+               'processing_timing':{'host_capture_start_to_result_ready_s':.03}},
+              {'status':'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY',
+               'shape_diagnostic':{'mask_depth':{'status':'COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY'}},
+               'frame_freshness':{'within_250ms_by_driver_metadata':False},
+               'processing_timing':{'host_capture_start_to_result_ready_s':.23}}]
+        result=diagnostic_freshness_groups(rows)
+        self.assertEqual(result['COHERENT_DEPTH']['driver_age_within_250ms'],0)
+        self.assertEqual(result['COHERENT_DEPTH']['host_median_s'],.23)
+        self.assertEqual(result['OTHER_RESULTS']['driver_age_within_250ms'],1)
+        self.assertEqual(result['COHERENT_DEPTH']['cycles'],1)
+
+    def test_pair_snapshots_both_streams_before_any_decode(self):
+        from types import SimpleNamespace
+        order=[];previous={'ar0234':3,'ov9281':7}
+        def snap(name,expected,sequence):
+            def call(after):
+                self.assertEqual(after,expected);order.append(name)
+                return name.encode(),{'sequence':sequence}
+            return SimpleNamespace(snapshot=call)
+        pair=select_latest_pair(snap('ar',3,4),snap('stereo',7,8),previous)
+        self.assertEqual(order,['ar','stereo'])
+        self.assertEqual(pair['ar0234'][0],b'ar')
+        self.assertEqual(previous,{'ar0234':3,'ov9281':7})
+        def failed(after):raise RuntimeError('no stereo')
+        with self.assertRaises(RuntimeError):select_latest_pair(snap('ar',3,4),SimpleNamespace(snapshot=failed),previous)
+
     def test_driver_age_does_not_turn_into_physical_timing_or_command(self):
         data={'ar0234':{'driver_timestamp_s':1.},'ov9281':{'driver_timestamp_s':1.02}}
         good=freshness_report(data,1.24,'hash')
