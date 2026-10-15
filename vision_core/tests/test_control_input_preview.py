@@ -29,7 +29,7 @@ def preview_node_class(ros_ok=True):
     tree = ast.parse(path.read_text())
     cls = next(x for x in tree.body if isinstance(x, ast.ClassDef))
     cls.bases = [ast.Name(id="PreviewParent", ctx=ast.Load())]
-    cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in ("_cycle", "_left_right_disparity", "_log_preview", "destroy_node")]
+    cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in ("_cycle", "_infer_current_segmentation", "_left_right_disparity", "_log_preview", "destroy_node")]
     scope = {"PreviewParent":type("PreviewParent",(),{"destroy_node":lambda self: True}),
              "rclpy": SimpleNamespace(ok=lambda: ros_ok), "time": time,
              "datetime": datetime, "timezone": timezone,
@@ -334,13 +334,47 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertEqual(set(fresh['driver_declared_soe_to_result_s']),{'ar0234','ov9281'})
         self.assertFalse(fresh['physical_exposure_timing_independently_verified'])
         self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
+        # The SAME RGB request must already be running while frozen stereo is decoded.
+        node._overlap_stereo_decode=True
+        inference_started=threading.Event();stereo_decoded=threading.Event();inference_done=threading.Event()
+        def concurrent_infer(cid,rgb):
+            inference_started.set()
+            if not stereo_decoded.wait(2):raise RuntimeError('stereo decode did not overlap RGB')
+            try:return infer(cid,rgb)
+            finally:inference_done.set()
+        def concurrent_read(cap):
+            if cap=='stereo':
+                if not inference_started.wait(2):raise RuntimeError('RGB not started before stereo decode')
+                stereo_decoded.set()
+            return native_read(cap)
+        node._mask_client.infer=concurrent_infer;node._read=concurrent_read
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker=worker
+            node._cycle()
+        self.assertTrue(messages[-1]['rgb_decode_overlap']['enabled'])
+        self.assertEqual(messages[-1]['rgb_decode_overlap']['same_cycle_id'],messages[-1]['cycle_id'])
+        self.assertTrue(inference_done.is_set())
+        self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
+        self.assertIn('rgb_wait_after_stereo_decode_s',messages[-1]['foreground_timing_s'])
+        # Invalid stereo still drains the asynchronous RGB request, with no depth/command.
+        def bad_stereo(cap):
+            frame,stamp=concurrent_read(cap)
+            return (None if cap=='stereo' else frame),stamp
+        node._read=bad_stereo;inference_done.clear()
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker=worker
+            node._cycle()
+        self.assertEqual(messages[-1]['status'],'CAMERA_FRAME_UNAVAILABLE')
+        self.assertTrue(inference_done.is_set())
+        self.assertIsNone(node._cached_stereo)
+        node._read=native_read
         node._mask_client.infer=lambda cid,rgb:{"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY","instances":[]}
         # A later no-target cycle must not reuse the previous association.
         node.observer = SimpleNamespace(observe=lambda *args, **kw: {"disposition": "UNAVAILABLE", "reason": "NO_TARGET"})
         with ThreadPoolExecutor(max_workers=1) as worker:
             node._perception_worker = worker
             node._cycle()
-        self.assertEqual(len(crop_calls),3)  # no stereo job for missing current target
+        self.assertEqual(len(crop_calls),4)  # no stereo job for missing current target
         self.assertEqual(messages[-1]["status"], "TARGET_UNAVAILABLE")
         self.assertIsNone(messages[-1]["association"])
         self.assertIsNone(node._cached_stereo)

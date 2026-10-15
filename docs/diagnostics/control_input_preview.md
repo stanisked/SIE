@@ -1301,3 +1301,28 @@ the driver probe already measured ~32 ms AR delivery before processing. No
 success predicted in advance. Seventeen targeted tests passed, including cached
 packet exclusion by receive-time threshold, timeout and preserved pair ordering.
 Pi fresh-trigger timing/quality pending.
+
+
+New-RGB live result (`20261015_190656`): 75 coherent masked-depth outputs, no
+pair-skew refusals; steady 74 pairs, 0/74 within driver-age 250 ms. AR age at
+selection median/max 32.98/37.84 ms; OV 32.88/48.95 ms. Age at depth result
+AR 266.59/275.70 ms, OV 266.79/287.59 ms. Pair skew 4.11/16.05 ms. Post-selection
+processing 232.43/242.65 ms; host including new-frame wait 263.54/299.43 ms.
+New arrival reduces cache residence but does not establish 250 ms freshness.
+
+`run_control_input_preview_decode_overlap.sh` opts into
+`preview_overlap_stereo_decode` (default false). Requires native current-target
+single segmentation. After AR JPEG decode, submits the SAME current RGB request
+to the existing one-worker perception pool and decodes the already frozen stereo
+JPEG in foreground. Awaiting that RGB task precedes target-dependent SGBM and
+fusion; worker is reused only after RGB completion. Selected packet/metadata and
+decoder settings are unchanged. No extra frame is fetched during decoding.
+
+On missing/bad stereo or early target/pair refusal, the RGB future is drained in
+finally. No pending RGB work or cached stereo enters a later cycle; existing
+selection/skew/MAD/admission gates remain. Exclusive foreground counters record
+submit/wait/drain, while actual RGB RPC wall time and stereo-decode overlap are
+separate nested timeline diagnostics, not added twice. Seventeen tests passed,
+including enforced concurrent decode/RGB scheduling, source cycle binding and
+invalid-stereo drain with STOP. Live latency/CPU contention benefit pending;
+12.22 ms measured serial decode cost is not a guaranteed whole-cycle saving.

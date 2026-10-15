@@ -149,6 +149,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._native_rgb_trigger=bool(self.get_parameter("preview_native_rgb_trigger").value)
         if self._native_rgb_trigger and self._capture_backend!="latest_v4l2":
             raise ValueError("new RGB trigger requires native continuous capture")
+        self.declare_parameter("preview_overlap_stereo_decode", False)
+        self._overlap_stereo_decode=bool(self.get_parameter("preview_overlap_stereo_decode").value)
+        if self._overlap_stereo_decode and (self._capture_backend!="latest_v4l2" or self._rgb_backend!="single_segmentation" or not self._target_crop):
+            raise ValueError("decode overlap requires native current-target single segmentation")
         self._last_capture_sequences={};self._native_capture_metadata={}
         if self._capture_backend=="latest_v4l2":
             if not self._target_crop or self._rgb_backend!="single_segmentation":
@@ -168,9 +172,14 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 if isinstance(self.stereo_capture,LatestV4L2Capture):self.stereo_capture.release()
                 raise
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; decode_overlap={self._overlap_stereo_decode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
+
+    def _infer_current_segmentation(self,cycle_id,ar,times):
+        times['start']=time.monotonic()
+        try:return self._mask_client.infer(cycle_id,ar)
+        finally:times['end']=time.monotonic()
 
     def _read(self,capture):
         if not isinstance(capture,LatestV4L2Capture):
@@ -262,6 +271,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         # timing collector across its worker and the foreground.
         self._stage_timings = None
         stamp = datetime.now(timezone.utc)
+        cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
+        rgb_future=None;rgb_async_times={}
         if isinstance(self.ar_capture,LatestV4L2Capture):
             stage=time.monotonic()
             try:
@@ -273,8 +284,14 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         stage=time.monotonic()
         ar, ar_mono = self._read(self.ar_capture)
         foreground['capture_ar_s']=time.monotonic()-stage
+        if getattr(self,"_overlap_stereo_decode",False) and ar is not None:
+            stage=time.monotonic()
+            rgb_future=self._perception_worker.submit(self._infer_current_segmentation,cycle_id,ar,rgb_async_times)
+            foreground['rgb_async_submit_s']=time.monotonic()-stage
         stage=time.monotonic()
+        events['stereo_decode_start']=stage
         combined, stereo_mono = self._read(self.stereo_capture)
+        events['stereo_decode_end']=time.monotonic()
         foreground['capture_stereo_s']=time.monotonic()-stage
         cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
         skew_ms = abs(stereo_mono - ar_mono) / 1e6
@@ -305,10 +322,17 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             segmentation = None
             audit["rgb_backend"] = getattr(self,"_rgb_backend","two_model_reference")
             if single:
-                events['rgb_call_start']=time.monotonic()
-                segmentation = self._mask_client.infer(cycle_id, ar)
-                events['rgb_call_end']=time.monotonic()
-                foreground['rgb_call_s']=events['rgb_call_end']-events['rgb_call_start']
+                if rgb_future is not None:
+                    wait_started=time.monotonic()
+                    segmentation=rgb_future.result()
+                    foreground['rgb_wait_after_stereo_decode_s']=time.monotonic()-wait_started
+                    events['rgb_call_start']=rgb_async_times['start']
+                    events['rgb_call_end']=rgb_async_times['end']
+                else:
+                    events['rgb_call_start']=time.monotonic()
+                    segmentation = self._mask_client.infer(cycle_id, ar)
+                    events['rgb_call_end']=time.monotonic()
+                    foreground['rgb_call_s']=events['rgb_call_end']-events['rgb_call_start']
                 selection_started=time.monotonic()
                 audit["segmentation_observation"] = {
                     **segmentation, "schema_version":"sie.ar0234.instance_segmentation_preview.v1",
@@ -441,6 +465,17 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 except Exception:
                     pass
                 foreground['stereo_final_drain_s']=time.monotonic()-drain_started
+            if rgb_future is not None:
+                drain_started=time.monotonic()
+                try:rgb_future.result()
+                except Exception as error:audit['rgb_async_error']=type(error).__name__
+                foreground['rgb_async_final_drain_s']=time.monotonic()-drain_started
+                if 'start' in rgb_async_times and 'end' in rgb_async_times:
+                    events['rgb_call_start']=rgb_async_times['start'];events['rgb_call_end']=rgb_async_times['end']
+                audit['rgb_decode_overlap']={"enabled":True,"same_cycle_id":cycle_id,
+                    "rgb_rpc_wall_s":rgb_async_times.get('end',0)-rgb_async_times.get('start',0),
+                    "foreground_stereo_decode_s":foreground.get('capture_stereo_s'),
+                    "definition":"RGB RPC overlaps foreground decode of frozen stereo packet; exclusive foreground timers do not sum worker wall duration"}
             self._cached_stereo = None
             # A camera-frame diagnostic is never substituted for an admitted
             # robot-front clearance/error/age input to the motion policy.
@@ -457,6 +492,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 timeline['stereo_queue_s']=worker_start-events['stereo_submit']
             if worker_start is not None and worker_end is not None and 'rgb_call_end' in events:
                 timeline['rgb_stereo_wall_interval_overlap_s']=max(0.,min(worker_end,events['rgb_call_end'])-max(worker_start,events['rgb_call_start']))
+            if all(k in events for k in ('rgb_call_start','rgb_call_end','stereo_decode_start','stereo_decode_end')):
+                timeline['rgb_stereo_decode_wall_interval_overlap_s']=max(0.,min(events['rgb_call_end'],events['stereo_decode_end'])-max(events['rgb_call_start'],events['stereo_decode_start']))
             audit['perception_timeline_s']=timeline
             audit["processing_timing"] = {"host_capture_start_to_result_ready_s": elapsed,
                 "exposure_age_known": False, "endpoint": "BEFORE_PREVIEW_PUBLISH_AND_BACKGROUND_JOURNAL"}
