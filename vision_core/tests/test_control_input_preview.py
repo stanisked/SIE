@@ -18,6 +18,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "ros2/sie_ros2/sie_ros2"))
 from latest_diagnostic_writer import LatestDiagnosticWriter
+from latest_v4l2_capture import freshness_report
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from approach_control_preview import approach_control_preview
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
@@ -35,7 +36,7 @@ def preview_node_class(ros_ok=True):
              "String": SimpleNamespace, "encode": json.dumps,
              "validate_ar0234_observation": lambda v: v,
              "ar0234_temporal_target_candidate": lambda raw, **kw: raw,
-             "assess_control_depth":assess_control_depth, "approach_control_preview": approach_control_preview, "select_instance":select_instance}
+             "freshness_report":freshness_report, "assess_control_depth":assess_control_depth, "approach_control_preview": approach_control_preview, "select_instance":select_instance}
     exec(compile(ast.fix_missing_locations(ast.Module(body=[cls], type_ignores=[])), str(path), "exec"), scope)
     return scope[cls.name]
 
@@ -132,7 +133,7 @@ class ControlPreviewTests(unittest.TestCase):
         node.temporal_target_minimum_match_margin = .1
         node.ar_capture, node.stereo_capture = "ar", "stereo"
         node._read = lambda cap: (np.zeros((1200,1920,3) if cap == "ar" else (800,2560,3), np.uint8), time.monotonic_ns())
-        node._audit_base = lambda cid, *_: {"cycle_id": cid, "stereo_execution": {},
+        node._audit_base = lambda cid, *_: {"cycle_id": cid, "stereo_execution": {}, "pairing":{},
             "metric_measurement_authorized": False, "navigation_eligible": False, "actuator_access": False}
         stereo_started, detector_started = threading.Event(), threading.Event()
         maps = object()
@@ -316,13 +317,30 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertEqual(messages[-1]['shape_diagnostic']['local_surface']['status'],'DISABLED_BY_EXPLICIT_PREVIEW_CONFIGURATION')
         self.assertEqual(messages[-1]['local_surface_async']['scheduled_cycle'],False)
         self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
+        node._capture_backend='latest_v4l2'
+        node._native_capture_sha256='c'*64
+        original_read=node._read
+        def native_read(cap):
+            frame,_=original_read(cap)
+            name='ar0234' if cap=='ar' else 'ov9281'
+            stamp=time.monotonic()-.02
+            node._native_capture_metadata[name]={'driver_timestamp_s':stamp,'sequence':10}
+            return frame,round(stamp*1e9)
+        node._read=native_read
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker=worker
+            node._cycle()
+        fresh=messages[-1]['frame_freshness']
+        self.assertEqual(set(fresh['driver_declared_soe_to_result_s']),{'ar0234','ov9281'})
+        self.assertFalse(fresh['physical_exposure_timing_independently_verified'])
+        self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
         node._mask_client.infer=lambda cid,rgb:{"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY","instances":[]}
         # A later no-target cycle must not reuse the previous association.
         node.observer = SimpleNamespace(observe=lambda *args, **kw: {"disposition": "UNAVAILABLE", "reason": "NO_TARGET"})
         with ThreadPoolExecutor(max_workers=1) as worker:
             node._perception_worker = worker
             node._cycle()
-        self.assertEqual(len(crop_calls),2)  # no stereo job for missing current target
+        self.assertEqual(len(crop_calls),3)  # no stereo job for missing current target
         self.assertEqual(messages[-1]["status"], "TARGET_UNAVAILABLE")
         self.assertIsNone(messages[-1]["association"])
         self.assertIsNone(node._cached_stereo)

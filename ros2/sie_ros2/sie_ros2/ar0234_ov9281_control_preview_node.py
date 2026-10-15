@@ -20,6 +20,7 @@ from .latest_diagnostic_writer import LatestDiagnosticWriter
 from .approach_control_preview import approach_control_preview
 from .preview_mask_client import PreviewMaskClient
 from .stereo_pair_executor import StereoPairExecutor
+from .latest_v4l2_capture import LatestV4L2Capture, freshness_report
 from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity, restore_crop
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
@@ -139,10 +140,49 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 self.project_root/"vision_core/tools/local_surface_async_worker.py")
             self._surface_diagnostics=LatestSurfaceDiagnostics(local_client,
                 self._writer.directory/"local-surfaces",self._publish_surface_result)
+        self.declare_parameter("preview_capture_backend", "opencv")
+        self.declare_parameter("preview_native_capture_executable", "")
+        self._capture_backend=str(self.get_parameter("preview_capture_backend").value)
+        if self._capture_backend not in ("opencv","latest_v4l2"):
+            raise ValueError("invalid diagnostic capture backend")
+        self._last_capture_sequences={};self._native_capture_metadata={}
+        if self._capture_backend=="latest_v4l2":
+            if not self._target_crop or self._rgb_backend!="single_segmentation":
+                raise ValueError("latest capture requires current-target single segmentation")
+            import hashlib
+            from pathlib import Path
+            executable=Path(str(self.get_parameter("preview_native_capture_executable").value))
+            if not executable.is_file():raise ValueError("compiled native capture executable required")
+            self._native_capture_sha256=hashlib.sha256(executable.read_bytes()).hexdigest()
+            self.ar_capture.release();self.stereo_capture.release()
+            self.ar_capture=LatestV4L2Capture(executable,self.ar_device,1920,1200)
+            try:
+                self.stereo_capture=LatestV4L2Capture(executable,self.stereo_device,2560,800)
+                self.ar_capture.snapshot();self.stereo_capture.snapshot()
+            except BaseException:
+                self.ar_capture.release()
+                if isinstance(self.stereo_capture,LatestV4L2Capture):self.stereo_capture.release()
+                raise
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
+
+    def _read(self,capture):
+        if not isinstance(capture,LatestV4L2Capture):
+            return super()._read(capture)
+        name="ar0234" if capture is self.ar_capture else "ov9281"
+        try:
+            payload,metadata=capture.snapshot(self._last_capture_sequences.get(name))
+            self._last_capture_sequences[name]=metadata['sequence']
+            frame=self.cv2.imdecode(self.np.frombuffer(payload,dtype=self.np.uint8),self.cv2.IMREAD_COLOR)
+            if frame is None or frame.shape!=(capture.height,capture.width,3):
+                raise ValueError("native JPEG decode size mismatch")
+            self._native_capture_metadata[name]=metadata
+            return frame,round(metadata['driver_timestamp_s']*1e9)
+        except Exception as error:
+            self._native_capture_metadata[name]={"status":"CAPTURE_UNAVAILABLE","reason":type(error).__name__,"detail":str(error)[:300]}
+            return None,time.monotonic_ns()
 
     def _crop_calibration(self):
         return {"P1":self.p1,"P2":self.p2,"R1":self.r1,
@@ -209,6 +249,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self.sequence += 1
         started = time.monotonic()
         foreground={};events={}
+        self._native_capture_metadata={}
         self._last_stereo_start=self._last_stereo_end=None
         self._cached_stereo = None
         self._last_stereo_worker_timings = None
@@ -406,6 +447,11 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             audit['perception_timeline_s']=timeline
             audit["processing_timing"] = {"host_capture_start_to_result_ready_s": elapsed,
                 "exposure_age_known": False, "endpoint": "BEFORE_PREVIEW_PUBLISH_AND_BACKGROUND_JOURNAL"}
+            if getattr(self,"_capture_backend","opencv")=="latest_v4l2":
+                ready=time.monotonic()
+                metadata=self._native_capture_metadata
+                audit['frame_freshness']=freshness_report(metadata,ready,self._native_capture_sha256)
+                audit['pairing']['timestamp_basis']='DRIVER_MONOTONIC_START_OF_EXPOSURE_DECLARATION'
             audit["working_targets"] = {"base_speed_m_s": .15, "stand_off_from_robot_front_m": 1.,
                 "depth_absolute_error_1_to_2m_m": .10, "depth_relative_error_above_2m": .05,
                 "exposure_to_command_age_max_s": .25}

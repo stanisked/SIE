@@ -1209,3 +1209,45 @@ OpenCV or paired cameras. `exposure_age_established=false` remains explicit.
 No motion interface, Measurement, confidence policy or quality gates changed.
 Native compilation with -Wall -Wextra -Werror and two summary tests passed;
 actual driver metadata on Pi pending.
+
+Pi frame-clock probe (`frame_clocks_20261015_181454.json`): both cameras declared
+MONOTONIC START_OF_EXPOSURE for all 16 recorded frames, no buffer errors. Median
+stamp-to-dequeue AR0234 32.06 ms / OV9281 16.03 ms; after a 250 ms read pause,
+218.17 / 234.12 ms respectively. Normal sequence increments were two. This
+establishes probe queue behavior, not physical clock validation or OpenCV age.
+
+`run_control_input_preview_latest_capture.sh` is an opt-in live native-capture
+challenge on the existing blocked/mmap/no-local preview. Launcher compiles
+`stream_v4l2_mjpeg.c` into a temporary executable using the Pi Linux headers.
+After the usual OpenCV startup configuration, both original captures are released
+and two persistent native streams open simultaneously. Current format must match
+MJPEG 1920x1200 / 2560x800; native helper does not write format/FPS/controls.
+One driver buffer is requested; actual allocation/FPS are recorded. The helper
+copies payload and metadata, requeues the driver buffer before pipe output, and
+emits each header plus exact JPEG payload. Eight startup frames are drained.
+Parent-death SIGTERM prevents orphan streaming; stop releases driver resources.
+
+Two reader threads continuously drain compressed packets and retain one immutable
+latest packet each; only selected packets are JPEG-decoded in the foreground.
+No list/queue of past frames exists. Each selection requires a new driver sequence;
+invalid payload, dimensions, clock flags, buffer errors, nonmonotonic sequence,
+truncated stream or unavailable new frame refuses current capture, never falls
+back to the last valid frame. Both selected snapshots keep their exact metadata.
+A buffer retained after selection cannot be mutated by later captures. Latest
+replacement count is a cache replacement count, not a claim of hardware drops.
+
+The existing pair-skew gate now compares driver-declared monotonic SOE stamps in
+this opt-in backend. Per-cycle `frame_freshness` records stamps/sequences/flags,
+dequeue/receipt time, format/buffer metadata, executable SHA, each frame's age at
+result readiness, maximum age, pair skew and the driver-based 250 ms comparison.
+Observation UTC remains explicitly HOST_CYCLE_START, not a relabeled exposure
+stamp. `physical_exposure_timing_independently_verified=false`, no command issued;
+quality shadow and original admission blockers remain. No driver-based age is
+silently promoted to admitted Measurement or actual exposure-to-command age.
+
+Summary adds FRAME_AGE / FRAME_PAIR / DRIVER_FRESHNESS. The 228.1 ms baseline is
+preserved by the earlier OpenCV launcher; native live speed, frame-age and paired
+stream quality are pending. Sixteen targeted tests passed (latest-slot ownership,
+new-sequence wait, failure invalidation, flags, truncated protocol, driver ages,
+cycle binding, unchanged STOP and existing scheduling). Native strict compiler
+checks passed; no camera hardware is available in the development container.

@@ -38,6 +38,8 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \
   -p preview_rgb_transport:="${SIE_PREVIEW_RGB_TRANSPORT:-npz}" \
+  -p preview_capture_backend:="${SIE_PREVIEW_CAPTURE_BACKEND:-opencv}" \
+  -p preview_native_capture_executable:="${SIE_PREVIEW_NATIVE_CAPTURE_EXECUTABLE:-}" \
   -p preview_crop_lookup_backend:="${SIE_PREVIEW_CROP_LOOKUP_BACKEND:-reference}" \
   -p preview_target_crop:="${SIE_PREVIEW_TARGET_CROP:-false}" \
   -p preview_stereo_mode:="$mode" \
@@ -92,6 +94,10 @@ show_stages('TIMELINE',[{k:v for k,v in r.get('perception_timeline_s',{}).items(
 show_stages('RGB_WORKER',[{k:r.get('segmentation_observation',{}).get(k) for k in ('worker_input_open_verify_s','worker_rgb_load_s','prediction_extract_s')} for r in steady])
 if steady:
     print('ACTIVE_ORT_SETTINGS:',steady[0].get('segmentation_observation',{}).get('segmentation_engine',{}).get('active_ort_session'))
+show_stages('FRAME_AGE',[r.get('frame_freshness',{}).get('driver_declared_soe_to_result_s',{}) for r in steady])
+show_stages('FRAME_PAIR',[{'driver_skew_s':r.get('frame_freshness',{}).get('driver_declared_pair_skew_s')} for r in steady])
+fresh=[r.get('frame_freshness',{}) for r in steady if r.get('frame_freshness')]
+if fresh:print('DRIVER_FRESHNESS within_250ms=',sum(f.get('within_250ms_by_driver_metadata',False) for f in fresh),'/',len(fresh),'physical_exposure_independently_verified=False')
 print('TIMING_NOTE: FOREGROUND durations exclusive per cycle; RPC/worker/timeline are nested or overlapping; do not sum across groups.')
 print('Journal root:', sys.argv[1])
 PY
