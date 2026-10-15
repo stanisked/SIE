@@ -652,3 +652,34 @@ Queue-drain/replacement, exact fit RPC and preview lifecycle tests also pass.
 No camera rerun is required specifically for this fix. Rebuild ROS before the
 next planned live run; inspect local counters then. This fix addresses shutdown
 integrity, not the remaining 250 ms latency gap.
+
+## Concurrent CPU helper-thread challenge (2026-10-15)
+
+Remaining live latency is about 359 ms. Segmentation companion has explicit
+ORT intra=2/inter=1/spinning-off, but its PyTorch/OpenCV helper pools were not
+explicitly limited. Actual default counts and any oversubscription are pending
+measurement, not established causes of the remaining delay.
+
+`run_concurrent_thread_benchmark.sh` compares unchanged helper defaults against
+PyTorch intra-op=1/OpenCV=1 in the companion only, retaining ORT=2. Parent stereo
+OpenCV=1 and the two independent half-resolution matchers remain unchanged.
+No runtime launcher switches helper settings. The optional worker/client setting
+exists solely for this explicit comparison until reviewed. Ready/result metadata
+records requested and actual helper counts, including current defaults.
+
+For each of 22 frozen AR/stereo cycles, two alternating-order repetitions run
+one active RGB inference RPC concurrently with the two SGBM tasks. Both resident
+companion models are initialized/warmed outside timing; they do not infer
+simultaneously. Input images are predecoded; this is not exposure-to-command
+latency. Benchmark-only mask SHA hashes compare every instance mask and exact
+instance dictionaries; both signed stereo maps must match exactly as well.
+Fingerprint overhead is present in both variants and excluded from worker
+inference-only timer but included in RGB RPC/joint wall time. No projection,
+mask-depth calculation, local fits, capture or physical error evaluation.
+
+Source files are hashed before/after; output records code/model/report metadata
+and timing. Any numerical difference aborts without activating a setting. Only
+an exact and materially faster candidate would justify a separate live change.
+Local unit checks exercise optional helper configuration, missing/different-mask
+refusal and existing worker/client integration. Real inference timing is pending
+execution on Pi. This challenge needs no person or camera capture.

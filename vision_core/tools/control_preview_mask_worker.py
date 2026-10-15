@@ -18,17 +18,28 @@ def emit(record):
     print(json.dumps(record,allow_nan=False,separators=(',',':')),flush=True)
 
 
+def configure_helper_threads(threads):
+    if threads is None:return
+    if threads not in (1,2):raise ValueError('unsupported helper threads')
+    import torch
+    import cv2
+    torch.set_num_threads(threads)
+    cv2.setNumThreads(threads)
+
+
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--model',type=Path,required=True)
     parser.add_argument('--engine',choices=['pytorch','onnxruntime'],default='pytorch')
     parser.add_argument('--comparison-report',type=Path)
     parser.add_argument('--ort-threads',type=int,default=2)
+    parser.add_argument('--cpu-helper-threads',type=int,choices=[1,2])
     args=parser.parse_args()
     os.environ['YOLO_AUTOINSTALL']='false' 
     try:
         with contextlib.redirect_stdout(sys.stderr):
             import numpy as np
+            configure_helper_threads(args.cpu_helper_threads)
             from ultralytics import YOLO
             from preview_mask_surface import evaluate, segment_array, CurrentInstanceMasks
             if args.engine=='onnxruntime':
@@ -52,6 +63,10 @@ def main():
         Path(__file__).resolve().parents[1]/'person_localization/instance_mask_stereo_fusion.py')}
     if args.engine=='onnxruntime':
         code_sha['onnx_backend']=digest(Path(__file__).with_name('onnx_segmentation_backend.py'))
+    engine_metadata={**engine_metadata,'cpu_helper_threads':{
+        'requested':args.cpu_helper_threads,
+        'torch':getattr(sys.modules.get('torch'),'get_num_threads',lambda:None)(),
+        'opencv':getattr(sys.modules.get('cv2'),'getNumThreads',lambda:None)()}}
     emit({'status':'READY','model_sha256':model_sha,'segmentation_engine':engine_metadata})
     current_masks=CurrentInstanceMasks()
     for line in sys.stdin:
@@ -68,8 +83,13 @@ def main():
                     started=time.monotonic()
                     with contextlib.redirect_stdout(sys.stderr):
                         instances=current_masks.infer(request['cycle_id'],request['arrays_sha256'],bundle['rgb'],model)
-                    emit({'status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY','instances':instances,
-                          'mask_s':time.monotonic()-started,'cycle_id':request['cycle_id'],
+                    inference_s=time.monotonic()-started
+                    fingerprints={}
+                    if request.get('diagnostic_mask_hashes'):
+                        fingerprints={'instance_mask_sha256':[hashlib.sha256(mask.tobytes()).hexdigest()
+                            for mask in current_masks.current[3]]}
+                    emit({**fingerprints,'status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY','instances':instances,
+                          'mask_s':inference_s,'cycle_id':request['cycle_id'],
                           'arrays_sha256':request['arrays_sha256'],'model_sha256':model_sha,
                           'code_sha256':code_sha,'class_name':'person','inference_count':1,'segmentation_engine':engine_metadata})
                     continue

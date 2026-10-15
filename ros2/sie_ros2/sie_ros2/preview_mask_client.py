@@ -9,13 +9,16 @@ import time
 
 
 class PreviewMaskClient:
-    def __init__(self, python, script, model, timeout=30., *, engine="pytorch", comparison_report=None, ort_threads=2):
+    def __init__(self, python, script, model, timeout=30., *, engine="pytorch", comparison_report=None, ort_threads=2, cpu_helper_threads=None):
         self.timeout=timeout
         self.process=None
         self.model_sha256=hashlib.sha256(Path(model).read_bytes()).hexdigest()
         command=[str(python),'-u',str(script),'--model',str(model)]
         if engine not in ('pytorch','onnxruntime'):
             raise ValueError('unsupported preview engine')
+        if cpu_helper_threads is not None:
+            if cpu_helper_threads not in (1,2):raise ValueError('unsupported helper thread count')
+            command+=['--cpu-helper-threads',str(cpu_helper_threads)]
         report_sha=None
         if engine=='onnxruntime':
             report_sha=hashlib.sha256(Path(comparison_report).read_bytes()).hexdigest()
@@ -113,8 +116,9 @@ class PreviewMaskClient:
             self.close()
             raise
 
-    def infer(self, cycle_id, rgb):
-        return self._array_request(cycle_id,{'rgb':rgb},{'operation':'infer_instances'})
+    def infer(self, cycle_id, rgb, *, diagnostic_mask_hashes=False):
+        return self._array_request(cycle_id,{'rgb':rgb},{'operation':'infer_instances',
+            'diagnostic_mask_hashes':diagnostic_mask_hashes})
 
     def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale, defer_local=False, prepare_local=True):
         if segmentation.get('cycle_id')!=cycle_id or segmentation.get('model_sha256')!=self.model_sha256:
