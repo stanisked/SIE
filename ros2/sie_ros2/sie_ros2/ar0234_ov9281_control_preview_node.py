@@ -145,6 +145,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._capture_backend=str(self.get_parameter("preview_capture_backend").value)
         if self._capture_backend not in ("opencv","latest_v4l2"):
             raise ValueError("invalid diagnostic capture backend")
+        self.declare_parameter("preview_native_rgb_trigger", False)
+        self._native_rgb_trigger=bool(self.get_parameter("preview_native_rgb_trigger").value)
+        if self._native_rgb_trigger and self._capture_backend!="latest_v4l2":
+            raise ValueError("new RGB trigger requires native continuous capture")
         self._last_capture_sequences={};self._native_capture_metadata={}
         if self._capture_backend=="latest_v4l2":
             if not self._target_crop or self._rgb_backend!="single_segmentation":
@@ -164,7 +168,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 if isinstance(self.stereo_capture,LatestV4L2Capture):self.stereo_capture.release()
                 raise
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 
@@ -261,7 +265,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         if isinstance(self.ar_capture,LatestV4L2Capture):
             stage=time.monotonic()
             try:
-                self._selected_native_packets=select_latest_pair(self.ar_capture,self.stereo_capture,self._last_capture_sequences)
+                self._selected_native_packets=select_latest_pair(self.ar_capture,self.stereo_capture,self._last_capture_sequences,wait_new_rgb=getattr(self,"_native_rgb_trigger",False))
                 self._last_capture_sequences.update({name:value[1]['sequence'] for name,value in self._selected_native_packets.items()})
             except Exception as error:
                 self._native_capture_metadata={name:{"status":"PAIR_CAPTURE_UNAVAILABLE","reason":type(error).__name__,"detail":str(error)[:300]} for name in ('ar0234','ov9281')}

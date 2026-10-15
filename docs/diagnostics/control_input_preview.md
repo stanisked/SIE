@@ -1275,3 +1275,29 @@ excluded. Coherent means existing diagnostic status, never admitted Measurement.
 Sixteen targeted tests passed, including complete-pair snapshot order, retained
 compressed payloads, no partial-pair return and fast-refusal count separation.
 Pi corrected pairing/age results pending; no 250 ms exposure-age success claimed.
+
+Pair-before-decode live result (`20261015_183308`): 85 coherent masked-depth
+outputs, no pair-skew refusals, one cancellation. Steady 84/84 host cycles within
+250 ms, host median/max 230.25/242.32 ms. Driver age coherent-only: AR median/max
+299.69/334.38 ms, OV 265.05/282.62 ms, 0/84 pairs within driver-age 250 ms. Age at
+selection AR 68.54/103.07 ms and OV 33.82/48.59 ms; pair skew 37.37/73.39 ms.
+Software pair order fixed refusals, not RGB cache residence or full frame age.
+
+`run_control_input_preview_new_rgb.sh` adds explicit `preview_native_rgb_trigger`
+(default false). Requires native continuous capture. At pair request it records
+host monotonic time and waits for an AR packet whose COMPLETE receive timestamp
+is at or after that request, AND whose sequence is newer than last selected.
+Then freezes the latest new OV packet before either JPEG decode. Native readers
+continue to replace their single latest slot; no queued history or reuse on
+capture failure. Packet arrival is not relabeled as exposure time; the original
+SOE stamp remains the source of age calculations. Existing timeouts and skew,
+selection, depth, quality and motion boundaries remain unchanged.
+
+Metadata records request/selection times, policy and wait duration. Host cycle
+latency includes the wait; FRAME_SELECTION_TO_RESULT measures the work after pair
+selection. A longer host cycle waiting for a fresher frame must not be hidden or
+confused with reduced computation. Source-to-result age may still exceed 250 ms:
+the driver probe already measured ~32 ms AR delivery before processing. No
+success predicted in advance. Seventeen targeted tests passed, including cached
+packet exclusion by receive-time threshold, timeout and preserved pair ordering.
+Pi fresh-trigger timing/quality pending.

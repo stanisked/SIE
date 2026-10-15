@@ -38,6 +38,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \
   -p preview_rgb_transport:="${SIE_PREVIEW_RGB_TRANSPORT:-npz}" \
+  -p preview_native_rgb_trigger:="${SIE_PREVIEW_NEW_RGB_TRIGGER:-false}" \
   -p preview_capture_backend:="${SIE_PREVIEW_CAPTURE_BACKEND:-opencv}" \
   -p preview_native_capture_executable:="${SIE_PREVIEW_NATIVE_CAPTURE_EXECUTABLE:-}" \
   -p preview_crop_lookup_backend:="${SIE_PREVIEW_CROP_LOOKUP_BACKEND:-reference}" \

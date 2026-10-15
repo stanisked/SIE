@@ -71,13 +71,14 @@ class LatestV4L2Capture:
                 if not self.closed:self.error=f'{type(error).__name__}: {error}'
                 self.latest=None;self.condition.notify_all()
 
-    def snapshot(self,after_sequence=None):
+    def snapshot(self,after_sequence=None,*,not_before_received_s=None):
         deadline=time.monotonic()+self.timeout
         with self.condition:
             while True:
                 if self.closed:raise RuntimeError('camera closed')
                 if self.error:raise RuntimeError(self.error)
-                if self.latest is not None and (after_sequence is None or self.latest[1]['sequence']>after_sequence):
+                if (self.latest is not None and (after_sequence is None or self.latest[1]['sequence']>after_sequence)
+                        and (not_before_received_s is None or self.latest[1]['host_packet_received_monotonic_s']>=not_before_received_s)):
                     payload,metadata=self.latest
                     return payload,{**metadata,'received_count':self.received,'replaced_latest_count':self.replaced,
                                     'driver_format':self.format,'driver_buffers':self.buffers}
@@ -111,13 +112,16 @@ def freshness_report(metadata,ready,executable_sha256):
         "endpoint":"RESULT_READY_BEFORE_PUBLICATION; not a motor command"}
 
 
-def select_latest_pair(ar_capture,stereo_capture,last_sequences):
+def select_latest_pair(ar_capture,stereo_capture,last_sequences,*,wait_new_rgb=False):
     """Freeze both compressed snapshots before any image decode; no history search."""
-    ar=ar_capture.snapshot(last_sequences.get('ar0234'))
+    requested=time.monotonic()
+    ar=ar_capture.snapshot(last_sequences.get('ar0234'),**({'not_before_received_s':requested} if wait_new_rgb else {}))
     stereo=stereo_capture.snapshot(last_sequences.get('ov9281'))
     # Return only a complete pair. Metadata/payload snapshots are independently owned.
     selected=time.monotonic()
-    return {name:(packet[0],{**packet[1],'pair_selected_monotonic_s':selected}) for name,packet in (('ar0234',ar),('ov9281',stereo))}
+    return {name:(packet[0],{**packet[1],'pair_selected_monotonic_s':selected,
+        'pair_request_monotonic_s':requested,'rgb_trigger_policy':'NEW_RGB_ARRIVAL' if wait_new_rgb else 'LATEST_AVAILABLE',
+        'pair_selection_wait_s':selected-requested}) for name,packet in (('ar0234',ar),('ov9281',stereo))}
 
 
 def diagnostic_freshness_groups(rows):

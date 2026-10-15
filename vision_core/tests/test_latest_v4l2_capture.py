@@ -40,6 +40,23 @@ class LatestCaptureTests(unittest.TestCase):
         self.assertEqual(result['OTHER_RESULTS']['driver_age_within_250ms'],1)
         self.assertEqual(result['COHERENT_DEPTH']['cycles'],1)
 
+    def test_new_rgb_policy_excludes_preexisting_arrival_and_freezes_pair(self):
+        from types import SimpleNamespace
+        calls=[]
+        def ar(after,**kwargs):
+            calls.append(('ar',after,kwargs))
+            self.assertIn('not_before_received_s',kwargs)
+            return b'ar',{'sequence':4,'host_packet_received_monotonic_s':kwargs['not_before_received_s']}
+        def stereo(after,**kwargs):
+            calls.append(('stereo',after,kwargs))
+            self.assertEqual(kwargs,{})
+            return b'stereo',{'sequence':8}
+        pair=select_latest_pair(SimpleNamespace(snapshot=ar),SimpleNamespace(snapshot=stereo),
+            {'ar0234':3,'ov9281':7},wait_new_rgb=True)
+        self.assertEqual([r[0] for r in calls],['ar','stereo'])
+        self.assertEqual(pair['ar0234'][1]['rgb_trigger_policy'],'NEW_RGB_ARRIVAL')
+        self.assertEqual(pair['ar0234'][1]['pair_selected_monotonic_s'],pair['ov9281'][1]['pair_selected_monotonic_s'])
+
     def test_pair_snapshots_both_streams_before_any_decode(self):
         from types import SimpleNamespace
         order=[];previous={'ar0234':3,'ov9281':7}
@@ -78,6 +95,7 @@ class LatestCaptureTests(unittest.TestCase):
                 self.assertEqual(payload,b'new');self.assertEqual(info['sequence'],5)
                 self.assertEqual(info['received_count'],2)
                 with self.assertRaises(TimeoutError):capture.snapshot(5)
+                with self.assertRaises(TimeoutError):capture.snapshot(3,not_before_received_s=info['host_packet_received_monotonic_s']+1)
             finally:capture.release()
             self.assertFalse(capture.thread.is_alive())
             with self.assertRaises(RuntimeError):capture.snapshot()
