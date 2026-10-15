@@ -18,6 +18,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "ros2/sie_ros2/sie_ros2"))
 from latest_diagnostic_writer import LatestDiagnosticWriter
+from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from approach_control_preview import approach_control_preview
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
 
@@ -34,7 +35,7 @@ def preview_node_class(ros_ok=True):
              "String": SimpleNamespace, "encode": json.dumps,
              "validate_ar0234_observation": lambda v: v,
              "ar0234_temporal_target_candidate": lambda raw, **kw: raw,
-             "approach_control_preview": approach_control_preview, "select_instance":select_instance}
+             "assess_control_depth":assess_control_depth, "approach_control_preview": approach_control_preview, "select_instance":select_instance}
     exec(compile(ast.fix_missing_locations(ast.Module(body=[cls], type_ignores=[])), str(path), "exec"), scope)
     return scope[cls.name]
 

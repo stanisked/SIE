@@ -540,3 +540,54 @@ preparation on that path, real worker RPC returning no local payload, and the
 actual callback performing six current-depth calls but only two fit submissions
 for cycles 1 and 6. Skips are explicit and no previous local result enters a new
 frame. Existing bounded-queue, local-fit, ONNX and shutdown tests remain relevant.
+
+## Per-frame control-depth quality shadow (2026-10-15)
+
+The 256x384 live run `control_input_preview_half_640x400_single_segmentation_onnxruntime_20261015_124340`
+completed 57 cycles: one legacy coherent masked depth, 56 global-MAD refusals;
+host median/max 0.3562/0.4378 s. Twelve same-frame local results had held-out
+MAD 15.6–22.3 mm, absolute residual P90 55.6–78.3 mm, coarse fitted-bin
+coverage 98.4–99.8%, unfitted patch fraction 4.3–13.2%. High coverage counts
+mask area in occupied bins, not dense correct depth. No physical-error bound
+or cause of 144 mm candidate-depth span was established.
+
+`control_depth_quality_shadow` is an additional diagnostic record, not a
+Measurement contract or decision input. Legacy masked-depth statuses and all
+numeric gates remain unchanged. It records independently:
+
+- existing candidate sample support and plausible depth-layer count;
+- legacy global MAD as context, without treating it as an independent local
+  surface-quality metric;
+- source-frame held-out residuals, coarse coverage and unfitted fraction;
+- declared age target, primary host processing time and unknown exposure age.
+
+`SHADOW_REFUSED` records known failures such as missing current candidate,
+ambiguous layers, cancelled/failed cycle, mismatched local binding or host
+processing above the declared age target. `SHADOW_UNDETERMINED` means no such
+known failure was found, but evidence is insufficient for admission. Neither
+status authorizes control. Local residuals have no validated conversion to
+physical distance error, so they are `OBSERVED_NOT_ADMITTED`, not a pass.
+No local residual/coverage threshold was invented. Exposure-to-command age
+remains unknown even when primary processing is below 250 ms.
+
+Primary assessment is published/journaled alongside the existing result. Local
+background results carry a second assessment of the exact source cycle, bound
+by cycle ID, mask SHA and identical source depth evidence, on the existing local
+diagnostic topic/file. They never update the primary record, become current
+for a later camera frame, or approve motion. Delayed assessment preserves the
+source primary timing endpoint; it does not claim to measure local-completion
+exposure age. No older local fit is substituted on unsampled frames.
+
+Offline replay needs only standard Python and existing compact journals:
+
+```bash
+python3 vision_core/tools/analyze_control_depth_quality_shadow.py \
+  --journal-root /home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_onnxruntime_20261015_124340 \
+  --output /home/elwis/.local/state/sie/evidence/control_depth_quality_shadow_20261015_124340.json
+```
+
+Replay rejects duplicate/orphan identities and records source/code SHA hashes.
+A local binding mismatch remains a refusal in the output. Sampling means local
+assessment is available only on the original twelve cycles, not all 57.
+Subsequent live runs use the same assessment after ROS rebuild; no new capture
+is needed to check this first implementation on already recorded evidence.

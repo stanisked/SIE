@@ -23,6 +23,7 @@ from .stereo_pair_executor import StereoPairExecutor
 from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
+from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 
 
 class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
@@ -323,6 +324,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     "phase":"cycle 1, then 1+N, 1+2N",
                     "replaced_pending_count":deferred.dropped,"completed":deferred.completed,
                     "compute_errors":deferred.errors,"write_errors":deferred.write_errors}
+            audit["control_depth_quality_shadow"] = assess_control_depth(audit)
             message = String()
             message.data = encode(audit)
             if rclpy.ok():
@@ -333,6 +335,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 deferred.submit(cycle_id,surface_job,{
                     "source_cycle_id":cycle_id,"captured_at_utc":stamp.isoformat(),
                     "local_every_n_cycles":getattr(self,"_local_every_n",1),
+                    "control_quality_input":{k:audit.get(k) for k in ("cycle_id","status","shape_diagnostic","processing_timing","working_targets")},
                     "calibration":audit.get("calibration"),"stereo_resolution":audit.get("stereo_resolution"),
                     "diagnostic_depth_range_m":shape.get("diagnostic_depth_range_m"),
                     "mask_sha256":shape.get("mask_sha256"),"mask_depth":shape.get("mask_depth"),

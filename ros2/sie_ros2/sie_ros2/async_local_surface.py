@@ -1,5 +1,6 @@
 """One active fit and one latest pending fit, independent of inference RPC."""
 from copy import deepcopy
+from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -107,6 +108,9 @@ class LatestSurfaceDiagnostics:
                     queue_wait_s=started-job['submitted_monotonic'],
                     submit_to_result_s=time.monotonic()-job['submitted_monotonic'],
                     replaced_pending_count=self.dropped)
+                source=job["provenance"].get("control_quality_input")
+                if source is not None:
+                    result["control_depth_quality_shadow"]=assess_control_depth(source,result)
                 if self.on_result is not None:
                     try:self.on_result(result)
                     except Exception as error:result['publication_error']=type(error).__name__
