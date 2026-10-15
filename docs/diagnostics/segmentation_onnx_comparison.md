@@ -187,3 +187,33 @@ mismatches, CPU thread/shape/rect arguments, current mask protocol, selection,
 callback isolation and shutdown. CPU adapter execution is mocked locally;
 real ONNX inference was demonstrated by the operator's saved comparison, and
 new concurrent live timing remains pending the command above.
+
+## Smaller ONNX input challenge (2026-10-15)
+
+Sampling local fits every five cycles produced 38 completed primary cycles:
+32 coherent masked-depth diagnostics, six global-MAD refusals, eight local
+results and 30 scheduled skips. No queue replacements or processing/write
+errors. Host median 0.5327 s, maximum 0.6924 s; zero of 37 timed steady-state
+cycles met 250 ms. Segmentation round trip median 0.3896 s; stereo 0.2629 s.
+These different live frames do not establish a quality improvement from sampling.
+
+Next offline experiment uses `run_segmentation_input_size_benchmark.sh`.
+It verifies the reviewed 416x640 ONNX export/report/checkpoint and exports two
+new FP32 static candidates, 320x512 and 256x384 (height x width), into a new
+output directory. Existing model files, activation and live defaults stay intact.
+All 22 saved cycles from `person_live_local_surfaces_20261014_201809` are used,
+with two alternating-order repetitions per candidate and ORT CPU threads=2.
+
+Stereo is recomputed once per saved JPEG pair at the existing diagnostic half
+resolution and shared by every model size. Runtime selection, geometry, inner
+ROI defaults and masked-depth gates are reused. Candidate-specific masks/ROIs
+are evaluated without local fitting. Report rows preserve unmatched detections,
+matching ties, selected-target correspondence, geometry and depth refusals,
+mask IoU, depth/MAD/sample changes and model/input/source hashes. No failed
+frame is removed from the comparison. Selection has no fabricated confirmed
+track. Inference/extraction timers exclude image decoding, IPC, stereo and depth.
+
+Run on Pi with other perception processes stopped, without a person or camera
+capture. Review `SIZE` summaries and `comparison.json`; there is no automatic
+winner or runtime switch. Agreement with the baseline is not physical accuracy
+or validation for moving targets or arbitrary scenes.
