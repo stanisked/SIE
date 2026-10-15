@@ -867,3 +867,42 @@ threshold is introduced, and no candidate is rolled out automatically.
 Eight targeted tests pass, including a confidence-only tiny difference with
 unchanged mask vs a changed mask. Rerun the same offline benchmark to obtain the
 previously missing evidence; no camera or live run is needed.
+
+## Targeted live capture/RPC/wait timers
+
+Actual ORT challenge completed: automatic joint 203.8 ms, intra=1 241.5 ms,
+intra=2 228.9 ms. Both candidates had identical masks/counts and unchanged
+selection/geometry dispositions, but bbox differences up to 0.000244140625 px
+and confidence differences 1.7881393432617188e-7 prevented strict instance
+identity (EXACT 0/44 across all variants). Do not replace the live auto session
+with a slower capped candidate. No new numerical tolerance/admission rule.
+Source inputs unchanged; helper/mmap experiments remain non-default.
+
+Next live run adds measurements only. Primary foreground exclusive timers:
+AR capture, stereo capture, stereo submission, RGB call, target selection /
+geometry, explicit future wait after target selection, fusion foreground,
+final future drain, and remaining foreground time. Per-cycle sum equals the
+existing host-to-result endpoint; median sums need not equal median host time.
+Actual stereo worker start/end and submit/RGB interval offsets additionally
+record queue time and wall-interval overlap. Wall overlap is not simultaneous
+CPU use or exposure synchronization.
+
+NPZ RPC adds parent setup, serialization, file hash, request prepare/send,
+response wait/decode, and response verification/local-input loading. These
+nested timings apply to current RGB and fusion calls, not to mmap candidates.
+Worker records input-open/provenance verification, RGB array lazy loading and
+prediction/extraction separately. Legacy mask_s still includes RGB lazy load;
+new prediction_extract_s excludes it, so comparisons preserve old semantics.
+RPC response wait includes remote work and scheduling, not just idle waiting.
+
+The standard launcher prints FOREGROUND, RGB_RPC, FUSION_RPC, RGB_WORKER,
+TIMELINE, ACTIVE_ORT_SETTINGS and the usual summary. Groups are nested or
+parallel and must not be summed across groups. Active actual automatic ORT,
+256x384, half stereo, existing NPZ, every-five local fits and all quality gates
+remain unchanged. No new image persistence, Measurement or actuator path.
+
+28 tests passed, including per-cycle exclusive accounting, worker timing
+identity and real worker/transport numerical checks; Python and shell syntax
+checks passed. Rebuild ROS and run the existing 256x384 diagnostic once with a
+person. This is the first measurement of previously absent capture/wait timers,
+not a new depth/calibration trial.

@@ -115,6 +115,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
 
     def _compute_stereo(self, combined):
         started = time.monotonic()
+        self._last_stereo_start=started
         width = self.stereo_size[0]
         right = self.cv2.remap(combined[:, :width], self.map_right_1, self.map_right_2, self.cv2.INTER_LINEAR)
         left = self.cv2.remap(combined[:, width:], self.map_left_1, self.map_left_2, self.cv2.INTER_LINEAR)
@@ -125,11 +126,14 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             right_gray = self.cv2.resize(right_gray, (640,400), interpolation=self.cv2.INTER_AREA)
             a, b, timing = self._half_executor.compute(left_gray, right_gray)
             self._last_stereo_worker_timings = timing
-            return left, right, half_disparity(a,b), time.monotonic()-started
+            result=half_disparity(a,b)
+            self._last_stereo_end=time.monotonic()
+            return left, right, result, self._last_stereo_end-started
         # Invoke the original full-resolution LR implementation once. Foreground
         # timers are intentionally absent on this worker thread.
         result = Ar0234Ov9281DynamicAssociationAuditNode._left_right_disparity(self, left_gray, right_gray)
-        return left, right, result, time.monotonic() - started
+        self._last_stereo_end=time.monotonic()
+        return left, right, result, self._last_stereo_end-started
 
     def _left_right_disparity(self, left_gray, right_gray):
         if self._cached_stereo is None:
@@ -150,14 +154,20 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             return
         self.sequence += 1
         started = time.monotonic()
+        foreground={};events={}
+        self._last_stereo_start=self._last_stereo_end=None
         self._cached_stereo = None
         self._last_stereo_worker_timings = None
         # Parent LR code calls _timed_call/decorators. Never share a mutable
         # timing collector across its worker and the foreground.
         self._stage_timings = None
         stamp = datetime.now(timezone.utc)
+        stage=time.monotonic()
         ar, ar_mono = self._read(self.ar_capture)
+        foreground['capture_ar_s']=time.monotonic()-stage
+        stage=time.monotonic()
         combined, stereo_mono = self._read(self.stereo_capture)
+        foreground['capture_stereo_s']=time.monotonic()-stage
         cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
         skew_ms = abs(stereo_mono - ar_mono) / 1e6
         audit = self._audit_base(cycle_id, stamp, skew_ms)
@@ -179,12 +189,18 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if skew_ms > self.max_pair_skew_ms:
                 audit.update(status="PAIR_SKEW_EXCEEDED", reason="PAIR_SKEW_EXCEEDED")
                 return
+            events['stereo_submit']=time.monotonic()
             future = self._perception_worker.submit(self._compute_stereo, combined)
+            foreground['stereo_submit_s']=time.monotonic()-events['stereo_submit']
             single = getattr(self,"_rgb_backend","two_model_reference") == "single_segmentation"
             segmentation = None
             audit["rgb_backend"] = getattr(self,"_rgb_backend","two_model_reference")
             if single:
+                events['rgb_call_start']=time.monotonic()
                 segmentation = self._mask_client.infer(cycle_id, ar)
+                events['rgb_call_end']=time.monotonic()
+                foreground['rgb_call_s']=events['rgb_call_end']-events['rgb_call_start']
+                selection_started=time.monotonic()
                 audit["segmentation_observation"] = {
                     **segmentation, "schema_version":"sie.ar0234.instance_segmentation_preview.v1",
                     "class_name":"person", "reference_frame":"ar0234_image_frame", "units":"px",
@@ -202,8 +218,12 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     minimum_match_margin=self.temporal_target_minimum_match_margin, minimum_confidence=self.confidence_threshold)
             else:
                 detector_start = time.monotonic()
+                events['rgb_call_start']=detector_start
                 raw = validate_ar0234_observation(self.observer.observe(ar, captured_at_utc=stamp, cycle_id=cycle_id))
-                audit["rgb_detector_s"] = time.monotonic() - detector_start
+                events['rgb_call_end']=time.monotonic()
+                foreground['rgb_call_s']=events['rgb_call_end']-detector_start
+                selection_started=time.monotonic()
+                audit["rgb_detector_s"] = foreground['rgb_call_s']
                 self._publish_observation(raw)
                 dynamic = ar0234_temporal_target_candidate(
                     raw, prior_track=self._confirmed_target_track,
@@ -224,7 +244,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             observation = ({**candidate, "captured_at_utc":stamp.isoformat(),
                 "observation_id":f"segmentation-preview:{cycle_id}:{candidate['instance_index']}"}
                 if single else self._selected_observation(raw, candidate, dynamic))
+            foreground['target_selection_geometry_s']=time.monotonic()-selection_started
+            stage=time.monotonic()
             left, right, self._cached_stereo, stereo_s = future.result()
+            foreground['stereo_wait_after_target_s']=time.monotonic()-stage
             audit["stereo_worker_s"] = stereo_s
             audit["stereo_execution"]["worker_timings_s"] = self._last_stereo_worker_timings
             scale = getattr(self, "_stereo_scale", 1.)
@@ -251,6 +274,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             # relabel this shape description as admitted depth or an Action.
             client = getattr(self, "_mask_client", None)
             if client is not None:
+                fusion_started=time.monotonic()
                 try:
                     disparity, lr = self._cached_stereo
                     current = self.np.where(lr, disparity, self.np.nan)
@@ -271,6 +295,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 except Exception as error:
                     audit["shape_diagnostic"] = {"status":"MASK_SURFACE_UNAVAILABLE",
                         "reason":type(error).__name__, "error_detail":str(error)[:400]}
+                foreground['fusion_foreground_s']=time.monotonic()-fusion_started
             else:
                 audit["shape_diagnostic"] = {"status":"DISABLED"}
             if scale == .5:
@@ -291,15 +316,29 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             # Drain a started stereo job even when detection failed. No stale
             # frame/map can leak to a later callback or a reused matcher.
             if future is not None:
+                drain_started=time.monotonic()
                 try:
                     future.result()
                 except Exception:
                     pass
+                foreground['stereo_final_drain_s']=time.monotonic()-drain_started
             self._cached_stereo = None
             # A camera-frame diagnostic is never substituted for an admitted
             # robot-front clearance/error/age input to the motion policy.
             audit["decision_preview"] = approach_control_preview()
             elapsed = time.monotonic() - started
+            # Exclusive foreground timers only; stereo worker runs concurrently.
+            foreground['other_foreground_s']=elapsed-sum(foreground.values())
+            audit['foreground_timing_s']=foreground
+            timeline={key+'_after_cycle_start_s':value-started for key,value in events.items()}
+            worker_start=getattr(self,'_last_stereo_start',None);worker_end=getattr(self,'_last_stereo_end',None)
+            if worker_start is not None:timeline['stereo_worker_start_after_cycle_start_s']=worker_start-started
+            if worker_end is not None:timeline['stereo_worker_end_after_cycle_start_s']=worker_end-started
+            if worker_start is not None and 'stereo_submit' in events:
+                timeline['stereo_queue_s']=worker_start-events['stereo_submit']
+            if worker_start is not None and worker_end is not None and 'rgb_call_end' in events:
+                timeline['rgb_stereo_wall_interval_overlap_s']=max(0.,min(worker_end,events['rgb_call_end'])-max(worker_start,events['rgb_call_start']))
+            audit['perception_timeline_s']=timeline
             audit["processing_timing"] = {"host_capture_start_to_result_ready_s": elapsed,
                 "exposure_age_known": False, "endpoint": "BEFORE_PREVIEW_PUBLISH_AND_BACKGROUND_JOURNAL"}
             audit["working_targets"] = {"base_speed_m_s": .15, "stand_off_from_robot_front_m": 1.,

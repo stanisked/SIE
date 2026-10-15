@@ -74,5 +74,19 @@ print('LOCAL_SURFACE_ASYNC records=',len(local_rows),'statuses=',dict(Counter(r[
 for key in ('queue_wait_s','local_processing_s','submit_to_result_s'):
     values=[r[key] for r in local_rows if r.get(key) is not None]
     if values:print('LOCAL',key,'median_s=',round(statistics.median(values),4),'max_s=',round(max(values),4))
+steady=[r for r in rows[1:] if r['status']!='CANCELLED_SHUTDOWN']
+def show_stages(prefix, mappings):
+    keys=sorted({key for mapping in mappings for key in mapping})
+    for key in keys:
+        values=[mapping[key] for mapping in mappings if isinstance(mapping.get(key),(int,float)) and not isinstance(mapping.get(key),bool)]
+        if values:print(prefix,key,'n=',len(values),'median_ms=',round(statistics.median(values)*1000,2),'max_ms=',round(max(values)*1000,2))
+show_stages('FOREGROUND',[r.get('foreground_timing_s',{}) for r in steady])
+show_stages('RGB_RPC',[r.get('segmentation_observation',{}).get('rpc_timing_s',{}) for r in steady])
+show_stages('FUSION_RPC',[r.get('shape_diagnostic',{}).get('rpc_timing_s',{}) for r in steady])
+show_stages('TIMELINE',[{k:v for k,v in r.get('perception_timeline_s',{}).items() if k in ('stereo_queue_s','rgb_stereo_wall_interval_overlap_s')} for r in steady])
+show_stages('RGB_WORKER',[{k:r.get('segmentation_observation',{}).get(k) for k in ('worker_input_open_verify_s','worker_rgb_load_s','prediction_extract_s')} for r in steady])
+if steady:
+    print('ACTIVE_ORT_SETTINGS:',steady[0].get('segmentation_observation',{}).get('segmentation_engine',{}).get('active_ort_session'))
+print('TIMING_NOTE: FOREGROUND durations exclusive per cycle; RPC/worker/timeline are nested or overlapping; do not sum across groups.')
 print('Journal root:', sys.argv[1])
 PY

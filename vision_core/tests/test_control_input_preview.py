@@ -165,6 +165,11 @@ class ControlPreviewTests(unittest.TestCase):
             node._cycle()
         self.assertEqual(events, ["publish", "journal"])
         self.assertEqual(messages[0]["status"], "ASSOCIATED_DIAGNOSTIC_ONLY")
+        measured=messages[0]['foreground_timing_s']
+        self.assertIn('capture_ar_s',measured);self.assertIn('capture_stereo_s',measured)
+        self.assertIn('stereo_wait_after_target_s',measured)
+        self.assertAlmostEqual(sum(measured.values()),messages[0]['processing_timing']['host_capture_start_to_result_ready_s'],places=10)
+
         self.assertEqual(messages[0]["decision_preview"]["status"], "STOP")
         self.assertFalse(messages[0]["actuator_access"])
         self.assertIsNone(node._cached_stereo)

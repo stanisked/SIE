@@ -112,14 +112,18 @@ def main():
         request={}
         try:
             request=json.loads(line)
+            input_started=time.monotonic()
             path=Path(request['arrays']) if 'arrays' in request else None
             with request_bundle(request) as bundle:
                 if str(bundle['cycle_id'].item())!=request['cycle_id']:
                     raise ValueError('array cycle mismatch')
                 if request.get('operation')=='infer_instances':
+                    input_open_verify_s=time.monotonic()-input_started
                     started=time.monotonic()
+                    rgb=bundle['rgb']
+                    rgb_loaded=time.monotonic()
                     with contextlib.redirect_stdout(sys.stderr):
-                        instances=current_masks.infer(request['cycle_id'],request['arrays_sha256'],bundle['rgb'],model)
+                        instances=current_masks.infer(request['cycle_id'],request['arrays_sha256'],rgb,model)
                     inference_s=time.monotonic()-started
                     verify_helper_threads(args.cpu_helper_threads)
                     if args.active_ort_threads is not None:verify_active_ort(model,args.active_ort_threads)
@@ -128,7 +132,9 @@ def main():
                         fingerprints={'rgb_payload_sha256':hashlib.sha256(bundle['rgb'].tobytes()).hexdigest(),'instance_mask_sha256':[hashlib.sha256(mask.tobytes()).hexdigest()
                             for mask in current_masks.current[3]]}
                     emit({**fingerprints,'status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY','instances':instances,
-                          'mask_s':inference_s,'cycle_id':request['cycle_id'],
+                          'mask_s':inference_s,'worker_input_open_verify_s':input_open_verify_s,
+                          'worker_rgb_load_s':rgb_loaded-started,
+                          'prediction_extract_s':inference_s-(rgb_loaded-started),'cycle_id':request['cycle_id'],
                           'arrays_sha256':request['arrays_sha256'],'model_sha256':model_sha,
                           'input_transport':request.get('rgb_transport','npz'),
                           'code_sha256':code_sha,'class_name':'person','inference_count':1,'segmentation_engine':engine_metadata})

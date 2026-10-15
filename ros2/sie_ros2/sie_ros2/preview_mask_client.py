@@ -102,14 +102,24 @@ class PreviewMaskClient:
         try:
             with tempfile.TemporaryDirectory(prefix='sie-preview-',dir='/dev/shm') as directory:
                 path=Path(directory)/'current.npz'
+                stamps={'setup_s':time.monotonic()-started}
+                stage=time.monotonic()
                 np.savez(path,cycle_id=cycle_id,**arrays)
+                stamps['serialize_npz_s']=time.monotonic()-stage
+                stage=time.monotonic()
                 sha=hashlib.sha256(path.read_bytes()).hexdigest()
+                stamps['input_file_hash_s']=time.monotonic()-stage
+                stage=time.monotonic()
                 request={**fields,'cycle_id':cycle_id,'arrays':str(path),'arrays_sha256':sha}
                 if self.process is None or self.process.stdin is None:
                     raise RuntimeError('preview worker unavailable')
                 self.process.stdin.write(json.dumps(request,separators=(',',':'))+'\n')
                 self.process.stdin.flush()
+                stamps['control_prepare_send_s']=time.monotonic()-stage
+                stage=time.monotonic()
                 result=self._read(self.timeout)
+                stamps['response_wait_decode_s']=time.monotonic()-stage
+                stage=time.monotonic()
                 if result.get('cycle_id')!=cycle_id:
                     raise ValueError('preview worker cycle mismatch')
                 if result.get('status')!='MASK_SURFACE_UNAVAILABLE':
@@ -124,6 +134,8 @@ class PreviewMaskClient:
                         if str(data['cycle_id'].item())!=cycle_id:
                             raise ValueError('deferred surface cycle mismatch')
                         result['_surface_job']={k:data[k].copy() for k in data.files if k!='cycle_id'}
+                stamps['validate_response_load_local_s']=time.monotonic()-stage
+                result['rpc_timing_s']=stamps
                 result['round_trip_s']=time.monotonic()-started
                 return result
         except BaseException:

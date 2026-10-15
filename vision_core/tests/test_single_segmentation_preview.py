@@ -98,6 +98,14 @@ class YOLO:
                     import hashlib
                     self.assertEqual(segmentation['rgb_payload_sha256'],hashlib.sha256(bytes(1200*1920*3)).hexdigest())
                     self.assertEqual(len(segmentation['instance_mask_sha256']),1)
+                    self.assertGreaterEqual(segmentation['worker_input_open_verify_s'],0)
+                    self.assertGreaterEqual(segmentation['worker_rgb_load_s'],0)
+                    self.assertGreaterEqual(segmentation['prediction_extract_s'],0)
+                    self.assertAlmostEqual(segmentation['worker_rgb_load_s']+segmentation['prediction_extract_s'],segmentation['mask_s'],places=10)
+                    if transport=='npz':
+                        self.assertIn('serialize_npz_s',segmentation['rpc_timing_s'])
+                        self.assertIn('response_wait_decode_s',segmentation['rpc_timing_s'])
+
                     p=np.array([[100.,0,0,0],[0,100.,0,0],[0,0,1,0]])
                     p2=p.copy();p2[0,3]=-75954.18816496264
                     cal=dict(P1=p,P2=p2,R1=np.eye(3),R=np.eye(3),T=np.zeros(3),K=p[:,:3],D=np.zeros(5),size=(128,96))
