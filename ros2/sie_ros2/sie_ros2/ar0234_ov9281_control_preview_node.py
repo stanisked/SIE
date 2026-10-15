@@ -47,14 +47,22 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             self._half_executor = StereoPairExecutor(*matchers)
         self.declare_parameter("preview_target_crop", False)
         self._target_crop=bool(self.get_parameter("preview_target_crop").value)
+        self.declare_parameter("preview_crop_lookup_backend", "reference")
+        self._crop_lookup_backend=str(self.get_parameter("preview_crop_lookup_backend").value)
+        if self._crop_lookup_backend not in ("reference","blocked"):
+            raise ValueError("invalid crop lookup backend")
+        if self._crop_lookup_backend=="blocked" and not self._target_crop:
+            raise ValueError("blocked lookup requires target crop")
         self._frustum_lookup=None
         if self._target_crop:
             if self._stereo_scale != .5:
                 raise ValueError("target crop requires half resolution")
-            from stereo_frustum_lookup import FrustumLookup
+            from stereo_frustum_lookup import FrustumLookup,BlockFrustumLookup
             started=time.monotonic()
             self._frustum_lookup=FrustumLookup(self._crop_calibration())
-            self.get_logger().info(f"crop lookup startup_s={time.monotonic()-started:.3f} bytes={self._frustum_lookup.table.nbytes}")
+            if self._crop_lookup_backend=="blocked":
+                self._frustum_lookup=BlockFrustumLookup(self._frustum_lookup)
+            self.get_logger().info(f"crop lookup backend={self._crop_lookup_backend} index_bytes={getattr(self._frustum_lookup,'index_bytes',0)} startup_s={time.monotonic()-started:.3f} bytes={self._frustum_lookup.table.nbytes}")
         self.declare_parameter("preview_mask_surface_enabled", True)
         if self._stereo_scale == .5 and not bool(self.get_parameter("preview_mask_surface_enabled").value):
             raise ValueError("half diagnostic mode requires current-frame mask diagnostics")
@@ -305,6 +313,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             audit["stereo_execution"]["worker_timings_s"] = self._last_stereo_worker_timings
             scale = getattr(self, "_stereo_scale", 1.)
             audit["stereo_resolution"] = {"mode":getattr(self,"_resolution_mode","full_1280x800"),
+                "crop_lookup_backend":getattr(self,"_crop_lookup_backend","reference"),
                 "scale":scale, "capture_per_camera_size_px":list(self.stereo_size),
                 "matching_size_px":[int(n*scale) for n in self.stereo_size],
                 "disparity_unit":"matching_image_pixel", "lr_tolerance_matching_px":1.5*scale,

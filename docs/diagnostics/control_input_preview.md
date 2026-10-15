@@ -1165,3 +1165,19 @@ separate. Full plan equality, crop-bound equality and observed support are recor
 No live switch or automatic acceptance is introduced. Four lookup tests include
 320 arbitrary rectangle/index comparisons with interior invalid cells, tile borders,
 small rectangles and fractional ROI bounds. Pi performance/equality pending.
+
+
+Block-index Pi result (`frustum_block_comparison_20261015_175340.json`): reference
+plan median/max 19.766/20.644 ms, blocked 4.397/4.938 ms. Complete plans and bounds
+exact 44/44, zero coordinate delta or additional observed support loss among
+176,936 repeated target samples. Index construction 0.270916 s, index 76,494 bytes;
+base table remains 73,827,872 bytes. Frozen inputs unchanged.
+
+`run_control_input_preview_target_crop_blocked.sh` selects explicit
+`preview_crop_lookup_backend=blocked` with target crop, mmap, single 256x384 ONNX
+and local surfaces disabled. Default backend remains reference; invalid backend
+or blocked without target crop refuses startup. Lookup backend is recorded in
+startup logs and per-cycle stereo_resolution. Both backends use identical lattice
+extrema, calibration binding, padding and invalid-ray fallback. All selection,
+mask depth and quality-shadow gates remain unchanged; no motion/Measurement.
+Live total latency is pending, not inferred from the sum of median savings.
