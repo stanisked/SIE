@@ -29,11 +29,35 @@ class Calls:
         return timed
 
 
+def active_session_owner(backend):
+    """Follow the actual AutoBackend.forward delegation, not shadow attributes."""
+    seen=set();owner=backend
+    while getattr(owner,'backend',None) is not None:
+        if id(owner) in seen:raise ValueError('backend delegation cycle')
+        seen.add(id(owner));owner=owner.backend
+    session=getattr(owner,'session',None)
+    if session is None or not callable(getattr(session,'run',None)):
+        raise ValueError('delegated backend has no supported ORT session.run')
+    return owner
+
+
+def active_session_metadata(adapter):
+    outer=adapter.model.predictor.model;owner=active_session_owner(outer);session=owner.session
+    opts=session.get_session_options()
+    return {'owner':type(owner).__module__+'.'+type(owner).__qualname__,
+        'delegated':owner is not outer,
+        'outer_session_is_active':getattr(outer,'session',None) is session,
+        'providers':session.get_providers(),'input_shape':session.get_inputs()[0].shape,
+        'intra_op_num_threads':opts.intra_op_num_threads,'inter_op_num_threads':opts.inter_op_num_threads,
+        'execution_mode':str(opts.execution_mode),
+        'meaning':'Actual session options; zero threads means ORT default, not zero execution threads.'}
+
+
 @contextmanager
 def instrument(adapter):
     from ultralytics.utils import ops
     predictor=adapter.model.predictor
-    backend=predictor.model;session=backend.session
+    backend=active_session_owner(predictor.model);session=backend.session
     calls=Calls()
     with ExitStack() as stack:
         for name in ('preprocess','inference','postprocess'):
@@ -78,10 +102,12 @@ def main():
     from onnx_segmentation_backend import OnnxSegmentationBackend
     from preview_mask_surface import infer_instances
     adapter=OnnxSegmentationBackend(args.model,args.report,2)
+    active=active_session_metadata(adapter)
+    print('ACTIVE_ORT:',json.dumps(active),flush=True)
     cases=load_cases(args.evidence_root);sources={str(f):sha256(f) for f in (args.model,args.report)}
     for case in cases:sources.update(case['source_sha256'])
     predictor=adapter.model.predictor
-    codepaths={Path(inspect.getsourcefile(function)) for function in (type(predictor),ops.process_mask_native,ops.scale_masks)}
+    codepaths={Path(inspect.getsourcefile(function)) for function in (type(predictor),type(active_session_owner(predictor.model)),ops.process_mask_native,ops.scale_masks)}
     codepaths.update((Path(__file__),Path(__file__).with_name('onnx_segmentation_backend.py'),Path(__file__).with_name('preview_mask_surface.py')))
     installed_code={str(path):sha256(path) for path in codepaths}
     rows=[]
@@ -114,13 +140,14 @@ def main():
     if not unchanged:raise ValueError('source inputs changed')
     report={'status':'OFFLINE_SEGMENTATION_STAGE_PROFILE_ONLY','rows':rows,'summary':summary,
         'source_sha256':sources,'inputs_unchanged':unchanged,'code_sha256':installed_code,
-        'model':adapter.metadata,'helper_threads':{'torch':torch.get_num_threads(),'opencv':cv2.getNumThreads()},
+        'model_declared_metadata':adapter.metadata,'active_ort_session':active,'helper_threads':{'torch':torch.get_num_threads(),'opencv':cv2.getNumThreads()},
         'reference_median_s':statistics.median(r['timing_s']['reference'] for r in rows),
         'actuator_access':False,'limitations':['Isolated process, no concurrent stereo/local fits or live contention.',
             'Timers are nested: never sum ORT with inference, or mask/scale with postprocess.',
             'scale_masks includes resizing/unpadding; process_mask_native also includes prototype reconstruction/cropping/threshold.',
             'Outside-predictor time includes source setup, wrappers, callbacks, result extraction; not pure IPC.',
             'Profiling wrappers add overhead; uninstrumented reference time is recorded on the same frames.',
+            'Declared adapter threads may refer to an inactive outer session; actual delegated session settings recorded separately.',
             'No source image, model, inference math, mask, threshold or runtime launch setting is changed.']}
     args.output.parent.mkdir(parents=True,exist_ok=True)
     with args.output.open('x') as stream:json.dump(report,stream,indent=2,allow_nan=False)

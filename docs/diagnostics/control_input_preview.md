@@ -790,3 +790,27 @@ This is isolated CPU inference, not the 207 ms live concurrent condition.
 No camera/IPC/stereo/local fitting is timed here. Current helper defaults and
 ORT=2 remain unchanged and actual counts are recorded. Two wrapper/accounting
 unit tests and Python/shell syntax checks passed; actual Pi timings pending.
+
+### Delegated ORT session profiling correction
+
+Pi rejected the first profile because no `ort_run` call was observed. Operator
+inspection of installed AutoBackend.forward shows it delegates to
+`self.backend.forward`, while an outer `session` attribute also exists. The
+profiler had patched that outer session, not necessarily the executed one.
+
+Profiler now follows backend delegation to the session-owning implementation,
+patches its session.run and records that implementation's source SHA. New
+`ACTIVE_ORT` output reports actual provider, input shape, session options and
+whether outer session and active session are identical. Zero ORT thread option
+means default/autoselection, not no worker threads. Coverage checks remain.
+A regression test includes both an inactive outer session and an active inner
+session; only the inner execution is timed. Three profile tests pass.
+
+Important open finding: previous adapter/session-replacement benchmarks assigned
+an outer AutoBackend.session. Operator source inspection now raises doubt that
+those assignments controlled actual execution in this installed version. Prior
+observed times/exact-mask comparisons remain observations, but declared ORT
+thread counts must not be treated as verified active thread counts. Profiling
+records actual settings without changing them or silently altering the live
+path. Review ACTIVE_ORT before any session-binding/runtime correction. This is
+separate from the confirmed PyTorch helper-count checks.
