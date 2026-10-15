@@ -720,3 +720,44 @@ are saved to compare background-fit contention without claiming causation.
 Source SHA hashes and unchanged checks preserve provenance; output is a new
 file. Standard-library tests exercise parallel accounting and missing/negative
 values. Immediate next step: apply to existing 131005 run, no new live trial.
+
+## RGB mmap transport candidate (2026-10-15)
+
+Existing 131005 timers: host median 359.24 ms; RGB RPC 254.30 ms, inference /
+mask extraction 207.24 ms, per-cycle RPC-outside-inference median 47.95 ms.
+Fusion RPC 66.99 ms, preparation 57.90 ms; difference 9.09 ms. Stereo worker
+213.39 ms overlaps RGB. Host unallocated proxy 36.36 ms cannot be labelled
+capture because capture/wait/start-offset timers were not recorded.
+
+A separate optional `rgb_transport=mmap` client path replaces only RGB inference
+NPZ transfer. Default live launchers remain NPZ. A private per-request RAM file
+`/dev/shm/sie-rgb-*/current.rgb` is memory-mapped; fixed uint8 1200x1920x3,
+cycle, random token and payload SHA are bound by a descriptor SHA. Parent owns
+mapping/file until validated reply, and stops the worker before cleanup on RPC
+failure. Receiver opens a read-only regular file with exact size/no symlink,
+validates descriptor/cycle/payload, and copies into owned storage before model
+use because Ultralytics may retain `orig_img`. Thus this removes NPZ packing
+and loading, not every copy. No reusable buffer, stale mapping or mmap view
+survives into model-owned results. Linux file mappings need no resource-tracker
+registration. Temporary directory cleanup follows success/failure.
+
+The mask cache uses the current descriptor binding SHA in the same exact
+cycle/index protocol; subsequent disparity/calibration fusion still uses the
+original NPZ path. Worker records input transport and transport-module code SHA.
+No calibration, inference, thresholds, selection or motor behavior changes.
+
+`run_rgb_transport_benchmark.sh` compares NPZ vs mmap with the same reviewed
+256x384 ONNX model/ORT=2/helper defaults, concurrently with two half-resolution
+stereo tasks. All 22 saved cycles, two alternating repetitions, warm-ups excluded.
+Benchmark-only raw RGB SHA, every instance mask SHA, exact bbox/confidence
+records and signed stereo maps must match. Independent raw input SHA verifies
+received bytes against the predecoded source. Fingerprinting overhead is enabled
+for both transports; no live latency reduction is claimed before measurement.
+Helper-thread comparison remains available separately. Its corrected result
+was 196.1 vs 188.6 ms joint, 44/44 exact, but no live setting was switched.
+
+28 local tests passed, including both real worker RPC transports with mocked
+model inference and actual projection/fitting, one-use cache, exact raw bytes,
+wrong cycle/hash, corrupt/truncated input, strided source, ownership lifetime,
+cleanup on timeout and prior preview/backend tests. Actual ML timings are
+pending Pi execution. This step needs no camera or person and no ROS rebuild.

@@ -2,6 +2,7 @@
 """Actual companion inference alongside two SGBM tasks, on frozen JPEGs only."""
 from concurrent.futures import ThreadPoolExecutor
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import statistics
@@ -16,13 +17,14 @@ def signature(result):
     if result.get('status')!='CURRENT_INSTANCES_DIAGNOSTIC_ONLY':raise ValueError('inference refused')
     hashes=result.get('instance_mask_sha256')
     if not isinstance(hashes,list) or len(hashes)!=len(result['instances']):raise ValueError('missing mask evidence')
-    return {'instances':result['instances'],'mask_sha256':hashes}
+    return {'instances':result['instances'],'mask_sha256':hashes, 'rgb_payload_sha256':result.get('rgb_payload_sha256')}
 
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     for key in ('evidence-root','model','report','output'):
         p.add_argument('--'+key,type=Path,required=True)
+    p.add_argument('--experiment',choices=['helper_threads','rgb_transport'],default='helper_threads')
     args=p.parse_args()
     if args.output.exists():p.error('new output required')
     import cv2
@@ -46,10 +48,12 @@ def main():
         if rgb is None or rgb.shape!=(1200,1920,3):raise ValueError('invalid RGB')
         prepared.append((rgb,stereo))
     clients={};rows=[];metadata={}
+    variants=(('npz',None,'npz'),('mmap',None,'mmap')) if args.experiment=='rgb_transport' else (('current',None,'npz'),('helper1',1,'npz'))
+    labels=tuple(v[0] for v in variants)
     try:
-        for label,threads in (('current',None),('helper1',1)):
+        for label,threads,transport in variants:
             client=PreviewMaskClient(sys.executable,ROOT/'vision_core/tools/control_preview_mask_worker.py',args.model,
-                engine='onnxruntime',comparison_report=args.report,ort_threads=2,cpu_helper_threads=threads)
+                engine='onnxruntime',comparison_report=args.report,ort_threads=2,cpu_helper_threads=threads,rgb_transport=transport)
             clients[label]=client;metadata[label]=client.engine_metadata
         with ThreadPoolExecutor(max_workers=2) as stereo_pool,ThreadPoolExecutor(max_workers=1) as owner:
             for label,client in clients.items():
@@ -57,7 +61,7 @@ def main():
                 client.infer('warm-'+label,prepared[0][0],diagnostic_mask_hashes=True);future.result()
             for repeat in range(2):
                 for index,(case,(rgb,stereo)) in enumerate(zip(cases,prepared)):
-                    order=('current','helper1') if (repeat+index)%2==0 else ('helper1','current')
+                    order=labels if (repeat+index)%2==0 else labels[::-1]
                     results={};maps={};timing={}
                     for label in order:
                         start=time.perf_counter()
@@ -66,21 +70,23 @@ def main():
                         maps[label],stereo_s=future.result()
                         timing[label]={'joint_s':time.perf_counter()-start,'inference_s':results[label]['mask_s'],
                             'rgb_round_trip_s':results[label]['round_trip_s'],'stereo_s':stereo_s}
-                    exact=signature(results['current'])==signature(results['helper1'])
-                    stereo_exact=all(np.array_equal(a,b) for a,b in zip(maps['current'],maps['helper1']))
+                    expected_rgb_sha=hashlib.sha256(rgb.tobytes()).hexdigest()
+                    if any(r.get('rgb_payload_sha256')!=expected_rgb_sha for r in results.values()):raise ValueError('RGB payload changed')
+                    exact=signature(results[labels[0]])==signature(results[labels[1]])
+                    stereo_exact=all(np.array_equal(a,b) for a,b in zip(maps[labels[0]],maps[labels[1]]))
                     rows.append({'cycle_id':case['cycle_id'],'repeat':repeat,'order':order,'timing':timing,
                         'rgb_instances_and_masks_exact':exact,'stereo_maps_exact':stereo_exact})
                     if not exact or not stereo_exact:raise ValueError('numerical difference; do not change live threads')
         unchanged=all(sha256(path)==digest for path,digest in sources.items())
         if not unchanged:raise ValueError('inputs changed')
         for label in clients:
-            print('THREAD_BUDGET',label,'metadata=',metadata[label]['cpu_helper_threads'],
+            print('RGB_TRANSPORT' if args.experiment=='rgb_transport' else 'THREAD_BUDGET',label,'metadata=',metadata[label]['cpu_helper_threads'],
                 'joint_median_s=',round(statistics.median(r['timing'][label]['joint_s'] for r in rows),4),
                 'rgb_median_s=',round(statistics.median(r['timing'][label]['rgb_round_trip_s'] for r in rows),4),
                 'stereo_median_s=',round(statistics.median(r['timing'][label]['stereo_s'] for r in rows),4),flush=True)
-        report={'status':'OFFLINE_CONCURRENT_THREAD_COMPARISON_ONLY','rows':rows,'metadata':metadata,
+        report={'status':'OFFLINE_CONCURRENT_TRANSPORT_COMPARISON_ONLY' if args.experiment=='rgb_transport' else 'OFFLINE_CONCURRENT_THREAD_COMPARISON_ONLY','experiment':args.experiment,'rows':rows,'metadata':metadata,
             'source_sha256':sources,'inputs_unchanged':unchanged,'runtime_source_sha256':code,
-            'code_sha256':{str(f):sha256(f) for f in (Path(__file__),ROOT/'vision_core/tools/control_preview_mask_worker.py',ROOT/'ros2/sie_ros2/sie_ros2/preview_mask_client.py')},
+            'code_sha256':{str(f):sha256(f) for f in (Path(__file__),ROOT/'vision_core/tools/control_preview_mask_worker.py',ROOT/'ros2/sie_ros2/sie_ros2/preview_mask_client.py',ROOT/'vision_core/person_localization/rgb_shared_buffer.py')},
             'actuator_access':False,'limitations':['No capture, local fits, projection or depth calculation in joint timer.',
                 'Mask hashing enabled for comparison adds IPC/work, identically in both variants.',
                 'Two resident model workers; only one inference active at a time. No live thread switch.',

@@ -9,7 +9,9 @@ import time
 
 
 class PreviewMaskClient:
-    def __init__(self, python, script, model, timeout=30., *, engine="pytorch", comparison_report=None, ort_threads=2, cpu_helper_threads=None):
+    def __init__(self, python, script, model, timeout=30., *, engine="pytorch", comparison_report=None, ort_threads=2, cpu_helper_threads=None, rgb_transport="npz"):
+        if rgb_transport not in ("npz","mmap"):raise ValueError("unsupported RGB transport")
+        self.rgb_transport=rgb_transport
         self.timeout=timeout
         self.process=None
         self.model_sha256=hashlib.sha256(Path(model).read_bytes()).hexdigest()
@@ -120,7 +122,29 @@ class PreviewMaskClient:
             self.close()
             raise
 
+    def _shared_rgb_request(self,cycle_id,rgb,diagnostic_mask_hashes):
+        from vision_core.person_localization.rgb_shared_buffer import publish_rgb
+        started=time.monotonic()
+        with publish_rgb(cycle_id,rgb) as (descriptor,sha):
+            try:
+                request={'operation':'infer_instances','rgb_transport':'mmap','rgb_shared':descriptor,
+                    'cycle_id':cycle_id,'arrays_sha256':sha,'diagnostic_mask_hashes':diagnostic_mask_hashes}
+                if self.process is None:raise RuntimeError('preview worker unavailable')
+                self.process.stdin.write(json.dumps(request,separators=(',',':'))+'\n');self.process.stdin.flush()
+                result=self._read(self.timeout)
+                if result.get('cycle_id')!=cycle_id:raise ValueError('shared RGB result cycle mismatch')
+                if result.get('status')!='MASK_SURFACE_UNAVAILABLE' and (result.get('arrays_sha256')!=sha or result.get('model_sha256')!=self.model_sha256):
+                    raise ValueError('shared RGB input/model mismatch')
+                result['round_trip_s']=time.monotonic()-started
+                result['rgb_transport']='mmap'
+                return result
+            except BaseException:
+                self.close()  # Stop reader before owner unmaps/unlinks on failure.
+                raise
+
     def infer(self, cycle_id, rgb, *, diagnostic_mask_hashes=False):
+        if getattr(self,'rgb_transport','npz')=='mmap':
+            return self._shared_rgb_request(cycle_id,rgb,diagnostic_mask_hashes)
         return self._array_request(cycle_id,{'rgb':rgb},{'operation':'infer_instances',
             'diagnostic_mask_hashes':diagnostic_mask_hashes})
 

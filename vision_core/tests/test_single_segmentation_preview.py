@@ -57,6 +57,10 @@ class SingleSegmentationTests(unittest.TestCase):
         self.assertIsNone(cache.current)
 
     def test_actual_worker_protocol_infers_once_then_fuses_cached_mask(self):
+        for transport in ('npz','mmap'):
+            with self.subTest(transport=transport):self._worker_protocol(transport)
+
+    def _worker_protocol(self,transport):
         with tempfile.TemporaryDirectory() as directory:
             folder=Path(directory);model=folder/'model.pt';model.write_bytes(b'fixture')
             # Substitute only model inference; run the production process,
@@ -87,10 +91,13 @@ class YOLO:
 """)
             env=str(folder)+os.pathsep+os.environ.get('PYTHONPATH','')
             with patch.dict(os.environ,{'PYTHONPATH':env}):
-                client=PreviewMaskClient(sys.executable,ROOT/'vision_core/tools/control_preview_mask_worker.py',model)
+                client=PreviewMaskClient(sys.executable,ROOT/'vision_core/tools/control_preview_mask_worker.py',model,rgb_transport=transport)
                 try:
-                    segmentation=client.infer('cycle',np.zeros((1200,1920,3),np.uint8))
+                    segmentation=client.infer('cycle',np.zeros((1200,1920,3),np.uint8),diagnostic_mask_hashes=True)
                     self.assertEqual(segmentation['status'],'CURRENT_INSTANCES_DIAGNOSTIC_ONLY')
+                    import hashlib
+                    self.assertEqual(segmentation['rgb_payload_sha256'],hashlib.sha256(bytes(1200*1920*3)).hexdigest())
+                    self.assertEqual(len(segmentation['instance_mask_sha256']),1)
                     p=np.array([[100.,0,0,0],[0,100.,0,0],[0,0,1,0]])
                     p2=p.copy();p2[0,3]=-75954.18816496264
                     cal=dict(P1=p,P2=p2,R1=np.eye(3),R=np.eye(3),T=np.zeros(3),K=p[:,:3],D=np.zeros(5),size=(128,96))

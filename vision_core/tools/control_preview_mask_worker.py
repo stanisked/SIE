@@ -9,6 +9,8 @@ from pathlib import Path
 import sys
 import time
 
+sys.path.insert(0,str(Path(__file__).resolve().parents[2]))
+
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -35,6 +37,21 @@ def verify_helper_threads(threads):
     actual=(torch.get_num_threads(),cv2.getNumThreads())
     if actual!=(threads,threads):
         raise ValueError(f'helper thread mismatch: requested={threads}, actual={actual}')
+
+
+@contextlib.contextmanager
+def request_bundle(request):
+    import numpy as np
+    if request.get('rgb_transport')=='mmap':
+        if request.get('operation')!='infer_instances':raise ValueError('mmap is RGB inference only')
+        from vision_core.person_localization.rgb_shared_buffer import receive_rgb
+        rgb=receive_rgb(request['rgb_shared'],request['cycle_id'],request['arrays_sha256'])
+        yield {'cycle_id':np.asarray(request['cycle_id']),'rgb':rgb}
+    else:
+        path=Path(request['arrays'])
+        if path.name!='current.npz' or digest(path)!=request['arrays_sha256']:
+            raise ValueError('array provenance mismatch')
+        with np.load(path,allow_pickle=False) as bundle:yield bundle
 
 
 def main():
@@ -71,7 +88,8 @@ def main():
     code_sha={str(path.name):digest(path) for path in (
         Path(__file__),Path(__file__).with_name('preview_mask_surface.py'),
         Path(__file__).resolve().parents[1]/'person_localization/local_surface_diagnostic.py',
-        Path(__file__).resolve().parents[1]/'person_localization/instance_mask_stereo_fusion.py')}
+        Path(__file__).resolve().parents[1]/'person_localization/instance_mask_stereo_fusion.py',
+        Path(__file__).resolve().parents[1]/'person_localization/rgb_shared_buffer.py')}
     if args.engine=='onnxruntime':
         code_sha['onnx_backend']=digest(Path(__file__).with_name('onnx_segmentation_backend.py'))
     engine_metadata={**engine_metadata,'cpu_helper_threads':{
@@ -84,10 +102,8 @@ def main():
         request={}
         try:
             request=json.loads(line)
-            path=Path(request['arrays'])
-            if path.name!='current.npz' or digest(path)!=request['arrays_sha256']:
-                raise ValueError('array provenance mismatch')
-            with np.load(path,allow_pickle=False) as bundle:
+            path=Path(request['arrays']) if 'arrays' in request else None
+            with request_bundle(request) as bundle:
                 if str(bundle['cycle_id'].item())!=request['cycle_id']:
                     raise ValueError('array cycle mismatch')
                 if request.get('operation')=='infer_instances':
@@ -98,11 +114,12 @@ def main():
                     verify_helper_threads(args.cpu_helper_threads)
                     fingerprints={}
                     if request.get('diagnostic_mask_hashes'):
-                        fingerprints={'instance_mask_sha256':[hashlib.sha256(mask.tobytes()).hexdigest()
+                        fingerprints={'rgb_payload_sha256':hashlib.sha256(bundle['rgb'].tobytes()).hexdigest(),'instance_mask_sha256':[hashlib.sha256(mask.tobytes()).hexdigest()
                             for mask in current_masks.current[3]]}
                     emit({**fingerprints,'status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY','instances':instances,
                           'mask_s':inference_s,'cycle_id':request['cycle_id'],
                           'arrays_sha256':request['arrays_sha256'],'model_sha256':model_sha,
+                          'input_transport':request.get('rgb_transport','npz'),
                           'code_sha256':code_sha,'class_name':'person','inference_count':1,'segmentation_engine':engine_metadata})
                     continue
                 source=bundle['rgb'] if 'rgb' in bundle else None
