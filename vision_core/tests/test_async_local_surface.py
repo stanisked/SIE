@@ -36,7 +36,7 @@ class AsyncSurfaceTests(unittest.TestCase):
     def test_unscheduled_cycle_keeps_depth_without_preparing_a_local_job(self):
         d,mask,cal,roi=inputs()
         reference=evaluate(d,mask,cal,roi,scale=.5)
-        with patch('preview_mask_surface.owned',side_effect=AssertionError('unneeded local input')):
+        with patch('preview_mask_surface.local_surface_stats',side_effect=AssertionError('unneeded local fit')):
             skipped,job=evaluate(d,mask,cal,roi,scale=.5,defer_local=True,prepare_local=False)
         self.assertIsNone(job)
         self.assertEqual(skipped['mask_depth'],reference['mask_depth'])

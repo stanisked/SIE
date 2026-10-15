@@ -62,11 +62,31 @@ def masked_depth_hypothesis(
     selected = np.zeros(len(depth), dtype=bool)
     selected[on_image] = interior[py[on_image], px[on_image]]
     sample = depth[selected]
+    return depth_from_owned_samples(sample, int(mask.sum()), int(interior.sum()),
+        minimum_samples=minimum_samples, depth_gap_m=depth_gap_m,
+        relative_depth_gap=relative_depth_gap,
+        minimum_layer_support_fraction=minimum_layer_support_fraction,
+        maximum_depth_mad_m=maximum_depth_mad_m)
+
+
+def depth_from_owned_samples(sample, mask_pixel_count, interior_pixel_count, *,
+    minimum_samples=100, depth_gap_m=.15, relative_depth_gap=.04,
+    minimum_layer_support_fraction=.25, maximum_depth_mad_m=.05):
+    """Internal numerical stage after verified finite positive mask ownership.
+
+    Shared by the reference NumPy selector and the equivalent OpenCV selector.
+    Input sample order is preserved; no filtering, clipping or new thresholds.
+    """
+    sample=np.asarray(sample,dtype=np.float64)
+    if sample.ndim!=1 or not np.isfinite(sample).all() or np.any(sample<=0):
+        raise ValueError('owned samples must be finite positive one-dimensional depths')
+    if minimum_samples<1 or depth_gap_m<=0 or relative_depth_gap<=0 or not 0<minimum_layer_support_fraction<=1 or maximum_depth_mad_m<=0:
+        raise ValueError('invalid diagnostic parameters')
     report = {
         "status": "INSUFFICIENT_MASKED_DEPTH",
         "selected_sample_count": int(sample.size),
-        "mask_pixel_count": int(mask.sum()),
-        "interior_pixel_count": int(interior.sum()),
+        "mask_pixel_count": int(mask_pixel_count),
+        "interior_pixel_count": int(interior_pixel_count),
         "depth_layers": [],
         "diagnostic_only": True,
         "semantic_ownership_verified": False,

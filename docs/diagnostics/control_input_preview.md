@@ -591,3 +591,34 @@ A local binding mismatch remains a refusal in the output. Sampling means local
 assessment is available only on the original twelve cycles, not all 57.
 Subsequent live runs use the same assessment after ROS rebuild; no new capture
 is needed to check this first implementation on already recorded evidence.
+
+## Equivalent mask ownership preparation (2026-10-15)
+
+Inspection found one stereo-to-RGB projection per frame, not a duplicated
+projection. The repeated work was mask ownership: the reference implementation
+built the two-pixel interior with 25 full-mask NumPy AND passes; scheduled local
+fits then performed another 5x5 OpenCV erosion and ownership selection.
+
+The foreground evaluator now uses a single constant-zero 5x5 OpenCV erosion and
+one ROI/mask ownership selection. Both masked-depth statistics and scheduled
+local inputs reuse exactly those indices. Layer/support/MAD calculations are
+shared with the original NumPy implementation through `depth_from_owned_samples`.
+The public reference `masked_depth_hypothesis` retains its original NumPy mask
+selector and unchanged defaults. No projection arithmetic, sample density,
+matching, mask margins, depth gates, calibration or policy is changed.
+
+`ownership_backend=reference_numpy` exists for offline comparison only; live
+calls use the optimized default. Benchmark `run_mask_ownership_benchmark.sh`
+uses existing verified masks and stored full-resolution LR disparity, comparing
+all result dictionaries and all prepared local sample arrays exactly. It warms
+both paths and alternates order twice for each local-preparation setting.
+Inputs are hashed before/after. No NN inference, cameras, motion or new scene.
+This isolates mask preparation, not whole live latency or physical accuracy.
+Pi timing is pending; do not attribute the entire previous 86 ms fusion round
+trip to erosion or predict a gain before this comparison.
+
+Local tests cover random holes/borders, empty/full masks, nonfinite projection
+coordinates, pixel rounding and every supported stereo scale; complete depth
+reports and prepared local arrays match exactly. Existing reference APIs remain
+NumPy-only and diagnostic-only. Rebuild ROS before the next live use, after
+reviewing the offline exact comparison; the immediate next action is offline.

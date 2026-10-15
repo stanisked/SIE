@@ -7,11 +7,13 @@ import cv2
 import numpy as np
 from compare_shadow_mask_depth_median import project, owned, in_roi
 from analyze_shadow_local_surfaces import coarse_coverage
-from vision_core.person_localization.instance_mask_stereo_fusion import masked_depth_hypothesis
+from vision_core.person_localization.instance_mask_stereo_fusion import masked_depth_hypothesis, depth_from_owned_samples
 from vision_core.person_localization.local_surface_diagnostic import analyze_local_surfaces
 
 
-def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True):
+def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True, ownership_backend="opencv"):
+    if ownership_backend not in ("opencv", "reference_numpy"):
+        raise ValueError("unknown mask ownership backend")
     if scale not in (1., .5, .25) or not 0 < lower < upper <= 4.5:
         raise ValueError('invalid diagnostic scale/range')
     width, height = cal['size']
@@ -32,14 +34,25 @@ def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_
     u, v, d, z = u[valid], v[valid], d[valid], z[valid]
     xy = project((u.astype(float)+.5)/scale-.5,
                  (v.astype(float)+.5)/scale-.5, z, cal)
-    in_box = in_roi(xy, roi)
-    depth = masked_depth_hypothesis(xy[in_box], z[in_box], mask)
+    # One equivalent 5x5 constant-zero erosion and one ownership selection.
+    # Reuse them for depth statistics and (when scheduled) local-fit inputs.
+    selected = interior = None
+    if ownership_backend == "reference_numpy":
+        in_box = in_roi(xy, roi)
+        depth = masked_depth_hypothesis(xy[in_box], z[in_box], mask)
+    else:
+        interior = cv2.erode(mask.astype(np.uint8), np.ones((5,5),np.uint8),
+                             borderType=cv2.BORDER_CONSTANT, borderValue=0)
+        selected = owned(xy, interior, roi)
+        depth = depth_from_owned_samples(z[selected], int(np.count_nonzero(mask)),
+                                         int(np.count_nonzero(interior)))
     if defer_local and not prepare_local:
         return diagnostic_result(depth,scale,lower,upper,
             {'status':'SKIPPED_BY_DIAGNOSTIC_SAMPLING'},True),None
-    interior = cv2.erode(mask.astype(np.uint8), np.ones((5,5),np.uint8),
-                         borderType=cv2.BORDER_CONSTANT, borderValue=0)
-    selected = owned(xy, interior, roi)
+    if selected is None:
+        interior = cv2.erode(mask.astype(np.uint8), np.ones((5,5),np.uint8),
+                             borderType=cv2.BORDER_CONSTANT, borderValue=0)
+        selected = owned(xy, interior, roi)
     u, v, d, xy = u[selected], v[selected], d[selected], xy[selected]
     samples={'u':u,'v':v,'d':d,'xy':xy,'interior':interior,
              'roi':np.asarray(roi),'fb':np.asarray(fb),'stride':np.asarray(stride),'scale':np.asarray(scale)}
