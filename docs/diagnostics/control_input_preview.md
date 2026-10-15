@@ -1068,3 +1068,28 @@ Both full and crop depth reports and point-wise differences are retained.
 `CROP_TOTAL` adds each cycle's measured plan and crop-copy cost to its repeated
 match/LR/depth timing; startup is separate. It excludes RGB, capture, rectification
 and local fitting and is not exposure-to-command latency. Actual Pi results pending.
+
+
+Lookup cropped-match replay (2026-10-15, `target_crop_match_lookup_20261015_171244.json`):
+full match/LR/depth median 117.95 ms; crop 39.42 ms; plan 20.24 ms; total
+plan+copy+crop processing median/max 59.59/61.58 ms. All 44 dispositions remained
+coherent, complete reports exact 10/44, lost/gained points 66/52 of 176,936
+reference samples across repetitions; 53,584 common disparities changed, maximum
+median-depth difference 10.51 mm. Inputs unchanged. This is not absolute accuracy.
+
+Live opt-in `run_control_input_preview_target_crop.sh` sets `preview_target_crop`
+(default false). Requires half resolution, single segmentation, diagnostic .5–4.5 m.
+Startup calibration lookup is prepared once. Each cycle first selects its current
+RGB instance using unchanged selection gates; only then submits the captured stereo
+pair with that cycle's inner ROI. No target means no stereo job; no previous ROI
+is reused. Both signed matchers use the same crop origin/configuration; maps are
+restored to global half-frame coordinates before LR checking and mask fusion.
+`crop_target_binding` records cycle/instance/ROI; worker timings include crop plan,
+copy, restore and full plan. Host latency includes serial RGB-to-stereo dependency,
+capture and fusion. A smaller stereo timing alone does not establish 250 ms latency.
+
+Previous launcher remains unchanged by default. Existing mask MAD, support, layers,
+quality shadow and local sampling remain unchanged; neither Measurement nor motor
+commands are enabled. Sixteen targeted tests passed, including current-target crop
+scheduling, missing-target no-submit, global LR rounding and lookup binding. Pi live
+latency/quality are pending.

@@ -31,3 +31,17 @@ def half_disparity(left_raw, right_raw):
     matched[valid]=right[y[valid],xr[valid]]
     consistent=valid&np.isfinite(matched)&(matched<-.5)&(np.abs(left+matched)<=.75)
     return left,consistent
+
+
+def restore_crop(raw_maps,box,full_shape,configs):
+    """Common crop origin: disparity unchanged; restore global LR rounding/grid."""
+    x1,y1,x2,y2=box;h,w=full_shape
+    if not 0<=x1<x2<=w or not 0<=y1<y2<=h:raise ValueError('invalid crop box')
+    restored=[]
+    for raw,config in zip(raw_maps,configs):
+        if raw.shape!=(y2-y1,x2-x1) or raw.dtype!=np.int16:raise ValueError('unexpected cropped map')
+        invalid=(config['minDisparity']-1)*16
+        full=np.full(full_shape,invalid,np.int16);full[y1:y2,x1:x2]=raw;restored.append(full)
+    if len(restored)!=2:raise ValueError('expected both matching directions')
+    return restored
+

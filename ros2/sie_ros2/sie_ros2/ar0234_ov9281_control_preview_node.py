@@ -21,7 +21,7 @@ from .approach_control_preview import approach_control_preview
 from .preview_mask_client import PreviewMaskClient
 from .stereo_pair_executor import StereoPairExecutor
 from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
-from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity
+from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity, restore_crop
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 
@@ -45,6 +45,16 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 raise ValueError("half mode requires the challenged 1280x800 calibration")
             matchers, self._half_configs = half_matchers(self.cv2, self.sgbm, self.right_sgbm)
             self._half_executor = StereoPairExecutor(*matchers)
+        self.declare_parameter("preview_target_crop", False)
+        self._target_crop=bool(self.get_parameter("preview_target_crop").value)
+        self._frustum_lookup=None
+        if self._target_crop:
+            if self._stereo_scale != .5:
+                raise ValueError("target crop requires half resolution")
+            from stereo_frustum_lookup import FrustumLookup
+            started=time.monotonic()
+            self._frustum_lookup=FrustumLookup(self._crop_calibration())
+            self.get_logger().info(f"crop lookup startup_s={time.monotonic()-started:.3f} bytes={self._frustum_lookup.table.nbytes}")
         self.declare_parameter("preview_mask_surface_enabled", True)
         if self._stereo_scale == .5 and not bool(self.get_parameter("preview_mask_surface_enabled").value):
             raise ValueError("half diagnostic mode requires current-frame mask diagnostics")
@@ -75,6 +85,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             # Parent startup still verifies its historical detector artifact;
             # release the unused ONNX session and never run it in this backend.
             self.observer = None
+        if self._target_crop and self._rgb_backend!="single_segmentation":
+            raise ValueError("target crop requires current single segmentation target")
         if engine=="onnxruntime" and self._rgb_backend!="single_segmentation":
             raise ValueError("ONNX preview requires single segmentation backend")
         self.declare_parameter("control_preview_topic", "/sie/diagnostics/ar0234_ov9281/control_preview")
@@ -85,6 +97,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         upper = float(self.get_parameter("preview_diagnostic_range_max_m").value)
         if not 0 < lower < upper <= 4.5:
             raise ValueError("invalid preview diagnostic range")
+        if self._target_crop and (lower,upper)!=(.5,4.5):
+            raise ValueError("target crop challenged range is .5 to 4.5 m")
         # This subclass emits hypotheses only, outside the original activation
         # when explicitly declared here. No activation/profile file is modified.
         self.range_min_m, self.range_max_m = lower, upper
@@ -109,11 +123,16 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             self._surface_diagnostics=LatestSurfaceDiagnostics(local_client,
                 self._writer.directory/"local-surfaces",self._publish_surface_result)
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; concurrent RGB/stereo; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; target_crop={self._target_crop}; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 
-    def _compute_stereo(self, combined):
+    def _crop_calibration(self):
+        return {"P1":self.p1,"P2":self.p2,"R1":self.r1,
+                "R":self.r_ar_to_left,"T":self.t_ar_to_left_m.reshape(3),
+                "K":self.k_ar,"D":self.d_ar,"size":self.stereo_size}
+
+    def _compute_stereo(self, combined, target_roi=None):
         started = time.monotonic()
         self._last_stereo_start=started
         width = self.stereo_size[0]
@@ -124,7 +143,25 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         if getattr(self, "_stereo_scale", 1.) == .5:
             left_gray = self.cv2.resize(left_gray, (640,400), interpolation=self.cv2.INTER_AREA)
             right_gray = self.cv2.resize(right_gray, (640,400), interpolation=self.cv2.INTER_AREA)
-            a, b, timing = self._half_executor.compute(left_gray, right_gray)
+            plan=None;plan_s=copy_s=0.
+            if target_roi is not None:
+                from analyze_target_stereo_crop import crop_plan
+                stage=time.monotonic()
+                plan=crop_plan(target_roi,self._crop_calibration(),self._half_configs,
+                    diagnostic_margin_full_px=self.frustum_search_margin_px,frustum_lookup=self._frustum_lookup)
+                plan_s=time.monotonic()-stage
+                x1,y1,x2,y2=plan['common_crop_xyxy_px']
+                if x2-x1<=64+7:raise ValueError("target crop too narrow")
+                stage=time.monotonic()
+                pair=[im[y1:y2,x1:x2].copy() for im in (left_gray,right_gray)]
+                copy_s=time.monotonic()-stage
+            else:pair=(left_gray,right_gray)
+            a, b, timing = self._half_executor.compute(*pair)
+            stage=time.monotonic()
+            if plan is not None:
+                a,b=restore_crop((a,b),plan['common_crop_xyxy_px'],(400,640),self._half_configs)
+            timing.update(crop_plan_s=plan_s,crop_copy_s=copy_s,crop_restore_s=time.monotonic()-stage,
+                crop_plan=plan,current_target_crop=target_roi is not None)
             self._last_stereo_worker_timings = timing
             result=half_disparity(a,b)
             self._last_stereo_end=time.monotonic()
@@ -190,7 +227,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 audit.update(status="PAIR_SKEW_EXCEEDED", reason="PAIR_SKEW_EXCEEDED")
                 return
             events['stereo_submit']=time.monotonic()
-            future = self._perception_worker.submit(self._compute_stereo, combined)
+            if not getattr(self,"_target_crop",False):
+                future = self._perception_worker.submit(self._compute_stereo, combined)
             foreground['stereo_submit_s']=time.monotonic()-events['stereo_submit']
             single = getattr(self,"_rgb_backend","two_model_reference") == "single_segmentation"
             segmentation = None
@@ -245,6 +283,12 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 "observation_id":f"segmentation-preview:{cycle_id}:{candidate['instance_index']}"}
                 if single else self._selected_observation(raw, candidate, dynamic))
             foreground['target_selection_geometry_s']=time.monotonic()-selection_started
+            if getattr(self,"_target_crop",False):
+                events['stereo_submit']=time.monotonic()
+                future=self._perception_worker.submit(self._compute_stereo,combined,tuple(self._ar_inner_roi(observation)))
+                foreground['stereo_submit_s']+=time.monotonic()-events['stereo_submit']
+                audit['crop_target_binding']={"cycle_id":cycle_id,"instance_index":candidate['instance_index'],
+                    "roi":list(self._ar_inner_roi(observation)),"scheduling":"current RGB selection before stereo; no prior ROI"}
             stage=time.monotonic()
             left, right, self._cached_stereo, stereo_s = future.result()
             foreground['stereo_wait_after_target_s']=time.monotonic()-stage

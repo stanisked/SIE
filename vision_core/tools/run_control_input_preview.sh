@@ -36,6 +36,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p preview_local_surface_every_n_cycles:="${SIE_PREVIEW_LOCAL_EVERY_N:-1}" \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \
+  -p preview_target_crop:="${SIE_PREVIEW_TARGET_CROP:-false}" \
   -p preview_stereo_mode:="$mode" \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \
   -p frame_rate_hz:=10.0 -p evidence_dir:="$directory" \
