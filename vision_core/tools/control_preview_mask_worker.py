@@ -68,7 +68,7 @@ def main():
         with contextlib.redirect_stdout(sys.stderr):
             import numpy as np
             from ultralytics import YOLO
-            from preview_mask_surface import evaluate, segment_array, CurrentInstanceMasks
+            from preview_mask_surface import evaluate, evaluate_prepared, GEOMETRY_KEYS, segment_array, CurrentInstanceMasks
             if args.engine=='onnxruntime':
                 if args.comparison_report is None or args.ort_threads<1:
                     raise ValueError('ONNX requires comparison report and positive threads')
@@ -140,7 +140,14 @@ def main():
                           'code_sha256':code_sha,'class_name':'person','inference_count':1,'segmentation_engine':engine_metadata})
                     continue
                 source=bundle['rgb'] if 'rgb' in bundle else None
-                cal={k:bundle[k] for k in ('P1','P2','R1','R','T','K','D','size')}
+                prepared=bool(request.get('prepared_geometry'))
+                if prepared:
+                    points={k:bundle['geometry_'+k] for k in GEOMETRY_KEYS}
+                    if (str(points['source_cycle_id'].item())!=request['cycle_id'] or float(points['scale'])!=request.get('scale',1.)
+                            or [float(points['lower']),float(points['upper'])]!=request['range']):
+                        raise ValueError('prepared geometry cycle/scale/range mismatch')
+                else:
+                    cal={k:bundle[k] for k in ('P1','P2','R1','R','T','K','D','size')}
                 started=time.monotonic()
                 if request.get('operation')=='evaluate_selected_instance':
                     mask=current_masks.take(request['cycle_id'],request['rgb_arrays_sha256'],
@@ -159,7 +166,10 @@ def main():
                 else:
                     started=time.monotonic()
                     deferred=bool(request.get('defer_local',False))
-                    evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)))
+                    if prepared:
+                        evaluated=evaluate_prepared(points,mask,request['roi'],defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)))
+                    else:
+                        evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)))
                     if deferred:
                         result,samples=evaluated
                         if samples is not None:

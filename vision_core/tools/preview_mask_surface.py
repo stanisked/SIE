@@ -12,15 +12,17 @@ from vision_core.person_localization.local_surface_diagnostic import analyze_loc
 
 
 def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True, ownership_backend="opencv"):
-    if ownership_backend not in ("opencv", "reference_numpy"):
-        raise ValueError("unknown mask ownership backend")
+    points=prepare_stereo_points(disparity,cal,lower,upper,scale=scale)
+    return evaluate_prepared(points,mask,roi,defer_local=defer_local,
+        prepare_local=prepare_local,ownership_backend=ownership_backend)
+
+
+def prepare_stereo_points(disparity,cal,lower=.5,upper=4.5,*,scale=1.,cycle_id=""):
     if scale not in (1., .5, .25) or not 0 < lower < upper <= 4.5:
         raise ValueError('invalid diagnostic scale/range')
     width, height = cal['size']
     if disparity.shape != (int(height*scale), int(width*scale)):
         raise ValueError('disparity/calibration size mismatch')
-    if mask.shape != (1200,1920) or mask.dtype != np.bool_:
-        raise ValueError('expected current AR boolean mask')
     # A fixed original-image sampling density, without upsampling/duplicating
     # depth. Resize maps pixel centres: u_full=(u_small+.5)/scale-.5.
     stride = int(4*scale)
@@ -34,6 +36,24 @@ def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_
     u, v, d, z = u[valid], v[valid], d[valid], z[valid]
     xy = project((u.astype(float)+.5)/scale-.5,
                  (v.astype(float)+.5)/scale-.5, z, cal)
+    return {'u':u,'v':v,'d':d,'z':z,'xy':xy,'fb':np.asarray(fb),
+        'stride':np.asarray(stride),'scale':np.asarray(scale),'lower':np.asarray(lower),
+        'upper':np.asarray(upper),'source_cycle_id':np.asarray(cycle_id)}
+
+
+GEOMETRY_KEYS=('u','v','d','z','xy','fb','stride','scale','lower','upper','source_cycle_id')
+
+
+def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,ownership_backend="opencv"):
+    if ownership_backend not in ('opencv','reference_numpy'):raise ValueError('unknown mask ownership backend')
+    if mask.shape!=(1200,1920) or mask.dtype!=np.bool_:raise ValueError('expected current AR boolean mask')
+    scale=float(points['scale']);lower=float(points['lower']);upper=float(points['upper'])
+    if scale not in (1.,.5,.25) or not 0<lower<upper<=4.5:raise ValueError('invalid prepared scale/range')
+    u,v,d,z,xy=(points[key] for key in ('u','v','d','z','xy'))
+    if any(a.ndim!=1 or len(a)!=len(u) for a in (u,v,d,z)) or xy.shape!=(len(u),2):
+        raise ValueError('prepared point shape mismatch')
+    fb=float(points['fb']);stride=int(points['stride'])
+    if stride!=int(4*scale) or not np.isfinite(fb) or fb<=0:raise ValueError('invalid prepared geometry metadata')
     # One equivalent 5x5 constant-zero erosion and one ownership selection.
     # Reuse them for depth statistics and (when scheduled) local-fit inputs.
     selected = interior = None

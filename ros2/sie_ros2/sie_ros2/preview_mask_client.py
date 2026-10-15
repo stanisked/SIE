@@ -168,11 +168,14 @@ class PreviewMaskClient:
         return self._array_request(cycle_id,{'rgb':rgb},{'operation':'infer_instances',
             'diagnostic_mask_hashes':diagnostic_mask_hashes})
 
-    def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale, defer_local=False, prepare_local=True):
+    def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale, defer_local=False, prepare_local=True, prepared_geometry=None):
         if segmentation.get('cycle_id')!=cycle_id or segmentation.get('model_sha256')!=self.model_sha256:
             raise ValueError('segmentation cycle/model mismatch')
-        result=self._array_request(cycle_id,{'disparity':disparity,**cal},{
-            'operation':'evaluate_selected_instance','instance_index':candidate['instance_index'],
+        arrays={'disparity':disparity,**cal} if prepared_geometry is None else {'geometry_'+k:v for k,v in prepared_geometry.items()}
+        if prepared_geometry is not None and str(prepared_geometry['source_cycle_id'].item())!=cycle_id:
+            raise ValueError('prepared geometry source cycle mismatch')
+        result=self._array_request(cycle_id,arrays,{
+            'operation':'evaluate_selected_instance','prepared_geometry':prepared_geometry is not None,'instance_index':candidate['instance_index'],
             'bbox_xyxy_px':candidate['bbox_xyxy_px'],'rgb_arrays_sha256':segmentation['arrays_sha256'],
             'roi':list(roi),'range':list(depth_range),'scale':scale,'defer_local':defer_local,'prepare_local':prepare_local})
         result['mask_s']=segmentation.get('mask_s')

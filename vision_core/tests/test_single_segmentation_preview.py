@@ -133,6 +133,19 @@ class YOLO:
                     self.assertEqual(skipped['local_surface']['status'],'SKIPPED_BY_DIAGNOSTIC_SAMPLING')
                     self.assertNotIn('_surface_job',skipped)
                     self.assertNotIn('deferred_surface',skipped)
+                    from preview_mask_surface import prepare_stereo_points
+                    prepared_seg=client.infer('prepared',np.zeros((1200,1920,3),np.uint8))
+                    points=prepare_stereo_points(np.full((48,64),16,np.float32),cal,scale=.5,cycle_id='prepared')
+                    prepared=client.evaluate_selected('prepared',None,{},prepared_seg['instances'][0],
+                        [4,4,120,88],[.5,4.5],prepared_seg,scale=.5,defer_local=True,prepared_geometry=points)
+                    self.assertEqual(prepared['mask_depth'],deferred['mask_depth'])
+                    for key,value in prepared['_surface_job'].items():
+                        np.testing.assert_array_equal(value,deferred['_surface_job'][key])
+                    points['source_cycle_id']=np.asarray('old')
+                    with self.assertRaisesRegex(ValueError,'source cycle mismatch'):
+                        client.evaluate_selected('prepared',None,{},prepared_seg['instances'][0],
+                            [4,4,120,88],[.5,4.5],prepared_seg,scale=.5,prepared_geometry=points)
+
 
 
                 finally:

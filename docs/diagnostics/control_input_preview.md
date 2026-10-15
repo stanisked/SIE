@@ -906,3 +906,43 @@ identity and real worker/transport numerical checks; Python and shell syntax
 checks passed. Rebuild ROS and run the existing 256x384 diagnostic once with a
 person. This is the first measurement of previously absent capture/wait timers,
 not a new depth/calibration trial.
+
+## Early geometry preparation candidate
+
+Targeted live run `...onnxruntime_20261015_141126`: 59/59 legacy coherent mask
+depths, median candidate 2.7126 m / span 0.0122 m, 12/12 local jobs succeeded,
+no write/processing errors. Host median 345 ms, RGB foreground 247.12 ms,
+captures AR/stereo 18.10/11.58 ms, fusion foreground 65.29 ms, explicit stereo
+wait median 0.01 ms/max 4.52 ms. Stereo queue 0.12 ms, overlap 222.09 ms.
+No physical error bound follows from low temporal span; this run establishes
+current scene repeatability and timer breakdown, not a new accuracy test.
+
+`prepare_stereo_points` now separates existing disparity sampling/range checks,
+metric z and calibrated RGB projection from mask/ROI selection.
+`evaluate_prepared` applies the unchanged ownership/layer/MAD/local-input stages.
+The usual evaluate wrapper executes the same stages in the original order.
+No formulas, masks, sample density, interpolation, quality thresholds or current
+live scheduling are changed by default.
+
+Optional companion/client prepared-geometry requests carry points in the
+existing SHA-verified temporary NPZ protocol, with source cycle/scale/range
+checks before mask consumption. Parent also rejects a mismatched source cycle.
+Exact current RGB model-result-index binding and single-use mask cache remain.
+No previous-frame geometry or local result can substitute for a new request.
+
+`run_geometry_overlap_benchmark.sh` compares current geometry-after-RGB with
+geometry prepared in the stereo job immediately after matching/LR, concurrently
+with remaining RGB inference. Same process/model/session/helper defaults and
+NPZ transport in both variants; 22 frozen RGB/rectified-stereo cycles with two
+alternating repetitions. Compare exact signed maps, all RGB bytes/instances/
+mask hashes and complete masked-depth reports. Worker local fitting is skipped
+in both; local-input equality is covered in tests. Packet transfer can add bytes,
+so a gain is a hypothesis until measured. No camera/rectification/local fitting
+in this benchmark timer; diagnostic mask hashing and ROI helper overhead are
+common to both. No automatic switch or live latency certification.
+
+31 relevant tests passed: scaled/masked/ROI split equivalence, no repeated
+projection, local-array identity, real worker prepared RPC and wrong-cycle
+refusal, original geometry/backend lifecycle and quality diagnostics. Python
+compile and launcher syntax pass. Next action is the offline Pi comparison,
+not another live person capture. Existing live launcher remains unchanged.
