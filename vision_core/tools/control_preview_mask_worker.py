@@ -60,6 +60,7 @@ def main():
     parser.add_argument('--engine',choices=['pytorch','onnxruntime'],default='pytorch')
     parser.add_argument('--comparison-report',type=Path)
     parser.add_argument('--ort-threads',type=int,default=2)
+    parser.add_argument('--active-ort-threads',type=int,choices=[1,2])
     parser.add_argument('--cpu-helper-threads',type=int,choices=[1,2])
     args=parser.parse_args()
     os.environ['YOLO_AUTOINSTALL']='false' 
@@ -73,7 +74,15 @@ def main():
                     raise ValueError('ONNX requires comparison report and positive threads')
                 from onnx_segmentation_backend import OnnxSegmentationBackend
                 model=OnnxSegmentationBackend(args.model,args.comparison_report,args.ort_threads)
-                engine_metadata=model.metadata
+                from active_ort_session import configure_active_ort,active_session_metadata,verify_active_ort
+                if args.active_ort_threads is not None:
+                    configure_active_ort(model,args.model,args.active_ort_threads)
+                    # Exercise the actual replaced session before READY.
+                    from preview_mask_surface import infer_instances
+                    for _ in range(2):infer_instances(np.zeros((1200,1920,3),np.uint8),model)
+                    verify_active_ort(model,args.active_ort_threads)
+                engine_metadata={**model.metadata,'active_ort_session':active_session_metadata(model),
+                                 'active_ort_threads_requested':args.active_ort_threads}
             else:
                 model=YOLO(str(args.model),task='segment')
                 engine_metadata={'engine':'pytorch'}
@@ -91,6 +100,7 @@ def main():
         Path(__file__).resolve().parents[1]/'person_localization/instance_mask_stereo_fusion.py',
         Path(__file__).resolve().parents[1]/'person_localization/rgb_shared_buffer.py')}
     if args.engine=='onnxruntime':
+        code_sha['active_ort_session']=digest(Path(__file__).with_name('active_ort_session.py'))
         code_sha['onnx_backend']=digest(Path(__file__).with_name('onnx_segmentation_backend.py'))
     engine_metadata={**engine_metadata,'cpu_helper_threads':{
         'requested':args.cpu_helper_threads,
@@ -112,6 +122,7 @@ def main():
                         instances=current_masks.infer(request['cycle_id'],request['arrays_sha256'],bundle['rgb'],model)
                     inference_s=time.monotonic()-started
                     verify_helper_threads(args.cpu_helper_threads)
+                    if args.active_ort_threads is not None:verify_active_ort(model,args.active_ort_threads)
                     fingerprints={}
                     if request.get('diagnostic_mask_hashes'):
                         fingerprints={'rgb_payload_sha256':hashlib.sha256(bundle['rgb'].tobytes()).hexdigest(),'instance_mask_sha256':[hashlib.sha256(mask.tobytes()).hexdigest()

@@ -29,28 +29,7 @@ class Calls:
         return timed
 
 
-def active_session_owner(backend):
-    """Follow the actual AutoBackend.forward delegation, not shadow attributes."""
-    seen=set();owner=backend
-    while getattr(owner,'backend',None) is not None:
-        if id(owner) in seen:raise ValueError('backend delegation cycle')
-        seen.add(id(owner));owner=owner.backend
-    session=getattr(owner,'session',None)
-    if session is None or not callable(getattr(session,'run',None)):
-        raise ValueError('delegated backend has no supported ORT session.run')
-    return owner
-
-
-def active_session_metadata(adapter):
-    outer=adapter.model.predictor.model;owner=active_session_owner(outer);session=owner.session
-    opts=session.get_session_options()
-    return {'owner':type(owner).__module__+'.'+type(owner).__qualname__,
-        'delegated':owner is not outer,
-        'outer_session_is_active':getattr(outer,'session',None) is session,
-        'providers':session.get_providers(),'input_shape':session.get_inputs()[0].shape,
-        'intra_op_num_threads':opts.intra_op_num_threads,'inter_op_num_threads':opts.inter_op_num_threads,
-        'execution_mode':str(opts.execution_mode),
-        'meaning':'Actual session options; zero threads means ORT default, not zero execution threads.'}
+from active_ort_session import active_session_owner, active_session_metadata
 
 
 @contextmanager

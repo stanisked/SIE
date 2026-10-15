@@ -814,3 +814,38 @@ thread counts must not be treated as verified active thread counts. Profiling
 records actual settings without changing them or silently altering the live
 path. Review ACTIVE_ORT before any session-binding/runtime correction. This is
 separate from the confirmed PyTorch helper-count checks.
+
+## Actual ORT session thread challenge
+
+Corrected profiler on Pi confirmed executed owner
+`ultralytics.nn.backends.onnx.ONNXBackend`, delegated=true,
+outer_session_is_active=false, CPU-only input [1,3,256,384], active intra/inter
+options 0/0 (automatic), sequential. Offline stage medians: total 85.72 ms,
+preprocess 2.85, ORT 51.60, inference 51.78, postprocess 27.15, native masks
+21.87 including scale_masks 5.36 ms. Exact 44/44; no modified inputs. These are
+isolated timings, not the concurrent live 207 ms inference duration.
+
+`active_ort_session.py` resolves the actual delegated owner. Optional worker
+`--active-ort-threads 1|2` replaces that owner's session with a verified export,
+CPU-only static shape, intra=1|2/inter=1/sequential/spinning-off configuration.
+It warms the replacement before READY and verifies active settings at startup
+and after each inference. Parent independently checks actual active metadata.
+The existing adapter's outer/session behavior and all live launchers remain
+unchanged; this optional path is an offline candidate until explicitly reviewed.
+Model SHA and package-version review remain prerequisites. Helper defaults,
+NPZ transport and all model/quality parameters stay fixed in this challenge.
+
+`run_active_ort_benchmark.sh` compares automatic/current behavior against actual
+intra=1 and intra=2 concurrently with half-resolution stereo, using all 22
+frozen cycles and two repetitions. Variant order rotates/reverses; only one NN
+inference runs at a time. One worker/model stays resident per variant, a stated
+benchmark limitation. Every received RGB payload, full mask, exact bbox/confidence
+record and both signed stereo maps must match across all three variants.
+A difference refuses the experiment; no automatic rollout. Actual executed
+session options are printed as ACTIVE_ORT_BUDGET and retained in the report.
+No camera/exposure/physical accuracy validation or full live-latency claim.
+
+19 targeted tests passed, including replacement of inner session while keeping
+an outer shadow untouched, active-setting mismatch/SHA refusal, profiling
+coverage, helper settings, worker protocol, mmap ownership and reviewed adapter.
+Actual Pi comparison is pending. Immediate action is offline, no ROS rebuild.

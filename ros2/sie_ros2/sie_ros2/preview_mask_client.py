@@ -9,7 +9,7 @@ import time
 
 
 class PreviewMaskClient:
-    def __init__(self, python, script, model, timeout=30., *, engine="pytorch", comparison_report=None, ort_threads=2, cpu_helper_threads=None, rgb_transport="npz"):
+    def __init__(self, python, script, model, timeout=30., *, engine="pytorch", comparison_report=None, ort_threads=2, cpu_helper_threads=None, rgb_transport="npz", active_ort_threads=None):
         if rgb_transport not in ("npz","mmap"):raise ValueError("unsupported RGB transport")
         self.rgb_transport=rgb_transport
         self.timeout=timeout
@@ -21,6 +21,9 @@ class PreviewMaskClient:
         if cpu_helper_threads is not None:
             if cpu_helper_threads not in (1,2):raise ValueError('unsupported helper thread count')
             command+=['--cpu-helper-threads',str(cpu_helper_threads)]
+        if active_ort_threads is not None:
+            if engine!='onnxruntime' or active_ort_threads not in (1,2):raise ValueError('unsupported active ORT configuration')
+            command+=['--active-ort-threads',str(active_ort_threads)]
         report_sha=None
         if engine=='onnxruntime':
             report_sha=hashlib.sha256(Path(comparison_report).read_bytes()).hexdigest()
@@ -35,6 +38,11 @@ class PreviewMaskClient:
             if ready.get('model_sha256')!=self.model_sha256:
                 raise ValueError('preview mask worker model mismatch')
             self.engine_metadata=ready.get('segmentation_engine',{'engine':'pytorch'})
+            if active_ort_threads is not None:
+                active=self.engine_metadata.get('active_ort_session',{})
+                if (self.engine_metadata.get('active_ort_threads_requested')!=active_ort_threads
+                        or active.get('intra_op_num_threads')!=active_ort_threads or active.get('inter_op_num_threads')!=1):
+                    raise ValueError('preview active ORT setting was not applied')
             if cpu_helper_threads is not None:
                 observed=self.engine_metadata.get('cpu_helper_threads',{})
                 if observed.get('requested')!=cpu_helper_threads or observed.get('torch')!=cpu_helper_threads or observed.get('opencv')!=cpu_helper_threads:
