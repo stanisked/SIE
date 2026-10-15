@@ -385,3 +385,103 @@ The existing 640x400 launcher remains PyTorch. Same one-inference target/index/
 mask ownership and diagnostic-only motor boundary. See the ONNX runbook for the
 exact paths, checks, results and live command. Concurrent Pi latency is pending;
 no new 250 ms or physical accuracy claim follows from the offline result.
+
+## 2026-10-15: current masked depth and deferred local fits
+
+### Evidence motivating the change
+
+First ONNX live journal:
+`control_input_preview_half_640x400_single_segmentation_onnxruntime_20261015_111247`.
+30 completed cycles, one cancelled; 24 global-MAD refusals, six coherent masked
+results. Post-first host median 0.6758 s / max 0.7006 s, 0/29 within 250 ms.
+Segmentation round-trip median 0.4167 s (inference 0.3760 s); overlapping stereo
+worker 0.2637 s. Subsequent fusion round trip 0.2225 s, including local surface
+fits 0.2135 s. No journal drops/errors. Candidate-median span 0.1157 m, with no
+same-frame basis to attribute the difference from the previous run to ONNX.
+
+The operator's journal extraction found global MAD 36.5–81.1 mm, local held-out
+MAD 12.5–20.0 mm, p90 local residual 44.7–74.1 mm and coarse fitted-bin coverage
+95.9–99.7%. Refused cycle 17 had local MAD 14.1 mm/p90 44.7 mm; passed cycle 14
+had 15.6/65.6 mm. Global MAD alone does not separate local fit quality here.
+This does not establish physical accuracy or explain the 115.7 mm depth span.
+No mask/depth/layer/MAD/geometry/confidence threshold is changed.
+
+### Implementation
+
+`preview_defer_local_surfaces=true` splits current mask-depth preparation from
+local fitting. The explicit ONNX launcher selects it; the general node and
+PyTorch reference still default to synchronous local diagnostics.
+
+1. Same segmentation result index, RGB/cycle/model binding and current LR maps.
+2. Same projection, range, ROI, mask erosion, supported depth layers and 50 mm
+   global-MAD check. A global-MAD refusal remains a refusal in `mask_depth`.
+3. Return mask-depth result immediately, plus sparse original samples and
+   coverage input through a SHA/cycle-checked temporary RAM transfer. There is
+   no local SciPy fitting in this foreground operation.
+4. Publish primary preview and submit its compact journal FIRST. Only then
+   submit local work to an independent process, which loads no neural model.
+5. At most one active task and one latest pending task. A new pending task
+   replaces an older pending task; replacement count is explicit. Inputs are
+   copied before queue ownership changes, so later frames cannot mutate them.
+
+Foreground status `MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY` means the current masked
+hypothesis is available; nested depth status may still refuse it. Local status
+is `DEFERRED_NOT_YET_COMPUTED`, never a fabricated pass or old-frame result.
+The primary journal's pending marker is a pre-submit snapshot, not evidence that
+local computation has completed. A cancelled cycle does not submit new fits.
+
+Each completed local result is independent and carries the EXACT original
+`cycle_id`, frame timestamp, calibration/scale/range, RGB/mask/disparity input
+hashes, prepared-sample transfer hash, engine/method hashes and original masked
+result. It includes local-fit statistics, coarse coverage, queue wait, compute
+and submit-to-result times, completion timestamp and replacement counter.
+Late completion never updates a primary record or masquerades as the current
+frame. Local results remain diagnostic, not Measurement or movement inputs.
+
+Results are published on
+`/sie/diagnostics/ar0234_ov9281/local_surface_async` (depth 1) and independently
+written under the main journal's `local-surfaces/` directory with filenames
+`local-surface-<original-cycle-id>.json`. These filenames cannot be mistaken for
+primary records by the existing `ar0234-ov9281-control-preview-*.json` search.
+Foreground journals contain no array payload. Large transfer files are deleted;
+array hashes do not make these compact journals a replayable image dataset.
+
+The local process sets BLAS/OMP/MKL thread counts to one before numerical imports
+to avoid accidental internal oversubscription. This does not change neural or
+stereo threads. One foreground mask RPC is never multiplexed with a local-fit
+RPC on the same pipe. Worker failure/wrong cycle/hash produces a specific local
+refusal and counters; it cannot substitute a previous result. Shutdown drains
+at most the active and latest pending tasks before closing the worker. ROS
+publication failure is recorded separately while local disk recording proceeds.
+
+### One live check
+
+```bash
+cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+git pull --ff-only
+source /opt/ros/jazzy/setup.bash
+colcon build --packages-select sie_ros2 --symlink-install
+bash vision_core/tools/run_control_input_preview_640x400_onnx.sh
+```
+
+Stop another camera consumer, person in view, same short implementation check.
+Read primary host timing and mask-depth status counts, then `LOCAL_SURFACE_ASYNC`
+completed/replaced/error counters and its separate latency summary. No model
+export, dependency install, calibration or distance sweep is required.
+
+The change removes the sequential local-fit wait, not its CPU cost. Concurrent
+background fitting can slow segmentation/stereo, so do not subtract 213 ms from
+the previous result as an established gain. The complete 250 ms target remains
+unmet until measured; no applicability or motion gate is bypassed.
+
+### Verification
+
+Tests check exact mask-depth parity and identical synchronous/deferred local
+statistics on synthetic inputs, absence of foreground fitting, one-pending-task
+replacement under a blocked worker, source-array ownership, cycle/provenance,
+real separate-process fitting and wrong-cycle closure/temp cleanup. The actual
+mask RPC transports deferred sparse inputs without fitting; the actual callback
+publishes and journals before local submission, including MAD-refused frames.
+Existing ONNX, selection, stereo, protocol and shutdown regressions remain in
+scope. Numerical checks are not physical-depth validation; new Pi concurrent
+timing remains pending the command above.

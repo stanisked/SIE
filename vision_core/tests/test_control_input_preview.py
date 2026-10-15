@@ -238,6 +238,28 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertEqual(messages[-1]["segmentation_observation"]["class_name"],"person")
         self.assertFalse(messages[-1]["segmentation_observation"]["canonical_observation_published"])
         self.assertEqual(messages[-1]["decision_preview"]["status"],"STOP")
+        # Primary publication/journal must precede background fit submission.
+        node._defer_local=True
+        def deferred_fuse(*args,**kwargs):
+            self.assertEqual(kwargs,{"scale":.5,"defer_local":True})
+            return {"status":"MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY",
+                    "mask_depth":{"status":"DEPTH_MAD_EXCEEDED"},
+                    "local_surface":{"status":"DEFERRED_NOT_YET_COMPUTED"},
+                    "_surface_job":{"u":np.array([4,8])}}
+        node._mask_client.evaluate_selected=deferred_fuse
+        submitted=[]
+        node._surface_diagnostics=SimpleNamespace(dropped=0,completed=0,errors=0,write_errors=0,
+            submit=lambda *args:(events.append("local-submit"),submitted.append(args)))
+        events.clear()
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker=worker
+            node._cycle()
+        self.assertEqual(events,["publish","journal","local-submit"])
+        self.assertEqual(messages[-1]["status"],"MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY")
+        self.assertEqual(messages[-1]["shape_diagnostic"]["mask_depth"]["status"],"DEPTH_MAD_EXCEEDED")
+        self.assertNotIn("_surface_job",messages[-1]["shape_diagnostic"])
+        self.assertEqual(submitted[0][0],messages[-1]["cycle_id"])
+        self.assertEqual(submitted[0][2]["source_cycle_id"],messages[-1]["cycle_id"])
         node._mask_client.infer=lambda cid,rgb:{"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY","instances":[]}
         # A later no-target cycle must not reuse the previous association.
         node.observer = SimpleNamespace(observe=lambda *args, **kw: {"disposition": "UNAVAILABLE", "reason": "NO_TARGET"})

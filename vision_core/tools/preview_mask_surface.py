@@ -11,7 +11,7 @@ from vision_core.person_localization.instance_mask_stereo_fusion import masked_d
 from vision_core.person_localization.local_surface_diagnostic import analyze_local_surfaces
 
 
-def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1.):
+def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False):
     if scale not in (1., .5, .25) or not 0 < lower < upper <= 4.5:
         raise ValueError('invalid diagnostic scale/range')
     width, height = cal['size']
@@ -38,15 +38,12 @@ def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1.):
                          borderType=cv2.BORDER_CONSTANT, borderValue=0)
     selected = owned(xy, interior, roi)
     u, v, d, xy = u[selected], v[selected], d[selected], xy[selected]
-    local, data = analyze_local_surfaces(u, v, d, fb, stride=stride,
-                                        tile_px=int(32*scale))
-    local['rgb_coverage'] = coarse_coverage(interior, roi, xy,
-                                          np.isfinite(data['axial_residual_m']))
-    count = local['patch_count']
-    local['unfitted_patch_fraction'] = 1-local['fitted_patch_count']/count if count else None
+    samples={'u':u,'v':v,'d':d,'xy':xy,'interior':interior,
+             'roi':np.asarray(roi),'fb':np.asarray(fb),'stride':np.asarray(stride),'scale':np.asarray(scale)}
+    local = {'status':'DEFERRED_NOT_YET_COMPUTED'} if defer_local else local_surface_stats(samples)
     # Compact result preserves maxima and all failed/sparse support counters.
-    return {'status':'SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY',
-            'mask_depth':depth, 'local_surface':{k:v for k,v in local.items() if k!='patches'},
+    result={'status':'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY' if defer_local else 'SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY',
+            'mask_depth':depth, 'local_surface':local,
             'reference_frame':'rectified_left_optical_frame', 'unit':'m',
             'confidence':None, 'confidence_status':'NOT_VALIDATED',
             'metric_measurement_authorized':False, 'navigation_eligible':False,
@@ -55,6 +52,22 @@ def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1.):
             'sample_stride_original_px':4,
             'limitations':['Local fit residuals are not physical distance error.',
                           'Global MAD remains a comparison metric, not shape-aware admission.']}
+
+
+    return (result,samples) if defer_local else result
+
+
+def local_surface_stats(samples):
+    u,v,d,xy=(samples[k] for k in ('u','v','d','xy'))
+    fb=float(samples['fb']);stride=int(samples['stride']);scale=float(samples['scale'])
+    interior=samples['interior'];roi=samples['roi']
+    local, data = analyze_local_surfaces(u, v, d, fb, stride=stride,
+                                        tile_px=int(32*scale))
+    local['rgb_coverage'] = coarse_coverage(interior, roi, xy,
+                                          np.isfinite(data['axial_residual_m']))
+    count = local['patch_count']
+    local['unfitted_patch_fraction'] = 1-local['fitted_patch_count']/count if count else None
+    return {k:v for k,v in local.items() if k!='patches'}
 
 
 def segment_array(source, candidate, model):

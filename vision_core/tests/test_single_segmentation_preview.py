@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'vision_core/tools'))
 sys.path.insert(0,str(ROOT/'ros2/sie_ros2/sie_ros2'))
 from preview_mask_client import PreviewMaskClient
-from preview_mask_surface import CurrentInstanceMasks
+from preview_mask_surface import CurrentInstanceMasks, local_surface_stats
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
 
 
@@ -103,6 +103,14 @@ class YOLO:
                     again=client.evaluate_selected('cycle',np.full((48,64),16,np.float32),cal,
                         segmentation['instances'][0],[4,4,120,88],[.5,4.5],segmentation,scale=.5)
                     self.assertEqual(again['status'],'MASK_SURFACE_UNAVAILABLE')
+                    next_seg=client.infer('next',np.zeros((1200,1920,3),np.uint8))
+                    deferred=client.evaluate_selected('next',np.full((48,64),16,np.float32),cal,
+                        next_seg['instances'][0],[4,4,120,88],[.5,4.5],next_seg,scale=.5,defer_local=True)
+                    self.assertEqual(deferred['status'],'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY')
+                    self.assertEqual(deferred['mask_depth'],result['mask_depth'])
+                    self.assertEqual(local_surface_stats(deferred['_surface_job']),result['local_surface'])
+                    self.assertNotIn('surface_s',deferred)
+
                 finally:
                     client.close()
 

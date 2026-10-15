@@ -33,6 +33,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p shadow_segmenter_python:="$segmenter_python" \
   -p shadow_segmenter_model:="$segmenter_model" \
   "${engine_args[@]}" \
+  -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \
   -p preview_stereo_mode:="$mode" \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \
@@ -58,12 +59,18 @@ print('CONTROL_PREVIEW_SUMMARY', 'records=', len(rows), 'statuses=', dict(Counte
 if times:
     print('host_median_s=', round(statistics.median(times), 4), 'host_max_s=', round(max(times), 4),
           'within_250ms=', sum(t <= .25 for t in times), '/', len(times))
-for key in ('mask_s','surface_s','round_trip_s'):
+for key in ('mask_s','mask_depth_prepare_s','surface_s','round_trip_s'):
     values=[r.get('shape_diagnostic',{}).get(key) for r in rows[1:] if r['status']!='CANCELLED_SHUTDOWN']
     values=[v for v in values if v is not None]
     if values: print(key,'median_s=',round(statistics.median(values),4),'max_s=',round(max(values),4))
 depths=[r.get('shape_diagnostic',{}).get('mask_depth',{}).get('candidate_depth_m') for r in rows if r['status']!='CANCELLED_SHUTDOWN']
 depths=[d for d in depths if d is not None]
 if depths: print('MASK_CANDIDATE_DEPTH median_m=',round(statistics.median(depths),4),'span_m=',round(max(depths)-min(depths),4))
+local_files=sorted(Path(sys.argv[1]).rglob('local-surface-*.json'))
+local_rows=[json.loads(p.read_text()) for p in local_files]
+print('LOCAL_SURFACE_ASYNC records=',len(local_rows),'statuses=',dict(Counter(r['status'] for r in local_rows)))
+for key in ('queue_wait_s','local_processing_s','submit_to_result_s'):
+    values=[r[key] for r in local_rows if r.get(key) is not None]
+    if values:print('LOCAL',key,'median_s=',round(statistics.median(values),4),'max_s=',round(max(values),4))
 print('Journal root:', sys.argv[1])
 PY

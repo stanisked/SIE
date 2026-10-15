@@ -92,8 +92,18 @@ def main():
                     result={'status':'MASK_UNAVAILABLE','mask':info}
                 else:
                     started=time.monotonic()
-                    result=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.))
-                    result.update(mask=info,surface_s=time.monotonic()-started,
+                    deferred=bool(request.get('defer_local',False))
+                    evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred)
+                    if deferred:
+                        result,samples=evaluated
+                        job=path.parent/'surface_job.npz'
+                        np.savez(job,cycle_id=request['cycle_id'],**samples)
+                        result['deferred_surface']={'file':job.name,'sha256':digest(job),'retained':False,'transport':'TEMPORARY_RAM_ONLY'}
+                        result['mask_depth_prepare_s']=time.monotonic()-started
+                    else:
+                        result=evaluated
+                        result['surface_s']=time.monotonic()-started
+                    result.update(mask=info,
                                   mask_sha256=hashlib.sha256(mask.tobytes()).hexdigest())
                 result.update(segmentation_engine=engine_metadata,code_sha256=code_sha,mask_s=mask_s,cycle_id=request['cycle_id'],
                               arrays_sha256=request['arrays_sha256'],model_sha256=model_sha)
