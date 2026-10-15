@@ -683,3 +683,19 @@ an exact and materially faster candidate would justify a separate live change.
 Local unit checks exercise optional helper configuration, missing/different-mask
 refusal and existing worker/client integration. Real inference timing is pending
 execution on Pi. This challenge needs no person or camera capture.
+
+### Corrected helper-thread initialization order
+
+First Pi challenge reported `current torch=3/OpenCV=1` and requested helper1
+also `torch=3/OpenCV=1`: joint medians 0.1943/0.1956 s, exact 44/44. This did
+not compare different helper thread settings. No performance conclusion or live
+switch follows from that run. Initialization reset the earlier request; the
+configuration had been applied before Ultralytics/backend initialization.
+
+The optional limit is now applied after model/backend warm-up, verified at
+startup, and rechecked after every inference. Parent validates the startup
+requested/actual counts as well. A mismatch refuses the experiment rather than
+printing misleading comparison statistics. Default unspecified helper behavior
+is unchanged. Rerun the same offline command; expect helper1 torch=1/OpenCV=1.
+Tests include configuration/reset rejection and initialization/inference order;
+19 targeted tests passed. Actual corrected Pi performance remains pending.

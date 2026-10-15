@@ -25,6 +25,16 @@ def configure_helper_threads(threads):
     import cv2
     torch.set_num_threads(threads)
     cv2.setNumThreads(threads)
+    verify_helper_threads(threads)
+
+
+def verify_helper_threads(threads):
+    if threads is None:return
+    import torch
+    import cv2
+    actual=(torch.get_num_threads(),cv2.getNumThreads())
+    if actual!=(threads,threads):
+        raise ValueError(f'helper thread mismatch: requested={threads}, actual={actual}')
 
 
 def main():
@@ -39,7 +49,6 @@ def main():
     try:
         with contextlib.redirect_stdout(sys.stderr):
             import numpy as np
-            configure_helper_threads(args.cpu_helper_threads)
             from ultralytics import YOLO
             from preview_mask_surface import evaluate, segment_array, CurrentInstanceMasks
             if args.engine=='onnxruntime':
@@ -53,6 +62,8 @@ def main():
                 engine_metadata={'engine':'pytorch'}
             if model.task!='segment' or model.names.get(0)!='person':
                 raise ValueError('expected COCO person segmentation model')
+            # Ultralytics/backend warm-up may reset torch thread defaults.
+            configure_helper_threads(args.cpu_helper_threads)
     except Exception as error:
         emit({'status':'UNAVAILABLE','reason':type(error).__name__,'error_detail':str(error)[:400]})
         return
@@ -84,6 +95,7 @@ def main():
                     with contextlib.redirect_stdout(sys.stderr):
                         instances=current_masks.infer(request['cycle_id'],request['arrays_sha256'],bundle['rgb'],model)
                     inference_s=time.monotonic()-started
+                    verify_helper_threads(args.cpu_helper_threads)
                     fingerprints={}
                     if request.get('diagnostic_mask_hashes'):
                         fingerprints={'instance_mask_sha256':[hashlib.sha256(mask.tobytes()).hexdigest()

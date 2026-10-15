@@ -33,6 +33,10 @@ class PreviewMaskClient:
             if ready.get('model_sha256')!=self.model_sha256:
                 raise ValueError('preview mask worker model mismatch')
             self.engine_metadata=ready.get('segmentation_engine',{'engine':'pytorch'})
+            if cpu_helper_threads is not None:
+                observed=self.engine_metadata.get('cpu_helper_threads',{})
+                if observed.get('requested')!=cpu_helper_threads or observed.get('torch')!=cpu_helper_threads or observed.get('opencv')!=cpu_helper_threads:
+                    raise ValueError('preview helper thread setting was not applied')
             if engine=='onnxruntime' and (self.engine_metadata.get('engine')!=engine or self.engine_metadata.get('threads')!=ort_threads or self.engine_metadata.get('comparison_sha256')!=report_sha):
                 raise ValueError('preview engine/report mismatch')
         except BaseException:
