@@ -362,3 +362,14 @@ cases and avoid threshold tuning to force agreement. Use the existing saved
 full-evidence captures rather than the compact latest journals, whose images
 were intentionally not retained. No new person or distance test is required
 for this offline step. Live replacement remains pending those results.
+
+
+### 2026-10-15 offline ONNX comparison implementation
+
+Prepared `benchmark_segmentation_onnx.py`, a separate dependency-overlay setup
+and frozen-frame launcher. See [segmentation_onnx_comparison.md](segmentation_onnx_comparison.md).
+It discovers and verifies the actual live PyTorch input tensor shape before
+export, uses identical tensor hashes for fair ONNX comparison, checks CPU thread
+variants 1/2/4, bbox/mask matching and selection/geometry outcomes. It does not
+switch the live backend or modify the existing runtime environments. Real model
+export/timing remains pending Pi execution. No new person run is requested.
