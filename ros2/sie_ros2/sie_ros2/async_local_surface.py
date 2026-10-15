@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import queue
 import select
+import signal
 import subprocess
 import tempfile
 import threading
@@ -16,10 +17,10 @@ import time
 
 class LocalSurfaceClient:
     def __init__(self,python,script,timeout=30.):
-        self.timeout=timeout;self.process=None
+        self.timeout=timeout;self.process=None;self.last_failure=None;self.last_exit=None
         env={**os.environ,'OPENBLAS_NUM_THREADS':'1','OMP_NUM_THREADS':'1','MKL_NUM_THREADS':'1'}
         self.process=subprocess.Popen([str(python),'-u',str(script)],stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,bufsize=1,env=env)
+            stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True,bufsize=1,env=env,start_new_session=True)
         try:
             self.metadata=self._read(60.)
             if self.metadata.get('status')!='READY':raise RuntimeError(f"local worker not ready: {self.metadata}")
@@ -31,12 +32,18 @@ class LocalSurfaceClient:
         ready,_,_=select.select([self.process.stdout],[],[],timeout)
         if not ready:raise TimeoutError('local worker timeout')
         line=self.process.stdout.readline()
-        if not line:raise RuntimeError('local worker closed')
+        if not line:
+            # EOF can precede waitpid visibility by a scheduler tick.
+            try:code=self.process.wait(timeout=.2)
+            except subprocess.TimeoutExpired:code=self.process.poll()
+            self.last_failure=self._exit_details(code, 'UNEXPECTED_STDOUT_EOF')
+            raise RuntimeError(f'local worker closed; returncode={code}')
         response=json.loads(line)
         if not isinstance(response,dict):raise ValueError("invalid local worker response")
         return response
 
     def compute(self,job):
+        self.last_failure=None
         import numpy as np
         try:
             with tempfile.TemporaryDirectory(prefix='sie-local-',dir='/dev/shm') as folder:
@@ -54,17 +61,39 @@ class LocalSurfaceClient:
                     raise ValueError('local worker input mismatch')
                 return result
         except BaseException:
+            if self.last_failure is None:
+                self.last_failure=self._exit_details(self.process.poll() if self.process else None,'REQUEST_FAILED_BEFORE_CLEANUP')
             self.close();raise
+
+    @staticmethod
+    def _exit_details(code,stage):
+        name=None
+        if code is not None and code<0:
+            try:name=signal.Signals(-code).name
+            except ValueError:name='UNKNOWN_SIGNAL'
+        return {'returncode':code,'signal':name,'stage':stage}
 
     def close(self):
         process,self.process=self.process,None
         if process is not None:
-            if process.poll() is None:
-                process.terminate()
+            # Queue owner calls this only after active/latest-pending jobs drain.
+            # EOF on stdin lets the idle worker leave its request loop normally.
+            if process.stdin is not None:
+                try:process.stdin.close()
+                except OSError:pass
+            method='STDIN_EOF'
+            try:process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                method='TERMINATE_AFTER_EOF_TIMEOUT';process.terminate()
                 try:process.wait(timeout=2)
-                except subprocess.TimeoutExpired:process.kill();process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    method='KILL_AFTER_TERMINATE_TIMEOUT';process.kill();process.wait(timeout=2)
+            self.last_exit={**self._exit_details(process.returncode,'CLEANUP'),'method':method}
             for stream in (process.stdin,process.stdout):
-                if stream is not None:stream.close()
+                if stream is not None:
+                    try:stream.close()
+                    except OSError:pass
+
 
 
 class LatestSurfaceDiagnostics:
@@ -96,7 +125,9 @@ class LatestSurfaceDiagnostics:
                     result=self.client.compute(job)
                 except Exception as error:
                     result={'cycle_id':job['cycle_id'],'status':'LOCAL_SURFACE_UNAVAILABLE',
-                            'reason':type(error).__name__,'error_detail':str(error)[:400]}
+                            'reason':type(error).__name__,'error_detail':str(error)[:400],
+                            'worker_failure':deepcopy(getattr(self.client,'last_failure',None)),
+                            'worker_cleanup_exit':deepcopy(getattr(self.client,'last_exit',None))}
                 if result.get('status')!='LOCAL_SURFACE_DIAGNOSTIC_ONLY':
                     self.errors+=1;self.last_error=result.get('reason',result.get('status'))
                 result.update(schema_version='sie.local_surface_async_diagnostic.v1',

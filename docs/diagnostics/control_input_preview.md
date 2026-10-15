@@ -622,3 +622,33 @@ coordinates, pixel rounding and every supported stereo scale; complete depth
 reports and prepared local arrays match exactly. Existing reference APIs remain
 NumPy-only and diagnostic-only. Rebuild ROS before the next live use, after
 reviewing the offline exact comparison; the immediate next action is offline.
+
+## Local-worker shutdown isolation (2026-10-15)
+
+Live `...onnxruntime_20261015_131005` completed 56 primary cycles; host median
+0.3592 s, fusion round trip 0.0670 s vs prior 0.0861 s, segmentation round trip
+0.2543 s vs 0.2331 s. Whole-cycle speedup was not demonstrated. Original masked
+statuses: 27 coherent / 29 MAD refusals; these are different frames, not evidence
+of quality improvement caused by optimization. Twelve local jobs yielded eleven
+results and one `local worker closed` on final scheduled source cycle 56 near
+shutdown. The old report contains no process return code; SIGINT from the shared
+foreground group is a hypothesis, not a proven historical cause.
+
+LocalSurfaceClient now starts its subprocess in a separate session. Parent-group
+terminal/timeout SIGINT does not interrupt it. Queue close still drains the
+active and latest pending accepted jobs, then closes worker stdin for normal
+EOF exit. Bounded two-second EOF/terminate waits retain kill fallback for a
+stalled worker. Request timeout is unchanged; failures remain unavailable.
+
+Unexpected stdout EOF records pre-cleanup return code and signal name (or null
+if not yet known), independently of cleanup exit status/method. Async refusal
+files retain `worker_failure` and `worker_cleanup_exit`. No stale-success
+substitution or change to frame binding, calculations, policy or motion.
+
+A real subprocess-group test sends SIGINT to the isolated parent's entire group,
+checks the local request completes and worker exits normally after EOF. Another
+real subprocess exits with code 7; the saved unavailable record preserves it.
+Queue-drain/replacement, exact fit RPC and preview lifecycle tests also pass.
+No camera rerun is required specifically for this fix. Rebuild ROS before the
+next planned live run; inspect local counters then. This fix addresses shutdown
+integrity, not the remaining 250 ms latency gap.
