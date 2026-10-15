@@ -1053,3 +1053,18 @@ previous cropped-match numerical results cannot automatically be attributed to
 the lookup. Frozen inputs are hashed before/after. No live launch, quality
 threshold, calibration or motion admission changes. Ten targeted tests and
 Python/shell syntax checks passed; actual Pi lookup performance is pending.
+
+
+Lookup-only Pi result: startup 0.9933 s / 73,827,872 bytes; dense plan median
+79.30 ms versus lookup 19.50 ms. Of 44 comparisons, 30 bounds were identical;
+lookup contained dense crop in all 44, with maximum coordinate difference one
+pixel. No observed additional support loss among 176,936 repeated target samples.
+Inputs unchanged. This is observed lattice/support evidence, not a continuous bound.
+
+`run_target_crop_lookup_benchmark.sh` now runs the existing full-versus-cropped
+matcher comparison using this lookup, selected explicitly by `--frustum-planner
+lookup`. Dense remains the benchmark default and live launches remain unchanged.
+Both full and crop depth reports and point-wise differences are retained.
+`CROP_TOTAL` adds each cycle's measured plan and crop-copy cost to its repeated
+match/LR/depth timing; startup is separate. It excludes RGB, capture, rectification
+and local fitting and is not exposure-to-command latency. Actual Pi results pending.

@@ -57,6 +57,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     for key in ('evidence-root','ar-intrinsic','stereo-calibration','activation','output'):
         p.add_argument('--'+key,type=Path,required=True)
+    p.add_argument("--frustum-planner",choices=("dense","lookup"),default="dense")
     args=p.parse_args()
     if args.output.exists():p.error('new output required')
     from analyze_ar0234_stereo_component_ambiguity import load_calibrations,sha256
@@ -70,6 +71,12 @@ def main():
     cal=load_calibrations(args.ar_intrinsic,args.stereo_calibration,extrinsic)
     configs,code=runtime_parameters();configs=scaled_configs(configs,.5);margin=runtime_frustum_margin()
     cv2.setNumThreads(1)
+    lookup=None;startup={}
+    if args.frustum_planner=="lookup":
+        from stereo_frustum_lookup import FrustumLookup
+        started=time.perf_counter();lookup=FrustumLookup(cal)
+        startup={"seconds":time.perf_counter()-started,"table_bytes":lookup.table.nbytes}
+        print("LOOKUP_STARTUP",json.dumps(startup),flush=True)
     matchers={label:[cv2.StereoSGBM_create(**c) for c in configs] for label in ('full','crop')}
     hashes={str(f):sha256(f) for f in (args.ar_intrinsic,args.stereo_calibration,args.activation,extrinsic)};rows=[]
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -86,7 +93,7 @@ def main():
                 if color is None or color.shape!=(800,1280,3):raise ValueError('invalid rectified stereo evidence')
                 images.append(cv2.resize(cv2.cvtColor(color,cv2.COLOR_BGR2GRAY),(640,400),interpolation=cv2.INTER_AREA))
             for f in (path,mp,folder/f'{cid}.json',folder/'ar0234_source.jpg',folder/'disparity_lr_consistent_px.npy'):hashes[str(f)]=sha256(f)
-            plan_start=time.perf_counter();plan=crop_plan(roi,cal,configs,diagnostic_margin_full_px=margin)
+            plan_start=time.perf_counter();plan=crop_plan(roi,cal,configs,diagnostic_margin_full_px=margin,frustum_lookup=lookup)
             plan_s=time.perf_counter()-plan_start
             x1,y1,x2,y2=plan['common_crop_xyxy_px']
             copy_start=time.perf_counter()
@@ -118,6 +125,7 @@ def main():
                     'lr_mask_changed_inside_crop':int(np.count_nonzero(lrs['full'][y1:y2,x1:x2]!=lrs['crop'][y1:y2,x1:x2]))}
                 a,b=results['full'].get('candidate_depth_m'),results['crop'].get('candidate_depth_m')
                 row={'cycle_id':cid,'repeat':repeat,'order':order,'plan':plan,'plan_s':plan_s,'crop_copy_s':crop_copy_s,
+                    'crop_plan_copy_match_lr_depth_s':plan_s+crop_copy_s+timing['crop']['match_lr_depth_s'],
                     'timing':timing,'full_depth':results['full'],'crop_depth':results['crop'],
                     'median_depth_delta_m':b-a if a is not None and b is not None else None,
                     'depth_report_exact':results['full']==results['crop'],'target_points':delta,'lr_comparison':support}
@@ -138,14 +146,17 @@ def main():
     for label in ('full','crop'):
         print('CROP_TIMING',label,json.dumps({key:statistics.median(r['timing'][label][key] for r in rows) for key in rows[0]['timing'][label]}),flush=True)
     print('ROI_PLAN median_s=',statistics.median(r['plan_s'] for r in rows),'crop_copy_median_s=',statistics.median(r['crop_copy_s'] for r in rows))
+    print('CROP_TOTAL median_s=',statistics.median(r['crop_plan_copy_match_lr_depth_s'] for r in rows),
+        'max_s=',max(r['crop_plan_copy_match_lr_depth_s'] for r in rows))
     print('CROP_MATCH_SUMMARY',json.dumps(summary),flush=True)
-    paths=(Path(__file__),ROOT/'vision_core/tools/analyze_target_stereo_crop.py',ROOT/'vision_core/tools/preview_mask_surface.py',ROOT/'vision_core/person_localization/diagnostic_stereo_resolution.py')
+    paths=(Path(__file__),ROOT/'vision_core/tools/analyze_target_stereo_crop.py',ROOT/'vision_core/tools/stereo_frustum_lookup.py',ROOT/'vision_core/tools/preview_mask_surface.py',ROOT/'vision_core/person_localization/diagnostic_stereo_resolution.py')
     report={'status':'OFFLINE_CROPPED_MATCHER_COMPARISON_ONLY','rows':rows,'summary':summary,
+        'frustum_planner':args.frustum_planner,'lookup_startup':startup,
         'inputs_unchanged':unchanged,'source_sha256':hashes,'calibration_sha256':cal['sha'],'runtime_source_sha256':code,
         'code_sha256':{str(f):sha256(f) for f in paths},'matcher_configs':configs,
         'environment':{'opencv':cv2.__version__,'numpy':np.__version__},'actuator_access':False,
         'limitations':['Frozen saved RGB ROI/mask; no live detection, capture, rectification or local fitting.',
-            'Dense ROI-plan cost recorded separately; cropped timing excludes plan and prebuilt crop copy.',
+            'ROI-plan cost recorded separately; CROP_TOTAL adds plan, copy and match-LR-depth; excludes one-time startup. Separate medians need not add to the median total.',
             'Same disparity range/block/P1/P2/speckle settings; changed aggregation context remains visible.',
             'Restore to original half-frame coordinates before LR rounding/grid; no resize, fill, smoothing or depth correction.',
             'Current-frame ROI becomes available after RGB; faster cropped matching alone is not full-cycle speedup.',
