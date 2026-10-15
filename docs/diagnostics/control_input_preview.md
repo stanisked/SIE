@@ -989,3 +989,40 @@ No previous-frame ROI/track fallback is introduced here.
 clipping/empty/no-overlap behavior and nonforward fallback, plus existing
 projection/prepared geometry tests. Python/shell checks pass. Actual recorded
 scene areas and point-loss counts await this one offline Pi command.
+
+## Cropped matcher comparison on frozen target ROI
+
+Area/support estimate result: saved inner ROI median/max fraction
+0.289791/0.291855, 88,468 observed target points; saved model bbox
+0.511418/0.520160, 173,209 points. Across 22 cycles neither region had observed
+points outside crop or additional local-support loss; none already fell outside
+full-frame support. These counts overlap between regions and are not independent
+samples. Frozen source inputs unchanged. Area alone is not speed/equality proof.
+
+`run_target_crop_benchmark.sh` now executes actual full and common-origin cropped
+half-resolution SGBM, using saved inner RGB ROI, identical decoded pairs/masks,
+same matcher configuration and bilateral LR tolerance. Two warmed repetitions
+per 22 cycles alternate full/crop order. Crop plans/search/block/rounding padding
+are exactly the preceding area's method, with no narrowed disparity interval.
+
+Raw cropped signed maps are embedded in the original 640x400 coordinate system
+with each matcher's invalid sentinel before LR lookup/rounding. Disparity values
+are not offset because both image crops share the same origin. Original sampling
+grid is retained, with no resize, fill, smoothing, correction or extra gate.
+A regression test covers odd crop origin and half-pixel ties: LR rounding must
+use global coordinates, not crop-local rounding with different parity.
+
+The report preserves both complete masked-depth dispositions, median-depth
+changes, LR support loss, raw left changes at reference target pixels and raw
+right changes at their reference lookups. Owned-point sets are compared by
+original pixel identity: lost/gained coordinates, common-point disparity/depth
+changes and largest changed depths are retained even if median depth/status
+happen to agree. No numerical tolerance or automatic crop rollout is introduced.
+
+Timing separates matcher pair, restore/LR and projection/ownership; dense ROI
+planning and crop copying are recorded separately. Matching timing assumes a
+known saved ROI and excludes RGB inference/capture/rectification/local fitting.
+Current-frame crop scheduling after RGB still needs a whole-path assessment.
+Sources/model-mask/calibration bindings are checked and inputs hashed before /
+after. No saved evidence is altered. 14 targeted tests and Python/shell syntax
+checks passed. Actual Pi cropped-match timing/quality differences are pending.
