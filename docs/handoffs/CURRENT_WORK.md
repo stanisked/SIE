@@ -927,3 +927,8 @@ Corrected trial remote_stop_trial_20261016_181217_a36eace3 ended STOPPED/READY w
 ### Single physical front-plane comparison prepared
 
 Front-geometry Pi run 20261016_184327: 96 target frames with coherent depth and partial front geometry, K median 2.4427 m, additional processing median 1.03 ms; 95/95 steady driver-declared frame ages within 250 ms (not exposure-to-command validation). Operator now placed a vertical 9x6/25 mm board 1500 mm horizontally from robot front. Added check_robot_front_board_distance.py to collect three frames, compare dense LR-consistent half-resolution board-plane points and matched corners against that reference, with no lateral/optical-normal pose gates and no fitted correction. Fourteen offline tests pass; actual capture pending. Reference uncertainty remains null. See front_board_distance_single_point_v1.md. This is one physical comparison, not a renewed distance sweep or a range activation.
+
+
+### First front-board capture: supplementary corner gate blocked dense calculation
+
+Operator report received 2026-10-16 19:11 Moscow: eight CORNER_EPIPOLAR_ERROR_EXCEEDED refusals, no dense frames. The initial runner gated both estimates and omitted rejected source images/residual numbers. Corrected the experiment tool to keep supplementary corner refusal separate, retain its unchanged 1.5 px threshold, compute dense board LR samples independently, expose a corner geometry warning and save all valid captured attempts/maps. Sixteen offline tests pass. One capture of the same unchanged 1500 mm setup is needed; no prior image exists for offline recomputation. No claim of valid calibration or physical accuracy is made from a dense-only numerical screen.
