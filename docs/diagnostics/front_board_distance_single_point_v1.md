@@ -41,3 +41,8 @@ Preceding camera-only run 20261016_184327 successfully produced partial front ge
 The first capture completed eight attempts, all with CORNER_EPIPOLAR_ERROR_EXCEEDED and no dense frame result. This establishes a corner-screen failure, not a dense SGBM support failure. The initial runner incorrectly let the supplementary corner check gate both estimates and did not save rejected images or numerical residuals. No exact residual magnitude or calibration-failure diagnosis can be inferred from that report.
 
 The corrected runner separates the estimates without relaxing the corner threshold, LR rule, dense support or active policies. Supplementary corner refusal remains visible in every frame and in `comparison.corner_geometry_warning`; a numerical dense/reference comparison with that warning is not evidence that calibration geometry is valid. Rejected images and arrays are now retained to enable offline inspection. One corrected capture at the same physical setup is required because the prior rejected source images were not saved. Do not move the board or start a distance series.
+
+
+## Completed comparison, 2026-10-16
+
+The three-frame physical comparison and the subsequent offline replay of all 15 original v7 holdout pairs are recorded in [the epipolar comparison review](ov9281_v7_epipolar_comparison_20261016.md). The current approximately 2.11 px corner residual is confirmed, while original pairs remain near 0.10 px with the same calibration. Dense front-term agreement does not waive that warning or establish a physical accuracy bound. Lenses were adjusted before the original capture; a later optical adjustment is not established.

@@ -932,3 +932,12 @@ Front-geometry Pi run 20261016_184327: 96 target frames with coherent depth and 
 ### First front-board capture: supplementary corner gate blocked dense calculation
 
 Operator report received 2026-10-16 19:11 Moscow: eight CORNER_EPIPOLAR_ERROR_EXCEEDED refusals, no dense frames. The initial runner gated both estimates and omitted rejected source images/residual numbers. Corrected the experiment tool to keep supplementary corner refusal separate, retain its unchanged 1.5 px threshold, compute dense board LR samples independently, expose a corner geometry warning and save all valid captured attempts/maps. Sixteen offline tests pass. One capture of the same unchanged 1500 mm setup is needed; no prior image exists for offline recomputation. No claim of valid calibration or physical accuracy is made from a dense-only numerical screen.
+
+
+## 2026-10-16: physical-front comparison and original/current v7 geometry
+
+The operator confirmed a 210 mm lens-rim setback and 15-degree upward block pitch. The stationary 1500 mm front-to-board comparison (9x6 inner corners, 25 mm squares) produced three nominal known terms with median 1.512272 m and frame-median span 5.49 mm, using 403–621 dense samples. This is not a physical depth error bound or offset calibration. The later approximate caliper estimate of 12.3–12.5 mm to a presumed optical centre is operator evidence only; its direction/projection and uncertainty remain unresolved.
+
+All three corner comparisons refused: median rectified vertical residuals 2.10–2.14 full-resolution px. Offline independent coordinate recomputation and two corner detectors reproduced the mismatch. The original 15 holdout pairs, reprocessed with the byte-identical active v7, gave typical/worst pair medians 0.103/0.215 px. Source metadata and all 30 old image hashes matched. Partial spatial overlap also retained low old residuals (86 nearby old corners, median absolute residual 0.091 px). Thus current images agree with v7 substantially worse than the original images; the physical cause remains unproven.
+
+The operator explicitly clarified that lens unscrewing/focus adjustment occurred BEFORE the 2026-09-28 source capture, not after. Do not attribute this mismatch to later lens adjustment. Next: test a small relative-rotation hypothesis offline on saved current pairs with held-out checks. Preserve active v7, thresholds, Measurement and motor boundaries. Full evidence: [v7 original/current comparison](../diagnostics/ov9281_v7_epipolar_comparison_20261016.md).
