@@ -902,3 +902,8 @@ MP-PersonDet environment не модифицируется. Камеры, ESP32,
 
 Prepared `v4_2_remote_stop_observed_v1`, source/observer hashes in `firmware/esp32/traction_control_v4_2_bounded_motion_api/remote_stop_candidate_manifest_v1.json`. This candidate changes `/stop` to immediate active braking with asynchronous encoder observation before terminal STOPPED; repeated stop does not restart observation, faults remain faults. Active requests return HTTP 202, so client compatibility must be reviewed. Host regression passes; ESP32 compilation, deployment and physical stopping bounds remain pending. Earlier physical evidence does not validate this changed path. See `docs/diagnostics/remote_stop_observed_candidate_v1.md`. No camera admission, range or motor authorization changes. Next: matching board build and stop-client review before arranging deployment.
 
+
+
+### Remote-stop client/build preparation
+
+Added a compile-only helper at `firmware/esp32/tools/build_remote_stop_candidate.py`, requiring an explicit FQBN and recording toolchain/source/binary provenance without upload. Reviewed bounded executor: no /stop sender exists in that module; matching STOPPED completion already leads to reobservation. New offline regression covers BRAKING through terminal STOPPED. Host checks pass; actual ESP32 compilation remains blocked by absent arduino-cli in the editing environment. Inventory the operator's laptop toolchain, then compile before deployment. Details and exact verification scope are in `docs/diagnostics/remote_stop_observed_candidate_v1.md`.

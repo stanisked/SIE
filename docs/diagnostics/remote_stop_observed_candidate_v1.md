@@ -26,3 +26,21 @@ Run `python3 firmware/esp32/tests/test_remote_stop.py`. The host test compiles t
 Next: build this sketch with the matching ESP32 board/toolchain and both local headers (wifi_credentials.h and remote_stop_observer.h); review the stop client's asynchronous response handling; only then arrange an explicit deployment and loaded stopping observation. No flash or movement was performed by this change. Camera processing, calibration, admission thresholds and active range remain unchanged.
 
 Read-only controller evidence supplied 2026-10-16: firmware traction_control_v4_2_bounded_motion_api, API v2_bounded_motion_api, boot session 94308DB022AB4747, READY, no active command/fault, zero PWM. This establishes the family, not an exact match to the previous source hash.
+
+## Compile-only workflow and client review (2026-10-16)
+
+The current `sie_core/supervised_bounded_executor.py` never sends `/stop`. It already recognizes STOPPED as terminal and polls the matching command ID within its boot session. A new injected-transport regression verifies that BRAKING (including an old unrelated STOPPED command) is ignored until the current command becomes STOPPED, followed by AWAIT_REOBSERVATION. No new automatic stop sender or motion permission has been added. An external/manual stop sender must treat HTTP 202 as acceptance and poll status; it must not interpret that response as completed braking.
+
+Compile helper: `firmware/esp32/tools/build_remote_stop_candidate.py`. It checks candidate hashes, requires an explicit ESP32 FQBN, stages the two candidate source files and a private credentials header in a temporary directory, then calls only version/core-list/compile. It never uploads, opens a serial port or sends HTTP. It records the supplied FQBN, installed CLI/core metadata, source hashes and output binary hashes in build_report.json. Core installation/version selection remains explicit; no compiler/core is downloaded or silently upgraded.
+
+For the generic ESP32 Dev Module definition, after confirming this matches the operator's installed board selection:
+
+```bash
+python3 firmware/esp32/tools/build_remote_stop_candidate.py \
+  --fqbn esp32:esp32:esp32 \
+  --output "$HOME/.local/state/sie/evidence/remote_stop_build_$(date +%Y%m%d_%H%M%S)"
+```
+
+The default credentials location is the sketch-local ignored wifi_credentials.h. `--credentials /absolute/private/header.h` selects another local header. Never publish that file or compile.local.log. The helper requires a fresh output directory and leaves the candidate sources unchanged.
+
+Verification in this editing environment: 39 firmware source-contract assertion functions passed through a direct assertion runner; three Git-dependent checks were excluded because this working copy has no Git metadata. The current asynchronous STOPPED executor regression passed. The actual-handler C++ host simulation passed. Two build-wrapper unit tests passed with a fake compiler; this is not an ESP32 compile. Modified Python files passed py_compile. pytest and arduino-cli are unavailable here; an attempted real compile stopped at the missing-tool check before creating build output. The next operator step is toolchain inventory on the laptop used for ESP32 work, then the compile-only command above. No flash was performed.

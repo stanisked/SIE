@@ -309,7 +309,12 @@ def test_interrupted_initial_pulse_keeps_completion_false(source: str) -> None:
     assert "completeActiveCommand(CommandState::FAULT);" in abort
     assert "boundedInitialPulseCompleted = true" not in abort
     stop = function_body(source, "void handleStop()")
-    assert "completeActiveCommand(CommandState::STOPPED);" in stop
+    assert "completeActiveCommand(" not in stop
+    assert "remoteStop.begin(" in stop
+    observed = function_body(source, "void updateRemoteStop()")
+    assert "if (!settled) return;" in observed
+    assert "CommandState::STOPPED" in observed
+    assert observed.index("if (!settled) return;") < observed.index("completeActiveCommand(")
     assert "boundedInitialPulseCompleted = true" not in stop
 
 
@@ -746,3 +751,4 @@ def test_manifest_and_credentials_remain_safe(source: str) -> None:
     assert hashlib.sha256(
         (ROOT / f"{BASELINE}/traction_control_v4_1_effective_track294.ino").read_bytes()
     ).hexdigest() == manifest["base_sanitized_sha256"]
+
