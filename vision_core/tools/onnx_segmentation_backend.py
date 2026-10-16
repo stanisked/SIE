@@ -11,6 +11,8 @@ def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 def verify_report(model, report_path, threads):
     report=json.loads(Path(report_path).read_text())
+    if report.get('status')=='OFFLINE_192X320_VS_REVIEWED_256X384_ONLY':
+        return verify_192_report(model,report,threads)
     if report.get('status')=='OFFLINE_INPUT_SIZE_CHALLENGE_ONLY':
         return verify_size_report(model,report,threads)
     if (report.get('status')!='OFFLINE_SEGMENTATION_COMPARISON_ONLY'
@@ -84,6 +86,68 @@ def verify_size_report(model,report,threads):
         raise ValueError('size/reference environments differ')
     # Common adapter metadata, without relabelling this as exact-mask equality.
     return {**report,'source_model_sha256':reviewed['source_model_sha256']},[1,3,256,384]
+
+
+def verify_192_report(model,report,threads):
+    """Bind the separately reviewed 192x320 diagnostic results, not a new gate."""
+    from benchmark_segmentation_input_size import summarize
+    from collections import Counter
+    if threads!=2 or report.get('inputs_unchanged') is not True:
+        raise ValueError('192x320 challenge requires verified inputs and compatibility thread argument 2')
+    reference=report['reference'];parent=reference['comparison_file']
+    if digest(parent)!=reference['comparison_sha256']:
+        raise ValueError('256x384 comparison SHA mismatch')
+    original=json.loads(Path(parent).read_text())
+    if original.get('status')!='OFFLINE_INPUT_SIZE_CHALLENGE_ONLY':
+        raise ValueError('192x320 requires reviewed 256x384 parent')
+    exports=[e for e in original['exports'] if e['size']==[256,384]]
+    if len(exports)!=1:raise ValueError('missing 256x384 parent export')
+    # The parent verifier binds the previous exact ONNX comparison/checkpoint.
+    parent_model=exports[0].get('path') or exports[0].get('file')
+    if not parent_model:raise ValueError('parent export path required')
+    reviewed,shape=verify_report(parent_model,parent,2)
+    if shape!=[1,3,256,384] or reference['model_sha256']!=digest(parent_model) or reference['source_checkpoint_sha256']!=reviewed['source_model_sha256']:
+        raise ValueError('192x320 reference model/checkpoint mismatch')
+    exports=[e for e in report['exports'] if e['size']==[192,320]]
+    if len(exports)!=1 or digest(model)!=exports[0]['sha256']:
+        raise ValueError('192x320 export SHA mismatch')
+    expected={'format':'onnx','imgsz':[192,320],'batch':1,'dynamic':False,'half':False,
+        'simplify':False,'opset':17,'nms':False,'device':'cpu'}
+    if exports[0]['arguments']!=expected:raise ValueError('192x320 export arguments mismatch')
+    rows=report['rows'];counts=Counter(r['cycle_id'] for r in rows)
+    if len(rows)!=44 or len(counts)!=22 or set(counts.values())!={2}:
+        raise ValueError('expected reviewed 22 cycles, two repetitions')
+    for cid in counts:
+        if {r['repeat'] for r in rows if r['cycle_id']==cid}!={0,1}:
+            raise ValueError('192x320 repeat coverage mismatch')
+    for row in rows:
+        if row['size']!=[192,320] or row['input_tensor']['shape']!=[1,3,192,320] or row['input_tensor']['dtype']!='float32':
+            raise ValueError('192x320 tensor shape mismatch')
+        if row['reference_depth']['status']!='COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY' or row['candidate_depth']['status']!=row['reference_depth']['status']:
+            raise ValueError('192x320 depth status differs from review')
+        m=row['matching'];choice=row['selection_comparison']
+        if not choice['same_disposition'] or choice.get('selected_correspondence_unambiguous') is not True:
+            raise ValueError('192x320 target correspondence differs from review')
+        extra=m['unmatched_reference_count']+m['unmatched_candidate_count']
+        if extra:
+            if (not row['cycle_id'].endswith(('00000014','00000020')) or
+                m['reference_count']!=1 or m['candidate_count']!=2 or
+                m['unmatched_reference_count']!=0 or m['unmatched_candidate_count']!=1 or
+                row['depth_delta_m']!=0 or
+                any(row[k]['current_eligible_count']!=1 or row[k]['candidate']['instance_index']!=0 or
+                    row[k]['reason']!='DIRECT_CURRENT_FRAME_SINGLE_TARGET' for k in ('reference_selection','candidate_selection'))):
+                raise ValueError('unmatched instance differs from reviewed two non-selected detections')
+    summary=summarize(rows)
+    observed={'mask_iou_median':0.9721894940444458,'mask_iou_min':0.9652224742582682,
+        'selection_disposition_changes':0,'selected_correspondence_failures':0,
+        'geometry_status_changes':0,'unmatched_instances':4,
+        'absolute_depth_delta_median_m':0.,'absolute_depth_delta_max_m':0.010505437850952148}
+    if any(summary[k]!=v for k,v in observed.items()):
+        raise ValueError('192x320 results differ from operator-reviewed evidence')
+    for package in ('ultralytics','onnxruntime','torch','numpy'):
+        if report['environment']['packages'][package]!=reviewed['environment']['packages'][package]:
+            raise ValueError('192x320 reference environment mismatch')
+    return {**report,'source_model_sha256':reviewed['source_model_sha256']},[1,3,192,320]
 
 
 class OnnxSegmentationBackend:

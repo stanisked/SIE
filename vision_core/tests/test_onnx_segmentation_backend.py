@@ -55,7 +55,59 @@ def size_fixture(folder):
     return candidate,path,report
 
 
+def size192_fixture(folder):
+    parent_model,parent_path,parent=size_fixture(folder)
+    parent['exports'][0]['path']=str(parent_model)
+    parent_path.write_text(json.dumps(parent))
+    model=folder/'192.onnx';model.write_bytes(b'192 export')
+    rows=[]
+    for index in range(44):
+        cycle=index//2+1;extra=cycle in (14,20)
+        choice={'current_eligible_count':1,'reason':'DIRECT_CURRENT_FRAME_SINGLE_TARGET',
+            'candidate':{'instance_index':0}}
+        rows.append({'cycle_id':f'cycle-{cycle:08d}','repeat':index%2,'size':[192,320],
+            'input_tensor':{'shape':[1,3,192,320],'dtype':'float32'},
+            'reference_s':.096,'candidate_s':.079,'depth_delta_m':.010505437850952148 if index==2 else 0.,
+            'reference_depth':{'status':'COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY'},
+            'candidate_depth':{'status':'COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY'},
+            'reference_geometry':{'accepted':True},'candidate_geometry':{'accepted':True},
+            'matching':{'reference_count':1,'candidate_count':2 if extra else 1,
+                'pairs':[{'mask_iou':.9652224742582682 if index==0 else .9721894940444458}],
+                'unmatched_reference_count':0,'unmatched_candidate_count':int(extra)},
+            'selection_comparison':{'same_disposition':True,'both_unavailable':False,'selected_correspondence_unambiguous':True},
+            'reference_selection':choice,'candidate_selection':choice})
+    report={'status':'OFFLINE_192X320_VS_REVIEWED_256X384_ONLY','inputs_unchanged':True,
+        'reference':{'comparison_file':str(parent_path),'comparison_sha256':digest(parent_path),
+            'model_sha256':digest(parent_model),'source_checkpoint_sha256':parent['reference']['source_checkpoint_sha256']},
+        'environment':parent['environment'],'exports':[{'size':[192,320],'sha256':digest(model),
+            'arguments':{'format':'onnx','imgsz':[192,320],'batch':1,'dynamic':False,'half':False,
+                'simplify':False,'opset':17,'nms':False,'device':'cpu'}}],'rows':rows}
+    path=folder/'192-comparison.json';path.write_text(json.dumps(report))
+    return model,path,report
+
+
 class OnnxBackendTests(unittest.TestCase):
+    def test_192_rollout_binds_review_and_nonselected_extra_detections(self):
+        with tempfile.TemporaryDirectory() as directory:
+            model,path,report=size192_fixture(Path(directory))
+            self.assertEqual(verify_report(model,path,2)[1],[1,3,192,320])
+            for mutation in ('extra_target','different_cycle','depth','shape','mask','repeats','export','parent'):
+                current=json.loads(json.dumps(report))
+                if mutation=='extra_target':current['rows'][26]['candidate_selection']['current_eligible_count']=2
+                if mutation=='different_cycle':current['rows'][26]['cycle_id']='wrong'
+                if mutation=='depth':current['rows'][0]['candidate_depth']['status']='DEPTH_MAD_EXCEEDED'
+                if mutation=='shape':current['rows'][0]['input_tensor']['shape']=[1,3,256,384]
+                if mutation=='mask':current['rows'][0]['matching']['pairs'][0]['mask_iou']=.9
+                if mutation=='repeats':current['rows'][0]['repeat']=1
+                if mutation=='export':current['exports'][0]['sha256']='changed'
+                if mutation=='parent':current['reference']['comparison_sha256']='changed'
+                path.write_text(json.dumps(current))
+                with self.assertRaises(ValueError,msg=mutation):verify_report(model,path,2)
+            path.write_text(json.dumps(report))
+            with self.assertRaises(ValueError):verify_report(model,path,1)
+            model.write_bytes(b'changed')
+            with self.assertRaises(ValueError):verify_report(model,path,2)
+
     def test_smaller_report_is_separate_and_binds_reference_and_observed_results(self):
         with tempfile.TemporaryDirectory() as directory:
             model,path,report=size_fixture(Path(directory))
