@@ -49,11 +49,27 @@ def assess_control_depth(audit,local_result=None):
     available=all(finite_number(residual.get(k)) for k in ('mad_m','absolute_p90_m'))
     unknown.append('LOCAL_ERROR_TO_PHYSICAL_ACCURACY_POLICY_NOT_VALIDATED' if available else 'CURRENT_FRAME_LOCAL_CONSISTENCY_UNAVAILABLE')
     host_exceeded=(finite_number(host) and finite_number(target) and target>0 and host>target)
-    if host_exceeded:reasons.append('HOST_PROCESSING_EXCEEDS_DECLARED_AGE_TARGET')
+    # A cycle can wait for a new exposure. Its duration is not the age of it.
+    frame=audit.get('frame_freshness') or {}
+    ages=frame.get('driver_declared_soe_to_result_s') or {}
+    valid_target=finite_number(target) and target>0
+    valid_driver=(frame.get('capture_backend')=='latest_v4l2'
+        and frame.get('endpoint')=='RESULT_READY_BEFORE_PUBLICATION; not a motor command'
+        and isinstance(ages,dict) and set(ages)=={'ar0234','ov9281'}
+        and all(finite_number(v) and v>=0 for v in ages.values()))
+    driver_status='UNAVAILABLE_OR_INVALID'
+    driver_max=max(ages.values()) if valid_driver else None
+    if valid_driver and valid_target:
+        driver_status='WITHIN_DECLARED_TARGET' if driver_max<=target else 'DECLARED_TARGET_EXCEEDED'
+        if driver_max>target:reasons.append('DRIVER_DECLARED_FRAME_AGE_EXCEEDS_TARGET')
+    elif valid_driver:
+        driver_status='AGE_TARGET_UNAVAILABLE'
+        unknown.append('FRAME_AGE_TARGET_UNAVAILABLE')
+    else:unknown.append('DRIVER_FRAME_AGE_UNAVAILABLE_OR_INVALID')
     unknown.extend(['EXPOSURE_TO_COMMAND_AGE_NOT_ESTABLISHED','PHYSICAL_DEPTH_ERROR_BOUND_NOT_ESTABLISHED'])
     if audit.get('status') in ('CANCELLED_SHUTDOWN','PROCESSING_REFUSED','TARGET_UNAVAILABLE'):
         reasons.append('CURRENT_CYCLE_NOT_USABLE')
-    return {'schema_version':'sie.control_depth_quality_shadow.v1','cycle_id':cid,
+    return {'schema_version':'sie.control_depth_quality_shadow.v1','assessment_revision':2,'cycle_id':cid,
         'status':'SHADOW_REFUSED' if reasons else 'SHADOW_UNDETERMINED',
         'suitable_for_control':False,'metric_measurement_authorized':False,
         'navigation_eligible':False,'actuator_access':False,
@@ -70,7 +86,14 @@ def assess_control_depth(audit,local_result=None):
             'held_out_residual':deepcopy(residual), 'rgb_coverage':deepcopy(local.get('rgb_coverage')),
             'unfitted_patch_fraction':local.get('unfitted_patch_fraction'),
             'physical_error_bound_m':None},
-        'freshness':{'status':'HOST_TARGET_EXCEEDED_EXPOSURE_AGE_UNKNOWN' if host_exceeded else 'EXPOSURE_AGE_UNKNOWN',
+        'freshness':{'status':'EXPOSURE_TO_COMMAND_AGE_NOT_ESTABLISHED',
+            'driver_metadata':{'status':driver_status,
+                'driver_declared_soe_to_result_s':deepcopy(ages) if valid_driver else {},
+                'maximum_driver_declared_age_s':driver_max,'endpoint':frame.get('endpoint'),
+                'physical_exposure_timing_independently_verified':False,
+                'command_age_established':False},
+            'performance':{'host_duration_exceeds_numeric_age_target':bool(host_exceeded),
+                'duration_is_frame_age':False},
             'source_primary_host_processing_s':host,'declared_age_target_s':target,
             'exposure_to_command_age_s':None,'host_endpoint':timing.get('endpoint'),
             'local_completion_is_new_camera_observation':False},
