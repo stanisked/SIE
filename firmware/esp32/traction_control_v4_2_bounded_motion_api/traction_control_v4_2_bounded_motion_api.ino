@@ -20,7 +20,7 @@
  * Safety model:
  *   - motor outputs are LOW during boot and Wi-Fi connection;
  *   - movement requires an explicit HTTP POST /start;
- *   - HTTP POST /stop cuts PWM immediately;
+ *   - HTTP POST /stop engages active braking immediately and observes encoders;
  *   - Wi-Fi loss, encoder loss, wrong direction, timeout, or distance-limit
  *     violation stops both motors;
  *   - target stopping uses a short TA6586 active-brake pulse, then coasting.
@@ -34,6 +34,10 @@
 // Copy the credentials from the validated Wi-Fi diagnostic sketch.
 // Keep the password private; do not publish this source with real credentials.
 #include "wifi_credentials.h"
+#include "remote_stop_observer.h"
+
+constexpr char FIRMWARE_BUILD_ID[] = "v4_2_remote_stop_observed_v1";
+RemoteStopObserver remoteStop;
 
 constexpr char FIRMWARE_ID[] = "traction_control_v4_2_bounded_motion_api";
 
@@ -2234,8 +2238,43 @@ void updateDriving(uint32_t now)
   }
 }
 
+void updateRemoteStop()
+{
+  // Own electrical output throughout observation, including timeout. No drive recovery.
+  brakeMotors();
+  updateDistancesFromEncoders();
+  int32_t right, left;
+  readMotionCounts(right, left);
+  const bool settled = remoteStop.update(millis(), right, left);
+  if (remoteStop.timed_out) {
+    boundedFaultLatched = true;
+    boundedFaultReason = "REMOTE_STOP_SETTLE_TIMEOUT";
+    faultReason = boundedFaultReason;
+  }
+  if (!settled) return;
+
+  CommandRecord* command = activeCommand();
+  if (command != nullptr) {
+    command->rightFinalCount = right;
+    command->leftFinalCount = left;
+    command->stopMode = BoundedStopMode::ACTIVE_BRAKE;
+    command->reobserveRequired = true;
+  }
+  const bool failed = boundedFaultLatched || activeBoundedFaultPending ||
+      faultReason.length() != 0;
+  stopMotors();
+  motionElapsedMs = motionStartTime == 0 ? 0 : millis() - motionStartTime;
+  rightSpeedMps = leftSpeedMps = profileSpeedMps = 0.0f;
+  motionState = failed ? MotionState::FAULT : MotionState::READY;
+  completeActiveCommand(failed ? CommandState::FAULT : CommandState::STOPPED);
+}
+
 void updateMotion()
 {
+  if (remoteStop.pending) {
+    updateRemoteStop();
+    return;
+  }
   if (!motionIsActive()) {
     stopMotors();
     return;
@@ -2532,6 +2571,26 @@ String buildStatusJson()
   json += FIRMWARE_ID;
   json += "\",";
 
+  json += "\"firmware_build_id\":\"";
+  json += FIRMWARE_BUILD_ID;
+  json += "\",\"remote_stop_pending\":";
+  json += remoteStop.pending ? "true," : "false,";
+  json += "\"remote_stop_timed_out\":";
+  json += remoteStop.timed_out ? "true," : "false,";
+  json += "\"remote_stop_observation_complete\":";
+  json += remoteStop.complete ? "true," : "false,";
+  json += "\"remote_stop_elapsed_ms\":";
+  json += String(remoteStop.pending ? millis() - remoteStop.started_ms :
+      (remoteStop.complete ? remoteStop.completed_ms - remoteStop.started_ms : 0));
+  json += ",\"remote_stop_right_start_count\":";
+  json += String(remoteStop.start_right);
+  json += ",\"remote_stop_left_start_count\":";
+  json += String(remoteStop.start_left);
+  json += ",\"remote_stop_right_observed_count\":";
+  json += String(remoteStop.final_right);
+  json += ",\"remote_stop_left_observed_count\":";
+  json += String(remoteStop.final_left);
+  json += ",";
   json += "\"motion_api_version\":\"v2_bounded_motion_api\",";
 
   json += "\"boot_session_id\":\"";
@@ -3189,7 +3248,7 @@ void handleRoot()
 
 bool motionOrSquareIsBusy()
 {
-  return motionIsActive() || startRequested ||
+  return remoteStop.pending || motionIsActive() || startRequested ||
          squareIsActive() || squareRequested;
 }
 
@@ -3491,38 +3550,47 @@ void handleSquare()
 
 void handleStop()
 {
-  // Cut drive immediately inside the HTTP handler. The state machine records
-  // REMOTE_STOP on its next loop iteration.
+  const bool needsObservation = remoteStop.pending || motionIsActive() ||
+      startRequested || squareRequested || squareIsActive() || activeCommand() != nullptr;
+  startRequested = false;
+  squareRequested = false;
+  stopRequested = false;
+  if (squareIsActive()) failSquareSequence("REMOTE_STOP");
+
+  if (needsObservation) {
+    // Engage brake before returning; HTTP acceptance is not physical completion.
+    brakeMotors();
+    if (!remoteStop.pending) {
+      int32_t right, left;
+      readMotionCounts(right, left);
+      remoteStop.begin(millis(), right, left);
+      rightCountAtStop = right;
+      leftCountAtStop = left;
+      CommandRecord* command = activeCommand();
+      if (command != nullptr) {
+        command->rightCountAtBrakeStart = right;
+        command->leftCountAtBrakeStart = left;
+        command->stopMode = BoundedStopMode::ACTIVE_BRAKE;
+      }
+      motionState = MotionState::BRAKING;
+      setActiveCommandState(CommandState::BRAKING);
+    }
+    server.send(202, "application/json",
+        "{\"accepted\":true,\"stopped\":false,\"stop_pending\":true}");
+    return;
+  }
   stopMotors();
-
-  if (activeCommand() != nullptr) {
-    startRequested = false;
-    stopRequested = false;
-    motionElapsedMs = motionStartTime == 0 ? 0 : millis() - motionStartTime;
-    rightSpeedMps = 0.0f;
-    leftSpeedMps = 0.0f;
-    profileSpeedMps = 0.0f;
-    motionState = MotionState::READY;
-    completeActiveCommand(CommandState::STOPPED);
-  }
-
-  if (motionIsActive()) {
-    stopRequested = true;
-  }
-
-  if (squareIsActive()) {
-    failSquareSequence("REMOTE_STOP");
-  }
-
-  server.send(
-      200,
-      "application/json",
-      "{\"stopped\":true}"
-  );
+  server.send(200, "application/json",
+      "{\"accepted\":true,\"stopped\":true,\"stop_pending\":false,\"basis\":\"NO_ACTIVE_MOTION\"}");
 }
 
 void handleAckFault()
 {
+  if (remoteStop.pending) {
+    brakeMotors();
+    sendJson(409, "{\"acknowledged\":false,\"reason\":\"STOP_OBSERVATION_PENDING\"}");
+    return;
+  }
   if (!boundedFaultLatched) {
     sendJson(409, "{\"acknowledged\":false,\"reason\":\"NO_BOUNDED_FAULT\"}");
     return;

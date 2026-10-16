@@ -1,0 +1,13 @@
+{
+  "status": "CANDIDATE_NOT_BUILT_FOR_ESP32_NOT_DEPLOYED",
+  "build_id": "v4_2_remote_stop_observed_v1",
+  "base_source_sha256": "19d2bac0f8f46f53e34fcd46f78ea8ca3aadd0985c3ef1de95a5bc7ecb06c28a",
+  "files": {
+    "traction_control_v4_2_bounded_motion_api.ino": "1d0296afdced367d62994b1dfaa45560281536088404451dc2c391964de2e980",
+    "remote_stop_observer.h": "b67dc0dda8702b30852723469fcc7db8440e354c76ace3e2bd7ccbfc59e641e3"
+  },
+  "stop_api_revision": "accepted_async_observed_v1",
+  "physical_stop_distance_bound_m": null,
+  "physical_stop_time_bound_s": null,
+  "hardware_validation": false
+}
