@@ -38,6 +38,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \
   -p preview_rgb_transport:="${SIE_PREVIEW_RGB_TRANSPORT:-npz}" \
+  -p preview_native_rgb_jpeg:="${SIE_PREVIEW_NATIVE_RGB_JPEG:-false}" \
   -p preview_overlap_stereo_decode:="${SIE_PREVIEW_OVERLAP_STEREO_DECODE:-false}" \
   -p preview_native_rgb_trigger:="${SIE_PREVIEW_NEW_RGB_TRIGGER:-false}" \
   -p preview_capture_backend:="${SIE_PREVIEW_CAPTURE_BACKEND:-opencv}" \
@@ -93,7 +94,7 @@ show_stages('FOREGROUND',[r.get('foreground_timing_s',{}) for r in steady])
 show_stages('RGB_RPC',[r.get('segmentation_observation',{}).get('rpc_timing_s',{}) for r in steady])
 show_stages('FUSION_RPC',[r.get('shape_diagnostic',{}).get('rpc_timing_s',{}) for r in steady])
 show_stages('TIMELINE',[{k:v for k,v in r.get('perception_timeline_s',{}).items() if k in ('stereo_queue_s','rgb_stereo_wall_interval_overlap_s','rgb_stereo_decode_wall_interval_overlap_s')} for r in steady])
-show_stages('RGB_WORKER',[{k:r.get('segmentation_observation',{}).get(k) for k in ('worker_input_open_verify_s','worker_rgb_load_s','prediction_extract_s')} for r in steady])
+show_stages('RGB_WORKER',[{k:r.get('segmentation_observation',{}).get(k) for k in ('worker_input_open_verify_s','worker_rgb_load_s','worker_jpeg_decode_s','prediction_extract_s')} for r in steady])
 if steady:
     print('ACTIVE_ORT_SETTINGS:',steady[0].get('segmentation_observation',{}).get('segmentation_engine',{}).get('active_ort_session'))
 from sie_ros2.latest_v4l2_capture import diagnostic_freshness_groups

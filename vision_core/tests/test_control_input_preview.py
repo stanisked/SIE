@@ -29,7 +29,7 @@ def preview_node_class(ros_ok=True):
     tree = ast.parse(path.read_text())
     cls = next(x for x in tree.body if isinstance(x, ast.ClassDef))
     cls.bases = [ast.Name(id="PreviewParent", ctx=ast.Load())]
-    cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in ("_cycle", "_infer_current_segmentation", "_left_right_disparity", "_log_preview", "destroy_node")]
+    cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name in ("_read", "_cycle", "_infer_current_segmentation", "_left_right_disparity", "_log_preview", "destroy_node")]
     scope = {"PreviewParent":type("PreviewParent",(),{"destroy_node":lambda self: True}),
              "rclpy": SimpleNamespace(ok=lambda: ros_ok), "time": time,
              "datetime": datetime, "timezone": timezone,
@@ -42,6 +42,26 @@ def preview_node_class(ros_ok=True):
 
 
 class ControlPreviewTests(unittest.TestCase):
+
+    def test_original_jpeg_read_preserves_packet_without_parent_decode(self):
+        node=preview_node_class()()
+        cap=LatestV4L2Capture.__new__(LatestV4L2Capture)
+        cap.width=1920;cap.height=1200
+        node.ar_capture=cap;node._native_rgb_jpeg=True
+        node._last_capture_sequences={};node._native_capture_metadata={}
+        payload=b"\xff\xd8original packet"
+        metadata={"sequence":17,"driver_timestamp_s":123.25}
+        node._selected_native_packets={"ar0234":(payload,metadata)}
+        # No cv2/np attribute: parent decoding here would fail the test.
+        frame,stamp=node._read(cap)
+        self.assertIs(frame,payload)
+        self.assertEqual(stamp,123250000000)
+        self.assertEqual(node._native_capture_metadata['ar0234'],metadata)
+        self.assertFalse(node._selected_native_packets)
+        node._selected_native_packets={"ar0234":(b"bad",metadata)}
+        self.assertIsNone(node._read(cap)[0])
+        self.assertEqual(node._native_capture_metadata['ar0234']['status'],'CAPTURE_UNAVAILABLE')
+
     def test_shutdown_without_ros_context_closes_all_resources_and_no_cycle_audit(self):
         node=preview_node_class(ros_ok=False)()
         calls=[]
@@ -377,6 +397,31 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertEqual(len(crop_calls),4)  # no stereo job for missing current target
         self.assertEqual(messages[-1]["status"], "TARGET_UNAVAILABLE")
         self.assertIsNone(messages[-1]["association"])
+        self.assertIsNone(node._cached_stereo)
+        # Original JPEG uses the same selected cycle and worker-owned mask cache.
+        node._native_rgb_jpeg=True
+        payload=b"\xff\xd8original packet"
+        def jpeg_read(cap):
+            frame,stamp=native_read(cap)
+            return (payload if cap=='ar' else frame),stamp
+        def jpeg_infer(cid,value):
+            self.assertIs(value,payload)
+            return infer(cid,value)
+        node._read=jpeg_read
+        node._mask_client.infer_jpeg=jpeg_infer
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker=worker
+            node._cycle()
+        self.assertEqual(messages[-1]['status'],'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY')
+        self.assertEqual(messages[-1]['rgb_decode']['owner'],'SEGMENTATION_WORKER')
+        self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
+        count=len(crop_calls)
+        node._mask_client.infer_jpeg=lambda *args:{'status':'MASK_SURFACE_UNAVAILABLE'}
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            node._perception_worker=worker
+            node._cycle()
+        self.assertEqual(messages[-1]['reason'],'CURRENT_SEGMENTATION_UNAVAILABLE')
+        self.assertEqual(len(crop_calls),count)
         self.assertIsNone(node._cached_stereo)
 
 

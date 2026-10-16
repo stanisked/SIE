@@ -153,6 +153,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._overlap_stereo_decode=bool(self.get_parameter("preview_overlap_stereo_decode").value)
         if self._overlap_stereo_decode and (self._capture_backend!="latest_v4l2" or self._rgb_backend!="single_segmentation" or not self._target_crop):
             raise ValueError("decode overlap requires native current-target single segmentation")
+        self.declare_parameter("preview_native_rgb_jpeg", False)
+        self._native_rgb_jpeg=bool(self.get_parameter("preview_native_rgb_jpeg").value)
+        if self._native_rgb_jpeg and (self._capture_backend!="latest_v4l2" or self._rgb_backend!="single_segmentation" or not self._target_crop or not self._overlap_stereo_decode):
+            raise ValueError("original JPEG requires native single segmentation, target crop and decode overlap")
         self._last_capture_sequences={};self._native_capture_metadata={}
         if self._capture_backend=="latest_v4l2":
             if not self._target_crop or self._rgb_backend!="single_segmentation":
@@ -172,13 +176,17 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 if isinstance(self.stereo_capture,LatestV4L2Capture):self.stereo_capture.release()
                 raise
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; decode_overlap={self._overlap_stereo_decode}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; decode_overlap={self._overlap_stereo_decode}; original_rgb_jpeg={self._native_rgb_jpeg}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 
     def _infer_current_segmentation(self,cycle_id,ar,times):
         times['start']=time.monotonic()
-        try:return self._mask_client.infer(cycle_id,ar)
+        try:
+            if getattr(self,"_native_rgb_jpeg",False):
+                if not isinstance(ar,bytes):raise ValueError("original RGB JPEG bytes required")
+                return self._mask_client.infer_jpeg(cycle_id,ar)
+            return self._mask_client.infer(cycle_id,ar)
         finally:times['end']=time.monotonic()
 
     def _read(self,capture):
@@ -188,6 +196,13 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         try:
             payload,metadata=self._selected_native_packets.pop(name)
             self._last_capture_sequences[name]=metadata['sequence']
+            if name=="ar0234" and getattr(self,"_native_rgb_jpeg",False):
+                # Immutable original packet, not a decoded or fabricated image.
+                # The worker checks decoded dimensions before inference/selection.
+                if (capture.width,capture.height)!=(1920,1200) or not isinstance(payload,bytes) or not payload.startswith(b"\xff\xd8"):
+                    raise ValueError("invalid original RGB JPEG packet")
+                self._native_capture_metadata[name]=metadata
+                return payload,round(metadata['driver_timestamp_s']*1e9)
             frame=self.cv2.imdecode(self.np.frombuffer(payload,dtype=self.np.uint8),self.cv2.IMREAD_COLOR)
             if frame is None or frame.shape!=(capture.height,capture.width,3):
                 raise ValueError("native JPEG decode size mismatch")
@@ -296,6 +311,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
         skew_ms = abs(stereo_mono - ar_mono) / 1e6
         audit = self._audit_base(cycle_id, stamp, skew_ms)
+        audit['rgb_decode']={"owner":"SEGMENTATION_WORKER" if getattr(self,"_native_rgb_jpeg",False) else "CONTROL_NODE",
+            "original_jpeg":getattr(self,"_native_rgb_jpeg",False),"decoded_dimensions_checked_before_selection":True}
         audit.update(schema_version="sie.ar0234_ov9281.control_input_preview.v1",
                      status="PROCESSING_REFUSED", reason="PROCESSING_REFUSED", association=None,
                      diagnostic_depth_range_m=[self.range_min_m, self.range_max_m],
@@ -308,7 +325,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if ar is None or combined is None:
                 audit.update(status="CAMERA_FRAME_UNAVAILABLE", reason="CAMERA_FRAME_UNAVAILABLE")
                 return
-            if ar.shape[:2] != (1200, 1920) or combined.shape[:2] != (self.stereo_size[1], self.stereo_size[0]*2):
+            jpeg_rgb=getattr(self,"_native_rgb_jpeg",False)
+            rgb_size_valid=isinstance(ar,bytes) if jpeg_rgb else ar.shape[:2]==(1200,1920)
+            if not rgb_size_valid or combined.shape[:2] != (self.stereo_size[1], self.stereo_size[0]*2):
                 audit.update(status="CALIBRATION_INVALID", reason="UNEXPECTED_FRAME_SIZE")
                 return
             if skew_ms > self.max_pair_skew_ms:
@@ -330,7 +349,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     events['rgb_call_end']=rgb_async_times['end']
                 else:
                     events['rgb_call_start']=time.monotonic()
-                    segmentation = self._mask_client.infer(cycle_id, ar)
+                    segmentation = self._infer_current_segmentation(cycle_id, ar, {})
                     events['rgb_call_end']=time.monotonic()
                     foreground['rgb_call_s']=events['rgb_call_end']-events['rgb_call_start']
                 selection_started=time.monotonic()
@@ -369,7 +388,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 audit.update(status="TARGET_UNAVAILABLE", reason=dynamic["reason"])
                 return
             candidate = dynamic["candidate"]
-            geometry = self._dynamic_target_geometry(candidate, ar.shape[1])
+            geometry = self._dynamic_target_geometry(candidate, 1920 if jpeg_rgb else ar.shape[1])
             audit["target_geometry"] = geometry
             if not geometry["accepted"]:
                 audit.update(status="TARGET_UNAVAILABLE", reason=geometry["reason"])
