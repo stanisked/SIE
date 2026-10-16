@@ -1,13 +1,36 @@
 import sys
 from pathlib import Path
 import unittest
+import json
+import tempfile
 from unittest.mock import patch
 import numpy as np
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
-from benchmark_segmentation_input_size import inner_roi,depth_for,delta,summarize
+from benchmark_segmentation_input_size import inner_roi,depth_for,delta,summarize,challenge_reference,sha256
 
 
 class InputSizeTests(unittest.TestCase):
+    def test_new_challenge_is_explicit_and_bound_to_original_checkpoint(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);checkpoint=root/'source.pt';checkpoint.write_bytes(b'frozen checkpoint')
+            parent=root/'original.json'
+            parent.write_text(json.dumps({'source_model':str(checkpoint),'source_model_sha256':sha256(checkpoint)}))
+            review=root/'review.json'
+            review.write_text(json.dumps({'status':'OFFLINE_INPUT_SIZE_CHALLENGE_ONLY',
+                'reference':{'comparison_file':str(parent),'comparison_sha256':sha256(parent)}}))
+            path,status=challenge_reference(review,[256,384],[(192,320)],True)
+            self.assertEqual(path,checkpoint)
+            self.assertEqual(status,'OFFLINE_192X320_VS_REVIEWED_256X384_ONLY')
+            for shape,sizes in (([416,640],[(192,320)]),([256,384],[(160,256)])):
+                with self.assertRaises(ValueError):challenge_reference(review,shape,sizes,True)
+            with self.assertRaises(ValueError):challenge_reference(review,[256,384],[(192,320)],False)
+            checkpoint.write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError,'checkpoint changed'):
+                challenge_reference(review,[256,384],[(192,320)],True)
+            parent.write_text('{}')
+            with self.assertRaisesRegex(ValueError,'parent comparison changed'):
+                challenge_reference(review,[256,384],[(192,320)],True)
+
     def test_runtime_roi_and_missing_depth(self):
         self.assertEqual(inner_roi({'bbox_xyxy_px':[100,100,500,1100]}),[180.,400.,420.,950.])
         self.assertIsNone(delta({}, {'candidate_depth_m':2.},'candidate_depth_m'))

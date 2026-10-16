@@ -85,12 +85,33 @@ def candidate_backend(path,size,first):
     return raw,wrapped
 
 
+
+def challenge_reference(report_path,shape,sizes,current_256=False):
+    """Keep this new challenge distinct from the previously reviewed rollout."""
+    report=json.loads(Path(report_path).read_text())
+    if not current_256:
+        if list(shape)!=[416,640]:raise ValueError('expected reviewed 416x640 baseline')
+        return Path(report['source_model']),'OFFLINE_INPUT_SIZE_CHALLENGE_ONLY'
+    if list(shape)!=[256,384] or report.get('status')!='OFFLINE_INPUT_SIZE_CHALLENGE_ONLY':
+        raise ValueError('expected reviewed 256x384 baseline')
+    if sizes!=[(192,320)]:raise ValueError('this challenge compares only 192x320 against reviewed 256x384')
+    parent=Path(report['reference']['comparison_file'])
+    if sha256(parent)!=report['reference']['comparison_sha256']:
+        raise ValueError('parent comparison changed')
+    original=json.loads(parent.read_text())
+    checkpoint=Path(original['source_model'])
+    if sha256(checkpoint)!=original['source_model_sha256']:
+        raise ValueError('source checkpoint changed')
+    return checkpoint,'OFFLINE_192X320_VS_REVIEWED_256X384_ONLY'
+
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     for key in ('reference-model','reference-report','evidence-root','ar-intrinsic','stereo-calibration','activation','output-dir'):
         p.add_argument('--'+key,type=Path,required=True)
     p.add_argument('--sizes',nargs='+',default=['320x512','256x384'])
     p.add_argument('--repeats',type=int,default=2)
+    p.add_argument('--reference-current-256',action='store_true',help='new offline-only 192x320 challenge against reviewed current 256x384')
     args=p.parse_args()
     sizes=[tuple(map(int,s.lower().split('x'))) for s in args.sizes]
     if args.output_dir.exists() or args.repeats<1 or any(len(s)!=2 or any(n<=0 or n%32 for n in s) or s[0]>=416 or s[1]>=640 for s in sizes):
@@ -109,18 +130,22 @@ def main():
     from benchmark_stereo_resolution import scaled_configs
     cv2.setNumThreads(1)
     baseline=OnnxSegmentationBackend(args.reference_model,args.reference_report,2)
-    if baseline.size!=[416,640]:raise ValueError('expected reviewed 416x640 baseline')
-    reference_report=json.loads(args.reference_report.read_text());checkpoint=Path(reference_report['source_model'])
+    checkpoint,challenge_status=challenge_reference(args.reference_report,baseline.size,sizes,args.reference_current_256)
+    from active_ort_session import active_session_metadata
+    active_reference=active_session_metadata(baseline)
     cp=json.loads(args.activation.read_text())['calibration_profile'];ex=cp['ar0234_to_ov9281_physical_left_extrinsic'];extrinsic=Path(ex['path']).expanduser()
     if sha256(args.ar_intrinsic)!=cp['source_sha256']['ar0234_intrinsic'] or sha256(args.stereo_calibration)!=cp['source_sha256']['ov9281_stereo_calibration'] or sha256(extrinsic)!=ex['sha256']:
         raise ValueError('activation/calibration SHA mismatch')
     cal=load_calibrations(args.ar_intrinsic,args.stereo_calibration,extrinsic)
     cases=load_cases(args.evidence_root)
     sources={str(f):sha256(f) for f in (args.reference_model,args.reference_report,checkpoint,args.activation,args.ar_intrinsic,args.stereo_calibration,extrinsic)}
+    if args.reference_current_256:
+        parent=Path(json.loads(args.reference_report.read_text())['reference']['comparison_file'])
+        sources[str(parent)]=sha256(parent)
     for case in cases:sources.update(case['source_sha256'])
     args.output_dir.mkdir(parents=True,exist_ok=False)
-    report={'status':'OFFLINE_INPUT_SIZE_CHALLENGE_ONLY','environment':environment(),'rows':[], 'exports':[],
-        'reference':baseline.metadata,'source_sha256':sources,'stereo_scale':.5,'diagnostic_range_m':[.5,4.5],
+    report={'status':challenge_status,'environment':environment(),'rows':[], 'exports':[],
+        'reference':baseline.metadata,'active_reference_session':active_reference,'source_sha256':sources,'stereo_scale':.5,'diagnostic_range_m':[.5,4.5],
         'metric_measurement_authorized':False,'actuator_access':False,
         'limitations':['Same saved scene; no physical depth truth or general/dynamic-scene certification.',
         'JPEG stereo recomputed once per cycle and shared by every segmentation size.',
@@ -152,6 +177,11 @@ def main():
             if exported.parent.resolve()!=folder.resolve():raise ValueError('export escaped output folder')
             onnx.checker.check_model(str(exported))
             raw,candidate=candidate_backend(exported,size,first)
+            active_candidate=active_session_metadata(candidate)
+            report.setdefault('active_candidate_sessions',{})[str(size)]=active_candidate
+            for key in ('providers','intra_op_num_threads','inter_op_num_threads','execution_mode'):
+                if active_reference[key]!=active_candidate[key]:
+                    raise ValueError('active session budget/provider differs; do not attribute timing to input size')
             report['exports'].append({'size':list(size),'path':str(exported),'sha256':sha256(exported),'arguments':export_args})
             for repeat in range(args.repeats):
                 for index,(case,disparity) in enumerate(zip(cases,prepared)):
@@ -182,6 +212,7 @@ def main():
     finally:
         report['tool_sha256']=sha256(__file__)
         with (args.output_dir/'comparison.json').open('x') as stream:json.dump(report,stream,indent=2,allow_nan=False)
+        print('INPUTS_UNCHANGED:',report.get('inputs_unchanged',False),flush=True)
         print('Saved:',args.output_dir/'comparison.json',flush=True)
 
 
