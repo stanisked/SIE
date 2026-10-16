@@ -133,6 +133,20 @@ class YOLO:
                     self.assertEqual(skipped['local_surface']['status'],'SKIPPED_BY_DIAGNOSTIC_SAMPLING')
                     self.assertNotIn('_surface_job',skipped)
                     self.assertNotIn('deferred_surface',skipped)
+                    fast_seg=client.infer('fast',np.zeros((1200,1920,3),np.uint8))
+                    fast=client.evaluate_selected('fast',np.full((48,64),16,np.float32),cal,
+                        fast_seg['instances'][0],[4,4,120,88],[.5,4.5],fast_seg,scale=.5,
+                        defer_local=True,prepare_local=False,fast_local=True)
+                    self.assertEqual(fast['mask_depth'],result['mask_depth'])
+                    self.assertNotIn('_surface_job',fast)
+                    local=fast['fast_local_consistency']
+                    self.assertEqual(local['provenance']['source_cycle_id'],'fast')
+                    self.assertEqual(local['provenance']['mask_sha256'],fast['mask_sha256'])
+                    self.assertEqual(local['provenance']['rgb_arrays_sha256'],fast_seg['arrays_sha256'])
+                    self.assertEqual(local['rgb_coverage_status'],'NOT_COMPUTED_IN_FAST_CURRENT_FRAME_PATH')
+                    self.assertGreater(local['pooled_held_out_axial_residual']['sample_count'],0)
+                    self.assertLess(local['pooled_held_out_axial_residual']['absolute_max_m'],1e-10)
+                    self.assertFalse(local['suitable_for_control'])
                     from preview_mask_surface import prepare_stereo_points
                     prepared_seg=client.infer('prepared',np.zeros((1200,1920,3),np.uint8))
                     points=prepare_stereo_points(np.full((48,64),16,np.float32),cal,scale=.5,cycle_id='prepared')
@@ -150,6 +164,16 @@ class YOLO:
 
                 finally:
                     client.close()
+
+    def test_fast_local_missing_or_wrong_provenance_is_not_accepted(self):
+        client=PreviewMaskClient.__new__(PreviewMaskClient);client.model_sha256='model'
+        client._array_request=lambda *args,**kwargs:{'status':'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY',
+            'mask_sha256':'mask','arrays_sha256':'fusion',
+            'fast_local_consistency':{'status':'LOCAL_CROSSFIT_DIAGNOSTIC_ONLY','provenance':{'source_cycle_id':'old'}}}
+        segmentation={'cycle_id':'one','model_sha256':'model','arrays_sha256':'rgb'}
+        with self.assertRaisesRegex(ValueError,'binding mismatch'):
+            client.evaluate_selected('one',None,{}, {'instance_index':0,'bbox_xyxy_px':[1,2,3,4]},
+                [1,2,3,4],[.5,4.5],segmentation,scale=.5,fast_local=True)
 
     def test_selection_refuses_multiple_stale_ties_and_low_confidence(self):
         kwargs=dict(prior_track=None,captured_at_utc='2026-10-14T20:00:01+00:00',

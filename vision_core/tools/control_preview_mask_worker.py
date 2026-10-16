@@ -104,7 +104,8 @@ def main():
         Path(__file__).resolve().parents[1]/'person_localization/local_surface_diagnostic.py',
         Path(__file__).resolve().parents[1]/'person_localization/instance_mask_stereo_fusion.py',
         Path(__file__).resolve().parents[1]/'person_localization/rgb_shared_buffer.py',
-        Path(__file__).resolve().parents[1]/'person_localization/jpeg_frame_transport.py')}
+        Path(__file__).resolve().parents[1]/'person_localization/jpeg_frame_transport.py',
+        Path(__file__).resolve().parents[1]/'person_localization/fast_local_depth_consistency.py')}
     if args.engine=='onnxruntime':
         code_sha['active_ort_session']=digest(Path(__file__).with_name('active_ort_session.py'))
         code_sha['onnx_backend']=digest(Path(__file__).with_name('onnx_segmentation_backend.py'))
@@ -174,9 +175,9 @@ def main():
                     started=time.monotonic()
                     deferred=bool(request.get('defer_local',False))
                     if prepared:
-                        evaluated=evaluate_prepared(points,mask,request['roi'],defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)))
+                        evaluated=evaluate_prepared(points,mask,request['roi'],defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)))
                     else:
-                        evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)))
+                        evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)))
                     if deferred:
                         result,samples=evaluated
                         if samples is not None:
@@ -189,6 +190,12 @@ def main():
                         result['surface_s']=time.monotonic()-started
                     result.update(mask=info,
                                   mask_sha256=hashlib.sha256(mask.tobytes()).hexdigest())
+                if 'fast_local_consistency' in result:
+                    result['fast_local_consistency']['provenance']={
+                        'source_cycle_id':request['cycle_id'],'mask_sha256':result['mask_sha256'],
+                        'instance_index':request.get('instance_index'),'model_sha256':model_sha,
+                        'rgb_arrays_sha256':request.get('rgb_arrays_sha256'),
+                        'fusion_arrays_sha256':request['arrays_sha256']}
                 result.update(segmentation_engine=engine_metadata,code_sha256=code_sha,mask_s=mask_s,cycle_id=request['cycle_id'],
                               arrays_sha256=request['arrays_sha256'],model_sha256=model_sha)
                 emit(result)

@@ -38,6 +38,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \
   -p preview_rgb_transport:="${SIE_PREVIEW_RGB_TRANSPORT:-npz}" \
+  -p preview_fast_local_consistency:="${SIE_PREVIEW_FAST_LOCAL_CONSISTENCY:-false}" \
   -p preview_fresh_stereo_during_rgb:="${SIE_PREVIEW_FRESH_STEREO_DURING_RGB:-false}" \
   -p preview_native_rgb_jpeg:="${SIE_PREVIEW_NATIVE_RGB_JPEG:-false}" \
   -p preview_overlap_stereo_decode:="${SIE_PREVIEW_OVERLAP_STEREO_DECODE:-false}" \
@@ -78,6 +79,15 @@ for key in ('mask_s','mask_depth_prepare_s','surface_s','round_trip_s'):
 depths=[r.get('shape_diagnostic',{}).get('mask_depth',{}).get('candidate_depth_m') for r in rows if r['status']!='CANCELLED_SHUTDOWN']
 depths=[d for d in depths if d is not None]
 if depths: print('MASK_CANDIDATE_DEPTH median_m=',round(statistics.median(depths),4),'span_m=',round(max(depths)-min(depths),4))
+fast=[r.get('shape_diagnostic',{}).get('fast_local_consistency') for r in rows[1:] if r['status']!='CANCELLED_SHUTDOWN']
+fast=[f for f in fast if f is not None]
+print('FAST_LOCAL:',dict(Counter(f.get('status') for f in fast)))
+for label,values in (
+    ('fit_ms',[f['fit_s']*1000 for f in fast]),
+    ('residual_MAD_mm',[f['pooled_held_out_axial_residual']['mad_m']*1000 for f in fast if 'mad_m' in f.get('pooled_held_out_axial_residual',{})]),
+    ('residual_p90_mm',[f['pooled_held_out_axial_residual']['absolute_p90_m']*1000 for f in fast if 'absolute_p90_m' in f.get('pooled_held_out_axial_residual',{})]),
+    ('fitted_fraction',[f['fitted_sample_fraction'] for f in fast])):
+    if values:print('FAST_LOCAL',label,'n=',len(values),'median=',round(statistics.median(values),4),'max=',round(max(values),4),'min=',round(min(values),4))
 local_files=sorted(Path(sys.argv[1]).rglob('local-surface-*.json'))
 local_rows=[json.loads(p.read_text()) for p in local_files]
 print('LOCAL_SAMPLING:',dict(Counter(r.get('local_surface_async',{}).get('status') for r in rows)))

@@ -118,6 +118,28 @@ class QualityShadowTests(unittest.TestCase):
             self.assertIn('INPUTS_UNCHANGED: True',result.stdout)
             self.assertFalse(report['actuator_access'])
 
+    def test_fast_local_only_observed_for_exact_current_mask_and_frame(self):
+        a=source();shape=a['shape_diagnostic']
+        shape.update(mask={'instance_index':0,'source_rgb_arrays_sha256':'rgb'},
+            model_sha256='model',arrays_sha256='fusion')
+        shape['fast_local_consistency']={'status':'LOCAL_CROSSFIT_DIAGNOSTIC_ONLY',
+            'algorithm':'BATCHED_OLS_DISPARITY_PLANE_TWO_FOLD',
+            'provenance':{'source_cycle_id':'one','mask_sha256':'mask','instance_index':0,
+                'model_sha256':'model','rgb_arrays_sha256':'rgb','fusion_arrays_sha256':'fusion'},
+            'pooled_held_out_axial_residual':{'mad_m':.02,'absolute_p90_m':.07},
+            'fitted_sample_fraction':.99}
+        r=assess_control_depth(a)
+        self.assertEqual(r['local_consistency']['status'],'OBSERVED_NOT_ADMITTED')
+        self.assertEqual(r['local_consistency']['binding'],'EXACT_SOURCE_FRAME_AND_MASK')
+        self.assertIn('CURRENT_FRAME_RGB_COVERAGE_UNAVAILABLE',r['missing_evidence'])
+        self.assertIn('PHYSICAL_DEPTH_ERROR_BOUND_NOT_ESTABLISHED',r['missing_evidence'])
+        self.assertFalse(r['suitable_for_control'])
+        for key in shape['fast_local_consistency']['provenance']:
+            b=deepcopy(a);b['shape_diagnostic']['fast_local_consistency']['provenance'][key]='wrong'
+            r=assess_control_depth(b)
+            self.assertIn('FAST_LOCAL_RESULT_BINDING_MISMATCH',r['refusal_reasons'])
+            self.assertEqual(r['local_consistency']['status'],'UNAVAILABLE')
+
     def test_missing_and_nonfinite_evidence_never_passes(self):
         for a in ({},source()):
             if a:

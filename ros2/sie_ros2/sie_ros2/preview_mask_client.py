@@ -199,7 +199,7 @@ class PreviewMaskClient:
         return self._array_request(cycle_id,{'rgb':rgb},{'operation':'infer_instances',
             'diagnostic_mask_hashes':diagnostic_mask_hashes})
 
-    def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale, defer_local=False, prepare_local=True, prepared_geometry=None):
+    def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale, defer_local=False, prepare_local=True, prepared_geometry=None, fast_local=False):
         if segmentation.get('cycle_id')!=cycle_id or segmentation.get('model_sha256')!=self.model_sha256:
             raise ValueError('segmentation cycle/model mismatch')
         arrays={'disparity':disparity,**cal} if prepared_geometry is None else {'geometry_'+k:v for k,v in prepared_geometry.items()}
@@ -208,7 +208,15 @@ class PreviewMaskClient:
         result=self._array_request(cycle_id,arrays,{
             'operation':'evaluate_selected_instance','prepared_geometry':prepared_geometry is not None,'instance_index':candidate['instance_index'],
             'bbox_xyxy_px':candidate['bbox_xyxy_px'],'rgb_arrays_sha256':segmentation['arrays_sha256'],
-            'roi':list(roi),'range':list(depth_range),'scale':scale,'defer_local':defer_local,'prepare_local':prepare_local})
+            'roi':list(roi),'range':list(depth_range),'scale':scale,'defer_local':defer_local,'prepare_local':prepare_local,
+            **({'fast_local':True} if fast_local else {})})
+        if fast_local and result.get('status')!='MASK_SURFACE_UNAVAILABLE':
+            fast=result.get('fast_local_consistency') or {}
+            expected={'source_cycle_id':cycle_id,'mask_sha256':result.get('mask_sha256'),
+                'instance_index':candidate['instance_index'],'model_sha256':self.model_sha256,
+                'rgb_arrays_sha256':segmentation['arrays_sha256'],'fusion_arrays_sha256':result.get('arrays_sha256')}
+            if fast.get('provenance')!=expected or not expected['mask_sha256'] or fast.get('status')!='LOCAL_CROSSFIT_DIAGNOSTIC_ONLY':
+                raise ValueError('fast local current-frame binding mismatch')
         result['mask_s']=segmentation.get('mask_s')
         result['inference_round_trip_s']=segmentation.get('round_trip_s')
         result['round_trip_scope']='FUSION_ONLY_AFTER_SEGMENTATION'

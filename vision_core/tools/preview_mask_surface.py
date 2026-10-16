@@ -11,10 +11,10 @@ from vision_core.person_localization.instance_mask_stereo_fusion import masked_d
 from vision_core.person_localization.local_surface_diagnostic import analyze_local_surfaces
 
 
-def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True, ownership_backend="opencv"):
+def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True, ownership_backend="opencv",fast_local=False):
     points=prepare_stereo_points(disparity,cal,lower,upper,scale=scale)
     return evaluate_prepared(points,mask,roi,defer_local=defer_local,
-        prepare_local=prepare_local,ownership_backend=ownership_backend)
+        prepare_local=prepare_local,ownership_backend=ownership_backend,fast_local=fast_local)
 
 
 def prepare_stereo_points(disparity,cal,lower=.5,upper=4.5,*,scale=1.,cycle_id=""):
@@ -44,7 +44,7 @@ def prepare_stereo_points(disparity,cal,lower=.5,upper=4.5,*,scale=1.,cycle_id="
 GEOMETRY_KEYS=('u','v','d','z','xy','fb','stride','scale','lower','upper','source_cycle_id')
 
 
-def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,ownership_backend="opencv"):
+def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,ownership_backend="opencv",fast_local=False):
     if ownership_backend not in ('opencv','reference_numpy'):raise ValueError('unknown mask ownership backend')
     if mask.shape!=(1200,1920) or mask.dtype!=np.bool_:raise ValueError('expected current AR boolean mask')
     scale=float(points['scale']);lower=float(points['lower']);upper=float(points['upper'])
@@ -66,9 +66,24 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
         selected = owned(xy, interior, roi)
         depth = depth_from_owned_samples(z[selected], int(np.count_nonzero(mask)),
                                          int(np.count_nonzero(interior)))
+    fast=None
+    if fast_local:
+        import time
+        from vision_core.person_localization.fast_local_depth_consistency import analyze_fast_local_depth
+        if selected is None:
+            interior=cv2.erode(mask.astype(np.uint8),np.ones((5,5),np.uint8),borderType=cv2.BORDER_CONSTANT,borderValue=0)
+            selected=owned(xy,interior,roi)
+        started=time.monotonic()
+        fast,_=analyze_fast_local_depth(u[selected],v[selected],d[selected],fb,
+            stride=stride,tile_px=int(32*scale))
+        fast['fit_s']=time.monotonic()-started
+        fast['rgb_coverage_status']='NOT_COMPUTED_IN_FAST_CURRENT_FRAME_PATH'
+    def attach(result):
+        if fast is not None:result['fast_local_consistency']=fast
+        return result
     if defer_local and not prepare_local:
-        return diagnostic_result(depth,scale,lower,upper,
-            {'status':'SKIPPED_BY_DIAGNOSTIC_SAMPLING'},True),None
+        return attach(diagnostic_result(depth,scale,lower,upper,
+            {'status':'SKIPPED_BY_DIAGNOSTIC_SAMPLING'},True)),None
     if selected is None:
         interior = cv2.erode(mask.astype(np.uint8), np.ones((5,5),np.uint8),
                              borderType=cv2.BORDER_CONSTANT, borderValue=0)
@@ -77,7 +92,7 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
     samples={'u':u,'v':v,'d':d,'xy':xy,'interior':interior,
              'roi':np.asarray(roi),'fb':np.asarray(fb),'stride':np.asarray(stride),'scale':np.asarray(scale)}
     local = {'status':'DEFERRED_NOT_YET_COMPUTED'} if defer_local else local_surface_stats(samples)
-    result=diagnostic_result(depth,scale,lower,upper,local,defer_local)
+    result=attach(diagnostic_result(depth,scale,lower,upper,local,defer_local))
     return (result,samples) if defer_local else result
 
 

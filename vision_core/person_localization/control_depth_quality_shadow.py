@@ -45,6 +45,22 @@ def assess_control_depth(audit,local_result=None):
         elif local_result.get('status')=='LOCAL_SURFACE_DIAGNOSTIC_ONLY':
             local=local_result.get('local_surface') or {}
         else:local={'status':'LOCAL_SURFACE_UNAVAILABLE'}
+    fast=shape.get('fast_local_consistency')
+    fast_binding=None
+    if fast is not None:
+        mask_info=shape.get('mask') or {}
+        expected={'source_cycle_id':cid,'mask_sha256':shape.get('mask_sha256'),
+            'instance_index':mask_info.get('instance_index'),'model_sha256':shape.get('model_sha256'),
+            'rgb_arrays_sha256':mask_info.get('source_rgb_arrays_sha256'),
+            'fusion_arrays_sha256':shape.get('arrays_sha256')}
+        bound=(bool(cid) and all(v is not None for v in expected.values())
+            and all(expected[k] for k in ('mask_sha256','model_sha256','rgb_arrays_sha256','fusion_arrays_sha256'))
+            and fast.get('provenance')==expected and fast.get('status')=='LOCAL_CROSSFIT_DIAGNOSTIC_ONLY')
+        fast_binding='EXACT_SOURCE_FRAME_AND_MASK' if bound else 'REJECTED_FRAME_BINDING'
+        if not bound:reasons.append('FAST_LOCAL_RESULT_BINDING_MISMATCH')
+        elif local_result is None:
+            local=fast;binding=fast_binding
+            unknown.append('CURRENT_FRAME_RGB_COVERAGE_UNAVAILABLE')
     residual=local.get('pooled_held_out_axial_residual') or {}
     available=all(finite_number(residual.get(k)) for k in ('mad_m','absolute_p90_m'))
     unknown.append('LOCAL_ERROR_TO_PHYSICAL_ACCURACY_POLICY_NOT_VALIDATED' if available else 'CURRENT_FRAME_LOCAL_CONSISTENCY_UNAVAILABLE')
@@ -69,7 +85,7 @@ def assess_control_depth(audit,local_result=None):
     unknown.extend(['EXPOSURE_TO_COMMAND_AGE_NOT_ESTABLISHED','PHYSICAL_DEPTH_ERROR_BOUND_NOT_ESTABLISHED'])
     if audit.get('status') in ('CANCELLED_SHUTDOWN','PROCESSING_REFUSED','TARGET_UNAVAILABLE'):
         reasons.append('CURRENT_CYCLE_NOT_USABLE')
-    return {'schema_version':'sie.control_depth_quality_shadow.v1','assessment_revision':2,'cycle_id':cid,
+    return {'schema_version':'sie.control_depth_quality_shadow.v1','assessment_revision':3 if fast is not None else 2,'cycle_id':cid,
         'status':'SHADOW_REFUSED' if reasons else 'SHADOW_UNDETERMINED',
         'suitable_for_control':False,'metric_measurement_authorized':False,
         'navigation_eligible':False,'actuator_access':False,
@@ -82,9 +98,10 @@ def assess_control_depth(audit,local_result=None):
         'layers':{'status':'SINGLE_EXISTING_PLAUSIBLE_LAYER' if unique else 'AMBIGUOUS_OR_UNAVAILABLE',
                   'plausible_layer_count':depth.get('plausible_layer_count'),'depth_layers':deepcopy(depth.get('depth_layers',[]))},
         'local_consistency':{'status':'OBSERVED_NOT_ADMITTED' if available else 'UNAVAILABLE',
-            'source_status':local.get('status'),'binding':binding,'source_cycle_id':cid,
+            'source_status':local.get('status'),'algorithm':local.get('algorithm'),'fast_binding':fast_binding,'binding':binding,'source_cycle_id':cid,
             'held_out_residual':deepcopy(residual), 'rgb_coverage':deepcopy(local.get('rgb_coverage')),
             'unfitted_patch_fraction':local.get('unfitted_patch_fraction'),
+            'fitted_sample_fraction':local.get('fitted_sample_fraction'),
             'physical_error_bound_m':None},
         'freshness':{'status':'EXPOSURE_TO_COMMAND_AGE_NOT_ESTABLISHED',
             'driver_metadata':{'status':driver_status,

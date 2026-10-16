@@ -140,6 +140,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 self.project_root/"vision_core/tools/local_surface_async_worker.py")
             self._surface_diagnostics=LatestSurfaceDiagnostics(local_client,
                 self._writer.directory/"local-surfaces",self._publish_surface_result)
+        self.declare_parameter("preview_fast_local_consistency", False)
+        self._fast_local_consistency=bool(self.get_parameter("preview_fast_local_consistency").value)
+        if self._fast_local_consistency and (self._rgb_backend!="single_segmentation" or not self._defer_local or self._local_enabled):
+            raise ValueError("fast local consistency requires single segmentation and disabled slow local diagnostics")
         self.declare_parameter("preview_capture_backend", "opencv")
         self.declare_parameter("preview_native_capture_executable", "")
         self._capture_backend=str(self.get_parameter("preview_capture_backend").value)
@@ -180,7 +184,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 if isinstance(self.stereo_capture,LatestV4L2Capture):self.stereo_capture.release()
                 raise
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; decode_overlap={self._overlap_stereo_decode}; original_rgb_jpeg={self._native_rgb_jpeg}; fresh_stereo_during_rgb={self._fresh_stereo_during_rgb}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; decode_overlap={self._overlap_stereo_decode}; original_rgb_jpeg={self._native_rgb_jpeg}; fresh_stereo_during_rgb={self._fresh_stereo_during_rgb}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; fast_local={self._fast_local_consistency}; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 
@@ -476,6 +480,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                         audit["shape_diagnostic"] = client.evaluate_selected(cycle_id, current, cal,
                             candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
                             segmentation, scale=scale,
+                            **({"fast_local":True} if getattr(self,"_fast_local_consistency",False) else {}),
                             **({"defer_local":True, **({"prepare_local":False} if not local_scheduled else {})}
                                if getattr(self,"_defer_local",False) else {}))
                         surface_job=audit["shape_diagnostic"].pop("_surface_job",None)
