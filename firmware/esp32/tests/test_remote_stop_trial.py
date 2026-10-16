@@ -10,7 +10,9 @@ class Harness:
     def __init__(self, mode='normal'):
         self.mode=mode;self.calls=[];self.time=0.;self.command=None;self.stopped=False;self.polls=0
     def clock(self):return self.time
-    def sleep(self,t):self.time+=t
+    def sleep(self,t):
+        if self.mode=='interrupt' and not self.stopped:raise KeyboardInterrupt()
+        self.time+=t
     def request(self,method,url,timeout):
         self.time+=0.001
         path=urlsplit(url).path;self.calls.append((method,path))
@@ -24,20 +26,26 @@ class Harness:
         if path=='/move-forward':
             self.command=parse_qs(urlsplit(url).query)['command_id'][0]
             if self.mode=='move_transport':raise OSError('ambiguous movement response')
+            if self.mode=='slow_accept':self.time+=.45
             return 202,{'accepted':True,'command_id':self.command}
         if path=='/stop':
             self.stopped=True
             if self.mode=='stop_transport':raise OSError('stop response unknown')
+            if self.mode=='natural':return 200,{'accepted':True,'stopped':True,'basis':'NO_ACTIVE_MOTION'}
             return 202,{'accepted':True,'stopped':False,'stop_pending':True}
         if self.mode=='interrupt' and not self.stopped:raise KeyboardInterrupt()
-        if self.mode=='status_transport' and not self.stopped:raise OSError('status unavailable')
-        if self.mode=='reboot' and not self.stopped:
+        if self.mode=='status_transport':raise OSError('status unavailable')
+        if self.mode=='reboot':
             return 200,{**ready,'boot_session_id':'FEDCBA9876543210'}
         terminal={**ready,'last_command_id':self.command,'last_command_state':'STOPPED',
                   'remote_stop_observation_complete':True,'remote_stop_elapsed_ms':600,
                   'remote_stop_right_start_count':40,'remote_stop_left_start_count':40,
                   'remote_stop_right_observed_count':43,'remote_stop_left_observed_count':42}
         if self.mode=='natural':return 200,{**terminal,'last_command_state':'SUCCESS'}
+        if self.mode=='no_progress':
+            terminal['remote_stop_right_start_count']=0
+            terminal['remote_stop_left_start_count']=0
+        if self.mode=='slow_status':self.time+=.479
         if self.stopped:
             self.polls+=1
             if self.polls==1 or self.mode=='timeout':
@@ -89,14 +97,25 @@ class TrialTests(unittest.TestCase):
         self.assertEqual(s['stop_posts'],1)
     def test_natural_completion_does_not_claim_stop_trial(self):
         s,h=self.trial('natural')
-        self.assertEqual(s['result'],'COMPLETED_BEFORE_STOP_NO_STOP_TRIAL')
-        self.assertEqual(s['stop_posts'],0)
+        self.assertEqual(s['result'],'REMOTE_STOP_NOT_CONFIRMED')
+        self.assertEqual(s['reason'],'STOP_ARRIVED_WITH_NO_ACTIVE_MOTION')
+        self.assertEqual(s['stop_posts'],1)
     def test_fault_stays_unconfirmed(self):
         s,h=self.trial('fault')
         self.assertEqual(s['result'],'REMOTE_STOP_NOT_CONFIRMED')
-    def test_progress_fallback_still_stops_once(self):
-        s,h=self.trial('fallback')
-        self.assertEqual(s['stop_posts'],1)
-        self.assertGreaterEqual(s['stop_request_host_monotonic_s'],1.)
+    def test_status_latency_cannot_delay_stop_dispatch(self):
+        s,h=self.trial('slow_status')
+        self.assertEqual(h.calls[:3],[('GET','/status'),('POST','/move-forward'),('POST','/stop')])
+        self.assertAlmostEqual(s['actual_move_post_to_stop_request_s'],.30)
+        self.assertAlmostEqual(s['stop_dispatch_lateness_s'],0.)
+    def test_late_acceptance_causes_immediate_stop_without_extra_sleep(self):
+        s,h=self.trial('slow_accept')
+        self.assertAlmostEqual(s['actual_move_post_to_stop_request_s'],.451)
+        self.assertAlmostEqual(s['stop_dispatch_lateness_s'],.151)
+        self.assertEqual(h.calls[2],('POST','/stop'))
+    def test_encoder_quiet_without_prior_progress_is_not_moving_stop_validation(self):
+        s,h=self.trial('no_progress')
+        self.assertEqual(s['result'],'STOP_OBSERVED_WITHOUT_BOTH_WHEEL_PROGRESS')
+        self.assertFalse(s['both_wheels_moved_before_stop'])
 
 if __name__=='__main__':unittest.main()

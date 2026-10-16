@@ -15,8 +15,7 @@ import uuid
 
 BUILD = 'v4_2_remote_stop_observed_v1'
 DISTANCE_M = 0.10
-STOP_TRIGGER_M = 0.04
-STOP_REQUEST_AFTER_S = 1.0  # stop even if progress telemetry never reaches trigger
+STOP_REQUEST_AFTER_S = 0.30  # host deadline from movement POST start; not a stopping bound
 TERMINAL_WAIT_S = 5.0  # observation deadline, never permission for more movement
 TERMINAL = {'SUCCESS', 'PARTIAL_PROGRESS', 'FAULT', 'STOPPED'}
 
@@ -69,8 +68,8 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
     command_id = 'remote-stop-' + uuid.uuid4().hex
     summary = {'schema_version':'sie.remote_stop_trial_diagnostic.v1',
                'command_id':command_id, 'requested_forward_m':DISTANCE_M,
-               'stop_trigger_progress_m':STOP_TRIGGER_M,
-               'stop_request_fallback_s':STOP_REQUEST_AFTER_S,
+               'stop_trigger_mode':'HOST_DEADLINE_WITHOUT_STATUS_POLL',
+               'stop_request_after_move_post_s':STOP_REQUEST_AFTER_S,
                'result':'NOT_STARTED','movement_posts':0,'stop_posts':0,
                'physical_stopping_bound_established':False,
                'manual_physical_post_stop_distance_m':None,
@@ -130,8 +129,21 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
         summary['movement_response'] = {'http_code':code,'body':response}
         if code != 202 or response.get('accepted') is not True or response.get('command_id') != command_id:
             raise TrialError('Movement acceptance unknown/rejected; no retry')
-        terminal_deadline = None
+        # No status request may occupy the stop dispatch window. An acceptance
+        # reply later than the deadline causes an immediate stop, never a retry.
+        stop_deadline = started + STOP_REQUEST_AFTER_S
+        summary['move_request_host_monotonic_s'] = started
+        summary['stop_dispatch_deadline_host_monotonic_s'] = stop_deadline
+        remaining = stop_deadline - clock()
+        if remaining > 0:
+            sleep(remaining)
+        stop_once()
+        summary['actual_move_post_to_stop_request_s'] = summary['stop_request_host_monotonic_s'] - started
+        summary['stop_dispatch_lateness_s'] = max(0.0, summary['stop_request_host_monotonic_s'] - stop_deadline)
+        terminal_deadline = clock() + TERMINAL_WAIT_S
         while True:
+            if clock() >= terminal_deadline:
+                raise TrialError('Terminal observation deadline expired; do not start another trial')
             code, status = call('GET','/status')
             if code != 200:
                 raise TrialError('Status unavailable during trial')
@@ -156,23 +168,18 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
                     proxy['mean_distance_m'] = (proxy['right_distance_m']+proxy['left_distance_m'])/2
                     proxy['basis'] = 'wheel encoder displacement from firmware brake onset to final braked sample; not independent physical measurement'
                     summary['encoder_stop_proxy'] = proxy
+                    summary['both_wheels_moved_before_stop'] = all(
+                        status.get(f'remote_stop_{wheel}_start_count', 0) > 0
+                        for wheel in ('right','left'))
+                    if not summary['both_wheels_moved_before_stop']:
+                        summary['result'] = 'STOP_OBSERVED_WITHOUT_BOTH_WHEEL_PROGRESS'
                     summary['controller_observation_elapsed_ms'] = status.get('remote_stop_elapsed_ms')
                     summary['host_stop_request_to_terminal_observed_s'] = clock()-summary['stop_request_host_monotonic_s']
                 else:
                     summary['result'] = 'REMOTE_STOP_NOT_CONFIRMED'
+                    if summary.get('stop_response', {}).get('body', {}).get('basis') == 'NO_ACTIVE_MOTION':
+                        summary['reason'] = 'STOP_ARRIVED_WITH_NO_ACTIVE_MOTION'
                 break
-            if not sent_stop:
-                progress = status.get('average_distance_m')
-                if type(progress) not in {int,float} or not math.isfinite(progress):
-                    raise TrialError('Invalid progress telemetry')
-                if progress >= STOP_TRIGGER_M or clock()-started >= STOP_REQUEST_AFTER_S:
-                    summary['status_before_stop'] = status
-                    summary['stop_requested_during_drive'] = status.get('state') in {'STARTING','DRIVING','CORRECTING'}
-                    summary['positive_encoder_motion_before_stop'] = status.get('right_count',0)>0 or status.get('left_count',0)>0
-                    stop_once()
-                    terminal_deadline = clock()+TERMINAL_WAIT_S
-            elif clock() >= terminal_deadline:
-                raise TrialError('Terminal observation deadline expired; do not start another trial')
             sleep(0.02)
     except BaseException as e:
         summary['result'] = 'INTERRUPTED' if isinstance(e,KeyboardInterrupt) else 'TRIAL_REFUSED_OR_UNKNOWN'

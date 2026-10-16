@@ -1,0 +1,24 @@
+{
+  "status": "REMOTE_STOP_NOT_EXERCISED_IN_FIRST_TRIAL",
+  "source_summary_sha256": "f765f7443be7aa85433caa008bd74fb83ae974682ebe642d1be46bc6f0989d08",
+  "source_http_sha256": "cb61c23dbae8fe439c2277e77d9514090e3e69e268961a6d4939eaa41e99d042",
+  "source_trial_directory": "/home/kestabor/.local/state/sie/evidence/remote_stop_trial_20261016_180046_220e99d6",
+  "operator_report": "normal start, approximately 0.10 m travel and stop",
+  "operator_physical_distance_uncertainty_m": null,
+  "encoder_mean_progress_m": 0.0952,
+  "terminal_fault": "BOUNDED_TARGET_NOT_REACHED",
+  "left_final_count": 94,
+  "left_minimum_success_count": 95,
+  "stop_http_basis": "NO_ACTIVE_MOTION",
+  "status_request_durations_ms": [
+    205.09,
+    196.6,
+    478.99
+  ],
+  "stop_request_duration_ms": 35.48,
+  "remote_stop_observation_complete": false,
+  "new_runner_mode": "HOST_DEADLINE_WITHOUT_STATUS_POLL",
+  "stop_schedule_from_move_post_s": 0.3,
+  "physical_stopping_bound_established": false,
+  "thresholds_changed": false
+}
