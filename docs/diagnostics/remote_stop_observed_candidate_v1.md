@@ -1,6 +1,6 @@
 # Remote stop observed candidate v1
 
-Status: CANDIDATE, not compiled for ESP32, not deployed or physically validated.
+Initial status: CANDIDATE. Later operator-reported Arduino compilation and deployment are recorded in `remote_stop_trial_v1.md`. Physical stopping validation remains pending.
 Build label: `v4_2_remote_stop_observed_v1`. The label identifies this source revision; it is not a binary checksum. Source and observer SHA-256 are recorded in `firmware/esp32/traction_control_v4_2_bounded_motion_api/remote_stop_candidate_manifest_v1.json`. Historical change_manifest.json records earlier evidence and does not qualify this candidate.
 
 ## Trigger and resulting behavior

@@ -907,3 +907,8 @@ Prepared `v4_2_remote_stop_observed_v1`, source/observer hashes in `firmware/esp
 ### Remote-stop client/build preparation
 
 Added a compile-only helper at `firmware/esp32/tools/build_remote_stop_candidate.py`, requiring an explicit FQBN and recording toolchain/source/binary provenance without upload. Reviewed bounded executor: no /stop sender exists in that module; matching STOPPED completion already leads to reobservation. New offline regression covers BRAKING through terminal STOPPED. Host checks pass; actual ESP32 compilation remains blocked by absent arduino-cli in the editing environment. Inventory the operator's laptop toolchain, then compile before deployment. Details and exact verification scope are in `docs/diagnostics/remote_stop_observed_candidate_v1.md`.
+
+
+### 2026-10-16 deployed label verified; single remote-stop trial prepared
+
+Operator reported Arduino IDE compile success (Flash 1,018,379 bytes; global RAM 53,740 bytes) and uploaded the candidate. Read-only status now reports build label v4_2_remote_stop_observed_v1, boot 2C0A9781CCBA9BD2, READY/no active command/no latch/zero PWM. Actual binary hash and toolchain metadata are not established by the label. Added `firmware/esp32/tools/run_remote_stop_trial.py`: read-only by default, explicit --execute performs one 0.10 m forward request followed by one stop and records current-session terminal/encoder evidence. Eight offline runner tests pass. Next: one operator-supervised stop trial, inspect its saved summary, then assess independent physical stopping measurements. Camera admission and capability qualification remain unchanged.
