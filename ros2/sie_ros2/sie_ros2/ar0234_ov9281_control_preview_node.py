@@ -140,6 +140,15 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 self.project_root/"vision_core/tools/local_surface_async_worker.py")
             self._surface_diagnostics=LatestSurfaceDiagnostics(local_client,
                 self._writer.directory/"local-surfaces",self._publish_surface_result)
+        self.declare_parameter("preview_front_mount_profile", "")
+        mount_path=str(self.get_parameter("preview_front_mount_profile").value)
+        self._front_profile=None
+        if mount_path:
+            if self._rgb_backend!="single_segmentation":
+                raise ValueError("front diagnostic requires exact selected segmentation mask")
+            from vision_core.person_localization.robot_front_geometry import load_profile
+            self._front_profile=load_profile(mount_path)
+            self.get_logger().info("front geometry diagnostic enabled: partial optical datum; no movement admission")
         self.declare_parameter("preview_fast_local_consistency", False)
         self._fast_local_consistency=bool(self.get_parameter("preview_fast_local_consistency").value)
         if self._fast_local_consistency and (self._rgb_backend!="single_segmentation" or not self._defer_local or self._local_enabled):
@@ -481,6 +490,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                             candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
                             segmentation, scale=scale,
                             **({"fast_local":True} if getattr(self,"_fast_local_consistency",False) else {}),
+                            **({"front_profile":self._front_profile} if getattr(self,"_front_profile",None) is not None else {}),
                             **({"defer_local":True, **({"prepare_local":False} if not local_scheduled else {})}
                                if getattr(self,"_defer_local",False) else {}))
                         surface_job=audit["shape_diagnostic"].pop("_surface_job",None)
@@ -655,3 +665,4 @@ def main(args=None):
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+

@@ -11,10 +11,10 @@ from vision_core.person_localization.instance_mask_stereo_fusion import masked_d
 from vision_core.person_localization.local_surface_diagnostic import analyze_local_surfaces
 
 
-def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True, ownership_backend="opencv",fast_local=False):
+def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True, ownership_backend="opencv",fast_local=False,front_geometry=None):
     points=prepare_stereo_points(disparity,cal,lower,upper,scale=scale)
     return evaluate_prepared(points,mask,roi,defer_local=defer_local,
-        prepare_local=prepare_local,ownership_backend=ownership_backend,fast_local=fast_local)
+        prepare_local=prepare_local,ownership_backend=ownership_backend,fast_local=fast_local,front_geometry=front_geometry)
 
 
 def prepare_stereo_points(disparity,cal,lower=.5,upper=4.5,*,scale=1.,cycle_id=""):
@@ -44,7 +44,7 @@ def prepare_stereo_points(disparity,cal,lower=.5,upper=4.5,*,scale=1.,cycle_id="
 GEOMETRY_KEYS=('u','v','d','z','xy','fb','stride','scale','lower','upper','source_cycle_id')
 
 
-def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,ownership_backend="opencv",fast_local=False):
+def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,ownership_backend="opencv",fast_local=False,front_geometry=None):
     if ownership_backend not in ('opencv','reference_numpy'):raise ValueError('unknown mask ownership backend')
     if mask.shape!=(1200,1920) or mask.dtype!=np.bool_:raise ValueError('expected current AR boolean mask')
     scale=float(points['scale']);lower=float(points['lower']);upper=float(points['upper'])
@@ -78,8 +78,20 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
             stride=stride,tile_px=int(32*scale))
         fast['fit_s']=time.monotonic()-started
         fast['rgb_coverage_status']='NOT_COMPUTED_IN_FAST_CURRENT_FRAME_PATH'
+    front=None
+    if front_geometry is not None:
+        import time
+        from vision_core.person_localization.robot_front_geometry import describe_front
+        if selected is None:
+            interior=cv2.erode(mask.astype(np.uint8),np.ones((5,5),np.uint8),borderType=cv2.BORDER_CONSTANT,borderValue=0)
+            selected=owned(xy,interior,roi)
+        started=time.monotonic()
+        front=describe_front(u[selected],v[selected],z[selected],front_geometry['P1'],front_geometry['R1'],
+            front_geometry['profile'],scale=scale,source_depth_status=depth.get('status'))
+        front['processing_s']=time.monotonic()-started
     def attach(result):
         if fast is not None:result['fast_local_consistency']=fast
+        if front is not None:result['front_geometry']=front
         return result
     if defer_local and not prepare_local:
         return attach(diagnostic_result(depth,scale,lower,upper,
@@ -200,3 +212,4 @@ class CurrentInstanceMasks:
         if type(index) is not int or not 0<=index<len(instances) or instances[index]['bbox_xyxy_px']!=bbox:
             raise ValueError('selected box and mask index disagree')
         return masks[index]
+

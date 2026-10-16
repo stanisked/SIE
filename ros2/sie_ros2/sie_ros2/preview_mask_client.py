@@ -199,14 +199,20 @@ class PreviewMaskClient:
         return self._array_request(cycle_id,{'rgb':rgb},{'operation':'infer_instances',
             'diagnostic_mask_hashes':diagnostic_mask_hashes})
 
-    def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale, defer_local=False, prepare_local=True, prepared_geometry=None, fast_local=False):
+    def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale, defer_local=False, prepare_local=True, prepared_geometry=None, fast_local=False, front_profile=None):
         if segmentation.get('cycle_id')!=cycle_id or segmentation.get('model_sha256')!=self.model_sha256:
             raise ValueError('segmentation cycle/model mismatch')
         arrays={'disparity':disparity,**cal} if prepared_geometry is None else {'geometry_'+k:v for k,v in prepared_geometry.items()}
         if prepared_geometry is not None and str(prepared_geometry['source_cycle_id'].item())!=cycle_id:
             raise ValueError('prepared geometry source cycle mismatch')
+        front_args={}
+        if front_profile is not None:
+            from vision_core.person_localization.robot_front_geometry import validate_profile
+            validate_profile(front_profile)
+            arrays.update(front_P1=cal['P1'],front_R1=cal['R1'])
+            front_args={'front_mount_profile':front_profile}
         result=self._array_request(cycle_id,arrays,{
-            'operation':'evaluate_selected_instance','prepared_geometry':prepared_geometry is not None,'instance_index':candidate['instance_index'],
+            **front_args,'operation':'evaluate_selected_instance','prepared_geometry':prepared_geometry is not None,'instance_index':candidate['instance_index'],
             'bbox_xyxy_px':candidate['bbox_xyxy_px'],'rgb_arrays_sha256':segmentation['arrays_sha256'],
             'roi':list(roi),'range':list(depth_range),'scale':scale,'defer_local':defer_local,'prepare_local':prepare_local,
             **({'fast_local':True} if fast_local else {})})
@@ -217,6 +223,16 @@ class PreviewMaskClient:
                 'rgb_arrays_sha256':segmentation['arrays_sha256'],'fusion_arrays_sha256':result.get('arrays_sha256')}
             if fast.get('provenance')!=expected or not expected['mask_sha256'] or fast.get('status')!='LOCAL_CROSSFIT_DIAGNOSTIC_ONLY':
                 raise ValueError('fast local current-frame binding mismatch')
+        if front_profile is not None and result.get('status')!='MASK_SURFACE_UNAVAILABLE':
+            from vision_core.person_localization.robot_front_geometry import profile_hash
+            front=result.get('front_geometry') or {}
+            expected={'source_cycle_id':cycle_id,'mask_sha256':result.get('mask_sha256'),
+                'instance_index':candidate['instance_index'],'model_sha256':self.model_sha256,
+                'rgb_arrays_sha256':segmentation['arrays_sha256'],'fusion_arrays_sha256':result.get('arrays_sha256')}
+            if (front.get('provenance')!=expected or not expected['mask_sha256'] or
+                    front.get('profile_sha256')!=profile_hash(front_profile) or
+                    front.get('distance_from_front_m') is not None or front.get('actuator_access') is not False):
+                raise ValueError('front geometry current-frame/profile binding mismatch')
         result['mask_s']=segmentation.get('mask_s')
         result['inference_round_trip_s']=segmentation.get('round_trip_s')
         result['round_trip_scope']='FUSION_ONLY_AFTER_SEGMENTATION'
@@ -234,3 +250,4 @@ class PreviewMaskClient:
             for stream in (process.stdin,process.stdout):
                 if stream is not None:
                     stream.close()
+

@@ -1,0 +1,17 @@
+{
+  "status": "REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY",
+  "source_summary_sha256": "325df424793865d8b5d3146c9e7ee81b38decb9ee028f998f6d65fae20647f96",
+  "source_trial_directory": "/home/kestabor/.local/state/sie/evidence/remote_stop_trial_20261016_181217_a36eace3",
+  "command_id": "remote-stop-0c13a42ca3b24b90b710b7b782e1b7fa",
+  "firmware_build_id": "v4_2_remote_stop_observed_v1",
+  "boot_session_id": "2C0A9781CCBA9BD2",
+  "last_command_state": "STOPPED",
+  "bounded_fault_latched": false,
+  "both_wheels_moved_before_stop": true,
+  "encoder_mean_total_progress_m": 0.0144,
+  "encoder_post_brake_mean_m": 0.00396862826449409,
+  "controller_observation_elapsed_ms": 602,
+  "actual_move_post_to_stop_request_s": 0.3000782800008892,
+  "physical_stopping_bound_established": false,
+  "scope": "Interrupted initial launch; does not establish full-speed stopping bound or physical elapsed stopping time."
+}

@@ -66,7 +66,12 @@
     "translation_base_from_rectified_left_m": null,
     "robot_front_footprint_m": null,
     "survey_provenance": null,
-    "clearance_method": "Transform owned target surface points into base frame and evaluate along the intended swept path relative to the front footprint; do not subtract an assumed offset from median optical Z."
+    "clearance_method": "Transform owned target surface points into base frame and evaluate along the intended swept path relative to the front footprint; do not subtract an assumed offset from median optical Z.",
+    "operator_mount_profile": {
+      "path": "vision_core/config/diagnostics/robot_front_mount_operator_v1.json",
+      "file_sha256": "056e04225016120c8db99d7b322eb00f7f3f5d50076b971a115704780aa4a742",
+      "status": "PARTIAL_OPERATOR_REPORTED_NOT_ACTIVATED"
+    }
   },
   "pending_evidence": [
     "verify deployed controller identity and stop semantics",

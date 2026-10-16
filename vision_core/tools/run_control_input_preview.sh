@@ -18,6 +18,10 @@ case "$engine" in
     engine_args+=(-p preview_onnx_comparison_report:="$SIE_PREVIEW_ONNX_REPORT" -p preview_onnx_threads:="${SIE_PREVIEW_ORT_THREADS:-2}") ;;
   *) echo "Unsupported segmentation engine: $engine" >&2; exit 2 ;;
 esac
+front_args=()
+if [ -n "${SIE_PREVIEW_FRONT_MOUNT_PROFILE:-}" ]; then
+  front_args+=(-p preview_front_mount_profile:="$SIE_PREVIEW_FRONT_MOUNT_PROFILE")
+fi
 case "$mode" in full_1280x800|half_640x400) ;; *) echo "Unsupported diagnostic mode: $mode" >&2; exit 2 ;; esac
 directory="/home/elwis/.local/state/sie/evidence/control_input_preview_${mode}_${backend}_${engine}_$(date +%Y%m%d_%H%M%S)"
 echo "Journal root: $directory"
@@ -32,7 +36,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p activation_profile:=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json \
   -p shadow_segmenter_python:="$segmenter_python" \
   -p shadow_segmenter_model:="$segmenter_model" \
-  "${engine_args[@]}" \
+  "${engine_args[@]}" "${front_args[@]}" \
   -p preview_local_surfaces_enabled:="${SIE_PREVIEW_LOCAL_ENABLED:-true}" \
   -p preview_local_surface_every_n_cycles:="${SIE_PREVIEW_LOCAL_EVERY_N:-1}" \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
@@ -118,5 +122,14 @@ for label,group in diagnostic_freshness_groups(steady).items():
     print('RESULT_FRESHNESS',label,json.dumps(group))
 print('FRESHNESS_NOTE: first/cancelled excluded; coherent diagnostics are not admitted Measurement; driver SOE not independently verified.')
 print('TIMING_NOTE: FOREGROUND durations exclusive per cycle; RPC/worker/timeline are nested or overlapping; do not sum across groups.')
+front=[r.get('shape_diagnostic',{}).get('front_geometry') for r in rows]
+front=[f for f in front if isinstance(f,dict)]
+if front:
+    print('FRONT_GEOMETRY:',dict(Counter(f.get('status') for f in front)))
+    terms=[f['known_term_m']['median'] for f in front if f.get('known_term_m')]
+    if terms:print('FRONT_KNOWN_TERM median_m=',round(statistics.median(terms),4),'optical_datum_offset=UNKNOWN')
+    timing=[f['processing_s'] for f in front if 'processing_s' in f]
+    if timing:print('FRONT_GEOMETRY processing_median_ms=',round(1000*statistics.median(timing),3))
 print('Journal root:', sys.argv[1])
 PY
+

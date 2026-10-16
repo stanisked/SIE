@@ -1,0 +1,22 @@
+{
+  "schema_version": "sie.robot_front_mount_operator.v1",
+  "status": "OPERATOR_REPORTED_PARTIAL_GEOMETRY_NOT_ACTIVATED",
+  "source_frame": "physical_left_optical_frame",
+  "front_rim_behind_robot_front_m": 0.21,
+  "block_pitch_up_deg": 15.0,
+  "rim_forward_of_optical_center_m": null,
+  "distance_standard_uncertainty_m": null,
+  "pitch_standard_uncertainty_deg": null,
+  "alignment_assumptions": {
+    "block_yaw_deg": 0.0,
+    "block_roll_deg": 0.0,
+    "status": "UNSURVEYED_DIAGNOSTIC_ASSUMPTION"
+  },
+  "operator_provenance": {
+    "distance_confirmed_at": "2026-10-16T18:19:21+03:00",
+    "pitch_reported_at": "2026-10-16T18:22:45+03:00",
+    "method": "operator report; 210 mm longitudinally from physical-left lens front rim to robot front; block pitched 15 degrees upward"
+  },
+  "measurement_authorized": false,
+  "actuator_access": false
+}

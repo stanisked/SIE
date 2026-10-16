@@ -174,10 +174,15 @@ def main():
                 else:
                     started=time.monotonic()
                     deferred=bool(request.get('defer_local',False))
+                    front_args={}
+                    if 'front_mount_profile' in request:
+                        front_args={'front_geometry':{'profile':request['front_mount_profile'],
+                            'P1':bundle['front_P1'],'R1':bundle['front_R1']}}
+
                     if prepared:
-                        evaluated=evaluate_prepared(points,mask,request['roi'],defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)))
+                        evaluated=evaluate_prepared(points,mask,request['roi'],defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)),**front_args)
                     else:
-                        evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)))
+                        evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)),**front_args)
                     if deferred:
                         result,samples=evaluated
                         if samples is not None:
@@ -190,12 +195,13 @@ def main():
                         result['surface_s']=time.monotonic()-started
                     result.update(mask=info,
                                   mask_sha256=hashlib.sha256(mask.tobytes()).hexdigest())
-                if 'fast_local_consistency' in result:
-                    result['fast_local_consistency']['provenance']={
-                        'source_cycle_id':request['cycle_id'],'mask_sha256':result['mask_sha256'],
-                        'instance_index':request.get('instance_index'),'model_sha256':model_sha,
-                        'rgb_arrays_sha256':request.get('rgb_arrays_sha256'),
-                        'fusion_arrays_sha256':request['arrays_sha256']}
+                for feature in ('fast_local_consistency','front_geometry'):
+                    if feature in result:
+                        result[feature]['provenance']={
+                            'source_cycle_id':request['cycle_id'],'mask_sha256':result['mask_sha256'],
+                            'instance_index':request.get('instance_index'),'model_sha256':model_sha,
+                            'rgb_arrays_sha256':request.get('rgb_arrays_sha256'),
+                            'fusion_arrays_sha256':request['arrays_sha256']}
                 result.update(segmentation_engine=engine_metadata,code_sha256=code_sha,mask_s=mask_s,cycle_id=request['cycle_id'],
                               arrays_sha256=request['arrays_sha256'],model_sha256=model_sha)
                 emit(result)
@@ -207,3 +213,4 @@ def main():
 
 if __name__=='__main__':
     main()
+
