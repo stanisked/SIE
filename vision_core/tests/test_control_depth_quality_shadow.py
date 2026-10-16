@@ -117,6 +117,8 @@ class QualityShadowTests(unittest.TestCase):
             self.assertEqual(report['summary']['driver_frame_age'],{'WITHIN_DECLARED_TARGET':1})
             self.assertIn('INPUTS_UNCHANGED: True',result.stdout)
             self.assertFalse(report['actuator_access'])
+            self.assertFalse(report['rows'][0]['draft_admission']['actuator_access'])
+            self.assertEqual(report['rows'][0]['draft_admission']['decision_preview'],'STOP')
 
     def test_fast_local_only_observed_for_exact_current_mask_and_frame(self):
         a=source();shape=a['shape_diagnostic']
