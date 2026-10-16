@@ -1326,3 +1326,38 @@ separate nested timeline diagnostics, not added twice. Seventeen tests passed,
 including enforced concurrent decode/RGB scheduling, source cycle binding and
 invalid-stereo drain with STOP. Live latency/CPU contention benefit pending;
 12.22 ms measured serial decode cost is not a guaranteed whole-cycle saving.
+
+
+Decode-overlap Pi result (`20261015_191400`): 76 coherent outputs, no pair refusals;
+75 steady cycles, 0/75 within driver-age 250 ms. Post-selection processing median
+223.21 ms versus previous 232.43 ms; RGB driver age median/max 257.02/267.57 ms,
+OV 259.45/277.33 ms. Actual RGB/stereo-decode overlap median 13.50 ms. Host including
+new-RGB wait 263.15/270.23 ms. All values remain driver-based diagnostic ages.
+
+Next offline candidate is original JPEG transport, not another decode setting.
+`PreviewMaskClient.infer_jpeg` publishes unchanged selected JPEG bytes into one
+cycle-bound temporary /dev/shm file. Descriptor binds protocol/cycle/token/path/
+length/payload SHA and expected decoded dimensions. Worker verifies descriptor,
+file type/length/content SHA, uses the SAME cv2.IMREAD_COLOR decoder, validates
+1200x1920 uint8 BGR, and performs unchanged segmentation/postprocessing. No JPEG
+encoding, quality change, resize or model change is introduced. Full-image
+pixel/mask fingerprints are optional offline diagnostics, not new live overhead.
+On protocol failure client stops worker before temporary input cleanup. Current
+mask cache/fusion still bind exact model result index and input descriptor SHA.
+
+`run_jpeg_rgb_transport_benchmark.sh` compares reference parent decode + decoded
+mmap against original JPEG RPC + worker decode on the same 22 frozen AR JPEGs,
+two alternating repetitions, one warmed model worker. Captures no new images.
+Checks decoded-pixel hashes, complete instance/mask signatures, target/geometry
+selection and exact full-depth reports using unchanged saved full-resolution
+disparity and saved inner RGB ROI. This is a transport equivalence comparison,
+not a new half-resolution crop validation. Refusals remain explicit; evaluated
+depth row count is reported. Calibration/model/report/source SHAs are verified,
+source inputs checked unchanged, candidate differences retained without tolerance.
+
+Timing includes route-specific decode and diagnostic fingerprint work for both
+variants; it excludes camera delivery/concurrent stereo and cannot predict live
+exposure-to-command latency. No live launcher or default changes. Seventeen
+targeted tests passed, including JPEG pixel equality, corruption/dimensions/cycle
+refusals, worker request-bundle path, input lifetime and existing preview controls.
+Python/shell syntax passed; actual ONNX/depth comparison awaits Pi packages/data.

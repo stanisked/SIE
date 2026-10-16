@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Isolated segmentation/SciPy worker; cycle-bound temporary arrays, no JPEGs."""
+"""Isolated segmentation/SciPy worker; cycle-bound temporary arrays or original JPEG payload."""
 import argparse
 import contextlib
 import hashlib
@@ -42,7 +42,12 @@ def verify_helper_threads(threads):
 @contextlib.contextmanager
 def request_bundle(request):
     import numpy as np
-    if request.get('rgb_transport')=='mmap':
+    if request.get('rgb_transport')=='jpeg':
+        if request.get('operation')!='infer_instances':raise ValueError('JPEG is RGB inference only')
+        from vision_core.person_localization.jpeg_frame_transport import receive_jpeg
+        rgb,decode_s=receive_jpeg(request['jpeg_frame'],request['cycle_id'],request['arrays_sha256'])
+        yield {'cycle_id':np.asarray(request['cycle_id']),'rgb':rgb,'jpeg_decode_s':decode_s}
+    elif request.get('rgb_transport')=='mmap':
         if request.get('operation')!='infer_instances':raise ValueError('mmap is RGB inference only')
         from vision_core.person_localization.rgb_shared_buffer import receive_rgb
         rgb=receive_rgb(request['rgb_shared'],request['cycle_id'],request['arrays_sha256'])
@@ -98,7 +103,8 @@ def main():
         Path(__file__),Path(__file__).with_name('preview_mask_surface.py'),
         Path(__file__).resolve().parents[1]/'person_localization/local_surface_diagnostic.py',
         Path(__file__).resolve().parents[1]/'person_localization/instance_mask_stereo_fusion.py',
-        Path(__file__).resolve().parents[1]/'person_localization/rgb_shared_buffer.py')}
+        Path(__file__).resolve().parents[1]/'person_localization/rgb_shared_buffer.py',
+        Path(__file__).resolve().parents[1]/'person_localization/jpeg_frame_transport.py')}
     if args.engine=='onnxruntime':
         code_sha['active_ort_session']=digest(Path(__file__).with_name('active_ort_session.py'))
         code_sha['onnx_backend']=digest(Path(__file__).with_name('onnx_segmentation_backend.py'))
@@ -134,6 +140,7 @@ def main():
                     emit({**fingerprints,'status':'CURRENT_INSTANCES_DIAGNOSTIC_ONLY','instances':instances,
                           'mask_s':inference_s,'worker_input_open_verify_s':input_open_verify_s,
                           'worker_rgb_load_s':rgb_loaded-started,
+                          'worker_jpeg_decode_s':float(bundle['jpeg_decode_s']) if 'jpeg_decode_s' in bundle else None,
                           'prediction_extract_s':inference_s-(rgb_loaded-started),'cycle_id':request['cycle_id'],
                           'arrays_sha256':request['arrays_sha256'],'model_sha256':model_sha,
                           'input_transport':request.get('rgb_transport','npz'),

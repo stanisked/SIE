@@ -170,6 +170,29 @@ class PreviewMaskClient:
                 self.close()  # Stop reader before owner unmaps/unlinks on failure.
                 raise
 
+    def infer_jpeg(self,cycle_id,payload,*,diagnostic_mask_hashes=False):
+        from vision_core.person_localization.jpeg_frame_transport import publish_jpeg
+        started=time.monotonic()
+        with publish_jpeg(cycle_id,payload) as (descriptor,sha):
+            stamps={'jpeg_publish_s':time.monotonic()-started}
+            try:
+                stage=time.monotonic()
+                request={'operation':'infer_instances','rgb_transport':'jpeg','jpeg_frame':descriptor,
+                    'cycle_id':cycle_id,'arrays_sha256':sha,'diagnostic_mask_hashes':diagnostic_mask_hashes}
+                if self.process is None:raise RuntimeError('preview worker unavailable')
+                self.process.stdin.write(json.dumps(request,separators=(',',':'))+'\n');self.process.stdin.flush()
+                stamps['control_prepare_send_s']=time.monotonic()-stage
+                stage=time.monotonic();result=self._read(self.timeout)
+                stamps['response_wait_decode_s']=time.monotonic()-stage
+                if result.get('cycle_id')!=cycle_id:raise ValueError('JPEG result cycle mismatch')
+                if result.get('status')!='MASK_SURFACE_UNAVAILABLE' and (result.get('arrays_sha256')!=sha or result.get('model_sha256')!=self.model_sha256):
+                    raise ValueError('JPEG input/model mismatch')
+                result['rpc_timing_s']=stamps;result['round_trip_s']=time.monotonic()-started
+                result['rgb_transport']='jpeg'
+                return result
+            except BaseException:
+                self.close();raise
+
     def infer(self, cycle_id, rgb, *, diagnostic_mask_hashes=False):
         if getattr(self,'rgb_transport','npz')=='mmap':
             return self._shared_rgb_request(cycle_id,rgb,diagnostic_mask_hashes)
