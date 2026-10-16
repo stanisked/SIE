@@ -11,6 +11,15 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
 
 
+
+def sources_unchanged(sources):
+    """Source manifests use JSON-compatible string paths, including on replay."""
+    for path,expected in sources.items():
+        with Path(path).open('rb') as stream:
+            if hashlib.file_digest(stream,'sha256').hexdigest()!=expected:return False
+    return True
+
+
 def fast_stats(samples):
     import numpy as np
     from analyze_shadow_local_surfaces import coarse_coverage
@@ -79,7 +88,7 @@ def main():
                     'fast_p90_mm=',None if 'absolute_p90_m' not in b else round(b['absolute_p90_m']*1000,2),
                     'fitted_fraction=',round(outputs['fast']['fitted_sample_fraction'],4),flush=True)
     if not rows:raise ValueError('no verified source cycles')
-    unchanged=all(sha256(path)==digest for path,digest in sources.items())
+    unchanged=sources_unchanged(sources)
     if not unchanged:raise ValueError('source evidence changed')
     summary={label:{'median_s':statistics.median(r['timing_s'][label] for r in rows),
         'max_s':max(r['timing_s'][label] for r in rows)} for label in ('reference','fast')}

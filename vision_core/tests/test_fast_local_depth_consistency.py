@@ -1,9 +1,22 @@
 import unittest
+import hashlib
+from pathlib import Path
+import tempfile
+from vision_core.tools.benchmark_fast_local_depth import sources_unchanged
 import numpy as np
 from vision_core.person_localization.fast_local_depth_consistency import analyze_fast_local_depth
 
 
 class FastLocalTests(unittest.TestCase):
+    def test_final_manifest_accepts_string_paths_and_detects_mutation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path=Path(folder)/'evidence.bin';path.write_bytes(b'original')
+            manifest={str(path):hashlib.sha256(b'original').hexdigest()}
+            self.assertTrue(sources_unchanged(manifest))
+            self.assertTrue(sources_unchanged({path:manifest[str(path)]}))
+            path.write_bytes(b'changed')
+            self.assertFalse(sources_unchanged(manifest))
+
     def grid(self):
         v,u=np.mgrid[0:64:4,0:64:4]
         return u.ravel(),v.ravel()

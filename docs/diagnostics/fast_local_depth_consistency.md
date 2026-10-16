@@ -81,3 +81,14 @@ invalid disparity. A deliberately biased plane test demonstrates the physical
 accuracy limitation. Three Python files compiled and the launcher passed shell
 syntax checks. Local OpenCV test dependency was 4.11.0; Pi benchmark records its
 own versions. Real 22-cycle benchmark/timing remains pending on Pi.
+
+
+## Manifest-path correction
+
+The first Pi benchmark processed all 22 cycles but failed during the final input
+hash check: manifest keys are strings and the imported digest helper expected a
+Path. No final report or timing summary was written, and INPUTS_UNCHANGED was
+not established for that run. The per-cycle terminal results are preliminary;
+they do not certify a completed comparison. A dedicated streaming manifest check
+now accepts both string and Path keys. A regression test covers both forms and
+changed content. Rerun the same offline command; no new capture is needed.
