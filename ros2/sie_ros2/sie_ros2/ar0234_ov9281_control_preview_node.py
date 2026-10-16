@@ -20,7 +20,7 @@ from .latest_diagnostic_writer import LatestDiagnosticWriter
 from .approach_control_preview import approach_control_preview
 from .preview_mask_client import PreviewMaskClient
 from .stereo_pair_executor import StereoPairExecutor
-from .latest_v4l2_capture import LatestV4L2Capture, freshness_report, select_latest_pair
+from .latest_v4l2_capture import LatestV4L2Capture, freshness_report, select_latest_pair, select_new_rgb, select_stereo_during_rgb
 from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity, restore_crop
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
@@ -157,6 +157,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._native_rgb_jpeg=bool(self.get_parameter("preview_native_rgb_jpeg").value)
         if self._native_rgb_jpeg and (self._capture_backend!="latest_v4l2" or self._rgb_backend!="single_segmentation" or not self._target_crop or not self._overlap_stereo_decode):
             raise ValueError("original JPEG requires native single segmentation, target crop and decode overlap")
+        self.declare_parameter("preview_fresh_stereo_during_rgb", False)
+        self._fresh_stereo_during_rgb=bool(self.get_parameter("preview_fresh_stereo_during_rgb").value)
+        if self._fresh_stereo_during_rgb and not (self._native_rgb_jpeg and self._native_rgb_trigger):
+            raise ValueError("fresh stereo during segmentation requires original native JPEG and new RGB trigger")
         self._last_capture_sequences={};self._native_capture_metadata={}
         if self._capture_backend=="latest_v4l2":
             if not self._target_crop or self._rgb_backend!="single_segmentation":
@@ -176,7 +180,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 if isinstance(self.stereo_capture,LatestV4L2Capture):self.stereo_capture.release()
                 raise
         self.get_logger().info(
-            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; decode_overlap={self._overlap_stereo_decode}; original_rgb_jpeg={self._native_rgb_jpeg}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
+            f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; decode_overlap={self._overlap_stereo_decode}; original_rgb_jpeg={self._native_rgb_jpeg}; fresh_stereo_during_rgb={self._fresh_stereo_during_rgb}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; immediate publish; "
             "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
         )
 
@@ -291,7 +295,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         if isinstance(self.ar_capture,LatestV4L2Capture):
             stage=time.monotonic()
             try:
-                self._selected_native_packets=select_latest_pair(self.ar_capture,self.stereo_capture,self._last_capture_sequences,wait_new_rgb=getattr(self,"_native_rgb_trigger",False))
+                if getattr(self,"_fresh_stereo_during_rgb",False):
+                    self._selected_native_packets={'ar0234':select_new_rgb(self.ar_capture,self._last_capture_sequences.get('ar0234'))}
+                else:
+                    self._selected_native_packets=select_latest_pair(self.ar_capture,self.stereo_capture,self._last_capture_sequences,wait_new_rgb=getattr(self,"_native_rgb_trigger",False))
                 self._last_capture_sequences.update({name:value[1]['sequence'] for name,value in self._selected_native_packets.items()})
             except Exception as error:
                 self._native_capture_metadata={name:{"status":"PAIR_CAPTURE_UNAVAILABLE","reason":type(error).__name__,"detail":str(error)[:300]} for name in ('ar0234','ov9281')}
@@ -303,14 +310,39 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             stage=time.monotonic()
             rgb_future=self._perception_worker.submit(self._infer_current_segmentation,cycle_id,ar,rgb_async_times)
             foreground['rgb_async_submit_s']=time.monotonic()-stage
+        if getattr(self,"_fresh_stereo_during_rgb",False) and rgb_future is not None:
+            stage=time.monotonic()
+            events['stereo_arrival_wait_start']=stage
+            try:
+                packet,ar_metadata=select_stereo_during_rgb(self.stereo_capture,
+                    self._last_capture_sequences.get('ov9281'),self._native_capture_metadata['ar0234'],stage)
+                self._selected_native_packets['ov9281']=packet
+                self._native_capture_metadata['ar0234']=ar_metadata
+                self._last_capture_sequences['ov9281']=packet[1]['sequence']
+            except Exception as error:
+                self._native_capture_metadata['ov9281']={"status":"STEREO_CAPTURE_UNAVAILABLE",
+                    "reason":type(error).__name__,"detail":str(error)[:300]}
+            except BaseException:
+                # An interrupt while snapshot waits must not abandon a running
+                # mask-cache request before node shutdown or another cycle.
+                try:rgb_future.result()
+                except Exception:pass
+                raise
+            events['stereo_arrival_wait_end']=time.monotonic()
+            foreground['capture_stereo_select_s']=events['stereo_arrival_wait_end']-stage
         stage=time.monotonic()
         events['stereo_decode_start']=stage
-        combined, stereo_mono = self._read(self.stereo_capture)
+        if self._native_capture_metadata.get('ov9281',{}).get('status')=='STEREO_CAPTURE_UNAVAILABLE':
+            combined,stereo_mono=None,time.monotonic_ns()
+        else:
+            combined, stereo_mono = self._read(self.stereo_capture)
         events['stereo_decode_end']=time.monotonic()
         foreground['capture_stereo_s']=time.monotonic()-stage
         cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
         skew_ms = abs(stereo_mono - ar_mono) / 1e6
         audit = self._audit_base(cycle_id, stamp, skew_ms)
+        audit['capture_scheduling']={"fresh_stereo_during_rgb":getattr(self,"_fresh_stereo_during_rgb",False),
+            "cycle_id":cycle_id,"previous_depth_reused":False}
         audit['rgb_decode']={"owner":"SEGMENTATION_WORKER" if getattr(self,"_native_rgb_jpeg",False) else "CONTROL_NODE",
             "original_jpeg":getattr(self,"_native_rgb_jpeg",False),"decoded_dimensions_checked_before_selection":True}
         audit.update(schema_version="sie.ar0234_ov9281.control_input_preview.v1",
@@ -513,6 +545,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 timeline['rgb_stereo_wall_interval_overlap_s']=max(0.,min(worker_end,events['rgb_call_end'])-max(worker_start,events['rgb_call_start']))
             if all(k in events for k in ('rgb_call_start','rgb_call_end','stereo_decode_start','stereo_decode_end')):
                 timeline['rgb_stereo_decode_wall_interval_overlap_s']=max(0.,min(events['rgb_call_end'],events['stereo_decode_end'])-max(events['rgb_call_start'],events['stereo_decode_start']))
+            if all(k in events for k in ('rgb_call_start','rgb_call_end','stereo_arrival_wait_start','stereo_arrival_wait_end')):
+                timeline['rgb_stereo_arrival_wait_overlap_s']=max(0.,min(events['rgb_call_end'],events['stereo_arrival_wait_end'])-max(events['rgb_call_start'],events['stereo_arrival_wait_start']))
             audit['perception_timeline_s']=timeline
             audit["processing_timing"] = {"host_capture_start_to_result_ready_s": elapsed,
                 "exposure_age_known": False, "endpoint": "BEFORE_PREVIEW_PUBLISH_AND_BACKGROUND_JOURNAL"}

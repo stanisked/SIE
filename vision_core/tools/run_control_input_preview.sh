@@ -38,6 +38,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p preview_defer_local_surfaces:="${SIE_PREVIEW_DEFER_LOCAL:-false}" \
   -p preview_rgb_backend:="$backend" \
   -p preview_rgb_transport:="${SIE_PREVIEW_RGB_TRANSPORT:-npz}" \
+  -p preview_fresh_stereo_during_rgb:="${SIE_PREVIEW_FRESH_STEREO_DURING_RGB:-false}" \
   -p preview_native_rgb_jpeg:="${SIE_PREVIEW_NATIVE_RGB_JPEG:-false}" \
   -p preview_overlap_stereo_decode:="${SIE_PREVIEW_OVERLAP_STEREO_DECODE:-false}" \
   -p preview_native_rgb_trigger:="${SIE_PREVIEW_NEW_RGB_TRIGGER:-false}" \

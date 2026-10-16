@@ -6,7 +6,7 @@ import threading
 import unittest
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'ros2/sie_ros2/sie_ros2'))
-from latest_v4l2_capture import LatestV4L2Capture,read_exact,validate_packet,freshness_report,select_latest_pair,diagnostic_freshness_groups
+from latest_v4l2_capture import LatestV4L2Capture,read_exact,validate_packet,freshness_report,select_latest_pair,select_new_rgb,select_stereo_during_rgb,diagnostic_freshness_groups
 
 
 def metadata(sequence):return {'kind':'frame','payload_bytes':3,'sequence':sequence,'flags':0x12000,
@@ -39,6 +39,28 @@ class LatestCaptureTests(unittest.TestCase):
         self.assertEqual(result['COHERENT_DEPTH']['host_median_s'],.23)
         self.assertEqual(result['OTHER_RESULTS']['driver_age_within_250ms'],1)
         self.assertEqual(result['COHERENT_DEPTH']['cycles'],1)
+
+    def test_split_capture_requires_new_stereo_and_keeps_original_rgb(self):
+        from types import SimpleNamespace
+        rgb_meta={'sequence':10,'driver_timestamp_s':1.}
+        def rgb(after,**kwargs):
+            self.assertEqual(after,9);self.assertIn('not_before_received_s',kwargs)
+            return b'RGB',rgb_meta
+        payload,meta=select_new_rgb(SimpleNamespace(snapshot=rgb),9)
+        original=dict(meta)
+        def stereo(after,**kwargs):
+            self.assertEqual(after,19)
+            self.assertEqual(kwargs,{'not_before_received_s':2.})
+            return b'NEW_STEREO',{'sequence':20,'driver_timestamp_s':1.01}
+        packet,updated=select_stereo_during_rgb(SimpleNamespace(snapshot=stereo),19,meta,2.)
+        self.assertEqual(payload,b'RGB');self.assertEqual(meta,original)
+        self.assertEqual(updated['sequence'],10)
+        self.assertEqual(updated['driver_timestamp_s'],1.)
+        self.assertEqual(updated['pair_selected_monotonic_s'],packet[1]['pair_selected_monotonic_s'])
+        def timeout(*args,**kwargs):raise TimeoutError('no new stereo')
+        with self.assertRaises(TimeoutError):
+            select_stereo_during_rgb(SimpleNamespace(snapshot=timeout),19,meta,2.)
+        self.assertEqual(meta,original)
 
     def test_new_rgb_policy_excludes_preexisting_arrival_and_freezes_pair(self):
         from types import SimpleNamespace

@@ -124,6 +124,26 @@ def select_latest_pair(ar_capture,stereo_capture,last_sequences,*,wait_new_rgb=F
         'pair_selection_wait_s':selected-requested}) for name,packet in (('ar0234',ar),('ov9281',stereo))}
 
 
+
+def select_new_rgb(ar_capture,last_sequence):
+    """Freeze only a new RGB packet so segmentation can start before stereo wait."""
+    requested=time.monotonic()
+    payload,meta=ar_capture.snapshot(last_sequence,not_before_received_s=requested)
+    frozen=time.monotonic()
+    return payload,{**meta,'rgb_packet_frozen_monotonic_s':frozen,
+        'pair_request_monotonic_s':requested,'pair_selected_monotonic_s':frozen,
+        'rgb_trigger_policy':'NEW_RGB_THEN_FRESH_STEREO_DURING_SEGMENTATION'}
+
+
+def select_stereo_during_rgb(stereo_capture,last_sequence,ar_metadata,not_before_received_s):
+    """Require a newly received stereo packet; never fall back to a cached pair."""
+    payload,meta=stereo_capture.snapshot(last_sequence,not_before_received_s=not_before_received_s)
+    selected=time.monotonic()
+    common={'pair_request_monotonic_s':ar_metadata['pair_request_monotonic_s'],
+        'pair_selected_monotonic_s':selected,'rgb_trigger_policy':ar_metadata['rgb_trigger_policy']}
+    return (payload,{**meta,**common,'stereo_arrival_not_before_monotonic_s':not_before_received_s}),{**ar_metadata,**common}
+
+
 def diagnostic_freshness_groups(rows):
     """Keep fast refusals out of coherent-depth age/latency success counts."""
     import statistics

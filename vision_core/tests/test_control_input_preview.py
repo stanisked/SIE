@@ -18,7 +18,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "ros2/sie_ros2/sie_ros2"))
 from latest_diagnostic_writer import LatestDiagnosticWriter
-from latest_v4l2_capture import freshness_report, LatestV4L2Capture, select_latest_pair
+from latest_v4l2_capture import freshness_report, LatestV4L2Capture, select_latest_pair, select_new_rgb, select_stereo_during_rgb
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from approach_control_preview import approach_control_preview
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
@@ -36,7 +36,7 @@ def preview_node_class(ros_ok=True):
              "String": SimpleNamespace, "encode": json.dumps,
              "validate_ar0234_observation": lambda v: v,
              "ar0234_temporal_target_candidate": lambda raw, **kw: raw,
-             "LatestV4L2Capture":LatestV4L2Capture,"select_latest_pair":select_latest_pair,"freshness_report":freshness_report, "assess_control_depth":assess_control_depth, "approach_control_preview": approach_control_preview, "select_instance":select_instance}
+             "LatestV4L2Capture":LatestV4L2Capture,"select_latest_pair":select_latest_pair,"select_new_rgb":select_new_rgb,"select_stereo_during_rgb":select_stereo_during_rgb,"freshness_report":freshness_report, "assess_control_depth":assess_control_depth, "approach_control_preview": approach_control_preview, "select_instance":select_instance}
     exec(compile(ast.fix_missing_locations(ast.Module(body=[cls], type_ignores=[])), str(path), "exec"), scope)
     return scope[cls.name]
 
@@ -423,6 +423,55 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertEqual(messages[-1]['reason'],'CURRENT_SEGMENTATION_UNAVAILABLE')
         self.assertEqual(len(crop_calls),count)
         self.assertIsNone(node._cached_stereo)
+        # A current RGB request runs while the fresh stereo snapshot waits.
+        ar_cap=LatestV4L2Capture.__new__(LatestV4L2Capture)
+        ov_cap=LatestV4L2Capture.__new__(LatestV4L2Capture)
+        ar_cap.width=1920;ar_cap.height=1200
+        node.ar_capture=ar_cap;node.stereo_capture=ov_cap
+        node._fresh_stereo_during_rgb=True;node._last_capture_sequences={}
+        node._native_rgb_trigger=True
+        entered=threading.Event();arrived=threading.Event();done=threading.Event()
+        mode={'value':'ok'};sequence={'ar':0,'ov':0}
+        def ar_snapshot(after,**kwargs):
+            sequence['ar']+=1
+            return payload,{'sequence':sequence['ar'],'driver_timestamp_s':time.monotonic()-.032}
+        def ov_snapshot(after,**kwargs):
+            self.assertTrue(entered.wait(2))
+            self.assertIn('not_before_received_s',kwargs)
+            sequence['ov']+=1;arrived.set()
+            if mode['value']=='timeout':raise TimeoutError('fresh stereo unavailable')
+            stamp=time.monotonic()-(.2 if mode['value']=='skew' else .016)
+            return b'stereo',{'sequence':sequence['ov'],'driver_timestamp_s':stamp}
+        ar_cap.snapshot=ar_snapshot;ov_cap.snapshot=ov_snapshot
+        def staged_infer(cid,value):
+            entered.set()
+            try:
+                self.assertTrue(arrived.wait(2))
+                return infer(cid,value)
+            finally:done.set()
+        def staged_read(cap):
+            if cap is ar_cap:return type(node)._read(node,cap)
+            _,meta=node._selected_native_packets.pop('ov9281')
+            node._native_capture_metadata['ov9281']=meta
+            frame,_=original_read('stereo')
+            return frame,round(meta['driver_timestamp_s']*1e9)
+        node._mask_client.infer_jpeg=staged_infer;node._read=staged_read
+        for value in ('ok','timeout','skew'):
+            mode['value']=value;entered.clear();arrived.clear();done.clear()
+            with ThreadPoolExecutor(max_workers=1) as worker:
+                node._perception_worker=worker
+                node._cycle()
+            self.assertTrue(done.is_set())
+            self.assertIsNone(node._cached_stereo)
+            self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
+            expected={'ok':'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY',
+                'timeout':'CAMERA_FRAME_UNAVAILABLE','skew':'PAIR_SKEW_EXCEEDED'}
+            self.assertEqual(messages[-1]['status'],expected[value])
+            if value=='ok':
+                frames=messages[-1]['frame_freshness']['frames']
+                self.assertEqual(frames['ar0234']['pair_selected_monotonic_s'],frames['ov9281']['pair_selected_monotonic_s'])
+                self.assertIn('capture_stereo_select_s',messages[-1]['foreground_timing_s'])
+
 
 
 if __name__ == "__main__":
