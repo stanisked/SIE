@@ -1,0 +1,108 @@
+{
+  "schema_version": "sie.experimental_approach_profile_draft.v1",
+  "status": "DRAFT_NOT_ACTIVATED",
+  "source_commit": "4f1bf52255b4370a88cfe478a71b2e421b4355b1",
+  "authorization": {
+    "measurement_emission": false,
+    "motor_commands": false,
+    "range_activation": false,
+    "capability_qualification_changed": false
+  },
+  "working_targets": {
+    "maximum_speed_m_s": 0.15,
+    "minimum_robot_front_standoff_m": 1.0,
+    "maximum_absolute_depth_error_up_to_2m_m": 0.1,
+    "maximum_relative_depth_error_above_2m": 0.05,
+    "maximum_exposure_to_command_age_s": 0.25,
+    "maximum_post_stop_distance_m": 0.025,
+    "maximum_post_stop_time_s": 0.5,
+    "additional_clearance_reserve_m": 0.1,
+    "reserve_status": "PROPOSED_NOT_MEASURED"
+  },
+  "drive_evidence": {
+    "configured_profile_speed_m_s": 0.14,
+    "source_comment_derived_wheel_speed_m_s": {
+      "right": 0.1326579641294375,
+      "left": 0.1372174468929103
+    },
+    "speed_scope": "Derived from rounded loaded encoder-count comments; not a measured maximum speed bound.",
+    "supervised_step": {
+      "requested_m": 0.1,
+      "reported_mean_progress_m": 0.0938,
+      "reported_heading_rad": 0.002
+    },
+    "completion_window_separate_trial": {
+      "requested_m": 0.1,
+      "manual_progress_m": 0.098,
+      "encoder_mean_progress_m": 0.0972
+    },
+    "current_capability_status": "NOT_QUALIFIED",
+    "flashed_firmware_identity": null,
+    "physical_stop_distance_bound_m": null,
+    "physical_stop_time_bound_s": null,
+    "remote_stop_source_finding": "PWM zero and immediate STOPPED; active braking and settled encoder observation are not performed by handleStop for the active bounded command.",
+    "source_finding_applies_to": "Repository source, not verified flashed firmware"
+  },
+  "vision_scope": {
+    "activated_metric_range_m": [
+      0.5,
+      2.0
+    ],
+    "diagnostic_range_m": [
+      0.5,
+      4.5
+    ],
+    "new_activated_range_m": null,
+    "latest_replay_cycles": 91,
+    "driver_age_within_target_cycles": 90,
+    "draft_admitted_cycles": 0,
+    "detector_scope": "person; universal object coverage not established",
+    "local_residual_is_physical_error_bound": false
+  },
+  "geometry": {
+    "source_frame": "rectified_left_optical_frame",
+    "destination_frame": "base_link",
+    "rotation_base_from_rectified_left": null,
+    "translation_base_from_rectified_left_m": null,
+    "robot_front_footprint_m": null,
+    "survey_provenance": null,
+    "clearance_method": "Transform owned target surface points into base frame and evaluate along the intended swept path relative to the front footprint; do not subtract an assumed offset from median optical Z."
+  },
+  "pending_evidence": [
+    "verify deployed controller identity and stop semantics",
+    "repair/review remote stop braking and physical terminal-state observation if source finding applies",
+    "establish physical stopping distance/time on current loaded platform",
+    "survey camera-to-base transform and front footprint",
+    "review explicit metric range applicability",
+    "establish physical depth error and dynamic association budgets",
+    "bind current-frame quality and exposure-to-command freshness",
+    "observe obstacles in swept path"
+  ],
+  "next_step": "Read-only deployed controller identification, then separately scoped stop-path change. No new static camera series.",
+  "sources": [
+    {
+      "path": "ros2/sie_ros2/config/bounded_forward_supervised_mvp_v1.json",
+      "sha256": "6298379c533c5af494ea79e3a4af8e7df23c152651485de50946a7d410af1276"
+    },
+    {
+      "path": "firmware/esp32/traction_control_v4_2_bounded_motion_api/change_manifest.json",
+      "sha256": "a9758dd0c0ec6bda5676b790dc632a7b1af96da5247efefe08d49cf60bd41609"
+    },
+    {
+      "path": "firmware/esp32/traction_control_v4_2_bounded_motion_api/traction_control_v4_2_bounded_motion_api.ino",
+      "sha256": "19d2bac0f8f46f53e34fcd46f78ea8ca3aadd0985c3ef1de95a5bc7ecb06c28a"
+    },
+    {
+      "path": "docs/ros2/supervised_bounded_forward_mvp.md",
+      "sha256": "8c4f8357cb28e87d660663359673ef4d245263202a2c8dff0d705b5483a11310"
+    },
+    {
+      "path": "firmware/esp32/traction_control_v4_1_effective_track294/baseline_manifest.json",
+      "sha256": "b4433b0eedb66133cc32a8bfa2224ac442cc8dcea70792217cc64424afe23b70"
+    },
+    {
+      "path": "sie_core/current_platform_capabilities.py",
+      "sha256": "3273c112e3d368c369e81a4d9ab8a41bcf9dea8299658c8ab233cf219476f79d"
+    }
+  ]
+}
