@@ -1,0 +1,39 @@
+{
+  "status": "LATE_MATCHING_TERMINAL_REVIEW_DIAGNOSTIC_ONLY",
+  "trial_root": "/home/elwis/.local/state/sie/evidence/remote_stop_trial_20261021_120454_e8ea9e7f",
+  "source_summary_sha256": "9f61a2b3af72416ffe1ef1bf62767099f4cc7a8534ea16fa3fabfcae2a227aa6",
+  "source_summary_result_preserved": "TRIAL_REFUSED_OR_UNKNOWN",
+  "terminal_source": "operator-submitted later read-only GET /status in conversation; not part of original journal",
+  "command_id": "remote-stop-b2eb02a4c0224985ad236d4d33dcb7e4",
+  "boot_session_id": "DB48F24762C93392",
+  "movement_response_http": 202,
+  "stop_response_http": 202,
+  "stop_dispatch_s": 0.3000654939996821,
+  "operator_observed_total_travel_approx_m": 0.05,
+  "terminal_selected_fields": {
+    "firmware_build_id": "v4_2_remote_stop_observed_v1",
+    "last_command_state": "STOPPED",
+    "state": "READY",
+    "active_command_id": null,
+    "bounded_fault_latched": false,
+    "remote_stop_pending": false,
+    "remote_stop_timed_out": false,
+    "remote_stop_observation_complete": true,
+    "remote_stop_elapsed_ms": 608,
+    "remote_stop_right_start_count": 26,
+    "remote_stop_left_start_count": 27,
+    "remote_stop_right_observed_count": 48,
+    "remote_stop_left_observed_count": 48,
+    "average_distance_m": 0.0476,
+    "right_pwm": 0,
+    "left_pwm": 0,
+    "reobserve_required": true
+  },
+  "encoder_brake_onset_to_settled_proxy_m": {
+    "right": 0.021779665752594213,
+    "left": 0.020880915831529828,
+    "mean": 0.021330290792062022
+  },
+  "physical_stop_distance_or_time_bound_established": false,
+  "camera_motion_authorized": false
+}

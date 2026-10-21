@@ -8,7 +8,7 @@ import math
 from pathlib import Path
 import re
 import time
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 import uuid
@@ -72,6 +72,7 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
                'stop_request_after_move_post_s':STOP_REQUEST_AFTER_S,
                'result':'NOT_STARTED','movement_posts':0,'stop_posts':0,
                'physical_stopping_bound_established':False,
+               'terminal_status_read_timeouts':0,
                'manual_physical_post_stop_distance_m':None,
                'manual_physical_stop_time_s':None,
                'script_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -80,16 +81,17 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
     sent_move = False
     sent_stop = False
     session = None
-    def call(method, endpoint, query=None):
+    def call(method, endpoint, query=None, request_timeout=None):
         url = base_url.rstrip('/') + endpoint
         if query:
             url += '?' + urlencode(query)
         started = clock()
         row = {'host_started_monotonic_s':started,
                'host_started_utc':datetime.now(timezone.utc).isoformat(),
-               'method':method,'endpoint':endpoint,'query':query}
+               'method':method,'endpoint':endpoint,'query':query,
+               'request_timeout_s':timeout if request_timeout is None else request_timeout}
         try:
-            code, data = request(method, url, timeout)
+            code, data = request(method, url, row['request_timeout_s'])
             row.update(http_code=code, response=data)
             return code, data
         except BaseException as e:
@@ -144,7 +146,21 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
         while True:
             if clock() >= terminal_deadline:
                 raise TrialError('Terminal observation deadline expired; do not start another trial')
-            code, status = call('GET','/status')
+            try:
+                code, status = call('GET','/status',
+                                    request_timeout=min(timeout, terminal_deadline-clock()))
+            except (TimeoutError, URLError) as error:
+                if not (isinstance(error, TimeoutError) or
+                        isinstance(getattr(error, 'reason', None), TimeoutError)):
+                    raise
+                summary['terminal_status_read_timeouts'] += 1
+                remaining = terminal_deadline-clock()
+                if remaining <= 0:
+                    raise TrialError('Terminal observation deadline expired after status read timeouts') from error
+                sleep(min(.02, remaining))
+                continue  # READ ONLY; never repeat either POST.
+            if clock() >= terminal_deadline:
+                raise TrialError('Terminal observation deadline expired during status read')
             if code != 200:
                 raise TrialError('Status unavailable during trial')
             if status.get('boot_session_id') != session:

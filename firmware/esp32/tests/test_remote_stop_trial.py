@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from urllib.parse import parse_qs, urlsplit
+from urllib.error import URLError
 from firmware.esp32.tools.run_remote_stop_trial import BUILD, run
 
 class Harness:
@@ -117,5 +118,55 @@ class TrialTests(unittest.TestCase):
         s,h=self.trial('no_progress')
         self.assertEqual(s['result'],'STOP_OBSERVED_WITHOUT_BOTH_WHEEL_PROGRESS')
         self.assertFalse(s['both_wheels_moved_before_stop'])
+
+    def test_timeout_after_stop_retries_only_status_and_confirms_same_command(self):
+        for wrapped in (False, True):
+            with self.subTest(wrapped=wrapped), tempfile.TemporaryDirectory() as tmp:
+                h=Harness(); request=h.request; failures=[]
+                def transport(method,url,timeout):
+                    if method=='GET' and h.stopped and not failures:
+                        h.calls.append((method,'/status'));h.time+=timeout;failures.append(timeout)
+                        if wrapped:raise URLError(TimeoutError('read timeout'))
+                        raise TimeoutError('read timeout')
+                    return request(method,url,timeout)
+                out=Path(tmp)/'trial'
+                s=run(base_url='http://127.0.0.1',output=out,execute=True,
+                    request=transport,clock=h.clock,sleep=h.sleep)
+                self.assertEqual(s['result'],'REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY')
+                self.assertEqual(s['terminal_status_read_timeouts'],1)
+                self.assertEqual([p for m,p in h.calls if m=='POST'],['/move-forward','/stop'])
+                self.assertAlmostEqual(s['actual_move_post_to_stop_request_s'],.30)
+                rows=[json.loads(x) for x in (out/'http.jsonl').read_text().splitlines()]
+                self.assertEqual(len(rows),len(h.calls))
+                self.assertEqual(sum('error' in r for r in rows),1)
+
+    def test_repeated_read_timeouts_end_at_original_deadline_without_more_posts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            h=Harness();request=h.request;timeouts=[]
+            def transport(method,url,timeout):
+                if method=='GET' and h.stopped:
+                    h.calls.append((method,'/status'));h.time+=timeout;timeouts.append(timeout)
+                    raise TimeoutError('read timeout')
+                return request(method,url,timeout)
+            s=run(base_url='http://127.0.0.1',output=Path(tmp)/'trial',execute=True,
+                request=transport,clock=h.clock,sleep=h.sleep)
+            self.assertEqual(s['result'],'TRIAL_REFUSED_OR_UNKNOWN')
+            self.assertGreater(s['terminal_status_read_timeouts'],1)
+            self.assertEqual([p for m,p in h.calls if m=='POST'],['/move-forward','/stop'])
+            self.assertLessEqual(h.time-s['stop_request_host_monotonic_s'],5.002)
+            self.assertLess(timeouts[-1],.5)
+
+    def test_late_success_response_cannot_extend_observation_deadline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            h=Harness();request=h.request
+            def transport(method,url,timeout):
+                result=request(method,url,timeout)
+                if method=='GET' and h.stopped:h.time+=5.1
+                return result
+            s=run(base_url='http://127.0.0.1',output=Path(tmp)/'trial',execute=True,
+                request=transport,clock=h.clock,sleep=h.sleep)
+            self.assertEqual(s['result'],'TRIAL_REFUSED_OR_UNKNOWN')
+            self.assertEqual(s['movement_posts'],1)
+            self.assertEqual(s['stop_posts'],1)
 
 if __name__=='__main__':unittest.main()
