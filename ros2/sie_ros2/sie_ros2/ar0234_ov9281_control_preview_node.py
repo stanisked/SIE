@@ -26,6 +26,8 @@ from vision_core.person_localization.diagnostic_stereo_resolution import half_ma
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from vision_core.person_localization.control_input_shadow import evaluate_control_input_shadow
+from vision_core.person_localization.existing_static_profile_preview import (
+    load_existing_static_profile, StaticProfilePreviewGate, REVIEWED_SHA)
 
 
 class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
@@ -108,6 +110,13 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self.declare_parameter("preview_diagnostic_range_min_m", .5)
         self.declare_parameter("preview_diagnostic_range_max_m", 4.5)
         self._activated_range = [self.range_min_m, self.range_max_m]
+        self.declare_parameter("preview_existing_static_profile_v2", False)
+        self._existing_static_gate = None
+        if bool(self.get_parameter("preview_existing_static_profile_v2").value):
+            if not self._target_crop or self._rgb_backend != "single_segmentation":
+                raise ValueError("static v2 preview requires current-target crop and single segmentation")
+            profile = load_existing_static_profile(self.activation_path)
+            self._existing_static_gate = StaticProfilePreviewGate(profile)
         lower = float(self.get_parameter("preview_diagnostic_range_min_m").value)
         upper = float(self.get_parameter("preview_diagnostic_range_max_m").value)
         if not 0 < lower < upper <= 4.5:
@@ -355,6 +364,12 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
         skew_ms = abs(stereo_mono - ar_mono) / 1e6
         audit = self._audit_base(cycle_id, stamp, skew_ms)
+        if self._existing_static_gate is not None:
+            audit["existing_static_profile_preview"] = {
+                "required": True, "profile_sha256": REVIEWED_SHA,
+                "profile_path": str(self.activation_path),
+                "scope": "EXISTING_STATIC_PROFILE_DIAGNOSTIC_ONLY",
+                "dynamic_fusion_permitted": False, "execution_authorized": False}
         audit['capture_scheduling']={"fresh_stereo_during_rgb":getattr(self,"_fresh_stereo_during_rgb",False),
             "cycle_id":cycle_id,"previous_depth_reused":False}
         audit['rgb_decode']={"owner":"SEGMENTATION_WORKER" if getattr(self,"_native_rgb_jpeg",False) else "CONTROL_NODE",
@@ -442,6 +457,13 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             observation = ({**candidate, "captured_at_utc":stamp.isoformat(),
                 "observation_id":f"segmentation-preview:{cycle_id}:{candidate['instance_index']}"}
                 if single else self._selected_observation(raw, candidate, dynamic))
+            if self._existing_static_gate is not None:
+                gate = self._existing_static_gate.evaluate(cycle_id, candidate,
+                    dynamic.get("current_eligible_count"), time.monotonic())
+                audit["existing_profile_static_gate"] = gate
+                if gate["status"] != "PASS":
+                    audit.update(status="TARGET_UNAVAILABLE", reason=gate["reason"], association=None)
+                    return
             foreground['target_selection_geometry_s']=time.monotonic()-selection_started
             if getattr(self,"_target_crop",False):
                 events['stereo_submit']=time.monotonic()
@@ -543,6 +565,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     "rgb_rpc_wall_s":rgb_async_times.get('end',0)-rgb_async_times.get('start',0),
                     "foreground_stereo_decode_s":foreground.get('capture_stereo_s'),
                     "definition":"RGB RPC overlaps foreground decode of frozen stereo packet; exclusive foreground timers do not sum worker wall duration"}
+            if self._existing_static_gate is not None and (
+                    "existing_profile_static_gate" not in audit
+                    or audit["status"] in ("CANCELLED_SHUTDOWN", "PROCESSING_REFUSED")):
+                self._existing_static_gate.reset()
             self._cached_stereo = None
             # A camera-frame diagnostic is never substituted for an admitted
             # robot-front clearance/error/age input to the motion policy.

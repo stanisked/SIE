@@ -18,6 +18,18 @@ case "$engine" in
     engine_args+=(-p preview_onnx_comparison_report:="$SIE_PREVIEW_ONNX_REPORT" -p preview_onnx_threads:="${SIE_PREVIEW_ORT_THREADS:-2}") ;;
   *) echo "Unsupported segmentation engine: $engine" >&2; exit 2 ;;
 esac
+activation_profile="/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json"
+profile_args=()
+if [ "${SIE_PREVIEW_EXISTING_STATIC_V2:-false}" = true ]; then
+  activation_profile="/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_0p5_to_4p5m_v2/ar0234_ov9281_decision_chain_activation.json"
+  "$runtime" - "$activation_profile" <<'CHECK_PROFILE'
+import sys
+from vision_core.person_localization.existing_static_profile_preview import load_existing_static_profile
+load_existing_static_profile(sys.argv[1])
+print('STATIC_V2_PROFILE_VERIFIED: existing profile; static checks before stereo; motors disabled')
+CHECK_PROFILE
+  profile_args+=(-p preview_existing_static_profile_v2:=true)
+fi
 front_args=()
 if [ -n "${SIE_PREVIEW_FRONT_MOUNT_PROFILE:-}" ]; then
   front_args+=(-p preview_front_mount_profile:="$SIE_PREVIEW_FRONT_MOUNT_PROFILE")
@@ -33,7 +45,7 @@ timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
   -p model_path:=/home/elwis/dev_ws/model_artifacts/ar0234_person_upper_body_yolo11n_v1/best.onnx \
   -p ar_intrinsic:=/home/elwis/dev_ws/runtime_artifacts/ar0234_intrinsic_v5_final_20260910/calibration_fullres.json \
   -p stereo_calibration:=/home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz \
-  -p activation_profile:=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json \
+  -p activation_profile:="$activation_profile" "${profile_args[@]}" \
   -p shadow_segmenter_python:="$segmenter_python" \
   -p shadow_segmenter_model:="$segmenter_model" \
   "${engine_args[@]}" "${front_args[@]}" \
@@ -130,6 +142,12 @@ if front:
     if terms:print('FRONT_KNOWN_TERM median_m=',round(statistics.median(terms),4),'optical_datum_offset=UNKNOWN')
     timing=[f['processing_s'] for f in front if 'processing_s' in f]
     if timing:print('FRONT_GEOMETRY processing_median_ms=',round(1000*statistics.median(timing),3))
+print('STATIC_PROFILE_GATE:',dict(Counter(r.get('existing_profile_static_gate',{}).get('status','NOT_EVALUATED') for r in rows)))
+print('CONTROL_DECISION_PREVIEW:',dict(Counter(r.get('decision_preview',{}).get('status') for r in rows)))
+print('CONTROL_FAILED_CHECKS:',dict(Counter(x for r in rows for x in r.get('decision_preview',{}).get('failed_checks',[]))))
+print('CONTROL_MISSING_CHECKS:',dict(Counter(x for r in rows for x in r.get('decision_preview',{}).get('missing_checks',[]))))
+assessment=[r.get('control_input_shadow',{}).get('assessment_processing_s') for r in rows[1:]]
+assessment=[v for v in assessment if isinstance(v,(int,float))]
+if assessment:print('CONTROL_ASSESSMENT_MS median/max:',round(1000*statistics.median(assessment),3),round(1000*max(assessment),3))
 print('Journal root:', sys.argv[1])
 PY
-

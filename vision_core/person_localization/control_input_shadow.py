@@ -6,6 +6,7 @@ from this cycle. Physical bounds remain unknown rather than inferred from MAD.
 """
 from .control_depth_admission_draft import evaluate_depth_admission_draft
 from .control_depth_quality_shadow import finite_number
+from .existing_static_profile_preview import REVIEWED_SHA
 
 
 def evaluate_control_input_shadow(audit):
@@ -22,6 +23,15 @@ def evaluate_control_input_shadow(audit):
         draft = None
         failed, missing = [], ['depth_admission_assessment']
         assessment_error = type(error).__name__
+    context = audit.get('existing_static_profile_preview') or {}
+    if context.get('required') is True:
+        gate = audit.get('existing_profile_static_gate') or {}
+        if (context.get('profile_sha256') != REVIEWED_SHA
+                or gate.get('cycle_id') != cid or not cid
+                or gate.get('profile_sha256') != context.get('profile_sha256')):
+            failed.append('existing_static_profile_binding')
+        elif gate.get('status') != 'PASS':
+            failed.append('existing_static_profile_applicability')
     if cid is None:
         failed.append('source_cycle_identity')
     shape = audit.get('shape_diagnostic')
