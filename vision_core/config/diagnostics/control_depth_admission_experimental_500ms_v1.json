@@ -1,0 +1,24 @@
+{
+  "policy_id": "control_depth_admission_experimental_500ms_v1",
+  "status": "DRAFT_NOT_ACTIVATED",
+  "minimum_candidate_samples": 100,
+  "required_plausible_layers": 1,
+  "maximum_driver_frame_age_s": 0.5,
+  "local_mad_max_m": null,
+  "local_absolute_p90_max_m": null,
+  "minimum_fitted_sample_fraction": null,
+  "minimum_rgb_coverage_fraction": null,
+  "physical_error_requirement": {
+    "up_to_2m_max_error_m": 0.1,
+    "above_2m_max_relative_error": 0.05
+  },
+  "sources": {
+    "minimum_candidate_samples": "Existing instance_mask_stereo_fusion minimum_samples; algorithm support only, not physical accuracy.",
+    "required_plausible_layers": "Existing masked-depth unique-layer requirement; not proof of ownership.",
+    "maximum_driver_frame_age_s": "Operator-selected experimental 500 ms limit, 2026-10-21. Driver SOE-to-result is a prerequisite only; exposure-to-ESP32-command age remains unestablished.",
+    "local_limits": "UNSET: residual/coverage to physical error relationship has not been validated.",
+    "physical_error_requirement": "R3/R4 task requirements; cannot be substituted by local residual MAD/p90."
+  },
+  "metric_measurement_authorized": false,
+  "actuator_access": false
+}

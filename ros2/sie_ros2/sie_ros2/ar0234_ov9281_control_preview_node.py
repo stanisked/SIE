@@ -598,12 +598,13 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 audit['pairing']['timestamp_basis']='DRIVER_MONOTONIC_START_OF_EXPOSURE_DECLARATION'
             audit["working_targets"] = {"base_speed_m_s": .15, "stand_off_from_robot_front_m": 1.,
                 "depth_absolute_error_1_to_2m_m": .10, "depth_relative_error_above_2m": .05,
-                "exposure_to_command_age_max_s": .25}
+                "exposure_to_command_age_max_s": .5,
+                "freshness_policy_id": "experimental_freshness_500ms_v1"}
             audit["admission_blockers_basis"] = "LEGACY_DIAGNOSTIC_SCREEN; see decision_preview.failed_checks/missing_checks for bound draft"
             audit["admission_blockers"] = ["DIAGNOSTIC_NOT_METRIC_MEASUREMENT", "EXPOSURE_AGE_NOT_ESTABLISHED",
                 "CAMERA_TO_ROBOT_FRONT_CLEARANCE_NOT_ESTABLISHED", "PHYSICAL_ERROR_BOUND_NOT_ESTABLISHED"]
-            if elapsed > .25:
-                audit["admission_blockers"].append("HOST_PROCESSING_EXCEEDS_250MS_TARGET")
+            if elapsed > .5:
+                audit["admission_blockers"].append("HOST_PROCESSING_EXCEEDS_500MS_EXPERIMENTAL_TARGET")
             candidate_depth = (audit.get("association") or {}).get("range_m")
             if candidate_depth is None:
                 candidate_depth = audit.get("shape_diagnostic",{}).get("mask_depth",{}).get("candidate_depth_m")
@@ -653,7 +654,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             shape = audit.get("shape_diagnostic",{})
             masked = shape.get("mask_depth",{})
             self._log_preview(f"CONTROL_PREVIEW {self.sequence:08d} status={audit['status']} "
-                f"range_m={depth} mask={masked.get('status')} mask_depth_m={masked.get('candidate_depth_m')} host_s={elapsed:.3f} host_within_250ms={elapsed <= .25} motors=DISABLED")
+                f"range_m={depth} mask={masked.get('status')} mask_depth_m={masked.get('candidate_depth_m')} host_s={elapsed:.3f} host_within_250ms={elapsed <= .25} host_within_500ms_experimental={elapsed <= .5} motors=DISABLED")
 
     def _publish_surface_result(self, result):
         if rclpy.ok():

@@ -8,15 +8,19 @@ from .control_depth_quality_shadow import assess_control_depth,finite_number
 POLICY=Path(__file__).resolve().parents[1]/'config/diagnostics/control_depth_admission_draft_v1.json'
 
 
-def load_policy():
-    raw=POLICY.read_bytes();policy=json.loads(raw)
+def load_policy(audit=None):
+    targets=(audit or {}).get('working_targets') or {}
+    experimental=(targets.get('freshness_policy_id') == 'experimental_freshness_500ms_v1'
+        and targets.get('exposure_to_command_age_max_s') == .5)
+    path=POLICY.with_name('control_depth_admission_experimental_500ms_v1.json') if experimental else POLICY
+    raw=path.read_bytes();policy=json.loads(raw)
     if policy['status']!='DRAFT_NOT_ACTIVATED' or policy['actuator_access'] is not False:
         raise ValueError('only non-actuating draft policy supported')
     return policy,hashlib.sha256(raw).hexdigest()
 
 
 def evaluate_depth_admission_draft(audit):
-    policy,sha=load_policy();quality=assess_control_depth(audit)
+    policy,sha=load_policy(audit);quality=assess_control_depth(audit)
     shape=audit.get('shape_diagnostic') or {};depth=shape.get('mask_depth') or {}
     fast=shape.get('fast_local_consistency') or {};residual=fast.get('pooled_held_out_axial_residual') or {}
     checks={}
@@ -71,7 +75,9 @@ def evaluate_depth_admission_draft(audit):
         ('closing_motion_bound','Applicable current relative/target closing-motion bounds'),
         ('drive_stopping_bound','Measured stop bounds under relevant load, floor, supply and controller/watchdog state'),
         ('path_obstacle_observation','Observation of obstacles in the swept path independent of selected semantic target')):
-        check(name,None,None,required_error if name=='physical_depth_error_bound' else None,explanation)
+        requirement_value = required_error if name=='physical_depth_error_bound' else (
+            policy['maximum_driver_frame_age_s'] if name=='exposure_to_command_age' else None)
+        check(name,None,None,requirement_value,explanation)
     failed=[k for k,v in checks.items() if v['status']=='FAIL'];unknown=[k for k,v in checks.items() if v['status']=='UNKNOWN']
     prereq_failed=[k for k in prerequisite_names if checks[k]['status']=='FAIL']
     prereq_unknown=[k for k in prerequisite_names if checks[k]['status']=='UNKNOWN']

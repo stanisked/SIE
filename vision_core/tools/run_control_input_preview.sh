@@ -87,7 +87,8 @@ for key in ('rgb_detector_s','rgb_segmentation_round_trip_s','stereo_worker_s'):
 print('CONTROL_PREVIEW_SUMMARY', 'records=', len(rows), 'statuses=', dict(Counter(r['status'] for r in rows)))
 if times:
     print('host_median_s=', round(statistics.median(times), 4), 'host_max_s=', round(max(times), 4),
-          'within_250ms=', sum(t <= .25 for t in times), '/', len(times))
+          'within_250ms=', sum(t <= .25 for t in times), '/', len(times),
+          'within_500ms_experimental=', sum(t <= .5 for t in times), '/', len(times))
 for key in ('mask_s','mask_depth_prepare_s','surface_s','round_trip_s'):
     values=[r.get('shape_diagnostic',{}).get(key) for r in rows[1:] if r['status']!='CANCELLED_SHUTDOWN']
     values=[v for v in values if v is not None]
