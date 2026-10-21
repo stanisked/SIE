@@ -9,7 +9,8 @@ import sys
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
-from vision_core.person_localization.control_depth_admission_draft import evaluate_depth_admission_draft,POLICY
+from vision_core.person_localization.control_depth_admission_draft import POLICY
+from vision_core.person_localization.control_input_shadow import evaluate_control_input_shadow
 
 
 def main():
@@ -34,8 +35,10 @@ def main():
         if audit.get('status')=='CANCELLED_SHUTDOWN':continue
         primary=assess_control_depth(audit)
         delayed=assess_control_depth(audit,local[cid]) if cid in local else None
+        bound=evaluate_control_input_shadow(audit)
         rows.append({'cycle_id':cid,'recorded_primary':audit.get('control_depth_quality_shadow'),
-            'primary':primary,'same_frame_delayed':delayed,'draft_admission':evaluate_depth_admission_draft(audit)})
+            'primary':primary,'same_frame_delayed':delayed,'draft_admission':bound['depth_admission_draft'],
+            'control_input_shadow':bound['control_input_shadow'],'decision_preview':bound['decision_preview']})
         print(cid[-8:],primary['status'],'reasons=',','.join(primary['refusal_reasons']),
               'local=',(delayed or primary)['local_consistency']['status'])
     if not rows:raise ValueError('no completed primary cycles')
@@ -52,12 +55,15 @@ def main():
             'sensor_prerequisites':dict(Counter(r['draft_admission']['sensor_prerequisites'] for r in rows)),
             'failed_checks':dict(Counter(k for r in rows for k in r['draft_admission']['failed_checks'])),
             'missing_checks':dict(Counter(k for r in rows for k in r['draft_admission']['missing_checks']))},
+        'control_input_shadow':{'statuses':dict(Counter(r['control_input_shadow']['status'] for r in rows)),
+            'decision_preview':dict(Counter(r['decision_preview']['status'] for r in rows)),
+            'reasons':dict(Counter(reason for r in rows for reason in r['decision_preview']['reasons']))},
         'includes_first_cycle':True,
         'local_matches':sum(r['same_frame_delayed'] is not None for r in rows),
         'local_binding_refusals':sum('LOCAL_RESULT_BINDING_MISMATCH' in (r['same_frame_delayed'] or {}) .get('refusal_reasons',[]) for r in rows)}
     report={'status':'CONTROL_DEPTH_QUALITY_SHADOW_REPLAY_ONLY','rows':rows,'summary':summary,
         'inputs_unchanged':unchanged,'source_sha256':hashes,'metric_measurement_authorized':False,'actuator_access':False,
-        'code_sha256':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in (Path(__file__),ROOT/'vision_core/person_localization/control_depth_quality_shadow.py',ROOT/'vision_core/person_localization/control_depth_admission_draft.py',POLICY)}}
+        'code_sha256':{str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in (Path(__file__),ROOT/'vision_core/person_localization/control_depth_quality_shadow.py',ROOT/'vision_core/person_localization/control_depth_admission_draft.py',ROOT/'vision_core/person_localization/control_input_shadow.py',POLICY)}}
     args.output.parent.mkdir(parents=True,exist_ok=True)
     with args.output.open('x') as stream:json.dump(report,stream,indent=2,allow_nan=False)
     print('QUALITY_SHADOW:',summary);print('INPUTS_UNCHANGED:',unchanged);print('Saved:',args.output)

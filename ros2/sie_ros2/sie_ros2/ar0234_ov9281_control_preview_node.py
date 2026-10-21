@@ -25,6 +25,7 @@ from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity, restore_crop
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
+from vision_core.person_localization.control_input_shadow import evaluate_control_input_shadow
 
 
 class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
@@ -545,7 +546,6 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             self._cached_stereo = None
             # A camera-frame diagnostic is never substituted for an admitted
             # robot-front clearance/error/age input to the motion policy.
-            audit["decision_preview"] = approach_control_preview()
             elapsed = time.monotonic() - started
             # Exclusive foreground timers only; stereo worker runs concurrently.
             foreground['other_foreground_s']=elapsed-sum(foreground.values())
@@ -573,6 +573,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             audit["working_targets"] = {"base_speed_m_s": .15, "stand_off_from_robot_front_m": 1.,
                 "depth_absolute_error_1_to_2m_m": .10, "depth_relative_error_above_2m": .05,
                 "exposure_to_command_age_max_s": .25}
+            audit["admission_blockers_basis"] = "LEGACY_DIAGNOSTIC_SCREEN; see decision_preview.failed_checks/missing_checks for bound draft"
             audit["admission_blockers"] = ["DIAGNOSTIC_NOT_METRIC_MEASUREMENT", "EXPOSURE_AGE_NOT_ESTABLISHED",
                 "CAMERA_TO_ROBOT_FRONT_CLEARANCE_NOT_ESTABLISHED", "PHYSICAL_ERROR_BOUND_NOT_ESTABLISHED"]
             if elapsed > .25:
@@ -596,6 +597,14 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 audit["local_surface_async"]={"status":"DISABLED_BY_EXPLICIT_PREVIEW_CONFIGURATION",
                     "scheduled_cycle":False,"admission_authorized":False}
             audit["control_depth_quality_shadow"] = assess_control_depth(audit)
+            control_started = time.monotonic()
+            bound = evaluate_control_input_shadow(audit)
+            # Retain the existing task-budget preview fields, then attach the
+            # current-cycle draft checks. No diagnostic is admitted as metric.
+            audit["decision_preview"] = {**approach_control_preview(), **bound.pop("decision_preview")}
+            audit.update(bound)
+            audit["control_input_shadow"]["assessment_processing_s"] = time.monotonic() - control_started
+            audit["control_input_shadow"]["freshness_basis"] = "driver age sampled before assessment; not exposure-to-command age"
             message = String()
             message.data = encode(audit)
             if rclpy.ok():
@@ -665,4 +674,3 @@ def main(args=None):
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
-
