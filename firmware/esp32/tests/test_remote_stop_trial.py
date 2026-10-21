@@ -80,6 +80,18 @@ class TrialTests(unittest.TestCase):
         s,h=self.trial(execute=False)
         self.assertEqual(s['result'],'PREFLIGHT_ONLY_NO_MOVEMENT')
         self.assertEqual(h.calls,[('GET','/status')])
+    def test_stopped_label_with_nonzero_pwm_is_not_confirmed(self):
+        h=Harness(); original=h.request
+        def request(method,url,timeout):
+            code,data=original(method,url,timeout)
+            if data.get('remote_stop_observation_complete') is True:
+                data['right_pwm']=10
+            return code,data
+        with tempfile.TemporaryDirectory() as tmp:
+            s=run(base_url='http://127.0.0.1',output=Path(tmp)/'trial',execute=True,
+                request=request,clock=h.clock,sleep=h.sleep)
+        self.assertEqual(s['result'],'TRIAL_REFUSED_OR_UNKNOWN')
+        self.assertEqual([p for m,p in h.calls if m=='POST'],['/move-forward','/stop'])
     def test_bad_build_does_not_move(self):
         s,h=self.trial('preflight')
         self.assertEqual(s['movement_posts'],0)

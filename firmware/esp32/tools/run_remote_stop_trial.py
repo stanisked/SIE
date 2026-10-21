@@ -58,7 +58,7 @@ def preflight(s):
 
 
 def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
-        sleep=time.sleep, timeout=0.5):
+        sleep=time.sleep, timeout=0.5, before_move=None):
     parsed = urlsplit(base_url)
     if parsed.scheme != 'http' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {'','/'}:
         raise TrialError('Use an explicit http://controller-host[:port] base URL')
@@ -123,6 +123,10 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
         if not execute:
             summary['result'] = 'PREFLIGHT_ONLY_NO_MOVEMENT'
             return summary
+        if before_move is not None:
+            # Last-moment external veto, after HTTP preflight and before any
+            # movement flag/POST. Exceptions here do not issue a stop or move.
+            summary['external_pre_move_evidence'] = before_move(status)
         sent_move = True
         summary['movement_posts'] += 1
         started = clock()
@@ -172,6 +176,7 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
                 if not sent_stop:
                     summary['result'] = 'COMPLETED_BEFORE_STOP_NO_STOP_TRIAL'
                 elif status.get('last_command_state') == 'STOPPED' and status.get('remote_stop_observation_complete') is True and status.get('remote_stop_pending') is False:
+                    preflight(status)  # Terminal label alone is insufficient: READY, zero PWM, no latch.
                     summary['result'] = 'REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY'
                     proxy = {}
                     for wheel, diameter, cpr in [('right',0.0646,205),('left',0.0652,206)]:
