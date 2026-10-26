@@ -2,8 +2,9 @@
 
 Experimental separate launcher; no canonical Measurement or autonomous admission.
 Uses the existing static-v2 camera diagnostic, the V7 one-step observation checks
-and the observed ESP32 stop trial. Nothing runs without `--execute` and a fresh
-session confirmation. Default is three steps, hard cap ten. Each step requests
+and the observed ESP32 stop trial. Nothing runs without the explicit `--execute`
+flag. There is no interactive `APPROACH-...` code. Default is three steps,
+hard cap ten. Each step requests
 0.10 m and one /stop; the next step requires a new eligible frame captured after
 the previous terminal observation, the same selected person box (IoU >= 0.7),
 and a 0.01–0.15 m decrease in optical depth. The final step is also reobserved.
