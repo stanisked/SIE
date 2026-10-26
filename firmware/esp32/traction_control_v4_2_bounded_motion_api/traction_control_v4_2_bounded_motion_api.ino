@@ -3306,11 +3306,6 @@ void sendJson(int status, const String &body)
 
 void queueLegacyMotionRequest(MotionDirection direction)
 {
-  if (acceptedCommandIds.contains(commandId.c_str(), commandId.length())) {
-    sendJson(409, "{\"accepted\":false,\"reason\":\"STALE_COMMAND_ID\"}");
-    return;
-  }
-
   if (boundedFaultLatched) {
     sendJson(409, "{\"accepted\":false,\"reason\":\"BOUNDED_FAULT_LATCHED\"}");
     return;
@@ -3416,6 +3411,11 @@ void queueBoundedMotionRequest(
     } else {
       sendJson(409, "{\"accepted\":false,\"reason\":\"COMMAND_ID_CONFLICT\"}");
     }
+    return;
+  }
+
+  if (acceptedCommandIds.contains(commandId.c_str(), commandId.length())) {
+    sendJson(409, "{\"accepted\":false,\"reason\":\"STALE_COMMAND_ID\"}");
     return;
   }
 
