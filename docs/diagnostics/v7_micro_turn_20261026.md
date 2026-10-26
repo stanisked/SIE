@@ -41,3 +41,19 @@ build. This corrects the stuck state; it does not demonstrate that the motors
 can physically turn under load or justify increasing PWM. Recheck compile and
 flash separately, then observe a single operator-approved diagnostic before
 resuming the approach series.
+
+After flashing v2, a single 3-degree turn remained physically stationary.
+The controller advanced to `DRIVING`, so the startup bypass was corrected,
+but samples at 2552 and 5015 ms showed PWM 180/180 and counts 1/1. The
+runner's five-second terminal deadline expired, it sent one `/stop` (202,
+pending), and no forward POST was made. This identifies a second source path:
+the micro-turn guard returned early during DRIVING before the common command
+timeout and periodic encoder stall checks. Build
+`v4_2_micro_turn_watchdog_v3` moves the deadline before that guard and routes
+an unbraked micro-turn through the existing 100 ms progress check. The small
+turn's target speed is below the generic stall-speed threshold, so its
+unbraked wheels are checked explicitly. With the existing three-cycle stall
+policy, a stationary turn should brake on lack of encoder progress instead
+of holding directed PWM until host `/stop`. This is a code-path correction,
+not proof of turn torque. Loaded PWM 180 may still be insufficient; inspect
+electrical supply and mechanical resistance before raising it.
