@@ -7,8 +7,16 @@ session confirmation. Default is three steps, hard cap ten. Each step requests
 0.10 m and one /stop; the next step requires a new eligible frame captured after
 the previous terminal observation, the same selected person box (IoU >= 0.7),
 and a 0.01–0.15 m decrease in optical depth. The final step is also reobserved.
+After every stop it also compares the RGB target center with the first eligible frame.
+More than 100 px of accumulated horizontal shift vetoes the next command (and
+is reported after the last command). In the first 10-step floor run the center
+shifted 299 px while the operator saw about 12 degrees of rightward drift.
+The 100 px threshold is an experimental early warning based on that run; bbox
+center shift is not a calibrated chassis angle and does not command steering.
 A refusal, missing frame, target change or unknown controller state ends the session
-without a further move request. Separate journals are written per command.
+without a further move request. The summary records the last rejected frame
+reason or camera-process exit on timeout, plus image drift and encoder counts.
+Separate journals are written per command.
 
 The operator enters a freshly measured horizontal front clearance. The entry
 must exceed 1.1 m plus 0.1 m per permitted step; that is an experimental request
