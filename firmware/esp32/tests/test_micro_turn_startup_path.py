@@ -29,6 +29,21 @@ class MicroTurnStartupPathTests(unittest.TestCase):
         self.assertIn('elapsed >= BREAKAWAY_TIMEOUT_MS', starting)
         self.assertIn('boundedBreakawayPwmCeiling()', starting)
 
+    def test_micro_turn_drive_cannot_bypass_deadline_and_stall(self):
+        source = SKETCH.read_text()
+        update = source.split('void updateMotion()', 1)[1].split(
+            'void updateSquareSequence()', 1)[0]
+        self.assertLess(update.index('now - motionStartTime >= activeTimeoutMs'),
+                        update.index('if (enforceBoundedEncoderLimit())'))
+        guard = source.split('bool enforceBoundedEncoderLimit()', 1)[1].split(
+            'void ', 1)[0]
+        unbraked = guard.split('// When neither wheel has reached its brake point', 1)[1]
+        self.assertIn('return false;', unbraked.split('const int32_t syncErrorCounts', 1)[0])
+        drive = source.split('void updateDriving(uint32_t now)', 1)[1].split(
+            'void updateMotion()', 1)[0]
+        self.assertIn('rightTargetSpeed > STALL_CHECK_MIN_TARGET_M_S || microTurnBeforeBrake', drive)
+        self.assertIn('leftTargetSpeed > STALL_CHECK_MIN_TARGET_M_S || microTurnBeforeBrake', drive)
+
 
 if __name__ == '__main__':
     unittest.main()
