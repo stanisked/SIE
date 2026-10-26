@@ -48,6 +48,20 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
         self.assertEqual(len(forward_dispatch), 1)
         self.assertLess(diagnostic_break[0].lineno, forward_dispatch[0].lineno)
 
+    def test_execute_flag_replaces_interactive_token(self):
+        _, tree = load_steering()
+        main = next(node for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name == 'main')
+        self.assertFalse(any(isinstance(node, ast.Call) and
+                             isinstance(node.func, ast.Name) and node.func.id == 'input'
+                             for node in ast.walk(main)))
+        execute_gate = next(node for node in main.body if isinstance(node, ast.If)
+                            and ast.unparse(node.test) == 'not args.execute')
+        ros_start = next(node for node in ast.walk(main) if isinstance(node, ast.Call)
+                         and isinstance(node.func, ast.Attribute) and
+                         ast.unparse(node.func) == 'rclpy.init')
+        self.assertLess(execute_gate.lineno, ros_start.lineno)
+
     def test_read_only_preflight_can_finish_before_fresh_frame(self):
         _, tree = load_steering()
         function = next(node for node in tree.body
