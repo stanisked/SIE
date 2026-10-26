@@ -5,21 +5,25 @@ import argparse
 import fcntl
 import json
 import math
+import os
 from pathlib import Path
 import secrets
 import signal
 import subprocess
 import time
 import sys
+from urllib.parse import urlencode, urlsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from vision_core.tools.run_v7_supervised_one_step import check_observation, execute_observed_step, TOPIC
+from firmware.esp32.tools.run_remote_stop_trial import Http, preflight
 
-# The first ten-step floor run shifted the target center by 299 px while the
-# operator observed roughly 12 degrees of rightward drift. This is a veto on
-# accumulating image displacement, not a calibrated heading or steering law.
-MAX_TARGET_CENTER_DRIFT_PX = 100.0
+# V5 AR0234 intrinsic, bound by check_observation to its reviewed SHA256.
+RGB_FX_PX = 2021.546012
+RGB_CX_PX = 924.649158
+TURN_DEADBAND_DEG = 1.5
+MAX_TURN_PER_STEP_DEG = 3.0
 
 def depth_and_box(a):
     d = (a.get('shape_diagnostic') or {}).get('mask_depth') or {}
@@ -42,11 +46,110 @@ def overlap(a, b):
 def target_center_x(box):
     return (box[0] + box[2]) / 2.0
 
-def check_course(box, initial_center_x):
-    drift = target_center_x(box) - initial_center_x
-    if abs(drift) > MAX_TARGET_CENTER_DRIFT_PX:
-        raise RuntimeError(f'TARGET_CENTER_DRIFT_EXCEEDED:{drift:+.1f}px')
-    return drift
+def target_bearing_deg(box):
+    return math.degrees(math.atan((target_center_x(box) - RGB_CX_PX) / RGB_FX_PX))
+
+def steering_request(bearing_deg):
+    if not math.isfinite(bearing_deg):
+        raise ValueError('INVALID_TARGET_BEARING')
+    if abs(bearing_deg) <= TURN_DEADBAND_DEG:
+        return None
+    # Image x increases to the right. A left turn brings a left-hand target
+    # toward image center. A single correction is followed by fresh feedback.
+    return {'endpoint': '/turn-right' if bearing_deg > 0 else '/turn-left',
+            'angle_deg': min(MAX_TURN_PER_STEP_DEG, max(1.0, abs(bearing_deg) / 2.0))}
+
+def verify_turn_feedback(z, box, new_z, new_box):
+    if overlap(box,new_box)<.7 or abs(new_z-z)>.15:
+        raise RuntimeError('TURN_TARGET_CORRESPONDENCE_UNCONFIRMED')
+    before=target_bearing_deg(box)
+    after=target_bearing_deg(new_box)
+    if abs(before)-abs(after)<.25:
+        raise RuntimeError('TURN_CAMERA_ALIGNMENT_UNCONFIRMED')
+    return after
+
+def execute_bounded_turn(audit, *, armed_at, base_url, output, endpoint, angle_deg,
+                         request=None, clock=time.monotonic, sleep=time.sleep):
+    """One bounded turn; no retry. Stop once if dispatch or completion is unknown."""
+    parsed = urlsplit(base_url)
+    if (parsed.scheme != 'http' or not parsed.hostname or parsed.username or parsed.password
+            or parsed.query or parsed.fragment or parsed.path not in ('', '/')
+            or endpoint not in ('/turn-left', '/turn-right')
+            or not 1.0 <= angle_deg <= MAX_TURN_PER_STEP_DEG):
+        raise ValueError('INVALID_BOUNDED_TURN_REQUEST')
+    check_observation(audit, armed_at, clock())
+    output.mkdir(parents=True, exist_ok=False)
+    request = request or Http()
+    cid = 'sie-turn-' + secrets.token_hex(12)
+    report = {'command_id':cid, 'endpoint':endpoint, 'angle_deg':angle_deg,
+              'turn_posts':0, 'stop_posts':0, 'result':'NOT_STARTED'}
+    journal = (output/'http.jsonl').open('x')
+    sent = False
+    def call(method, route, params=None):
+        url = base_url.rstrip('/') + route
+        if params: url += '?' + urlencode(params)
+        row = {'method':method, 'endpoint':route, 'query':params,
+               'host_started_monotonic_s':clock()}
+        try:
+            code, body = request(method, url, .5)
+            row.update(http_code=code, response=body)
+            return code, body
+        except BaseException as error:
+            row['error'] = type(error).__name__ + ': ' + str(error)
+            raise
+        finally:
+            row['host_completed_monotonic_s'] = clock()
+            journal.write(json.dumps(row, allow_nan=False)+'\n')
+            journal.flush()
+    try:
+        code, status = call('GET','/status')
+        if code != 200: raise RuntimeError('TURN_STATUS_UNAVAILABLE')
+        preflight(status)
+        boot = status['boot_session_id']
+        check_observation(audit, armed_at, clock())
+        sent = True  # An ambiguous POST is never retried.
+        report['turn_posts'] = 1
+        code, body = call('POST', endpoint,
+                          {'boot_session_id':boot, 'command_id':cid,
+                           'angle_deg':format(angle_deg,'.3f')})
+        if code != 202 or body.get('accepted') is not True or body.get('command_id') != cid:
+            raise RuntimeError('TURN_ACCEPTANCE_UNKNOWN')
+        deadline = clock() + 5.0
+        while clock() < deadline:
+            code, status = call('GET','/status')
+            if code != 200 or status.get('boot_session_id') != boot:
+                raise RuntimeError('TURN_STATUS_OR_SESSION_CHANGED')
+            if status.get('last_command_id') == cid and status.get('last_command_state') in ('SUCCESS','PARTIAL_PROGRESS','FAULT','STOPPED'):
+                report['terminal_status'] = status
+                if (status.get('last_command_state') not in ('SUCCESS','PARTIAL_PROGRESS')
+                        or status.get('last_command_endpoint') != endpoint
+                        or status.get('bounded_motion_profile') != 'BOUNDED_MICRO_TURN_V1'):
+                    raise RuntimeError('TURN_TERMINAL_REFUSED')
+                preflight(status)  # READY, both PWM zero, no fault latch.
+                angle = status.get('bounded_turn_final_angle_rad')
+                sign = 1 if endpoint == '/turn-left' else -1
+                if (type(angle) not in (int,float) or not math.isfinite(angle)
+                        or sign * angle <= 0 or abs(angle) > math.radians(angle_deg) + .01):
+                    raise RuntimeError('TURN_ENCODER_DIRECTION_OR_BOUND_REFUSED')
+                report['result'] = 'TURN_TERMINAL_REOBSERVE_REQUIRED'
+                report['encoder_turn_deg'] = math.degrees(angle)
+                return report
+            sleep(.02)
+        raise RuntimeError('TURN_TERMINAL_TIMEOUT')
+    except BaseException as error:
+        report['result']='TURN_REFUSED_OR_UNKNOWN'
+        report['error']=type(error).__name__+': '+str(error)
+        if sent:
+            report['stop_posts']=1
+            try:
+                code, body = call('POST','/stop')
+                report['stop_response']={'http_code':code,'body':body}
+            except BaseException as stop_error:
+                report['stop_error']=type(stop_error).__name__+': '+str(stop_error)
+        return report
+    finally:
+        journal.close()
+        (output/'summary.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
 
 def next_observation(node, holder, *, after, armed_at, camera_process=None, timeout_s=8):
     holder.clear()
@@ -93,8 +196,9 @@ def main():
     from std_msgs.msg import String
     token='APPROACH-'+secrets.token_hex(3)
     print('Up to',args.max_steps,'separate 0.10 m commands, each followed by /stop and a new camera observation.')
+    print('At most one 1–3 degree camera-guided turn before each forward step and after the final step; each turn requires fresh camera feedback.')
     print('This supervised experiment does not activate Measurement or autonomous motion admission.')
-    print('Confirm stationary person, clear path both ways, cart facing person, and accessible motor power cutoff.')
+    print('Confirm stationary person, clear approach path and rotation space, cart facing person, and accessible motor power cutoff.')
     if input('Type '+token+' to authorize this bounded session: ').strip()!=token:
         print('NOT_CONFIRMED: nothing started')
         return 1
@@ -103,9 +207,10 @@ def main():
     root.mkdir(parents=True,exist_ok=False)
     report={'result':'NO_MOVEMENT','movement_posts':0,'stop_posts':0,'steps':[],
             'operator_front_clearance_m':args.front_clearance_m,'max_steps':args.max_steps,
-            'scope':'OPERATOR_BOUNDED_APPROACH_WITH_V7_DIAGNOSTIC_VETO',
-            'measurement_admission_changed':False,
-            'max_target_center_drift_px':MAX_TARGET_CENTER_DRIFT_PX}
+            'scope':'OPERATOR_BOUNDED_APPROACH_WITH_CAMERA_FEEDBACK_STEERING',
+            'measurement_admission_changed':False, 'turn_posts':0,
+            'rgb_intrinsic':{'fx_px':RGB_FX_PX,'cx_px':RGB_CX_PX},
+            'turn_deadband_deg':TURN_DEADBAND_DEG,'max_turn_per_step_deg':MAX_TURN_PER_STEP_DEG}
     process=None
     node=None
     try:
@@ -117,7 +222,37 @@ def main():
             except (ValueError,TypeError): pass
             if len(holder)>1: del holder[:-1]
         node.create_subscription(String,TOPIC,callback,QoSProfile(depth=1,durability=DurabilityPolicy.VOLATILE,reliability=ReliabilityPolicy.RELIABLE))
-        process=subprocess.Popen(['bash',str(ROOT/'vision_core/tools/run_control_preview_existing_static_v2.sh')],cwd=ROOT,start_new_session=True)
+        camera_env=os.environ.copy()
+        camera_env['SIE_PREVIEW_DURATION_S']='120'
+        process=subprocess.Popen(['bash',str(ROOT/'vision_core/tools/run_control_preview_existing_static_v2.sh')],cwd=ROOT,start_new_session=True,env=camera_env)
+        def align_once(audit, evidence, z, box, row, *, label=None):
+            request=steering_request(target_bearing_deg(box))
+            row['bearing_before_turn_deg']=target_bearing_deg(box)
+            if request is None:
+                row['steering']='ALREADY_CENTERED'
+                return audit,evidence,z,box
+            row['steering_request']=request
+            result=execute_bounded_turn(audit,armed_at=armed,base_url=args.base_url,
+                                        output=root/('turn_'+(label or str(row['index']).zfill(2))),**request)
+            row['turn_result']=result['result']
+            row['turn_posts']=result['turn_posts']
+            row['turn_stop_posts']=result['stop_posts']
+            report['turn_posts']+=result['turn_posts']
+            report['stop_posts']+=result['stop_posts']
+            if result['result']!='TURN_TERMINAL_REOBSERVE_REQUIRED':
+                raise RuntimeError('TURN_NOT_CONFIRMED:'+result.get('error','UNKNOWN'))
+            # No straight request from pre-turn geometry. Require a new capture
+            # and observed improvement of the same current-frame target.
+            fresh,_=next_observation(node,holder,after=time.monotonic(),armed_at=armed,
+                                     camera_process=process)
+            new_z,new_box=depth_and_box(fresh)
+            after_bearing=target_bearing_deg(new_box)
+            row['bearing_after_turn_deg']=after_bearing
+            row['post_turn_cycle_id']=fresh['cycle_id']
+            row['post_turn_depth_m']=new_z
+            verify_turn_feedback(z,box,new_z,new_box)
+            row['steering']='CAMERA_ALIGNMENT_IMPROVED'
+            return fresh,check_observation(fresh,armed,time.monotonic()),new_z,new_box
         previous_z=previous_box=initial_center_x=None
         after=armed
         for index in range(args.max_steps):
@@ -136,7 +271,6 @@ def main():
                 report['steps'][-1]['reobserved_rgb_center_x_px']=target_center_x(box)
                 report['steps'][-1]['reobserved_center_drift_px']=center_drift_px
                 if not .01 <= delta <= .15: raise RuntimeError('DEPTH_PROGRESS_UNCONFIRMED')
-            check_course(box,initial_center_x)
             row={'index':index+1,'source_cycle_id':audit['cycle_id'],'depth_before_m':z,
                  'camera_evidence':evidence,'rgb_center_x_px':target_center_x(box),
                  'center_drift_from_first_px':center_drift_px}
@@ -145,6 +279,10 @@ def main():
             if args.front_clearance_m - .1*(index+1) <= 1.0:
                 report['result']='FRONT_CLEARANCE_BUDGET_REACHED'
                 break
+            audit,evidence,z,box=align_once(audit,evidence,z,box,row)
+            row['forward_source_cycle_id']=audit['cycle_id']
+            row['forward_depth_m']=z
+            row['forward_rgb_center_x_px']=target_center_x(box)
             result=execute_observed_step(audit,armed_at=armed,base_url=args.base_url,
                                          output=root/('controller_'+str(index+1).zfill(2)))
             row['controller_result']=result['result']
@@ -173,7 +311,9 @@ def main():
             report['steps'][-1]['reobserved_center_drift_px']=target_center_x(box)-initial_center_x
             if overlap(previous_box,box)<.7 or not .01<=delta<=.15:
                 raise RuntimeError('FINAL_DEPTH_PROGRESS_UNCONFIRMED')
-            check_course(box,initial_center_x)
+            report['final_alignment']={'index':args.max_steps,'source_cycle_id':audit['cycle_id']}
+            audit,_,z,box=align_once(audit,None,z,box,report['final_alignment'],label='final')
+            report['final_alignment']['final_bearing_deg']=target_bearing_deg(box)
             report['result']='BOUNDED_SESSION_COMPLETE'
     except (Exception,KeyboardInterrupt) as error:
         report['result']='STOPPED_ON_REFUSAL'

@@ -38,7 +38,9 @@ case "$mode" in full_1280x800|half_640x400) ;; *) echo "Unsupported diagnostic m
 directory="/home/elwis/.local/state/sie/evidence/control_input_preview_${mode}_${backend}_${engine}_$(date +%Y%m%d_%H%M%S)"
 echo "Journal root: $directory"
 exit_code=0
-timeout --signal=INT --kill-after=10s 30s "$runtime" -c \
+duration="${SIE_PREVIEW_DURATION_S:-30}"
+case "$duration" in 30|120) ;; *) echo "Unsupported preview duration" >&2; exit 2 ;; esac
+timeout --signal=INT --kill-after=10s "${duration}s" "$runtime" -c \
   'from sie_ros2.ar0234_ov9281_control_preview_node import main; main()' \
   --ros-args \
   -p project_root:="$PWD" \
