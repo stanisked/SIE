@@ -321,7 +321,6 @@ def main():
     finally:
         (root/'summary.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
         if process is not None and process.poll() is None:
-            import os
             os.killpg(process.pid,signal.SIGINT)
             try: process.wait(timeout=5)
             except subprocess.TimeoutExpired:
