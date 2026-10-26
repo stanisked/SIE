@@ -49,7 +49,7 @@ def target_center_x(box):
 def target_bearing_deg(box):
     return math.degrees(math.atan((target_center_x(box) - RGB_CX_PX) / RGB_FX_PX))
 
-def steering_request(bearing_deg):
+def steering_request(bearing_deg, *, diagnostic_turn_only=False):
     if not math.isfinite(bearing_deg):
         raise ValueError('INVALID_TARGET_BEARING')
     if abs(bearing_deg) <= TURN_DEADBAND_DEG:
@@ -57,7 +57,8 @@ def steering_request(bearing_deg):
     # Image x increases to the right. A left turn brings a left-hand target
     # toward image center. A single correction is followed by fresh feedback.
     return {'endpoint': '/turn-right' if bearing_deg > 0 else '/turn-left',
-            'angle_deg': min(MAX_TURN_PER_STEP_DEG, max(1.0, abs(bearing_deg) / 2.0))}
+            'angle_deg': (MAX_TURN_PER_STEP_DEG if diagnostic_turn_only else
+                          min(MAX_TURN_PER_STEP_DEG, max(1.0, abs(bearing_deg) / 2.0)))}
 
 def verify_turn_feedback(z, box, new_z, new_box):
     if overlap(box,new_box)<.7 or abs(new_z-z)>.15:
@@ -179,12 +180,16 @@ def main():
     p.add_argument('--base-url')
     p.add_argument('--front-clearance-m',type=float)
     p.add_argument('--max-steps',type=int,default=3)
+    p.add_argument('--diagnostic-turn-only',action='store_true',
+                   help='One camera-directed 3 degree turn and reobservation; never forward')
     args=p.parse_args()
     if not args.execute:
         print('NO_EXECUTION: no camera, network or motor opened')
         return 0
     if not args.base_url or not args.base_url.startswith('http://') or not args.front_clearance_m or not math.isfinite(args.front_clearance_m) or not 1 <= args.max_steps <= 10 or args.front_clearance_m <= 1.1 + .1*args.max_steps:
         p.error('Require controller URL, 1..10 steps, and measured front clearance > 1.1 m + 0.1 m per step')
+    if args.diagnostic_turn_only and args.max_steps != 1:
+        p.error('--diagnostic-turn-only requires --max-steps 1')
     lockpath=Path.home()/'.local/state/sie/v7_operator_one_step.lock'
     lockpath.parent.mkdir(parents=True,exist_ok=True)
     lock=lockpath.open('a')
@@ -195,7 +200,10 @@ def main():
     from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
     from std_msgs.msg import String
     token='APPROACH-'+secrets.token_hex(3)
-    print('Up to',args.max_steps,'separate 0.10 m commands, each followed by /stop and a new camera observation.')
+    if args.diagnostic_turn_only:
+        print('One camera-directed 3 degree turn followed by fresh camera feedback; no forward request.')
+    else:
+        print('Up to',args.max_steps,'separate 0.10 m commands, each followed by /stop and a new camera observation.')
     print('At most one 1–3 degree camera-guided turn before each forward step and after the final step; each turn requires fresh camera feedback.')
     print('This supervised experiment does not activate Measurement or autonomous motion admission.')
     print('Confirm stationary person, clear approach path and rotation space, cart facing person, and accessible motor power cutoff.')
@@ -210,7 +218,8 @@ def main():
             'scope':'OPERATOR_BOUNDED_APPROACH_WITH_CAMERA_FEEDBACK_STEERING',
             'measurement_admission_changed':False, 'turn_posts':0,
             'rgb_intrinsic':{'fx_px':RGB_FX_PX,'cx_px':RGB_CX_PX},
-            'turn_deadband_deg':TURN_DEADBAND_DEG,'max_turn_per_step_deg':MAX_TURN_PER_STEP_DEG}
+            'turn_deadband_deg':TURN_DEADBAND_DEG,'max_turn_per_step_deg':MAX_TURN_PER_STEP_DEG,
+            'diagnostic_turn_only':args.diagnostic_turn_only}
     process=None
     node=None
     try:
@@ -226,7 +235,8 @@ def main():
         camera_env['SIE_PREVIEW_DURATION_S']='120'
         process=subprocess.Popen(['bash',str(ROOT/'vision_core/tools/run_control_preview_existing_static_v2.sh')],cwd=ROOT,start_new_session=True,env=camera_env)
         def align_once(audit, evidence, z, box, row, *, label=None):
-            request=steering_request(target_bearing_deg(box))
+            request=steering_request(target_bearing_deg(box),
+                                     diagnostic_turn_only=args.diagnostic_turn_only)
             row['bearing_before_turn_deg']=target_bearing_deg(box)
             if request is None:
                 row['steering']='ALREADY_CENTERED'
@@ -235,6 +245,8 @@ def main():
             result=execute_bounded_turn(audit,armed_at=armed,base_url=args.base_url,
                                         output=root/('turn_'+(label or str(row['index']).zfill(2))),**request)
             row['turn_result']=result['result']
+            row['turn_encoder_deg']=result.get('encoder_turn_deg')
+            row['turn_terminal_state']=(result.get('terminal_status') or {}).get('last_command_state')
             row['turn_posts']=result['turn_posts']
             row['turn_stop_posts']=result['stop_posts']
             report['turn_posts']+=result['turn_posts']
@@ -280,6 +292,9 @@ def main():
                 report['result']='FRONT_CLEARANCE_BUDGET_REACHED'
                 break
             audit,evidence,z,box=align_once(audit,evidence,z,box,row)
+            if args.diagnostic_turn_only:
+                report['result']='TURN_ONLY_REOBSERVED' if row.get('turn_posts') else 'TURN_ONLY_ALREADY_CENTERED'
+                break
             row['forward_source_cycle_id']=audit['cycle_id']
             row['forward_depth_m']=z
             row['forward_rgb_center_x_px']=target_center_x(box)
@@ -330,7 +345,7 @@ def main():
         lock.close()
     print('V7_APPROACH',report['result'],'movement_posts=',report['movement_posts'],'stop_posts=',report['stop_posts'])
     print('Saved:',root/'summary.json')
-    return 0 if report['result']=='BOUNDED_SESSION_COMPLETE' else 1
+    return 0 if report['result'] in ('BOUNDED_SESSION_COMPLETE', 'TURN_ONLY_REOBSERVED', 'TURN_ONLY_ALREADY_CENTERED') else 1
 
 if __name__=='__main__':
     raise SystemExit(main())
