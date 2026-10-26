@@ -15,7 +15,8 @@ import uuid
 
 BUILD = 'v4_2_remote_stop_observed_v1'
 REUSABLE_HISTORY_BUILD = 'v4_2_reusable_history_v1'
-ACCEPTED_BUILDS = {BUILD, REUSABLE_HISTORY_BUILD}
+MICRO_TURN_STARTUP_BUILD = 'v4_2_micro_turn_startup_v2'
+ACCEPTED_BUILDS = {BUILD, REUSABLE_HISTORY_BUILD, MICRO_TURN_STARTUP_BUILD}
 DISTANCE_M = 0.10
 STOP_REQUEST_AFTER_S = 0.30  # host deadline from movement POST start; not a stopping bound
 TERMINAL_WAIT_S = 5.0  # observation deadline, never permission for more movement
