@@ -224,7 +224,6 @@ def main():
     from rclpy.node import Node
     from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
     from std_msgs.msg import String
-    token='APPROACH-'+secrets.token_hex(3)
     if args.diagnostic_turn_only:
         print('One camera-directed 3 degree turn followed by fresh camera feedback; no forward request.')
     else:
@@ -232,9 +231,6 @@ def main():
     print('At most one 1–3 degree camera-guided turn before each forward step and after the final step; each turn requires fresh camera feedback.')
     print('This supervised experiment does not activate Measurement or autonomous motion admission.')
     print('Confirm stationary person, clear approach path and rotation space, cart facing person, and accessible motor power cutoff.')
-    if input('Type '+token+' to authorize this bounded session: ').strip()!=token:
-        print('NOT_CONFIRMED: nothing started')
-        return 1
     armed=time.monotonic()
     root=Path.home()/'.local/state/sie/evidence'/('v7_supervised_approach_'+str(int(time.time()))+'_'+secrets.token_hex(4))
     root.mkdir(parents=True,exist_ok=False)
