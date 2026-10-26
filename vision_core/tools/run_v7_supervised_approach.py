@@ -70,7 +70,8 @@ def verify_turn_feedback(z, box, new_z, new_box):
     return after
 
 def execute_bounded_turn(audit, *, armed_at, base_url, output, endpoint, angle_deg,
-                         request=None, clock=time.monotonic, sleep=time.sleep):
+                         request=None, clock=time.monotonic, sleep=time.sleep,
+                         ready_status=None):
     """One bounded turn; no retry. Stop once if dispatch or completion is unknown."""
     parsed = urlsplit(base_url)
     if (parsed.scheme != 'http' or not parsed.hostname or parsed.username or parsed.password
@@ -103,8 +104,11 @@ def execute_bounded_turn(audit, *, armed_at, base_url, output, endpoint, angle_d
             journal.write(json.dumps(row, allow_nan=False)+'\n')
             journal.flush()
     try:
-        code, status = call('GET','/status')
-        if code != 200: raise RuntimeError('TURN_STATUS_UNAVAILABLE')
+        if ready_status is None:
+            code, status = call('GET','/status')
+            if code != 200: raise RuntimeError('TURN_STATUS_UNAVAILABLE')
+        else:
+            status = ready_status
         preflight(status)
         boot = status['boot_session_id']
         check_observation(audit, armed_at, clock())
@@ -151,6 +155,27 @@ def execute_bounded_turn(audit, *, armed_at, base_url, output, endpoint, angle_d
     finally:
         journal.close()
         (output/'summary.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
+
+def preflight_turn_before_fresh_frame(*, base_url, output, request=None,
+                                      clock=time.monotonic):
+    """Read controller state before selecting the frame used for the POST."""
+    request = request or Http()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    row = {'method':'GET', 'endpoint':'/status',
+           'host_started_monotonic_s':clock()}
+    try:
+        code, status = request('GET',base_url.rstrip('/')+'/status',1.0)
+        row['http_code'] = code
+        row['response'] = status
+        if code != 200: raise RuntimeError('TURN_STATUS_UNAVAILABLE')
+        preflight(status)
+        return status,clock()
+    except BaseException as error:
+        row['error'] = type(error).__name__+': '+str(error)
+        raise
+    finally:
+        row['host_completed_monotonic_s'] = clock()
+        output.write_text(json.dumps(row,allow_nan=False)+'\n')
 
 def next_observation(node, holder, *, after, armed_at, camera_process=None, timeout_s=8):
     holder.clear()
@@ -241,9 +266,30 @@ def main():
             if request is None:
                 row['steering']='ALREADY_CENTERED'
                 return audit,evidence,z,box
+            turn_label=label or str(row['index']).zfill(2)
+            ready_status, ready_at=preflight_turn_before_fresh_frame(
+                base_url=args.base_url,output=root/('turn_'+turn_label+'_preflight.json'))
+            # A slow read-only status request may age out the selected frame.
+            # The command instead uses a new camera frame captured afterward.
+            fresh,_=next_observation(node,holder,after=ready_at,armed_at=armed,
+                                     camera_process=process)
+            new_z,new_box=depth_and_box(fresh)
+            if overlap(box,new_box)<.7 or abs(new_z-z)>.15:
+                raise RuntimeError('TURN_PREFLIGHT_TARGET_CORRESPONDENCE_LOST')
+            fresh_request=steering_request(target_bearing_deg(new_box),
+                                           diagnostic_turn_only=args.diagnostic_turn_only)
+            row['post_preflight_cycle_id']=fresh['cycle_id']
+            row['post_preflight_bearing_deg']=target_bearing_deg(new_box)
+            if fresh_request is None:
+                row['steering']='ALREADY_CENTERED_AFTER_PREFLIGHT'
+                return fresh,check_observation(fresh,armed,time.monotonic()),new_z,new_box
+            if fresh_request['endpoint']!=request['endpoint']:
+                raise RuntimeError('TURN_PREFLIGHT_BEARING_DIRECTION_CHANGED')
+            audit,z,box,request=fresh,new_z,new_box,fresh_request
             row['steering_request']=request
             result=execute_bounded_turn(audit,armed_at=armed,base_url=args.base_url,
-                                        output=root/('turn_'+(label or str(row['index']).zfill(2))),**request)
+                                        output=root/('turn_'+turn_label),
+                                        ready_status=ready_status,**request)
             row['turn_result']=result['result']
             row['turn_encoder_deg']=result.get('encoder_turn_deg')
             row['turn_terminal_state']=(result.get('terminal_status') or {}).get('last_command_state')
@@ -349,3 +395,4 @@ def main():
 
 if __name__=='__main__':
     raise SystemExit(main())
+
