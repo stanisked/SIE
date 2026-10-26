@@ -1,6 +1,6 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-10-14
+**Snapshot date:** 2026-10-26 (network and NVMe handoff; earlier vision checkpoints retain their own dates)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
 **Status:** active engineering validation, not autonomous operation.
 
@@ -12,6 +12,12 @@ This file is the change-controlled snapshot of the active project state.
 - Do not silently update it after code edits, tests, experiments, or conversation summaries.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
+
+## 2026-10-26: current network and NVMe handoff
+
+The operator confirmed OpenSSH from Kestabor to Raspberry Pi 5 over Tailscale: `ssh elwis@100.70.100.29` (PASS). The laptop is `kestabor-hn-wx9x` at Tailscale `100.96.180.119`; the Pi is `piecake` on mobile hotspot `SIE-Mobile`. They do not need the same physical Wi-Fi network. Tailscale SSH is disabled; `tailscaled` is running. These facts do not establish Tailscale access to ESP32 or authorize motion.
+
+A post-boot Tailscale/SSH timeout recovered on 2026-10-26. Mobile-network control-plane sync and port 80 involvement are hypotheses, not established causes; a separate port 80 probe returned HTTP 302. The accepted action is observation: preserve Netplan, DNS, service ordering, Tailscale and SSH. Revisit only recurring delays over 2–3 minutes with working internet, using current-boot logs. The Pi's NVMe APST is disabled by `nvme_core.default_ps_max_latency_us=0`; retain the setting. A 1 GiB read and SMART/boot-log checks were clean in the observed interval, but original fault cause remains unknown. Do not run motors during network diagnosis or change NVMe settings without a specific need. Full operator-provided evidence and commands: [network infrastructure handoff](docs/diagnostics/network_infrastructure_20261026.md).
 
 ## Project name and compatibility
 
@@ -212,7 +218,7 @@ real Pi evidence but does not validate physical accuracy or dynamic safety.
 
 | Item | Current fact |
 | --- | --- |
-| Compute | Raspberry Pi 5 `piecake`, Ubuntu Server 24.04, headless over SSH |
+| Compute | Raspberry Pi 5 `piecake`, Ubuntu Server 24.04.5 LTS ARM64, kernel `6.8.0-1065-raspi`, headless over SSH |
 | Middleware | ROS 2 Jazzy, normally `ROS_DOMAIN_ID=42` |
 | RGB camera | AR0234 UVC, 1920x1200, runtime auto exposure must be `3` |
 | Stereo camera | DECXIN dual OV9281 UVC, combined 2560x800 at 60 FPS, MJPG, auto exposure `3` |

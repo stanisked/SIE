@@ -1,5 +1,10 @@
 # Current bounded-motion MVP handoff
 
+## 2026-10-26: актуальное подключение Pi и контекст накопителя
+
+Оператор подтвердил SSH с Kestabor на Pi через обычный OpenSSH поверх Tailscale: `ssh elwis@100.70.100.29` (PASS). Ноутбук `kestabor-hn-wx9x` имеет Tailscale IP `100.96.180.119`; Pi `piecake` работает в `SIE-Mobile`. Одна физическая Wi-Fi-сеть не требуется; доступ к ESP32 через Tailscale этим не подтверждён. После задержки подключения 26 октября SSH восстановился самостоятельно. Причина задержки не установлена: возможные проблемы control-plane/порта 80 остаются гипотезой. Решено наблюдать, не менять сетевые настройки; возвращаться к журналам текущей загрузки при повторяющемся ожидании дольше 2–3 минут при наличии интернета. NVMe APST отключён аргументом `nvme_core.default_ps_max_latency_us=0` и остаётся отключённым; первоначальная причина старых ошибок не доказана. Во время сетевой диагностики моторы не запускать. [Подробный сетевой handoff](../diagnostics/network_infrastructure_20261026.md).
+
+
 ## Supervised metric person-approach navigation MVP
 
 `vision_core/tools/run_sie_person_approach_demo_mvp.py` добавляет отдельную
