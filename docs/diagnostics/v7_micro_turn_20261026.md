@@ -72,3 +72,12 @@ checks frame age immediately before the one allowed POST. No motion request is
 retried. A failed preflight or unavailable new frame still exits without a
 motor command. This change addresses the measured network delay; it does not
 validate the firmware watchdog or the turn's physical torque.
+
+A subsequent turn-only run stopped before any turn request: the preliminary
+`GET /status` timed out after 1.121 s at its 1.0 s deadline. The cart did not
+move. The preliminary read now gets one read-only retry (1.0 s, then 2.0 s),
+with both attempts recorded in `turn_01_preflight.json`. A failed or non-READY
+response still refuses the session. After a successful read, the runner waits
+for a fresh camera frame and repeats target and age checks before the single
+turn POST. This does not establish reliable ESP32 communication; a repeated
+timeout needs network/controller diagnosis rather than more retries.
