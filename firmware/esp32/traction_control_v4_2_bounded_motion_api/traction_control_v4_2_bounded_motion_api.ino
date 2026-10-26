@@ -37,7 +37,7 @@
 #include "remote_stop_observer.h"
 #include "command_replay_guard.h"
 
-constexpr char FIRMWARE_BUILD_ID[] = "v4_2_micro_turn_startup_v2";
+constexpr char FIRMWARE_BUILD_ID[] = "v4_2_micro_turn_watchdog_v3";
 RemoteStopObserver remoteStop;
 
 constexpr char FIRMWARE_ID[] = "traction_control_v4_2_bounded_motion_api";
@@ -1545,6 +1545,13 @@ bool enforceBoundedEncoderLimit()
       return true;
     }
 
+    // When neither wheel has reached its brake point, updateDriving owns
+    // the periodic encoder-progress check. Do not bypass its stall detector.
+    if (!activeBoundedRightIndividualBrakeStarted &&
+        !activeBoundedLeftIndividualBrakeStarted) {
+      return false;
+    }
+
     const int32_t syncErrorCounts = abs(rightCount - leftCount);
     activeBoundedSyncErrorCounts = syncErrorCounts;
     if (command != nullptr) {
@@ -2205,14 +2212,20 @@ void updateDriving(uint32_t now)
     );
   }
 
-  if (rightTargetSpeed > STALL_CHECK_MIN_TARGET_M_S) {
+  const bool microTurnBeforeBrake = activeBoundedMotion &&
+      activeBoundedMotionProfile == BoundedMotionProfile::BOUNDED_MICRO_TURN_V1 &&
+      !activeBoundedRightIndividualBrakeStarted &&
+      !activeBoundedLeftIndividualBrakeStarted;
+  // A 1-3 degree turn has a low target speed, so the generic speed threshold
+  // would disable stall detection even while directed PWM is applied.
+  if (rightTargetSpeed > STALL_CHECK_MIN_TARGET_M_S || microTurnBeforeBrake) {
     rightStallCycles =
         deltaRight <= 0 ? rightStallCycles + 1 : 0;
   } else {
     rightStallCycles = 0;
   }
 
-  if (leftTargetSpeed > STALL_CHECK_MIN_TARGET_M_S) {
+  if (leftTargetSpeed > STALL_CHECK_MIN_TARGET_M_S || microTurnBeforeBrake) {
     leftStallCycles =
         deltaLeft <= 0 ? leftStallCycles + 1 : 0;
   } else {
@@ -2331,13 +2344,22 @@ void updateMotion()
     return;
   }
 
+  const uint32_t now = millis();
+  const uint32_t activeTimeoutMs = activeBoundedMotion
+      ? activeBoundedTimeoutMs
+      : motionTimeoutMs;
+  // The micro-turn encoder guard may handle drive outputs and return early.
+  // Check the command deadline before that branch on every loop.
+  if (now - motionStartTime >= activeTimeoutMs) {
+    abortMotion("TIMEOUT");
+    return;
+  }
+
   // Run before the 100 ms PI cadence in STARTING, DRIVING and COASTING.
   // It owns the bounded command's terminal encoder cutoff.
   if (enforceBoundedEncoderLimit()) {
     return;
   }
-
-  const uint32_t now = millis();
 
   if (!activeBoundedMotion && motionState == MotionState::DRIVING) {
     updateDistancesFromEncoders();
@@ -2346,14 +2368,6 @@ void updateMotion()
       beginCoasting();
       return;
     }
-  }
-
-  const uint32_t activeTimeoutMs = activeBoundedMotion
-      ? activeBoundedTimeoutMs
-      : motionTimeoutMs;
-  if (now - motionStartTime >= activeTimeoutMs) {
-    abortMotion("TIMEOUT");
-    return;
   }
 
   switch (motionState) {
