@@ -37,7 +37,7 @@
 #include "remote_stop_observer.h"
 #include "command_replay_guard.h"
 
-constexpr char FIRMWARE_BUILD_ID[] = "v4_2_reusable_history_v1";
+constexpr char FIRMWARE_BUILD_ID[] = "v4_2_micro_turn_startup_v2";
 RemoteStopObserver remoteStop;
 
 constexpr char FIRMWARE_ID[] = "traction_control_v4_2_bounded_motion_api";
@@ -1503,7 +1503,14 @@ bool enforceBoundedEncoderLimit()
       }
     }
     return false;
+  }  // During STARTING the breakaway ramp and its timeout belong to
+  // updateStarting(). Keep the absolute encoder limit above active, but do
+  // not let the micro-turn's driving output bypass the startup state machine.
+  if (motionState == MotionState::STARTING) {
+    return false;
   }
+
+
 
   if (activeBoundedMotionProfile ==
       BoundedMotionProfile::BOUNDED_MICRO_TURN_V1) {
