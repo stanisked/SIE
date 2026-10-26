@@ -87,6 +87,56 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
             self.assertEqual(calls, [('GET', 'http://controller/status', 1.0)])
             self.assertEqual(json.loads(output.read_text())['http_code'], 200)
 
+    def test_status_timeout_retries_read_only_then_uses_new_frame_boundary(self):
+        _, tree = load_steering()
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and
+                        node.name == 'preflight_turn_before_fresh_frame')
+        now = [0.0]
+        calls = []
+        def request(method, url, timeout):
+            calls.append((method, timeout))
+            now[0] += 1.12 if len(calls) == 1 else .15
+            if len(calls) == 1:
+                raise TimeoutError('timed out')
+            return 200, {'state': 'READY'}
+        namespace = {'Http': None, 'preflight': lambda status: None,
+                     'time': __import__('time'), 'json': json}
+        exec(compile(ast.Module(body=[function], type_ignores=[]),
+                     str(SOURCE), 'exec'), namespace)
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / 'turn_preflight.json'
+            status, completed = namespace[function.name](
+                base_url='http://controller', output=output, request=request,
+                clock=lambda: now[0])
+            self.assertEqual(status['state'], 'READY')
+            self.assertEqual(completed, 1.27)
+            self.assertEqual(calls, [('GET', 1.0), ('GET', 2.0)])
+            attempts = json.loads(output.read_text())['attempts']
+            self.assertEqual(attempts[0]['error'], 'TimeoutError: timed out')
+            self.assertEqual(attempts[1]['http_code'], 200)
+
+    def test_two_status_timeouts_exit_without_motion(self):
+        _, tree = load_steering()
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and
+                        node.name == 'preflight_turn_before_fresh_frame')
+        calls = []
+        def request(method, url, timeout):
+            calls.append(method)
+            raise TimeoutError('timed out')
+        namespace = {'Http': None, 'preflight': lambda status: None,
+                     'time': __import__('time'), 'json': json}
+        exec(compile(ast.Module(body=[function], type_ignores=[]),
+                     str(SOURCE), 'exec'), namespace)
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / 'turn_preflight.json'
+            with self.assertRaises(TimeoutError):
+                namespace[function.name](base_url='http://controller',
+                                         output=output, request=request)
+            self.assertEqual(calls, ['GET', 'GET'])
+            self.assertEqual(len(json.loads(output.read_text())['attempts']), 2)
+
     def test_fresh_camera_frame_follows_preflight_before_turn_post(self):
         _, tree = load_steering()
         main = next(node for node in tree.body
