@@ -22,3 +22,22 @@ uses the current target bearing for left/right choice, then the same one-time
 operator confirmation, bounded-turn terminal observation and camera feedback.
 The diagnostic-only branch exits before the existing forward dispatch. Its
 summary records the terminal state and encoder angle for comparison.
+
+The 3-degree diagnostic returned `STARTING` on 33 consecutive status reads.
+At controller elapsed 89, 2042 and 4133 ms, both PWMs stayed at 180, and
+encoder counts stayed at 1/0. One status GET timed out after 598 ms; the
+runner then posted `/stop` (202, pending). Later read-only status was READY,
+`last_command_state=STOPPED`, both PWMs zero, no fault latch. The operator
+heard motors for several seconds but observed no chassis turn. There was no
+forward command in this session.
+
+Source review found that `enforceBoundedEncoderLimit()` entered the
+micro-turn output branch during `STARTING` and returned true on each loop.
+That skipped `updateStarting()`, including its 450 ms breakaway timeout and
+PWM ramp. The firmware fix lets STARTING reach that state handler while the
+absolute encoder limit remains checked first. Build ID
+`v4_2_micro_turn_startup_v2` distinguishes a flashed fix from the observed
+build. This corrects the stuck state; it does not demonstrate that the motors
+can physically turn under load or justify increasing PWM. Recheck compile and
+flash separately, then observe a single operator-approved diagnostic before
+resuming the approach series.
