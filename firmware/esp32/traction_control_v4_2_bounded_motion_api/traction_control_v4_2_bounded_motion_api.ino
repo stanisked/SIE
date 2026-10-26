@@ -35,8 +35,9 @@
 // Keep the password private; do not publish this source with real credentials.
 #include "wifi_credentials.h"
 #include "remote_stop_observer.h"
+#include "command_replay_guard.h"
 
-constexpr char FIRMWARE_BUILD_ID[] = "v4_2_remote_stop_observed_v1";
+constexpr char FIRMWARE_BUILD_ID[] = "v4_2_reusable_history_v1";
 RemoteStopObserver remoteStop;
 
 constexpr char FIRMWARE_ID[] = "traction_control_v4_2_bounded_motion_api";
@@ -328,6 +329,8 @@ float requestedTurnAngleRad = 0.0f;
 int8_t activeCommandIndex = -1;
 int8_t lastCommandIndex = -1;
 CommandRecord commandHistory[COMMAND_HISTORY_CAPACITY];
+CommandReplayGuard acceptedCommandIds;
+uint8_t nextReusableCommandIndex = 0;
 
 SquareState squareState = SquareState::IDLE;
 bool squareSegmentActive = false;
@@ -837,6 +840,20 @@ int8_t findCommand(const String &commandId)
   return -1;
 }
 
+bool completedCommand(const CommandRecord &command)
+{
+  if (!command.used) return false;
+  switch (command.state) {
+    case CommandState::SUCCESS:
+    case CommandState::PARTIAL_PROGRESS:
+    case CommandState::FAULT:
+    case CommandState::STOPPED:
+      return true;
+    default:
+      return false;
+  }
+}
+
 int8_t reserveCommandRecord()
 {
   for (uint8_t index = 0; index < COMMAND_HISTORY_CAPACITY; ++index) {
@@ -846,7 +863,23 @@ int8_t reserveCommandRecord()
       return static_cast<int8_t>(index);
     }
   }
-  return -1;
+
+  // Keep the active command and the last completed command visible to /status.
+  // Older terminal details can be reused because the replay guard remembers
+  // every accepted ID independently of this small status-history window.
+  const int8_t index = selectReusableCommandSlot(
+      COMMAND_HISTORY_CAPACITY,
+      nextReusableCommandIndex,
+      activeCommandIndex,
+      lastCommandIndex,
+      [](uint8_t candidate) {
+        return completedCommand(commandHistory[candidate]);
+      });
+  if (index < 0) return -1;
+  commandHistory[index] = CommandRecord();
+  commandHistory[index].used = true;
+  nextReusableCommandIndex = (index + 1) % COMMAND_HISTORY_CAPACITY;
+  return index;
 }
 
 const char* directionName()
@@ -3273,6 +3306,11 @@ void sendJson(int status, const String &body)
 
 void queueLegacyMotionRequest(MotionDirection direction)
 {
+  if (acceptedCommandIds.contains(commandId.c_str(), commandId.length())) {
+    sendJson(409, "{\"accepted\":false,\"reason\":\"STALE_COMMAND_ID\"}");
+    return;
+  }
+
   if (boundedFaultLatched) {
     sendJson(409, "{\"accepted\":false,\"reason\":\"BOUNDED_FAULT_LATCHED\"}");
     return;
@@ -3403,11 +3441,18 @@ void queueBoundedMotionRequest(
     return;
   }
 
+  if (acceptedCommandIds.full()) {
+    sendJson(409, "{\"accepted\":false,\"reason\":\"COMMAND_ID_HISTORY_EXHAUSTED\"}");
+    return;
+  }
+
   const int8_t newIndex = reserveCommandRecord();
   if (newIndex < 0) {
     sendJson(409, "{\"accepted\":false,\"reason\":\"COMMAND_HISTORY_FULL\"}");
     return;
   }
+  // Full and duplicate checks above make this insertion unconditional.
+  acceptedCommandIds.remember(commandId.c_str(), commandId.length());
 
   CommandRecord &command = commandHistory[newIndex];
   command.commandId = commandId;

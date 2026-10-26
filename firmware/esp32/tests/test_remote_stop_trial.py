@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from urllib.parse import parse_qs, urlsplit
 from urllib.error import URLError
-from firmware.esp32.tools.run_remote_stop_trial import BUILD, run
+from firmware.esp32.tools.run_remote_stop_trial import BUILD, REUSABLE_HISTORY_BUILD, run
 
 class Harness:
     def __init__(self, mode='normal'):
@@ -23,6 +23,7 @@ class Harness:
                'right_pwm':0,'left_pwm':0}
         if not self.command and method=='GET':
             if self.mode=='preflight':ready['firmware_build_id']='wrong'
+            if self.mode=='reusable_history_build':ready['firmware_build_id']=REUSABLE_HISTORY_BUILD
             return 200,ready
         if path=='/move-forward':
             self.command=parse_qs(urlsplit(url).query)['command_id'][0]
@@ -69,6 +70,11 @@ class TrialTests(unittest.TestCase):
             rows=[json.loads(x) for x in (out/'http.jsonl').read_text().splitlines()]
             self.assertEqual(len(rows),len(h.calls))
         return s,h
+    def test_reusable_history_build_is_accepted(self):
+        s,h=self.trial('reusable_history_build')
+        self.assertEqual(s['result'],'REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY')
+        self.assertEqual([p for m,p in h.calls if m=='POST'],['/move-forward','/stop'])
+
     def test_one_move_stop_then_matching_terminal(self):
         s,h=self.trial()
         self.assertEqual(s['result'],'REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY')

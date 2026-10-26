@@ -14,6 +14,8 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 import uuid
 
 BUILD = 'v4_2_remote_stop_observed_v1'
+REUSABLE_HISTORY_BUILD = 'v4_2_reusable_history_v1'
+ACCEPTED_BUILDS = {BUILD, REUSABLE_HISTORY_BUILD}
 DISTANCE_M = 0.10
 STOP_REQUEST_AFTER_S = 0.30  # host deadline from movement POST start; not a stopping bound
 TERMINAL_WAIT_S = 5.0  # observation deadline, never permission for more movement
@@ -43,7 +45,7 @@ class Http:
 
 
 def preflight(s):
-    if s.get('firmware_build_id') != BUILD:
+    if s.get('firmware_build_id') not in ACCEPTED_BUILDS:
         raise TrialError('Unexpected firmware build')
     if s.get('motion_api_version') != 'v2_bounded_motion_api':
         raise TrialError('Unexpected motion API')
