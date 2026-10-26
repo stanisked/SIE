@@ -57,3 +57,17 @@ policy, a stationary turn should brake on lack of encoder progress instead
 of holding directed PWM until host `/stop`. This is a code-path correction,
 not proof of turn torque. Loaded PWM 180 may still be insufficient; inspect
 electrical supply and mechanical resistance before raising it.
+
+The next v3 turn-only attempt did not reach the ESP32 motion endpoint. A fresh
+RGB target center at 1065.4 px gave a 3.984-degree bearing and a 3-degree
+right-turn request, but the first read-only `GET /status` took 573 ms and
+raised `TimeoutError` at the previous 500 ms client deadline. Its HTTP journal
+contains no POST; `turn_posts=0`, `stop_posts=0`. Camera refusals in adjacent
+frames were not the cause of this no-motion result. The status preflight is
+now read before choosing a new camera frame. It has a one-second read-only
+deadline, and the runner requires a newly captured, eligible frame after the
+preflight, checks target correspondence and bearing direction again, then
+checks frame age immediately before the one allowed POST. No motion request is
+retried. A failed preflight or unavailable new frame still exits without a
+motor command. This change addresses the measured network delay; it does not
+validate the firmware watchdog or the turn's physical torque.
