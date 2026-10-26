@@ -18,8 +18,9 @@ that this chassis can achieve a 3-degree physical turn. If the result is again
 and settled counts before changing the firmware turn profile.
 
 `run_v7_supervised_approach.sh --execute --diagnostic-turn-only --max-steps 1`
-uses the current target bearing for left/right choice, then the same one-time
-operator confirmation, bounded-turn terminal observation and camera feedback.
+uses the current target bearing for left/right choice, then bounded-turn
+terminal observation and camera feedback. `--execute` is the operator action;
+the runner does not request an additional `APPROACH-...` code.
 The diagnostic-only branch exits before the existing forward dispatch. Its
 summary records the terminal state and encoder angle for comparison.
 
