@@ -81,3 +81,11 @@ response still refuses the session. After a successful read, the runner waits
 for a fresh camera frame and repeats target and age checks before the single
 turn POST. This does not establish reliable ESP32 communication; a repeated
 timeout needs network/controller diagnosis rather than more retries.
+
+The retry change is committed through `6578a71`; seven local tests passed.
+No physical turn after that commit is recorded. To distinguish a communication
+refusal from a firmware or traction result, inspect the run's `summary.json`,
+`turn_01_preflight.json`, `turn_01/http.jsonl`, terminal controller status and
+the operator's direct observation together. A zero `turn_posts` count cannot
+validate watchdog v3 or physical turn capability. Keep the next check to one
+supervised turn-only run; do not infer permission for a forward step.

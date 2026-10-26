@@ -27,7 +27,8 @@ reason or camera-process exit on timeout, plus image drift and encoder counts.
 Separate journals are written per command.
 
 The camera launcher uses a 120 s session for this approach runner; other
-preview launches retain 30 s. The operator enters a freshly measured horizontal front clearance. The entry
+preview launches retain 30 s. The operator supplies `--front-clearance-m` from
+a freshly measured horizontal front clearance. The value
 must exceed 1.1 m plus 0.1 m per permitted step; that is an experimental request
 budget, **not** a measured physical upper travel bound. Optical depth and this
 clearance have different datums. There is no path-obstacle detection.
@@ -51,3 +52,23 @@ bash vision_core/tools/run_v7_supervised_approach.sh \
 This is not a route to bypass failed V7 checks: the original one-step
 `check_observation` runs on each current frame and again after controller
 preflight. The original one-step launcher remains available unchanged.
+
+## Current turn-only diagnostic checkpoint (2026-10-26)
+
+For a single alignment check, use `--execute --diagnostic-turn-only
+--max-steps 1` with the operator's current ESP32 address and measured front
+clearance. This mode exits before forward dispatch. The preliminary
+`GET /status` uses a 1 s timeout and one 2 s retry only for `TimeoutError`.
+Both read attempts are recorded in `turn_01_preflight.json`. An invalid,
+non-READY or repeatedly unavailable status refuses the run without a turn
+POST. After a successful status read, the runner waits for a newly captured
+eligible frame, checks target correspondence and turn direction again, and
+checks frame age before one possible turn POST. No motion POST is retried.
+
+The most recent physical attempt timed out during the first 1 s status read
+after 1.121 s, so it tested neither the turn nor firmware watchdog v3. The
+read-only retry was then implemented and covered by seven local tests; no
+later physical result is recorded. Inspect `summary.json`,
+`turn_01_preflight.json`, the `turn_01` HTTP journal, controller terminal
+status and observed chassis displacement together. Repeated status timeouts
+need communication diagnosis before any change to turn power or forward scope.
