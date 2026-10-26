@@ -161,15 +161,25 @@ def preflight_turn_before_fresh_frame(*, base_url, output, request=None,
     """Read controller state before selecting the frame used for the POST."""
     request = request or Http()
     output.parent.mkdir(parents=True, exist_ok=True)
-    row = {'method':'GET', 'endpoint':'/status',
-           'host_started_monotonic_s':clock()}
+    row = {'method':'GET', 'endpoint':'/status', 'attempts':[]}
     try:
-        code, status = request('GET',base_url.rstrip('/')+'/status',1.0)
-        row['http_code'] = code
-        row['response'] = status
-        if code != 200: raise RuntimeError('TURN_STATUS_UNAVAILABLE')
-        preflight(status)
-        return status,clock()
+        for timeout in (1.0, 2.0):
+            attempt = {'host_started_monotonic_s':clock(), 'timeout_s':timeout}
+            row['attempts'].append(attempt)
+            try:
+                code, status = request('GET',base_url.rstrip('/')+'/status',timeout)
+                attempt.update(http_code=code, response=status)
+            except TimeoutError as error:
+                attempt['error'] = type(error).__name__+': '+str(error)
+                if timeout == 2.0:
+                    raise
+                continue
+            finally:
+                attempt['host_completed_monotonic_s'] = clock()
+            if code != 200: raise RuntimeError('TURN_STATUS_UNAVAILABLE')
+            preflight(status)
+            row.update(http_code=code, response=status)
+            return status,clock()
     except BaseException as error:
         row['error'] = type(error).__name__+': '+str(error)
         raise
