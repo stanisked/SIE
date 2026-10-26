@@ -2,7 +2,7 @@
 set -eo pipefail
 cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
 source /opt/ros/jazzy/setup.bash
-source install/setup.bash
+source install/local_setup.bash
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 runtime=/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python
 mode="${SIE_PREVIEW_STEREO_MODE:-full_1280x800}"
