@@ -1,6 +1,6 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-10-26 (network and NVMe handoff; earlier vision checkpoints retain their own dates)
+**Snapshot date:** 2026-10-26 (supervised V7 turn handoff; earlier checkpoints retain their own dates)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
 **Status:** active engineering validation, not autonomous operation.
 
@@ -12,6 +12,41 @@ This file is the change-controlled snapshot of the active project state.
 - Do not silently update it after code edits, tests, experiments, or conversation summaries.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
+
+## 2026-10-26: current supervised V7 turn checkpoint
+
+The active branch is `codex/sie-ros2-integration-v1`. The latest source and
+documentation checkpoint before this update is `6578a71`. The separate
+`run_v7_supervised_approach.sh` experiment requires `--execute`; its
+`--diagnostic-turn-only --max-steps 1` mode cannot dispatch a forward POST.
+This supervised experiment does not change the camera diagnostic's STOP output,
+admit a canonical Measurement, qualify the actuator, or approve autonomous
+navigation. Earlier statements below that the active stage excludes motor
+control describe the canonical diagnostic path; this separately authorized
+supervised trial has since been added.
+
+The first short right turn (1.278 degrees requested) ended in
+`PARTIAL_PROGRESS` with no observed chassis turn. A later 3-degree test held
+PWM at 180/180 while encoder counts stayed at 1/1 until the host sent `/stop`.
+Firmware `v4_2_micro_turn_watchdog_v3` repairs the identified path that skipped
+the command deadline and stall checks; it has not yet passed a physical turn
+test. Do not infer turn torque or safe stopping from source-level correction.
+
+Two subsequent turn-only attempts sent no motion POST. In the first, read-only
+`GET /status` timed out after 573 ms at the former 500 ms deadline. In the
+second, it timed out after 1.121 s at the new 1 s deadline. The latest runner
+now performs preliminary status reads at 1 s and, on `TimeoutError` only, one
+2 s retry. It records both attempts in `turn_01_preflight.json`, then obtains
+a new camera frame and rechecks target identity, bearing direction and age
+before the single possible turn POST. Motion POSTs are never retried.
+Seven local tests passed for the latest retry change; no physical run after
+`6578a71` is recorded. The next evidence should be one operator-supervised,
+turn-only attempt after confirming the Pi has this branch and the intended
+ESP32 watchdog build. Inspect `summary.json`, `turn_01_preflight.json`, the
+turn HTTP journal, terminal status and observed chassis motion before any
+forward trial. A repeated status timeout calls for network/controller
+diagnosis, not additional retries. Details: [V7 micro-turn record](docs/diagnostics/v7_micro_turn_20261026.md)
+and [approach runbook](docs/diagnostics/v7_supervised_approach.md).
 
 ## 2026-10-26: current network and NVMe handoff
 
@@ -69,7 +104,7 @@ Important invariants:
 
 ## Current product direction
 
-The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIEE. **The active stage deliberately excludes mobile-base navigation and motor control.** No output of the current dynamic fusion diagnostic may authorize motion.
+The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIEE. **Canonical dynamic fusion diagnostics exclude mobile-base navigation and motor control.** A separate supervised bounded trial is recorded in the current checkpoint; it grants no autonomous or canonical motion admission. No output of the current dynamic fusion diagnostic may authorize motion.
 
 The intended, future operating model is:
 
@@ -546,7 +581,7 @@ The immediate engineering goal remains reusable RGB semantics plus stereo geomet
 
 ## Active development stage
 
-SIEE is in **evidence-driven AR0234-to-OV9281 target-association validation**, before validated dynamic Measurement and camera-driven motion. Pose-aware v7 depth evidence and unresolved startup disparity shifts remain recorded above; avoid repeating manual board series without a specific new decision they can resolve. Both v8 and v8b are rejected as replacements despite strong solver metrics. Active v7 remains unchanged. A narrow stationary-person semantic gate is confirmed at 2.5 to 4.2 m for the current 7° upward rigid camera-block pose, but its metric depth values remain provisional because no optical-frame-consistent physical validation has yet established its bounds above 1.5 m.
+SIEE is in **evidence-driven AR0234-to-OV9281 target-association validation**, before validated dynamic Measurement or autonomous camera-driven motion. A separate operator-supervised bounded trial exists, as recorded in the current checkpoint above; it does not promote diagnostic camera output to canonical motion admission. Pose-aware v7 depth evidence and unresolved startup disparity shifts remain recorded above; avoid repeating manual board series without a specific new decision they can resolve. Both v8 and v8b are rejected as replacements despite strong solver metrics. Active v7 remains unchanged. A narrow stationary-person semantic gate is confirmed at 2.5 to 4.2 m for the current 7° upward rigid camera-block pose, but its metric depth values remain provisional because no optical-frame-consistent physical validation has yet established its bounds above 1.5 m.
 
 The architecture is accepted: AR0234 provides semantics; OV9281 provides geometry. The active uncertainty has three practical parts, with reproducible startup disparity drift now an explicit part of the first:
 
@@ -569,7 +604,7 @@ The intended MVP combines AR0234 semantic detection, OV9281 relative range, base
 - LiDAR and the map constrain the robot's own pose and safe route; they do not by themselves correct an unmodelled stereo bias to a moving person or object;
 - a state estimator may fuse valid measurements and their covariances, but a Kalman filter cannot manufacture a correct value from an unknown systematic camera bias. Stereo bias and uncertainty must therefore be part of the measurement model and must be gated.
 
-This is an MVP direction, not an approved change to the current motor-disabled safety boundary. Any future bounded motion requires a separate versioned Measurement policy, fresh physical ground truth, estimator validation, obstacle and stop behavior, and explicit supervised authorization.
+This remains a proposed operational MVP. The later separate supervised trial does not change the diagnostic camera's motor-disabled boundary or approve autonomous motion. Operational bounded motion still requires a separate versioned Measurement policy, fresh physical ground truth, estimator validation, obstacle and stop behavior, and explicit authorization.
 
 ## Approved next sequence
 
@@ -608,6 +643,7 @@ This is an MVP direction, not an approved change to the current motor-disabled s
 
 | Date | Change |
 | --- | --- |
+| 2026-10-26 | Updated the active handoff through `6578a71`: documented two read-only `/status` preflight timeouts with zero motion POSTs, the single 1 s then 2 s read retry, fresh-frame checks before any turn POST, and the unverified physical watchdog-v3 turn. The supervised trial remains separate from canonical Measurement and autonomous admission. |
 | 2026-10-14 | Recorded shape-aware mask diagnostics, 22-cycle resolution replay, 640x400 live mode, one segmentation inference for bbox/mask and latest 25 completed Pi cycles (867 ms host median, 25/25 coherent mask-depth diagnostics). Adopted the operator-selected motion targets as implementation requirements, preserved disabled movement and unvalidated physical/exposure bounds, and prioritized offline ONNX segmentation comparison over repeated scene trials. |
 | 2026-10-11 | Recorded the 21-cycle component/mask replay and 25-cycle live shadow capture, diagnosed the active 2.0 m range refusal, and added explicit 0.5 to 4.5 m offline masked-depth results (16/22 passed, six MAD refusals, three no target). Kept activation, Measurement and motors unchanged; prioritized saved-failure analysis and replaceable hardware interfaces before bounded motion. |
 | 2026-10-01 | Initial consolidated project snapshot: SIE architecture, Pi ROS2 state, RGB-to-stereo direction, dynamic diagnostic evidence, and explicit safety gates. |

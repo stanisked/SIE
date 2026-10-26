@@ -1,5 +1,28 @@
 # Current bounded-motion MVP handoff
 
+## 2026-10-26: active V7 turn-only checkpoint
+
+Use branch `codex/sie-ros2-integration-v1`, latest pre-handoff commit
+`6578a71`. The separate V7 supervised approach runner requires `--execute`;
+`--diagnostic-turn-only --max-steps 1` permits at most one bounded turn and no
+forward POST. The latest two attempts made no motion POST because preliminary
+`GET /status` timed out after 573 ms (former 500 ms limit) and 1.121 s (1 s
+limit). The cart stayed in place. A single read-only retry now uses 1 s then
+2 s, logging both attempts in `turn_01_preflight.json`. After success the
+runner captures a new frame and rechecks the same target, direction and age
+before its one possible POST. It never retries a motion POST.
+
+Firmware `v4_2_micro_turn_watchdog_v3` contains the timeout/stall-path fix,
+but its physical behavior remains unverified. Earlier turn trials at PWM 180
+showed negligible encoder progress and no observed chassis turn. Seven local
+tests passed for the status retry; a new Pi/controller run is still pending.
+Continue with one supervised turn-only diagnostic after checking branch and
+build identities. Review `summary.json`, `turn_01_preflight.json`, turn HTTP
+journal, terminal status and direct motion observation. Diagnose repeated
+read-only timeouts before changing motor behavior or attempting forward motion.
+See [micro-turn evidence](../diagnostics/v7_micro_turn_20261026.md) and the
+[approach runbook](../diagnostics/v7_supervised_approach.md).
+
 ## 2026-10-26: актуальное подключение Pi и контекст накопителя
 
 Оператор подтвердил SSH с Kestabor на Pi через обычный OpenSSH поверх Tailscale: `ssh elwis@100.70.100.29` (PASS). Ноутбук `kestabor-hn-wx9x` имеет Tailscale IP `100.96.180.119`; Pi `piecake` работает в `SIE-Mobile`. Одна физическая Wi-Fi-сеть не требуется; доступ к ESP32 через Tailscale этим не подтверждён. После задержки подключения 26 октября SSH восстановился самостоятельно. Причина задержки не установлена: возможные проблемы control-plane/порта 80 остаются гипотезой. Решено наблюдать, не менять сетевые настройки; возвращаться к журналам текущей загрузки при повторяющемся ожидании дольше 2–3 минут при наличии интернета. NVMe APST отключён аргументом `nvme_core.default_ps_max_latency_us=0` и остаётся отключённым; первоначальная причина старых ошибок не доказана. Во время сетевой диагностики моторы не запускать. [Подробный сетевой handoff](../diagnostics/network_infrastructure_20261026.md).
