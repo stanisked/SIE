@@ -1503,14 +1503,14 @@ bool enforceBoundedEncoderLimit()
       }
     }
     return false;
-  }  // During STARTING the breakaway ramp and its timeout belong to
+  }
+
+  // During STARTING the breakaway ramp and its timeout belong to
   // updateStarting(). Keep the absolute encoder limit above active, but do
   // not let the micro-turn's driving output bypass the startup state machine.
   if (motionState == MotionState::STARTING) {
     return false;
   }
-
-
 
   if (activeBoundedMotionProfile ==
       BoundedMotionProfile::BOUNDED_MICRO_TURN_V1) {
