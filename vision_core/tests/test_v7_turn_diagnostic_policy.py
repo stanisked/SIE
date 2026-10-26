@@ -1,7 +1,9 @@
 """Offline checks for the one-turn camera diagnostic; no ROS or motor access."""
 
 import ast
+import json
 import math
+from tempfile import TemporaryDirectory
 import unittest
 from pathlib import Path
 
@@ -45,6 +47,48 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
                             and node.func.id == 'execute_observed_step']
         self.assertEqual(len(forward_dispatch), 1)
         self.assertLess(diagnostic_break[0].lineno, forward_dispatch[0].lineno)
+
+    def test_read_only_preflight_can_finish_before_fresh_frame(self):
+        _, tree = load_steering()
+        function = next(node for node in tree.body
+                        if isinstance(node, ast.FunctionDef) and
+                        node.name == 'preflight_turn_before_fresh_frame')
+        now = [0.0]
+        calls = []
+        def request(method, url, timeout):
+            calls.append((method, url, timeout))
+            now[0] += .57  # Longer than the former 500 ms status deadline.
+            return 200, {'boot_session_id': '0123456789ABCDEF', 'state': 'READY'}
+        namespace = {'Http': None, 'preflight': lambda status: None,
+                     'time': __import__('time'), 'json': json}
+        exec(compile(ast.Module(body=[function], type_ignores=[]),
+                     str(SOURCE), 'exec'), namespace)
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / 'turn_preflight.json'
+            status, completed = namespace[function.name](
+                base_url='http://controller', output=output, request=request,
+                clock=lambda: now[0])
+            self.assertEqual(status['state'], 'READY')
+            self.assertEqual(completed, .57)
+            self.assertEqual(calls, [('GET', 'http://controller/status', 1.0)])
+            self.assertEqual(json.loads(output.read_text())['http_code'], 200)
+
+    def test_fresh_camera_frame_follows_preflight_before_turn_post(self):
+        _, tree = load_steering()
+        main = next(node for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name == 'main')
+        align = next(node for node in ast.walk(main)
+                     if isinstance(node, ast.FunctionDef) and node.name == 'align_once')
+        calls = {}
+        for node in ast.walk(align):
+            if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                    and node.func.id in {'preflight_turn_before_fresh_frame',
+                                         'next_observation', 'execute_bounded_turn'}):
+                calls[node.func.id] = min(node.lineno,
+                                          calls.get(node.func.id, node.lineno))
+        self.assertLess(calls['preflight_turn_before_fresh_frame'],
+                        calls['next_observation'])
+        self.assertLess(calls['next_observation'], calls['execute_bounded_turn'])
 
 
 if __name__ == '__main__':
