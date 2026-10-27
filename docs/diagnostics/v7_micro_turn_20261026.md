@@ -89,3 +89,28 @@ refusal from a firmware or traction result, inspect the run's `summary.json`,
 the operator's direct observation together. A zero `turn_posts` count cannot
 validate watchdog v3 or physical turn capability. Keep the next check to one
 supervised turn-only run; do not infer permission for a forward step.
+
+## 2026-10-27 supervised 1-degree and 3-degree left-turn outcomes
+
+After two confirmed short forward steps (~0.10 m observed on the floor),
+coordinate-reference steering requested a one-degree left turn. Terminal
+`PARTIAL_PROGRESS` showed target counts 3/3, individual brake at 1/1,
+settled counts 1/0, and +0.195-degree encoder heading. The operator reported
+no visible turn. The camera bearing improved only ~0.055 degrees, below the
+0.25-degree feedback rule, so no third forward step was sent. Evidence root:
+`/home/elwis/.local/state/sie/evidence/v7_supervised_approach_1793114646_3c37824a`.
+
+The following isolated three-degree left-turn diagnostic sent no forward
+POST. ESP32 terminal state was `FAULT` with latched
+`BREAKAWAY_NOT_FOUND`; one `/stop` was acknowledged after the fault.
+Targets were 8/8 counts, brake starts 2/2, final settled counts 6/-1.
+Right breakaway registered at PWM 180, left breakaway did not register.
+The firmware's bounded-start ceiling formula gives PWM 190 at a two-count
+brake start, below its own source comment's loaded breakaway observation of
+215–225. That is a specific explanation to challenge, not proof that the
+left motor or encoder is healthy. Physical inspection with motor power off
+and an electrical/encoder diagnosis are needed before any new motion test.
+Do not treat the reported 0.96-degree encoder heading as a verified chassis
+turn when one wheel did not break away. The fault remains latched in the
+supplied terminal status; no automatic fault acknowledgement or approach
+retry is authorized by this result.
