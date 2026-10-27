@@ -333,3 +333,28 @@ has been physically validated. Next isolate a supervised 3-degree turn-only
 diagnostic without forward motion, then use its encoder, camera and floor
 observations to choose the next steering command size. Do not weaken the
 camera feedback requirement solely to pass this near-zero turn.
+
+## Isolated 3-degree left-turn fault (2026-10-27)
+
+The follow-up turn-only run sent zero forward POSTs, one `/turn-left` POST and
+one `/stop` after terminal refusal. Main and child reports were supplied by
+the operator as `summary.json` and `turn_01_summary.json`. The terminal ESP32
+status reported `FAULT`, latched reason `BREAKAWAY_NOT_FOUND`, and zero PWM.
+It used firmware build `v4_2_micro_turn_watchdog_v3`. The three-degree request
+had eight target counts per wheel and brake-start counts of two. Right final
+count was six; left final count was -1. Right breakaway was detected at PWM
+180; left breakaway was not detected (`left_breakaway_pwm=0`). The encoder
+heading 0.0168 rad (~0.96 degrees) is not a validated physical chassis turn
+because the left wheel did not establish the expected motion. The turn was
+not accepted as a safe correction, and no forward command followed.
+
+This is an actuator/encoder-start fault rather than a camera refusal. The
+source's bounded breakaway PWM ceiling for this request is computed from the
+two-count brake start: `180 + 2*5 = 190`, while the source comment records
+loaded breakaway at PWM 215–225. That mismatch is a concrete software
+hypothesis for the left non-start; wheel resistance, electrical delivery and
+encoder direction remain alternatives until checked physically. The
+controller fault is latched. Keep motion trials stopped; inspect the left
+wheel, motor power path and encoder with motor power off before deciding
+whether firmware needs a revised bounded turn startup procedure. Do not
+simply raise PWM or clear the fault and retry in the person-approach run.
