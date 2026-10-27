@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 from firmware.esp32.tools.run_remote_stop_trial import Http, preflight
 
 ANGLE_DEG = 3.0
+BENCH_ANGLES_DEG = (3.0, 5.0)
 FAULT = 'BREAKAWAY_NOT_FOUND'
 EXPECTED_BUILD_ID = 'v4_2_micro_turn_loaded_start_v4'
 ALLOWED_BENCH_BUILDS = (EXPECTED_BUILD_ID, 'v4_2_micro_turn_power_v5')
@@ -25,7 +26,8 @@ TERMINAL = {'SUCCESS', 'PARTIAL_PROGRESS', 'FAULT', 'STOPPED'}
 
 
 def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
-        expected_build_id=EXPECTED_BUILD_ID, clock=time.monotonic, sleep=time.sleep):
+        expected_build_id=EXPECTED_BUILD_ID, angle_deg=ANGLE_DEG,
+        clock=time.monotonic, sleep=time.sleep):
     if not execute:
         return {'result': 'NO_EXECUTION', 'turn_posts': 0, 'stop_posts': 0,
                 'fault_ack_posts': 0}
@@ -33,6 +35,10 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
         raise ValueError('WHEELS_LIFTED_CONFIRMATION_REQUIRED')
     if expected_build_id not in ALLOWED_BENCH_BUILDS:
         raise ValueError('UNREVIEWED_BENCH_FIRMWARE_BUILD')
+    if (angle_deg not in BENCH_ANGLES_DEG or
+            (angle_deg == 5.0 and expected_build_id !=
+             'v4_2_micro_turn_power_v5')):
+        raise ValueError('UNREVIEWED_BENCH_TURN_ANGLE')
     parsed = urlsplit(base_url)
     if (parsed.scheme != 'http' or not parsed.hostname or parsed.username or
             parsed.password or parsed.query or parsed.fragment or
@@ -44,7 +50,7 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
     command_id = 'stand-turn-' + uuid.uuid4().hex
     summary = {'schema_version': 'sie.wheels_lifted_turn_diagnostic.v1',
                'command_id': command_id, 'endpoint': '/turn-left',
-               'angle_deg': ANGLE_DEG, 'wheels_lifted_operator_assertion': True,
+               'angle_deg': angle_deg, 'wheels_lifted_operator_assertion': True,
                'expected_firmware_build_id': expected_build_id,
                'result': 'NOT_STARTED', 'fault_ack_posts': 0,
                'turn_posts': 0, 'stop_posts': 0,
@@ -109,7 +115,7 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
         summary['turn_posts'] = 1
         code, accepted = call('POST', '/turn-left',
             {'boot_session_id': boot, 'command_id': command_id,
-             'angle_deg': format(ANGLE_DEG, '.3f')})
+             'angle_deg': format(angle_deg, '.3f')})
         summary['turn_response'] = {'http_code': code, 'body': accepted}
         if (code != 202 or accepted.get('accepted') is not True or
                 accepted.get('command_id') != command_id):
@@ -179,6 +185,8 @@ def main(argv=None):
                    help='operator confirms both driven wheels cannot contact the floor')
     p.add_argument('--expected-build-id', choices=ALLOWED_BENCH_BUILDS,
                    default=EXPECTED_BUILD_ID)
+    p.add_argument('--angle-deg', type=float, choices=BENCH_ANGLES_DEG,
+                   default=ANGLE_DEG)
     p.add_argument('--base-url')
     p.add_argument('--output', type=Path)
     args = p.parse_args(argv)
@@ -193,7 +201,8 @@ def main(argv=None):
     print('Wheels-lifted bench only: keep both driven wheels clear of the floor and motor power cutoff accessible.')
     result = run(base_url=args.base_url, output=output, execute=True,
                  wheels_lifted=True,
-                 expected_build_id=args.expected_build_id)
+                 expected_build_id=args.expected_build_id,
+                 angle_deg=args.angle_deg)
     print('STAND_TURN', result['result'], 'turn_posts=', result['turn_posts'],
           'stop_posts=', result['stop_posts'])
     print('Saved:', output / 'summary.json')

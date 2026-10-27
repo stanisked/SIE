@@ -381,3 +381,22 @@ computer and flashes it. The existing supervised approach and floor turn
 runner do not admit v5. The next motor trial is one marked-wheel, wheels-lifted
 three-degree turn after exact live build-ID verification; inspect that result
 before any floor turn.
+
+## V5 wheels-lifted three-degree result (2026-10-27)
+
+Evidence root:
+`/home/elwis/.local/state/sie/evidence/wheels_lifted_turn_20261027_204709_08a7e310`.
+The operator compiled and flashed build `v4_2_micro_turn_power_v5`, confirmed
+by the initial and terminal statuses. One bounded three-degree left-turn POST
+and one `/stop` were accepted. Terminal state was `PARTIAL_PROGRESS`, READY,
+no fault latch, zero PWM. The right/left breakaway PWM rose to 210/215, as
+designed. Both individual brake points remained at two counts, and final
+settled counts were only 1 right / 2 left from 8/8 targets. Encoder-estimated
+angle was 0.0101 rad (~0.58 degrees), not physical chassis yaw. The operator
+saw only a barely perceptible left twist while the cart was lifted.
+
+This confirms that the stronger launch was applied, but it did not make the
+three-degree request useful: the unchanged early two-count braking still
+terminates movement. A v5 five-degree wheels-lifted diagnostic is now
+available to test a longer bounded request before any floor run. It requires
+an explicit angle and exact v5 build ID. Floor testing on v5 and person approach remain unavailable pending this result.
