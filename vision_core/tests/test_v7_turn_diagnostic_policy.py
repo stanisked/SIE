@@ -22,7 +22,24 @@ def load_steering():
     return namespace['steering_request'], tree
 
 
+def load_steering_schedule():
+    tree = ast.parse(SOURCE.read_text())
+    function = next(node for node in tree.body
+                    if isinstance(node, ast.FunctionDef)
+                    and node.name == 'steering_due_before_step')
+    namespace = {}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), str(SOURCE), 'exec'),
+         namespace)
+    return namespace['steering_due_before_step']
+
+
 class TurnDiagnosticPolicyTests(unittest.TestCase):
+    def test_first_approach_step_starts_straight_then_enables_correction(self):
+        steering_due = load_steering_schedule()
+        self.assertFalse(steering_due(0))
+        self.assertTrue(steering_due(1))
+        self.assertTrue(steering_due(0, diagnostic_turn_only=True))
+
     def test_one_turn_diagnostic_requests_3_degrees_in_target_direction(self):
         steer, _ = load_steering()
         self.assertEqual(steer(2.555, diagnostic_turn_only=True),

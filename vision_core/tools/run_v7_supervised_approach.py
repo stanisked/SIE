@@ -60,6 +60,10 @@ def steering_request(bearing_deg, *, diagnostic_turn_only=False):
             'angle_deg': (MAX_TURN_PER_STEP_DEG if diagnostic_turn_only else
                           min(MAX_TURN_PER_STEP_DEG, max(1.0, abs(bearing_deg) / 2.0)))}
 
+def steering_due_before_step(index, *, diagnostic_turn_only=False):
+    """Keep the initial detected target as a straight-start reference."""
+    return diagnostic_turn_only or index > 0
+
 def verify_turn_feedback(z, box, new_z, new_box):
     if overlap(box,new_box)<.7 or abs(new_z-z)>.15:
         raise RuntimeError('TURN_TARGET_CORRESPONDENCE_UNCONFIRMED')
@@ -343,7 +347,12 @@ def main():
             if args.front_clearance_m - .1*(index+1) <= 1.0:
                 report['result']='FRONT_CLEARANCE_BUDGET_REACHED'
                 break
-            audit,evidence,z,box=align_once(audit,evidence,z,box,row)
+            row['bearing_before_forward_deg'] = target_bearing_deg(box)
+            if steering_due_before_step(index,
+                                        diagnostic_turn_only=args.diagnostic_turn_only):
+                audit,evidence,z,box=align_once(audit,evidence,z,box,row)
+            else:
+                row['steering'] = 'INITIAL_STRAIGHT_STEP'
             if args.diagnostic_turn_only:
                 report['result']='TURN_ONLY_REOBSERVED' if row.get('turn_posts') else 'TURN_ONLY_ALREADY_CENTERED'
                 break
@@ -378,9 +387,12 @@ def main():
             report['steps'][-1]['reobserved_center_drift_px']=target_center_x(box)-initial_center_x
             if overlap(previous_box,box)<.7 or not .01<=delta<=.15:
                 raise RuntimeError('FINAL_DEPTH_PROGRESS_UNCONFIRMED')
-            report['final_alignment']={'index':args.max_steps,'source_cycle_id':audit['cycle_id']}
-            audit,_,z,box=align_once(audit,None,z,box,report['final_alignment'],label='final')
-            report['final_alignment']['final_bearing_deg']=target_bearing_deg(box)
+            report['final_alignment']={
+                'index':args.max_steps,
+                'source_cycle_id':audit['cycle_id'],
+                'final_bearing_deg':target_bearing_deg(box),
+                'steering':'NOT_REQUESTED_AFTER_FINAL_FORWARD_STEP',
+            }
             report['result']='BOUNDED_SESSION_COMPLETE'
     except (Exception,KeyboardInterrupt) as error:
         report['result']='STOPPED_ON_REFUSAL'

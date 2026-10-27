@@ -8,15 +8,16 @@ hard cap ten. Each step requests
 0.10 m and one /stop; the next step requires a new eligible frame captured after
 the previous terminal observation, the same selected person box (IoU >= 0.7),
 and a 0.01–0.15 m decrease in optical depth. The final step is also reobserved.
-Before a straight step, AR0234 target bearing is estimated from the selected
-bbox center and the reviewed V5 intrinsic (fx=2021.546012, cx=924.649158).
-If the absolute bearing exceeds 1.5 degrees, the runner requests one bounded
-ESP32 turn toward the target, between 1 and 3 degrees. Its sign follows the
-image coordinate and controller turn convention. It requires terminal READY,
-zero PWM, valid encoder direction, and then a fresh eligible camera frame of
-the same person. The new image bearing must improve by at least 0.25 degrees
-before the runner can request forward motion. The final forward step also
-gets a fresh observation and one possible alignment turn. There is no blind
+The first forward step begins from the first eligible target frame without a
+steering request. Before each later straight step, AR0234 target bearing is
+estimated from the selected bbox center and the reviewed V5 intrinsic
+(fx=2021.546012, cx=924.649158). If the absolute bearing exceeds 1.5 degrees,
+the runner requests one bounded ESP32 turn toward the target, between 1 and 3
+degrees. Its sign follows the image coordinate and controller turn convention.
+It requires terminal READY, zero PWM, valid encoder direction, and then a
+fresh eligible camera frame of the same person. The new image bearing must
+improve by at least 0.25 degrees before the runner can request the next
+forward motion. There is no turn after the final forward step and no blind
 turn retry. The original ten-step run moved the bbox center from 982.7 to
 683.8 px while the operator observed about 12 degrees of rightward drift.
 Those per-step encoder headings were local command estimates, not a global yaw.
