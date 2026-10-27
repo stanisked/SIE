@@ -30,8 +30,10 @@ forward motion. Before every forward request, the runner reads ESP32
 `/status`, then waits for a newly captured eligible frame of the same target.
 The stop trial validates the supplied status without another pre-move GET and
 rechecks the new frame's 500 ms driver age immediately before dispatch.
-The supplied controller status must also be no more than 2 seconds old. A
-status failure, changed target, or stale frame stops without a move request.
+The supplied controller status must have been read after operator arming.
+The firmware validates boot session, fault and busy state when it receives
+the bounded request. A status failure, changed target, or stale frame stops
+without a move request.
 There is no turn after the final forward step and no blind turn retry.
 The original ten-step run moved the bbox center from 982.7 to
 683.8 px while the operator observed about 12 degrees of rightward drift.
@@ -195,3 +197,17 @@ first-frame bearing by more than 1.5 degrees. A turn still requires READY,
 encoder direction and fresh camera improvement; it can refuse without a
 further forward request. No physical result with this encoder-based progress
 policy is recorded yet.
+
+## First-step refusal after encoder policy update (2026-10-27)
+
+The next three-step run made zero movement and zero stop POSTs. The first
+eligible target was observed at about 2.575 m, and a later fresh frame at
+about 2.564 m passed the camera-age check. `GET /status` returned READY in
+about 85 ms, but the next eligible frame arrived about 4.1 seconds later.
+The host's two-second age cap on that earlier status caused
+`Provided controller status is stale or unbound` before the first POST.
+That cap is removed. The status must still be from after operator arming;
+the camera frame must be fresh immediately before dispatch, and firmware
+rechecks session, fault and busy state atomically on the motion request.
+The child controller error is now copied into the approach summary. This
+change has not yet been tested with physical motion.

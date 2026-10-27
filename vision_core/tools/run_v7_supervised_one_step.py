@@ -119,6 +119,9 @@ def execute_observed_step(audit, *, armed_at, base_url, output, request=None,
     # supplies a controller status read before this frame was captured.
     frozen = deepcopy(audit)
     check_observation(frozen, armed_at, clock())
+    if ready_status is not None and (type(ready_status_at) not in (int, float)
+            or not math.isfinite(ready_status_at) or ready_status_at < armed_at):
+        raise ValueError('CONTROLLER_STATUS_BEFORE_OPERATOR_ARM')
     return stop_trial(base_url=base_url, output=output, execute=True,
         request=request, clock=clock, sleep=sleep, ready_status=ready_status,
         ready_status_at=ready_status_at,

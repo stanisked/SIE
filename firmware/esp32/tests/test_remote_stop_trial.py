@@ -108,12 +108,20 @@ class TrialTests(unittest.TestCase):
                         ready_status=bad,ready_status_at=h.clock())
         self.assertEqual(refused['movement_posts'],0)
         self.assertEqual(h.calls,[])
-        h=Harness();h.time=3.0
+        h=Harness();h.time=4.3
         with tempfile.TemporaryDirectory() as tmp:
-            stale=run(base_url='http://127.0.0.1',output=Path(tmp)/'trial',
-                      execute=True,request=h.request,clock=h.clock,sleep=h.sleep,
-                      ready_status=ready,ready_status_at=0.0)
-        self.assertEqual(stale['movement_posts'],0)
+            delayed=run(base_url='http://127.0.0.1',output=Path(tmp)/'trial',
+                        execute=True,request=h.request,clock=h.clock,sleep=h.sleep,
+                        ready_status=ready,ready_status_at=0.0)
+        self.assertEqual(delayed['result'],'REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY')
+        self.assertGreaterEqual(delayed['preflight_age_at_dispatch_s'],4.3)
+        self.assertEqual(h.calls[0],('POST','/move-forward'))
+        h=Harness()
+        with tempfile.TemporaryDirectory() as tmp:
+            future=run(base_url='http://127.0.0.1',output=Path(tmp)/'trial',
+                       execute=True,request=h.request,clock=h.clock,sleep=h.sleep,
+                       ready_status=ready,ready_status_at=1.0)
+        self.assertEqual(future['movement_posts'],0)
         self.assertEqual(h.calls,[])
 
     def test_stopped_label_with_nonzero_pwm_is_not_confirmed(self):

@@ -129,8 +129,8 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
             summary['preflight_source'] = 'PROVIDED_BEFORE_FRESH_FRAME'
             if (type(ready_status_at) not in (int, float)
                     or not math.isfinite(ready_status_at)
-                    or not 0 <= clock() - ready_status_at <= 2.0):
-                raise TrialError('Provided controller status is stale or unbound')
+                    or ready_status_at > clock()):
+                raise TrialError('Provided controller status timestamp is invalid or unbound')
         preflight(status)
         session = status['boot_session_id']
         summary['boot_session_id'] = session
@@ -144,8 +144,8 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
             summary['external_pre_move_evidence'] = before_move(status)
         if ready_status is not None:
             summary['preflight_age_at_dispatch_s'] = clock() - ready_status_at
-            if not 0 <= summary['preflight_age_at_dispatch_s'] <= 2.0:
-                raise TrialError('Provided controller status expired before movement')
+            if summary['preflight_age_at_dispatch_s'] < 0:
+                raise TrialError('Provided controller status timestamp is in the future')
         sent_move = True
         summary['movement_posts'] += 1
         started = clock()

@@ -420,12 +420,14 @@ def main():
                                          ready_status=ready_status,
                                          ready_status_at=ready_at)
             row['controller_result']=result['result']
+            row['controller_error']=result.get('error')
+            row['forward_preflight_age_at_dispatch_s']=result.get('preflight_age_at_dispatch_s')
             row['movement_posts']=result['movement_posts']
             row['stop_posts']=result['stop_posts']
             report['movement_posts']+=result['movement_posts']
             report['stop_posts']+=result['stop_posts']
             if result['result']!='REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY':
-                raise RuntimeError('CONTROLLER_STOP_NOT_CONFIRMED')
+                raise RuntimeError('CONTROLLER_STOP_NOT_CONFIRMED: '+str(result.get('error') or result['result']))
             t=result.get('terminal_status') or {}
             row['terminal_encoder_heading_rad']=t.get('heading_rad')
             row['terminal_right_count']=t.get('right_count')
