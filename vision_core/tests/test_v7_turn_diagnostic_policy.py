@@ -33,12 +33,48 @@ def load_steering_schedule():
     return namespace['steering_due_before_step']
 
 
+def load_progress_policy():
+    tree = ast.parse(SOURCE.read_text())
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                 and node.name in {'operator_budget_valid', 'encoder_step_progress'}]
+    namespace = {'math': math,
+                 'RIGHT_M_PER_COUNT': math.pi * 0.0646 / 205.0,
+                 'LEFT_M_PER_COUNT': math.pi * 0.0652 / 206.0,
+                 'MIN_ENCODER_STEP_M': 0.01,
+                 'MAX_ENCODER_STEP_M': 0.15}
+    exec(compile(ast.Module(body=functions, type_ignores=[]), str(SOURCE), 'exec'),
+         namespace)
+    return namespace['operator_budget_valid'], namespace['encoder_step_progress'], tree
+
+
 class TurnDiagnosticPolicyTests(unittest.TestCase):
     def test_first_approach_step_starts_straight_then_enables_correction(self):
         steering_due = load_steering_schedule()
         self.assertFalse(steering_due(0))
         self.assertTrue(steering_due(1))
         self.assertTrue(steering_due(0, diagnostic_turn_only=True))
+
+    def test_encoder_progress_replaces_optical_delta_gate(self):
+        valid_budget, progress, tree = load_progress_policy()
+        self.assertTrue(valid_budget(5.0, 11))
+        self.assertFalse(valid_budget(2.5, 14))
+        self.assertFalse(valid_budget(2.5, 0))
+        self.assertAlmostEqual(progress({'right_count': 44, 'left_count': 38})
+                               ['mean_distance_m'], 0.0406719229)
+        self.assertAlmostEqual(progress({'right_count': 63, 'left_count': 58})
+                               ['mean_distance_m'], 0.0600200719)
+        for status in ({'right_count': 0, 'left_count': 38},
+                       {'right_count': 200, 'left_count': 200},
+                       {'right_count': True, 'left_count': 38}):
+            with self.subTest(status=status), self.assertRaises(RuntimeError):
+                progress(status)
+        main = next(node for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name == 'main')
+        self.assertTrue(any(isinstance(node, ast.Call) and
+                            isinstance(node.func, ast.Name) and
+                            node.func.id == 'encoder_step_progress'
+                            for node in ast.walk(main)))
+        self.assertNotIn('DEPTH_PROGRESS_UNCONFIRMED', ast.unparse(main))
 
     def test_one_turn_diagnostic_requests_3_degrees_in_target_direction(self):
         steer, _ = load_steering()

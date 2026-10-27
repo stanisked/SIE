@@ -39,12 +39,13 @@ directory="/home/elwis/.local/state/sie/evidence/control_input_preview_${mode}_$
 echo "Journal root: $directory"
 exit_code=0
 duration="${SIE_PREVIEW_DURATION_S:-30}"
-case "$duration" in 30|120) ;; *) echo "Unsupported preview duration" >&2; exit 2 ;; esac
+case "$duration" in ''|*[!0-9]*) echo "Unsupported preview duration" >&2; exit 2 ;; esac
+if [ "$duration" -lt 30 ]; then echo "Preview duration must be at least 30 s" >&2; exit 2; fi
 timeout_mode=()
 # The approach runner owns a fresh process group and must be able to stop the
 # entire preview tree. GNU timeout otherwise moves its child into another
 # process group, leaving camera output alive after the runner has exited.
-if [ "$duration" = 120 ]; then timeout_mode=(--foreground); fi
+if [ "$duration" -gt 30 ]; then timeout_mode=(--foreground); fi
 timeout "${timeout_mode[@]}" --signal=INT --kill-after=10s "${duration}s" "$runtime" -c \
   'from sie_ros2.ar0234_ov9281_control_preview_node import main; main()' \
   --ros-args \

@@ -3,15 +3,19 @@
 Experimental separate launcher; no canonical Measurement or autonomous admission.
 Uses the existing static-v2 camera diagnostic, the V7 one-step observation checks
 and the observed ESP32 stop trial. Nothing runs without the explicit `--execute`
-flag. There is no interactive `APPROACH-...` code. Default is three steps,
-hard cap ten. Each step requests
-0.10 m and one /stop; the next step requires a new eligible frame captured after
-the previous terminal observation, the same selected person box (IoU >= 0.7),
-and a 0.01–0.15 m decrease in optical depth. The final step is also reobserved.
+flag. There is no interactive `APPROACH-...` code. Default is three steps;
+the operator selects a positive step count within the declared front-clearance
+budget. Each step requests 0.10 m and one /stop. Before any following step,
+the runner requires confirmed terminal READY and zero PWM, positive progress
+on both wheel encoders, and a per-command mean encoder travel of 0.01–0.15 m.
+It then requires a fresh eligible frame of the same selected person box
+(IoU >= 0.7). The final step is also reobserved. Optical depth change is
+recorded but is not used as travel odometry or as the per-step progress gate.
 The runner waits up to 60 seconds for the first eligible frame while the
 camera pipeline starts. Later observations retain an 8 second timeout. If
 no first frame arrives, it exits without a motor request. The first forward
-step begins from the first eligible target frame without a steering request. Its target bearing becomes the reference. Before each later
+step begins from the first eligible target frame without a steering request.
+Its target bearing becomes the reference. Before each later
 straight step, AR0234 target bearing is estimated from the selected bbox center
 and the reviewed V5 intrinsic (fx=2021.546012, cx=924.649158). The runner
 requests one bounded ESP32 turn only if bearing changed by more than 1.5 degrees
@@ -38,15 +42,18 @@ without a further move request. The summary records the last rejected frame
 reason or camera-process exit on timeout, plus image drift and encoder counts.
 Separate journals are written per command.
 
-The camera launcher uses a 120 s session for this approach runner; other
-preview launches retain 30 s. The operator supplies `--front-clearance-m` from
+The approach camera session lasts at least 120 s and grows with the operator's
+requested step count (`60 + 20 × max_steps` seconds); other preview launches
+retain 30 s. The operator supplies `--front-clearance-m` from
 a freshly measured horizontal front clearance. The value
 must exceed 1.1 m plus 0.1 m per permitted step; that is an experimental request
 budget, **not** a measured physical upper travel bound. Optical depth and this
 clearance have different datums. There is no path-obstacle detection.
 The operator must keep the person stationary, the cart facing them, and the
 straight path clear with power cutoff accessible. No unattended operation.
-The numeric progress window and steering checks are experimental, not validated accuracy.
+The encoder progress envelope and steering checks are experimental, not
+validated physical accuracy. Encoder distance is a wheel-motion proxy; slip
+or calibration error can make chassis travel differ.
 The 500 ms driver-declared timestamp is not independent exposure-to-actuator
 certification. Network/power failures can prevent /stop; firmware stopping
 distance is not independently bounded. Stop if unexpected direction occurs.
@@ -163,3 +170,28 @@ estimator. The 0.01–0.15 m per-step gate remains unchanged. A controlled
 follow-up needs a fixed target with independent distance references, or a
 person constrained to a measured position and pose during both captures.
 Return-position camera journal: `/home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_onnxruntime_20261027_122336`.
+
+## Encoder-confirmed approach continuation (2026-10-27)
+
+The per-step optical depth decrease of 0.01–0.15 m was an experimental
+person-mask progress heuristic. The operator later clarified that the person
+moved during the motor-off A-B-A comparison, so that check cannot establish a
+camera scale error or a replacement optical tolerance. The runner now uses
+per-command wheel encoder counts after a confirmed remote stop to check
+bounded progress, while still requiring a fresh eligible observation and box
+correspondence of the same target before another command. Optical depth values
+and their differences remain in the audit as diagnostic observations. A zero
+or excessive encoder result refuses further motion. The arbitrary ten-step
+software cap was removed; the operator-declared clearance budget, explicit
+step count, one 0.10 m request at a time, remote stop, camera freshness and
+a camera-session timeout sized to the requested count remain. This does not establish an independent
+physical stopping bound or autonomous motion admission.
+
+For the next supervised steering check, use three requested steps only after
+a fresh front-clearance measurement and with the person maintaining position.
+The first step starts straight; a turn before a later step occurs only when
+current image bearing both leaves the optical deadband and differs from the
+first-frame bearing by more than 1.5 degrees. A turn still requires READY,
+encoder direction and fresh camera improvement; it can refuse without a
+further forward request. No physical result with this encoder-based progress
+policy is recorded yet.

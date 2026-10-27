@@ -24,6 +24,33 @@ RGB_FX_PX = 2021.546012
 RGB_CX_PX = 924.649158
 TURN_DEADBAND_DEG = 1.5
 MAX_TURN_PER_STEP_DEG = 3.0
+RIGHT_M_PER_COUNT = math.pi * 0.0646 / 205.0
+LEFT_M_PER_COUNT = math.pi * 0.0652 / 206.0
+MIN_ENCODER_STEP_M = 0.01
+MAX_ENCODER_STEP_M = 0.15
+
+def operator_budget_valid(front_clearance_m, max_steps):
+    return (type(max_steps) is int and max_steps >= 1
+            and type(front_clearance_m) in (int, float)
+            and math.isfinite(front_clearance_m)
+            and front_clearance_m > 1.1 + 0.1 * max_steps)
+
+def encoder_step_progress(status):
+    right_count = status.get('right_count')
+    left_count = status.get('left_count')
+    if (type(right_count) is not int or type(left_count) is not int
+            or right_count <= 0 or left_count <= 0):
+        raise RuntimeError('ENCODER_PROGRESS_UNCONFIRMED')
+    right_m = right_count * RIGHT_M_PER_COUNT
+    left_m = left_count * LEFT_M_PER_COUNT
+    mean_m = (right_m + left_m) / 2.0
+    if (not MIN_ENCODER_STEP_M <= mean_m <= MAX_ENCODER_STEP_M
+            or right_m > MAX_ENCODER_STEP_M or left_m > MAX_ENCODER_STEP_M):
+        raise RuntimeError('ENCODER_PROGRESS_OUTSIDE_ONE_STEP_ENVELOPE')
+    return {'right_count': right_count, 'left_count': left_count,
+            'right_distance_m': right_m, 'left_distance_m': left_m,
+            'mean_distance_m': mean_m,
+            'basis': 'per-command wheel encoder counts after confirmed remote stop; diagnostic proxy, not independent physical displacement'}
 
 def depth_and_box(a):
     d = (a.get('shape_diagnostic') or {}).get('mask_depth') or {}
@@ -232,8 +259,8 @@ def main():
     if not args.execute:
         print('NO_EXECUTION: no camera, network or motor opened')
         return 0
-    if not args.base_url or not args.base_url.startswith('http://') or not args.front_clearance_m or not math.isfinite(args.front_clearance_m) or not 1 <= args.max_steps <= 10 or args.front_clearance_m <= 1.1 + .1*args.max_steps:
-        p.error('Require controller URL, 1..10 steps, and measured front clearance > 1.1 m + 0.1 m per step')
+    if not args.base_url or not args.base_url.startswith('http://') or not operator_budget_valid(args.front_clearance_m, args.max_steps):
+        p.error('Require controller URL, positive step count, and measured front clearance > 1.1 m + 0.1 m per step')
     if args.diagnostic_turn_only and args.max_steps != 1:
         p.error('--diagnostic-turn-only requires --max-steps 1')
     lockpath=Path.home()/'.local/state/sie/v7_operator_one_step.lock'
@@ -261,7 +288,9 @@ def main():
             'measurement_admission_changed':False, 'turn_posts':0,
             'rgb_intrinsic':{'fx_px':RGB_FX_PX,'cx_px':RGB_CX_PX},
             'turn_deadband_deg':TURN_DEADBAND_DEG,'max_turn_per_step_deg':MAX_TURN_PER_STEP_DEG,
-            'diagnostic_turn_only':args.diagnostic_turn_only}
+            'diagnostic_turn_only':args.diagnostic_turn_only,
+            'travel_confirmation':'PER_COMMAND_WHEEL_ENCODER_AFTER_CONFIRMED_STOP',
+            'optical_depth_change':'DIAGNOSTIC_ONLY_NOT_TRAVEL_GATE'}
     process=None
     node=None
     try:
@@ -274,7 +303,7 @@ def main():
             if len(holder)>1: del holder[:-1]
         node.create_subscription(String,TOPIC,callback,QoSProfile(depth=1,durability=DurabilityPolicy.VOLATILE,reliability=ReliabilityPolicy.RELIABLE))
         camera_env=os.environ.copy()
-        camera_env['SIE_PREVIEW_DURATION_S']='120'
+        camera_env['SIE_PREVIEW_DURATION_S']=str(max(120, 60 + 20*args.max_steps))
         process=subprocess.Popen(['bash',str(ROOT/'vision_core/tools/run_control_preview_existing_static_v2.sh')],cwd=ROOT,start_new_session=True,env=camera_env)
         def align_once(audit, evidence, z, box, row, *, label=None):
             request=steering_request(target_bearing_deg(box),
@@ -350,7 +379,7 @@ def main():
                 report['steps'][-1]['observed_depth_decrease_m']=delta
                 report['steps'][-1]['reobserved_rgb_center_x_px']=target_center_x(box)
                 report['steps'][-1]['reobserved_center_drift_px']=center_drift_px
-                if not .01 <= delta <= .15: raise RuntimeError('DEPTH_PROGRESS_UNCONFIRMED')
+                report['steps'][-1]['optical_depth_delta_diagnostic_only']=True
             row={'index':index+1,'source_cycle_id':audit['cycle_id'],'depth_before_m':z,
                  'camera_evidence':evidence,'rgb_center_x_px':target_center_x(box),
                  'center_drift_from_first_px':center_drift_px,
@@ -403,10 +432,11 @@ def main():
             row['terminal_left_count']=t.get('left_count')
             if t.get('right_pwm')!=0 or t.get('left_pwm')!=0 or t.get('state')!='READY':
                 raise RuntimeError('CONTROLLER_NOT_READY_AFTER_STOP')
+            row['encoder_progress']=encoder_step_progress(t)
             previous_z,previous_box=z,box
             after=time.monotonic()
         else:
-            # Last step also needs fresh feedback before claiming progress.
+            # Last step also needs fresh target feedback after encoder-confirmed progress.
             audit,_=next_observation(node,holder,after=after,armed_at=armed,camera_process=process)
             z,box=depth_and_box(audit)
             delta=previous_z-z
@@ -414,8 +444,9 @@ def main():
             report['steps'][-1]['observed_depth_decrease_m']=delta
             report['steps'][-1]['reobserved_rgb_center_x_px']=target_center_x(box)
             report['steps'][-1]['reobserved_center_drift_px']=target_center_x(box)-initial_center_x
-            if overlap(previous_box,box)<.7 or not .01<=delta<=.15:
-                raise RuntimeError('FINAL_DEPTH_PROGRESS_UNCONFIRMED')
+            report['steps'][-1]['optical_depth_delta_diagnostic_only']=True
+            if overlap(previous_box,box)<.7:
+                raise RuntimeError('FINAL_TARGET_CORRESPONDENCE_LOST')
             report['final_alignment']={
                 'index':args.max_steps,
                 'source_cycle_id':audit['cycle_id'],
