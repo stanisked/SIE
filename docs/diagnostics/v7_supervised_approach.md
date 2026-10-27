@@ -106,4 +106,32 @@ The forward path now reads status first, takes a new eligible frame afterward,
 and rechecks that frame just before the one bounded move request. The previous
 read-then-old-frame ordering remains in the standalone one-step runner unless
 its caller supplies a preflight status; its existing stale-frame veto remains.
-No physical result after this ordering change is recorded.
+The subsequent physical result is recorded below.
+
+## Two-step physical checkpoint (2026-10-27)
+
+With commit `62b1f58`, a supervised `--max-steps 2` trial at operator-declared
+2.5 m front clearance sent two 0.10 m forward POSTs and two stop POSTs. Both
+controller results were `REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY`; the operator
+observed straight travel of approximately 0.10 m and a stationary person.
+Firmware resets encoder counts at each command start. Terminal counts were
+44/38 for step 1 and 63/58 for step 2 (right/left), corresponding to about
+0.041 m and 0.060 m using the firmware wheel factors, or about 0.101 m total.
+These are wheel-based estimates, not independent physical measurements.
+
+Camera mask depth decreased from 3.1648 to 3.1321 m after step 1 (0.0326 m),
+then to 2.9641 m after step 2 (0.1681 m). The second decrease exceeded the
+experimental 0.01–0.15 m per-step progress window and produced
+`STOPPED_ON_REFUSAL: FINAL_DEPTH_PROGRESS_UNCONFIRMED` after both confirmed
+stops. Camera cycles 17–20 remained around 2.9786–3.0081 m, so this was not
+a single isolated depth frame. Mask-depth MAD rose from about 0.0326 m before
+the second step to 0.0573–0.0868 m in those later frames. The optical depth
+change is inconsistent with both the wheel estimate and operator travel
+estimate; its cause is unresolved. The depth limit is not raised on this
+trial alone.
+
+No turn was requested: bearing drift before step 2 was 0.991 degrees, below
+the 1.5 degree trigger. The final center drift was about 1.65 degrees, but
+this runner makes no turn after its final forward step. The approach trial
+therefore verifies straight startup and bounded stops, but not steering.
+Camera journal: `/home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_onnxruntime_20261027_113149`.
