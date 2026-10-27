@@ -8,8 +8,10 @@ hard cap ten. Each step requests
 0.10 m and one /stop; the next step requires a new eligible frame captured after
 the previous terminal observation, the same selected person box (IoU >= 0.7),
 and a 0.01–0.15 m decrease in optical depth. The final step is also reobserved.
-The first forward step begins from the first eligible target frame without a
-steering request. Its target bearing becomes the reference. Before each later
+The runner waits up to 60 seconds for the first eligible frame while the
+camera pipeline starts. Later observations retain an 8 second timeout. If
+no first frame arrives, it exits without a motor request. The first forward
+step begins from the first eligible target frame without a steering request. Its target bearing becomes the reference. Before each later
 straight step, AR0234 target bearing is estimated from the selected bbox center
 and the reviewed V5 intrinsic (fx=2021.546012, cx=924.649158). The runner
 requests one bounded ESP32 turn only if bearing changed by more than 1.5 degrees
@@ -76,3 +78,14 @@ later physical result is recorded. Inspect `summary.json`,
 `turn_01_preflight.json`, the `turn_01` HTTP journal, controller terminal
 status and observed chassis displacement together. Repeated status timeouts
 need communication diagnosis before any change to turn power or forward scope.
+
+## First-frame startup checkpoint (2026-10-27)
+
+A five-step attempt with 2.5 m operator clearance stopped before any motor
+request: `movement_posts=0`, `stop_posts=0`, `steps=[]`, and
+`NO_FRESH_ELIGIBLE_FRAME_AFTER_STOP:rejected=0 last=NO_FRAME_RECEIVED`.
+At the former 20 second initial timeout, the camera child was still waiting
+for its startup `snapshot()`; the runner's shutdown signal produced the child's
+`KeyboardInterrupt` traceback. This does not prove that the camera would
+subsequently publish. The initial wait is now 60 seconds; a further zero-frame
+refusal requires camera/capture diagnosis before another approach attempt.
