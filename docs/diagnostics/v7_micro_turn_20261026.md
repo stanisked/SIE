@@ -223,3 +223,21 @@ that brake when entering DRIVING. The stand-only diagnostic accepts this
 build ID for a later unloaded test. The deployed v3 source and supervised
 approach runner were not changed. Compilation, flashing, and physical tests
 have not yet occurred; the candidate must not be treated as validated.
+
+## Post-flash stand run identified old firmware (2026-10-27)
+
+The operator reported a successful compile and upload, then ran the marked-wheel
+stand test. Both wheels briefly moved in the expected directions, right
+forward and left backward. Evidence root:
+`/home/elwis/.local/state/sie/evidence/wheels_lifted_turn_20261027_192543_c1791e96`.
+The saved initial, terminal, and post-stop statuses all report firmware build
+`v4_2_micro_turn_watchdog_v3`, not the candidate
+`v4_2_micro_turn_loaded_start_v4`. Thus this run did not exercise the new
+startup logic. It ended PARTIAL_PROGRESS at 4/6 settled counts from 8/8
+requested, with READY, zero PWM, one turn POST, and one confirmed stop.
+
+The stand diagnostic now requires the exact v4 build ID by default and
+refuses before any motor POST if v3 is still active. Verify the sketch, board,
+port, and upload result on the computer and confirm the live `/status`
+`firmware_build_id` before repeating the stand test. Do not use the v3
+result as evidence for v4 or proceed to a floor/person approach test.

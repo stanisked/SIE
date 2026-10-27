@@ -19,6 +19,7 @@ from firmware.esp32.tools.run_remote_stop_trial import Http, preflight
 
 ANGLE_DEG = 3.0
 FAULT = 'BREAKAWAY_NOT_FOUND'
+EXPECTED_BUILD_ID = 'v4_2_micro_turn_loaded_start_v4'
 TERMINAL = {'SUCCESS', 'PARTIAL_PROGRESS', 'FAULT', 'STOPPED'}
 
 
@@ -41,6 +42,7 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
     summary = {'schema_version': 'sie.wheels_lifted_turn_diagnostic.v1',
                'command_id': command_id, 'endpoint': '/turn-left',
                'angle_deg': ANGLE_DEG, 'wheels_lifted_operator_assertion': True,
+               'expected_firmware_build_id': EXPECTED_BUILD_ID,
                'result': 'NOT_STARTED', 'fault_ack_posts': 0,
                'turn_posts': 0, 'stop_posts': 0,
                'measurement_emission': False, 'camera_control_enabled': False}
@@ -68,10 +70,13 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
     try:
         code, initial = call('GET', '/status', timeout=1.0)
         summary['initial_status'] = initial
-        if (code != 200 or initial.get('firmware_build_id') not in {
-                    'v4_2_micro_turn_watchdog_v3',
-                    'v4_2_micro_turn_loaded_start_v4'}
-                or initial.get('motion_api_version') != 'v2_bounded_motion_api'
+        if code != 200:
+            raise RuntimeError('INITIAL_STATUS_UNAVAILABLE')
+        if initial.get('firmware_build_id') != EXPECTED_BUILD_ID:
+            raise RuntimeError('FIRMWARE_BUILD_ID_MISMATCH:expected=' +
+                               EXPECTED_BUILD_ID + ':actual=' +
+                               str(initial.get('firmware_build_id')))
+        if (initial.get('motion_api_version') != 'v2_bounded_motion_api'
                 or initial.get('active_command_id') is not None
                 or initial.get('remote_stop_pending') is not False
                 or initial.get('right_pwm') != 0 or initial.get('left_pwm') != 0):

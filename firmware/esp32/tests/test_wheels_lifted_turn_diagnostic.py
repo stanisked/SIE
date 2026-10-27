@@ -9,7 +9,7 @@ from firmware.esp32.tools.run_wheels_lifted_turn_diagnostic import run
 
 
 def status():
-    return {'firmware_build_id': 'v4_2_micro_turn_watchdog_v3',
+    return {'firmware_build_id': 'v4_2_micro_turn_loaded_start_v4',
             'motion_api_version': 'v2_bounded_motion_api',
             'boot_session_id': 'B05C5663A9707458',
             'bounded_fault_latched': True,
@@ -110,6 +110,17 @@ class WheelsLiftedTurnTests(unittest.TestCase):
         self.assertEqual(report['stop_posts'], 1)
         self.assertEqual(t.calls.count(('POST', '/turn-left')), 1)
         self.assertEqual(t.calls.count(('POST', '/stop')), 1)
+
+    def test_old_firmware_refused_before_motor_command(self):
+        t = Transport(initially_ready=True)
+        t.data['firmware_build_id'] = 'v4_2_micro_turn_watchdog_v3'
+        report = self.trial(t)
+        self.assertEqual(report['result'], 'TRIAL_REFUSED_OR_UNKNOWN')
+        self.assertEqual(report['expected_firmware_build_id'],
+                         'v4_2_micro_turn_loaded_start_v4')
+        self.assertIn('FIRMWARE_BUILD_ID_MISMATCH', report['error'])
+        self.assertEqual((report['turn_posts'], report['stop_posts']), (0, 0))
+        self.assertEqual(t.calls, [('GET', '/status')])
 
     def test_default_is_no_execution(self):
         t = Transport()
