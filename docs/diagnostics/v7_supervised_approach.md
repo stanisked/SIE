@@ -233,3 +233,22 @@ request more steps only with a newly measured clear approach path, stationary
 person, clear rotation space and operator access to motor cutoff. It should
 record turn request, terminal encoder turn, fresh image response and physical
 heading after the session.
+
+## Five-step continuation with target initially right of optical axis (2026-10-27)
+
+The operator supplied the next `summary.json` and reported about 0.32 m of
+floor travel with about 1.5 degrees of rightward heading deviation. The
+runner reported `BOUNDED_SESSION_COMPLETE`, five forward POSTs, five stop
+POSTs and zero turn POSTs. Per-command encoder mean progress was 0.0476,
+0.0784, 0.0590, 0.0620 and 0.0695 m, summing to 0.3165 m. The initial
+camera target bearing was +2.65 degrees; subsequent bearings before steps
+two through five were +2.57, +1.99, +1.66 and +0.87 degrees, and the final
+bearing was -0.14 degrees. The person's image moved toward the optical axis
+throughout the run. At step five the displacement from the initial image
+exceeded 1.5 degrees, but the current target was already inside the optical
+1.5-degree deadband. No steering was requested, so turn direction and image
+response remain physically untested. A further supervised test should start
+with the person centered close to the optical axis, then observe whether
+rightward cart drift moves the target left far enough to request and verify a
+small left turn. The operator must remeasure front clearance and keep the
+person stationary with a clear path and rotation space.
