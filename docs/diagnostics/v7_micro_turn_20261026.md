@@ -154,3 +154,28 @@ but not under floor load points toward inadequate loaded start torque or
 supply, while no observed left-wheel motion off-floor keeps motor drive,
 encoder wiring and direction logic in scope. These are diagnostic
 interpretations, not established causes.
+
+## Wheels-lifted three-degree result (2026-10-27)
+
+Evidence root:
+`/home/elwis/.local/state/sie/evidence/wheels_lifted_turn_20261027_185847_5fb6a04d`.
+The bench script acknowledged the exact prior breakaway fault, accepted one
+three-degree `/turn-left` request and sent one `/stop`. Terminal status was
+`PARTIAL_PROGRESS`, READY, no fault latch and zero PWM. Both individual
+brake-starts were recorded at two counts; final settled counts were four
+right and six left, versus eight-count targets. Encoder heading was 0.0338
+rad (~1.94 degrees), an encoder-only estimate. The stop response was 200 and
+the following status retained zero PWM, no active command and READY.
+
+The operator heard a brief motor-on/motor-off sound but saw no wheel motion.
+This visual observation and the nonzero encoder counts are not yet reconciled;
+a short movement or drivetrain lash may be difficult to see, while encoder
+noise or sign errors cannot be ruled out from this trial alone. In contrast,
+the loaded floor attempt ended with left final count -1 and a latched
+`BREAKAWAY_NOT_FOUND` fault. The differing encoder results suggest load
+sensitivity, but do not alone prove inadequate torque or exclude an electrical
+problem. Keep person approach paused. A repeat wheels-lifted observation with
+visible marks on each wheel and slow-motion video can establish actual wheel
+rotation and direction; only then choose a bounded loaded-start firmware
+change or electrical repair. Do not infer a physical 1.94-degree chassis
+turn from the stand's encoder heading.
