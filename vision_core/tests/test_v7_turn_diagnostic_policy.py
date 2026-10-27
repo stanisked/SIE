@@ -49,6 +49,20 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
         self.assertIsNone(steer(1.4, diagnostic_turn_only=True))
         self.assertAlmostEqual(steer(2.555)['angle_deg'], 1.2775)
 
+    def test_approach_turn_requires_new_drift_and_off_axis_target(self):
+        steer, _ = load_steering()
+        self.assertIsNone(steer(2.0, reference_bearing_deg=1.6))
+        self.assertIsNone(steer(0.5, reference_bearing_deg=3.0))
+        self.assertEqual(steer(-2.0, reference_bearing_deg=1.6)['endpoint'],
+                         '/turn-left')
+        self.assertEqual(steer(3.2, reference_bearing_deg=1.6)['endpoint'],
+                         '/turn-right')
+        self.assertEqual(steer(2.0, reference_bearing_deg=2.0,
+                               diagnostic_turn_only=True)['endpoint'],
+                         '/turn-right')
+        with self.assertRaisesRegex(ValueError, 'INVALID_REFERENCE_BEARING'):
+            steer(2.0, reference_bearing_deg=math.nan)
+
     def test_turn_only_exits_before_forward_dispatch(self):
         _, tree = load_steering()
         main = next(node for node in tree.body
