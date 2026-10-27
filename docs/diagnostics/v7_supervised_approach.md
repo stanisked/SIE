@@ -304,3 +304,32 @@ they are not a motion or target-correspondence gate. The default one-step
 launcher retains its prior depth check. Physical turn sign and image response
 are still to be verified on the floor. This change is limited to supervised
 operator-bounded requests and does not admit Measurement or autonomous motion.
+
+## First coordinate-reference steering request: turn underreach (2026-10-27)
+
+Pi journal: `/home/elwis/.local/state/sie/evidence/v7_supervised_approach_1793114646_3c37824a/summary.json`.
+The operator requested up to ten bounded steps with declared 2.5 m front
+clearance. The cart made two straight forward commands and two confirmed remote
+stops, moving about 0.10 m on the floor by operator observation. Per-command
+wheel encoder means were 0.0461 and 0.0630 m, summing to 0.1091 m. The first
+forward-dispatch target bearing was -3.324 degrees. After the two stops the
+same target moved left relative to that coordinate: before the third step its
+bearing was -5.420 degrees, an error of -2.096 degrees. The revised controller
+correctly requested `/turn-left` with a 1.0-degree upper bound before another
+forward command.
+
+Turn journal: `turn_03/summary.json` under the same root. ESP32 build
+`v4_2_micro_turn_watchdog_v3` returned READY with zero PWM and terminal
+`PARTIAL_PROGRESS`. A 1-degree request had only three target counts per wheel;
+individual braking started at count one, and final settled counts were one
+right and zero left. Encoder heading was +0.195 degrees, and the operator
+reported no visible chassis turn. The target bearing changed only from
+-5.288 to -5.233 degrees after the turn, an approximately 0.055-degree
+improvement, below the runner's 0.25-degree feedback requirement. The runner
+stopped with `TURN_CAMERA_ALIGNMENT_UNCONFIRMED`; no third forward command
+was sent. This establishes that the 1-degree request was ineffective in this
+specific floor trial, not that turn direction or an effective 3-degree request
+has been physically validated. Next isolate a supervised 3-degree turn-only
+diagnostic without forward motion, then use its encoder, camera and floor
+observations to choose the next steering command size. Do not weaken the
+camera feedback requirement solely to pass this near-zero turn.
