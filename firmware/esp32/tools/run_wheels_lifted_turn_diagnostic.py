@@ -68,7 +68,9 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
     try:
         code, initial = call('GET', '/status', timeout=1.0)
         summary['initial_status'] = initial
-        if (code != 200 or initial.get('firmware_build_id') != 'v4_2_micro_turn_watchdog_v3'
+        if (code != 200 or initial.get('firmware_build_id') not in {
+                    'v4_2_micro_turn_watchdog_v3',
+                    'v4_2_micro_turn_loaded_start_v4'}
                 or initial.get('motion_api_version') != 'v2_bounded_motion_api'
                 or initial.get('active_command_id') is not None
                 or initial.get('remote_stop_pending') is not False

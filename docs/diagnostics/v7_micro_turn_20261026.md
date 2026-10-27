@@ -212,3 +212,14 @@ wheels-lifted observation, and then a single floor turn with no person in the
 path are required before restoring coordinate-based approach. Motor supply
 voltage under load and left driver output remain alternative diagnostics if
 the revised bounded start still fails.
+
+## Isolated loaded-start candidate prepared (2026-10-27)
+
+The source for build `v4_2_micro_turn_loaded_start_v4` is staged in its own
+sketch folder, alongside a compile-only helper. It implements individual
+braking during STARTING, raises the lagging wheel's startup ceiling to the
+existing 235 PWM limit only after the leading wheel is braked, and preserves
+that brake when entering DRIVING. The stand-only diagnostic accepts this
+build ID for a later unloaded test. The deployed v3 source and supervised
+approach runner were not changed. Compilation, flashing, and physical tests
+have not yet occurred; the candidate must not be treated as validated.
