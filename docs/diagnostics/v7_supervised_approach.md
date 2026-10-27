@@ -113,7 +113,8 @@ The subsequent physical result is recorded below.
 With commit `62b1f58`, a supervised `--max-steps 2` trial at operator-declared
 2.5 m front clearance sent two 0.10 m forward POSTs and two stop POSTs. Both
 controller results were `REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY`; the operator
-observed straight travel of approximately 0.10 m and a stationary person.
+observed straight travel of approximately 0.10 m and reported that the person
+stood in place; the person's exact depth and pose were not measured.
 Firmware resets encoder counts at each command start. Terminal counts were
 44/38 for step 1 and 63/58 for step 2 (right/left), corresponding to about
 0.041 m and 0.060 m using the firmware wheel factors, or about 0.101 m total.
@@ -126,9 +127,9 @@ experimental 0.01–0.15 m per-step progress window and produced
 stops. Camera cycles 17–20 remained around 2.9786–3.0081 m, so this was not
 a single isolated depth frame. Mask-depth MAD rose from about 0.0326 m before
 the second step to 0.0573–0.0868 m in those later frames. The optical depth
-change is inconsistent with both the wheel estimate and operator travel
-estimate; its cause is unresolved. The depth limit is not raised on this
-trial alone.
+change exceeded the fixed progress window, but the person's physical
+position and pose were not independently tracked to centimetre accuracy. These data do not establish a camera error or actual chassis travel
+from optical depth alone. The depth limit is not raised on this trial alone.
 
 No turn was requested: bearing drift before step 2 was 0.991 degrees, below
 the 1.5 degree trigger. The final center drift was about 1.65 degrees, but
@@ -136,26 +137,29 @@ this runner makes no turn after its final forward step. The approach trial
 therefore verifies straight startup and bounded stops, but not steering.
 Camera journal: `/home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_onnxruntime_20261027_113149`.
 
-## Motor-off manual depth A-B-A check (2026-10-27)
+## Exploratory motor-off A-B-A check (2026-10-27)
 
-With motors powered off, the operator kept the same person stationary and
-measured the camera at the initial cart mark (A), manually translated the
-cart 0.10 m forward without turning (B), then returned it to the original
-mark (A again). Each camera-only preview ran 30 seconds. The built-in summaries
-reported:
+With motors powered off, the operator made three 30-second camera-only previews
+at nominal cart positions A, B (reported 0.10 m forward), and A again. The
+operator later clarified that the person in the image also moved, returned
+only approximately to the earlier location, and may have leaned or changed
+pose. The target's physical depth was therefore not held fixed to centimetre
+accuracy. The built-in summaries reported:
 
-| Position | Records | Coherent mask-depth frames | MAD refusals | Median candidate depth | Depth span |
+| Nominal cart position | Records | Coherent mask-depth frames | MAD refusals | Median candidate depth | Depth span |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | A | 102 | 100 | 0 | 3.1484 m | 0.0326 m |
-| B, 0.10 m forward | 101 | 83 | 16 | 2.9497 m | 0.0720 m |
+| B | 101 | 83 | 16 | 2.9497 m | 0.0720 m |
 | A again | 105 | 94 | 0 | 3.1484 m | 0.0164 m |
 
-The A-to-B depth change was 0.1987 m for the operator-reported 0.10 m cart
-translation. Returning to A restored exactly the prior displayed median.
-Thus the discrepancy reproduces without motor actuation and depends on cart
-position in this setup. The increased MAD refusals and span at B show poorer
-mask-depth consistency there. The evidence does not identify whether stereo
-disparity, person-mask surface selection, geometry, or another position-linked
-factor caused the shift. The 0.01–0.15 m per-step gate remains unchanged; this
-person-mask depth median is not yet a reliable travel odometer at this range.
+The displayed A-to-B depth medians differ by 0.1987 m and the final A median
+matches the initial A median at four displayed decimals. Because the person
+moved and pose may have changed, this difference **cannot be attributed to
+the 0.10 m cart translation** or used to infer a camera scale error. Returning
+to the same displayed median does not remove that confounder. The B series
+had more MAD refusals and a wider depth span; their cause is also unresolved.
+This check is inconclusive for relative depth accuracy of the person-mask
+estimator. The 0.01–0.15 m per-step gate remains unchanged. A controlled
+follow-up needs a fixed target with independent distance references, or a
+person constrained to a measured position and pose during both captures.
 Return-position camera journal: `/home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_onnxruntime_20261027_122336`.
