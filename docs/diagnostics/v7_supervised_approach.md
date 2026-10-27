@@ -252,3 +252,29 @@ with the person centered close to the optical axis, then observe whether
 rightward cart drift moves the target left far enough to request and verify a
 small left turn. The operator must remeasure front clearance and keep the
 person stationary with a clear path and rotation space.
+
+## No-motion steering setup refusal (2026-10-27)
+
+In the next seven-step requested run, the cart did not move and motors did
+not start. The runner reported `STOPPED_ON_REFUSAL`, zero movement, stop and
+turn POSTs, with `NO_FRESH_ELIGIBLE_FRAME_AFTER_STOP:rejected=40 last=ValueError:
+LEGACY_MASK_QUALITY_REFUSED` while waiting for a new frame after the ESP32
+preflight. The first accepted camera frame was cycle 9 at 3.1002 m with
+bounding-box center x=814.25 px and bearing -3.13 degrees relative to the
+reviewed optical axis x=924.65 px. It was not a centered steering start.
+
+Pi camera journal:
+`/home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_onnxruntime_20261027_180531`.
+The operator's read-only extraction found 49 total frames: one unavailable,
+47 with `DEPTH_MAD_EXCEEDED`, and only cycle 9 with coherent mask depth.
+The rejected frames had candidate MAD about 0.063–0.096 m, above the
+existing 0.050 m mask-depth threshold; cycle 9 had MAD 0.0482 m. The
+single passing frame arrived before the controller preflight, and no later
+frame met the quality gate in the eight-second wait. The refusal occurred
+before any motor command, so this is not a controller-start failure.
+
+Do not infer physical depth error from this mask spread alone. Before another
+motion trial, inspect a stationary camera-only preview after centering the
+person near x=925 px, and review the per-frame mask-depth status distribution.
+Do not raise the mask MAD threshold based only on this one run. Steering
+remains physically untested.
