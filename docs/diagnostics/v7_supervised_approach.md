@@ -14,19 +14,20 @@ recorded but is not used as travel odometry or as the per-step progress gate.
 The runner waits up to 60 seconds for the first eligible frame while the
 camera pipeline starts. Later observations retain an 8 second timeout. If
 no first frame arrives, it exits without a motor request. The first forward
-step begins from the first eligible target frame without a steering request.
-Its target bearing becomes the reference. Before each later
-straight step, AR0234 target bearing is estimated from the selected bbox center
-and the reviewed V5 intrinsic (fx=2021.546012, cx=924.649158). The runner
-requests one bounded ESP32 turn only if bearing changed by more than 1.5 degrees
-from the first frame and the target is more than 1.5 degrees from the optical
-axis. It checks both conditions again on a fresh frame after controller preflight.
-The turn is 1–3 degrees toward the target; its sign follows the image coordinate
-and controller turn convention.
-It requires terminal READY, zero PWM, valid encoder direction, and then a
-fresh eligible camera frame of the same person. The new image bearing must
-improve by at least 0.25 degrees before the runner can request the next
-forward motion. Before every forward request, the runner reads ESP32
+step begins after detecting one current RGB person target, without a steering
+request. The target bearing in the fresh frame immediately before that first
+forward request becomes the reference, wherever it is in the image. Before
+each later straight step, AR0234 target bearing is estimated from the selected
+bbox center and the reviewed V5 intrinsic (fx=2021.546012, cx=924.649158).
+The runner requests one bounded ESP32 turn if bearing changes by more than
+1.5 degrees from that first forward frame, regardless of the person's
+distance from the optical axis. It checks the change again on a fresh frame
+after controller preflight. The 1–3 degree turn reduces displacement from
+the original target coordinate; its sign follows the image coordinate and
+controller turn convention. It requires terminal READY, zero PWM, valid encoder
+direction, and then a fresh eligible camera frame of the same person. The new
+image bearing must move at least 0.25 degrees toward the original coordinate
+before the runner can request the next forward motion. Before every forward request, the runner reads ESP32
 `/status`, then waits for a newly captured eligible frame of the same target.
 The stop trial validates the supplied status without another pre-move GET and
 rechecks the new frame's 500 ms driver age immediately before dispatch.
@@ -51,8 +52,9 @@ a freshly measured horizontal front clearance. The value
 must exceed 1.1 m plus 0.1 m per permitted step; that is an experimental request
 budget, **not** a measured physical upper travel bound. Optical depth and this
 clearance have different datums. There is no path-obstacle detection.
-The operator must keep the person stationary, the cart facing them, and the
-straight path clear with power cutoff accessible. No unattended operation.
+The operator must keep the person stationary and visible in the camera,
+the approach path clear and the power cutoff accessible. Manual centering
+on the optical axis is not required. No unattended operation.
 The encoder progress envelope and steering checks are experimental, not
 validated physical accuracy. Encoder distance is a wheel-motion proxy; slip
 or calibration error can make chassis travel differ.
@@ -70,9 +72,12 @@ bash vision_core/tools/run_v7_supervised_approach.sh \
   --front-clearance-m 2.5 --max-steps 3
 ```
 
-This is not a route to bypass failed V7 checks: the original one-step
-`check_observation` runs on each current frame and again after controller
-preflight. The original one-step launcher remains available unchanged.
+This separate operator-bounded runner checks current RGB instance binding,
+static-v2 profile, target geometry and both driver-declared frame ages on
+each frame and again before motion. Masked depth remains diagnostic and its
+MAD status does not veto this RGB-coordinate steering experiment. The
+original one-step launcher still requires coherent masked depth by default.
+Neither path activates metric Measurement or autonomous motion admission.
 
 ## Current turn-only diagnostic checkpoint (2026-10-26)
 
@@ -247,11 +252,9 @@ bearing was -0.14 degrees. The person's image moved toward the optical axis
 throughout the run. At step five the displacement from the initial image
 exceeded 1.5 degrees, but the current target was already inside the optical
 1.5-degree deadband. No steering was requested, so turn direction and image
-response remain physically untested. A further supervised test should start
-with the person centered close to the optical axis, then observe whether
-rightward cart drift moves the target left far enough to request and verify a
-small left turn. The operator must remeasure front clearance and keep the
-person stationary with a clear path and rotation space.
+response remain physically untested. That recommendation to center the person is superseded below. The operator
+must remeasure front clearance and keep the person stationary with a clear
+path and rotation space.
 
 ## No-motion steering setup refusal (2026-10-27)
 
@@ -273,8 +276,31 @@ single passing frame arrived before the controller preflight, and no later
 frame met the quality gate in the eight-second wait. The refusal occurred
 before any motor command, so this is not a controller-start failure.
 
-Do not infer physical depth error from this mask spread alone. Before another
-motion trial, inspect a stationary camera-only preview after centering the
-person near x=925 px, and review the per-frame mask-depth status distribution.
-Do not raise the mask MAD threshold based only on this one run. Steering
-remains physically untested.
+Do not infer physical depth error from this mask spread alone. The earlier recommendation to manually center the person is superseded
+below. Do not raise the mask MAD threshold based only on this one run.
+Steering remains physically untested.
+
+## Initial target coordinate as steering reference (2026-10-27)
+
+The operator clarified the desired behavior: detect the person anywhere in
+the camera field, start the first bounded forward step, then steer if later
+observations show displacement from that person's original image coordinate.
+No manual optical-axis alignment is required. The preceding five-step run
+shows why the old two-condition gate was wrong for this task: the target moved
+from +2.65 degrees toward the axis, while the cart physically drifted right.
+The old gate saw an axis-centered target and never corrected the drift.
+
+The supervised approach now binds the reference to the first fresh frame used
+for forward dispatch. Later turns are requested from the signed bearing
+change from that reference; turn feedback must reduce the same error. The
+turn-only diagnostic retains its explicit optical-axis behavior. The runner
+still requires one current RGB instance, exact current-cycle segmentation and
+static-v2 profile binding, a fresh driver-declared frame, matching target boxes
+across observations, operator-measured front clearance, encoder progress and
+a confirmed stop after each bounded command. It no longer requires the legacy
+masked-depth MAD status for this coordinate-based experiment. Candidate depth
+and optical depth deltas remain in the journal as diagnostics when available;
+they are not a motion or target-correspondence gate. The default one-step
+launcher retains its prior depth check. Physical turn sign and image response
+are still to be verified on the floor. This change is limited to supervised
+operator-bounded requests and does not admit Measurement or autonomous motion.

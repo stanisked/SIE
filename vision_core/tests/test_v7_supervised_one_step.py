@@ -110,6 +110,35 @@ class OneStepTests(unittest.TestCase):
                     ready_status=ready,ready_status_at=.8)
         self.assertEqual(h.calls,[])
 
+    def test_supervised_rgb_forward_trial_accepts_mad_refusal(self):
+        a=current_audit()
+        a['shape_diagnostic']['mask_depth'].update(
+            status='DEPTH_MAD_EXCEEDED', candidate_mad_m=.08)
+        h=Harness(); h.time=1.1
+        with tempfile.TemporaryDirectory() as tmp:
+            r=execute_observed_step(a,armed_at=.9,
+                base_url='http://127.0.0.1',output=Path(tmp)/'trial',
+                request=h.request,clock=h.clock,sleep=h.sleep,
+                supervised_rgb_only=True)
+        self.assertEqual(r['result'],'REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY')
+        self.assertEqual([route for method,route in h.calls if method=='POST'],
+                         ['/move-forward','/stop'])
+        self.assertTrue(r['external_pre_move_evidence']['supervised_rgb_only'])
+
+    def test_supervised_rgb_target_does_not_require_coherent_mask_depth(self):
+        a=current_audit()
+        a['shape_diagnostic']['mask_depth'].update(
+            status='DEPTH_MAD_EXCEEDED', candidate_mad_m=.08)
+        with self.assertRaisesRegex(ValueError,'LEGACY_MASK_QUALITY_REFUSED'):
+            check_observation(a,.9,1.1)
+        evidence=check_observation(a,.9,1.1,supervised_rgb_only=True)
+        self.assertEqual(evidence['mask_depth_status'],'DEPTH_MAD_EXCEEDED')
+        self.assertTrue(evidence['supervised_rgb_only'])
+        self.assertEqual(evidence['diagnostic_decision']['status'],'STOP')
+        a['frame_freshness']['frames']['ar0234']['driver_timestamp_s']=.5
+        with self.assertRaises(ValueError):
+            check_observation(a,.9,1.1,supervised_rgb_only=True)
+
     def test_slow_preflight_causes_no_move_and_no_stop(self):
         r, h = self.run_trial(preflight_delay=.401)
         self.assertEqual(r['movement_posts'], 0)

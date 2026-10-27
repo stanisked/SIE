@@ -35,7 +35,7 @@ def finite(value):
     return type(value) in (int, float) and math.isfinite(value)
 
 
-def check_observation(audit, armed_at, now):
+def check_observation(audit, armed_at, now, *, supervised_rgb_only=False):
     """Recompute checks, never accept a caller's precomputed PASS/permissions."""
     if not finite(armed_at) or not finite(now) or now < armed_at:
         raise ValueError('INVALID_LOCAL_CLOCK')
@@ -75,15 +75,27 @@ def check_observation(audit, armed_at, now):
             or shape.get('model_sha256') != segmentation.get('model_sha256')
             or (shape.get('mask') or {}).get('source_rgb_arrays_sha256') != segmentation.get('arrays_sha256')):
         raise ValueError('CURRENT_RGB_FUSION_BINDING_MISMATCH')
-    if (shape.get('mask_depth') or {}).get('status') != 'COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY':
+    if supervised_rgb_only:
+        gate = audit.get('existing_profile_static_gate') or {}
+        geometry = audit.get('target_geometry') or {}
+        if (audit.get('status') not in ('MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY',
+                'SHAPE_AWARE_SHADOW_DIAGNOSTIC_ONLY')
+                or target.get('disposition') != 'OBSERVED'
+                or geometry.get('accepted') is not True
+                or gate.get('cycle_id') != cid
+                or gate.get('profile_sha256') != REVIEWED_SHA
+                or gate.get('status') != 'PASS'):
+            raise ValueError('CURRENT_RGB_TARGET_OR_STATIC_GATE_REFUSED')
+    elif (shape.get('mask_depth') or {}).get('status') != 'COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY':
         raise ValueError('LEGACY_MASK_QUALITY_REFUSED')
     bound = evaluate_control_input_shadow(audit)
-    if bound['decision_preview']['failed_checks']:
-        raise ValueError('CURRENT_CHECK_FAILED:' + ','.join(bound['decision_preview']['failed_checks']))
-    # Require complete current algorithmic prerequisites, while preserving all
-    # physical/policy unknowns in the operator trial record.
-    if bound['depth_admission_draft']['sensor_prerequisites'] != 'PRESENT_NOT_ADMITTED':
-        raise ValueError('SENSOR_PREREQUISITES_UNAVAILABLE')
+    if not supervised_rgb_only:
+        if bound['decision_preview']['failed_checks']:
+            raise ValueError('CURRENT_CHECK_FAILED:' + ','.join(bound['decision_preview']['failed_checks']))
+        # Require complete current algorithmic prerequisites, while preserving all
+        # physical/policy unknowns in the operator trial record.
+        if bound['depth_admission_draft']['sensor_prerequisites'] != 'PRESENT_NOT_ADMITTED':
+            raise ValueError('SENSOR_PREREQUISITES_UNAVAILABLE')
     frame = audit.get('frame_freshness') or {}
     if frame.get('capture_backend') != 'latest_v4l2':
         raise ValueError('DRIVER_FRAME_CLOCK_REQUIRED')
@@ -108,24 +120,28 @@ def check_observation(audit, armed_at, now):
         'physical_exposure_timing_verified': False,
         'diagnostic_decision': bound['decision_preview'],
         'diagnostic_is_admitted_measurement': False,
-        'scope': SCOPE, 'missing_checks': bound['decision_preview']['missing_checks']}
+        'scope': SCOPE, 'supervised_rgb_only': supervised_rgb_only,
+        'mask_depth_status': (shape.get('mask_depth') or {}).get('status'),
+        'missing_checks': bound['decision_preview']['missing_checks']}
 
 
 def execute_observed_step(audit, *, armed_at, base_url, output, request=None,
                           clock=time.monotonic, sleep=time.sleep, ready_status=None,
-                          ready_status_at=None):
+                          ready_status_at=None, supervised_rgb_only=False):
     # Freeze the chosen current record; subsequent frames cannot substitute its
     # identity. Recheck immediately before movement, including when a caller
     # supplies a controller status read before this frame was captured.
     frozen = deepcopy(audit)
-    check_observation(frozen, armed_at, clock())
+    check_observation(frozen, armed_at, clock(),
+                      supervised_rgb_only=supervised_rgb_only)
     if ready_status is not None and (type(ready_status_at) not in (int, float)
             or not math.isfinite(ready_status_at) or ready_status_at < armed_at):
         raise ValueError('CONTROLLER_STATUS_BEFORE_OPERATOR_ARM')
     return stop_trial(base_url=base_url, output=output, execute=True,
         request=request, clock=clock, sleep=sleep, ready_status=ready_status,
         ready_status_at=ready_status_at,
-        before_move=lambda status: check_observation(frozen, armed_at, clock()))
+        before_move=lambda status: check_observation(frozen, armed_at, clock(),
+            supervised_rgb_only=supervised_rgb_only))
 
 
 def main(argv=None):

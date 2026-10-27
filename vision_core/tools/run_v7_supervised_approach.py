@@ -53,14 +53,18 @@ def encoder_step_progress(status):
             'basis': 'per-command wheel encoder counts after confirmed remote stop; diagnostic proxy, not independent physical displacement'}
 
 def depth_and_box(a):
+    """Return current RGB target box; optional masked depth is diagnostic only."""
     d = (a.get('shape_diagnostic') or {}).get('mask_depth') or {}
     c = (a.get('ar0234_dynamic_target') or {}).get('candidate') or {}
     z, box = d.get('candidate_depth_m'), c.get('bbox_xyxy_px')
-    if not isinstance(z, (int, float)) or not math.isfinite(z) or z <= 0:
-        raise ValueError('NO_CURRENT_DEPTH')
-    if not isinstance(box, list) or len(box) != 4 or not all(isinstance(x, (int,float)) and math.isfinite(x) for x in box):
+    if not isinstance(box, list) or len(box) != 4 or not all(isinstance(x, (int,float)) and math.isfinite(x) for x in box) or box[2] <= box[0] or box[3] <= box[1]:
         raise ValueError('NO_CURRENT_TARGET_BOX')
-    return float(z), box
+    z = float(z) if type(z) in (int, float) and math.isfinite(z) and z > 0 else None
+    return z, box
+
+
+def diagnostic_depth_delta(before, after):
+    return before - after if before is not None and after is not None else None
 
 def overlap(a, b):
     x0,y0,x1,y1 = a
@@ -80,36 +84,40 @@ def steering_request(bearing_deg, *, reference_bearing_deg=None,
                      diagnostic_turn_only=False):
     if not math.isfinite(bearing_deg):
         raise ValueError('INVALID_TARGET_BEARING')
-    if reference_bearing_deg is not None:
-        if not math.isfinite(reference_bearing_deg):
+    if diagnostic_turn_only:
+        error_deg = bearing_deg  # Explicit optical-axis diagnostic.
+    else:
+        if reference_bearing_deg is None or not math.isfinite(reference_bearing_deg):
             raise ValueError('INVALID_REFERENCE_BEARING')
-        if (not diagnostic_turn_only and
-                abs(bearing_deg - reference_bearing_deg) <= TURN_DEADBAND_DEG):
-            return None
-    if abs(bearing_deg) <= TURN_DEADBAND_DEG:
+        error_deg = bearing_deg - reference_bearing_deg
+    if abs(error_deg) <= TURN_DEADBAND_DEG:
         return None
-    # Image x increases to the right. A left turn brings a left-hand target
-    # toward image center. A single correction is followed by fresh feedback.
-    return {'endpoint': '/turn-right' if bearing_deg > 0 else '/turn-left',
+    # Image x increases to the right. A negative shift from the first target
+    # coordinate requests a left turn, regardless of where the target began.
+    return {'endpoint': '/turn-right' if error_deg > 0 else '/turn-left',
             'angle_deg': (MAX_TURN_PER_STEP_DEG if diagnostic_turn_only else
-                          min(MAX_TURN_PER_STEP_DEG, max(1.0, abs(bearing_deg) / 2.0)))}
+                          min(MAX_TURN_PER_STEP_DEG, max(1.0, abs(error_deg) / 2.0)))}
 
 def steering_due_before_step(index, *, diagnostic_turn_only=False):
     """Keep the initial detected target as a straight-start reference."""
     return diagnostic_turn_only or index > 0
 
-def verify_turn_feedback(z, box, new_z, new_box):
-    if overlap(box,new_box)<.7 or abs(new_z-z)>.15:
+def verify_turn_feedback(z, box, new_z, new_box, *,
+                         reference_bearing_deg=None, diagnostic_turn_only=False):
+    if overlap(box,new_box)<.7:
         raise RuntimeError('TURN_TARGET_CORRESPONDENCE_UNCONFIRMED')
     before=target_bearing_deg(box)
     after=target_bearing_deg(new_box)
-    if abs(before)-abs(after)<.25:
+    reference = 0.0 if diagnostic_turn_only else reference_bearing_deg
+    if reference is None or not math.isfinite(reference):
+        raise ValueError('INVALID_REFERENCE_BEARING')
+    if abs(before-reference)-abs(after-reference)<.25:
         raise RuntimeError('TURN_CAMERA_ALIGNMENT_UNCONFIRMED')
     return after
 
 def execute_bounded_turn(audit, *, armed_at, base_url, output, endpoint, angle_deg,
                          request=None, clock=time.monotonic, sleep=time.sleep,
-                         ready_status=None):
+                         ready_status=None, supervised_rgb_only=False):
     """One bounded turn; no retry. Stop once if dispatch or completion is unknown."""
     parsed = urlsplit(base_url)
     if (parsed.scheme != 'http' or not parsed.hostname or parsed.username or parsed.password
@@ -117,7 +125,8 @@ def execute_bounded_turn(audit, *, armed_at, base_url, output, endpoint, angle_d
             or endpoint not in ('/turn-left', '/turn-right')
             or not 1.0 <= angle_deg <= MAX_TURN_PER_STEP_DEG):
         raise ValueError('INVALID_BOUNDED_TURN_REQUEST')
-    check_observation(audit, armed_at, clock())
+    check_observation(audit, armed_at, clock(),
+                      supervised_rgb_only=supervised_rgb_only)
     output.mkdir(parents=True, exist_ok=False)
     request = request or Http()
     cid = 'sie-turn-' + secrets.token_hex(12)
@@ -149,7 +158,8 @@ def execute_bounded_turn(audit, *, armed_at, base_url, output, endpoint, angle_d
             status = ready_status
         preflight(status)
         boot = status['boot_session_id']
-        check_observation(audit, armed_at, clock())
+        check_observation(audit, armed_at, clock(),
+                          supervised_rgb_only=supervised_rgb_only)
         sent = True  # An ambiguous POST is never retried.
         report['turn_posts'] = 1
         code, body = call('POST', endpoint,
@@ -236,7 +246,8 @@ def next_observation(node, holder, *, after, armed_at, camera_process=None, time
         for audit in holder[:]:
             holder.clear()
             try:
-                evidence=check_observation(audit,armed_at,time.monotonic())
+                evidence=check_observation(audit,armed_at,time.monotonic(),
+                                           supervised_rgb_only=True)
                 if evidence['oldest_driver_stamp_s'] > after:
                     return audit,evidence
                 last_reason='FRAME_NOT_NEWER_THAN_LAST_STOP'
@@ -276,9 +287,9 @@ def main():
         print('One camera-directed 3 degree turn followed by fresh camera feedback; no forward request.')
     else:
         print('Up to',args.max_steps,'separate 0.10 m commands, each followed by /stop and a new camera observation.')
-    print('First step starts straight; later steps may turn 1–3 degrees after observed target drift. Each turn requires fresh camera feedback.')
+    print('First step starts straight from a target anywhere in view; later steps may turn 1–3 degrees to reduce drift from its initial coordinate. Each turn requires fresh camera feedback.')
     print('This supervised experiment does not activate Measurement or autonomous motion admission.')
-    print('Confirm stationary person, clear approach path and rotation space, cart facing person, and accessible motor power cutoff.')
+    print('Confirm stationary person visible in camera, clear approach path and rotation space, and accessible motor power cutoff.')
     armed=time.monotonic()
     root=Path.home()/'.local/state/sie/evidence'/('v7_supervised_approach_'+str(int(time.time()))+'_'+secrets.token_hex(4))
     root.mkdir(parents=True,exist_ok=False)
@@ -290,7 +301,9 @@ def main():
             'turn_deadband_deg':TURN_DEADBAND_DEG,'max_turn_per_step_deg':MAX_TURN_PER_STEP_DEG,
             'diagnostic_turn_only':args.diagnostic_turn_only,
             'travel_confirmation':'PER_COMMAND_WHEEL_ENCODER_AFTER_CONFIRMED_STOP',
-            'optical_depth_change':'DIAGNOSTIC_ONLY_NOT_TRAVEL_GATE'}
+            'optical_depth_change':'DIAGNOSTIC_ONLY_NOT_TRAVEL_GATE',
+        'steering_reference':'FIRST_FORWARD_DISPATCH_TARGET_BEARING',
+             'supervised_target_basis':'CURRENT_RGB_INSTANCE_WITH_OPERATOR_CLEARANCE'}
     process=None
     node=None
     try:
@@ -311,7 +324,7 @@ def main():
                                      diagnostic_turn_only=args.diagnostic_turn_only)
             row['bearing_before_turn_deg']=target_bearing_deg(box)
             if request is None:
-                row['steering']='ALREADY_CENTERED' if args.diagnostic_turn_only else 'NO_DRIFT_OR_ALREADY_CENTERED'
+                row['steering']='ALREADY_CENTERED' if args.diagnostic_turn_only else 'WITHIN_REFERENCE_DEADBAND'
                 return audit,evidence,z,box
             turn_label=label or str(row['index']).zfill(2)
             ready_status, ready_at=preflight_controller_before_fresh_frame(
@@ -321,7 +334,7 @@ def main():
             fresh,_=next_observation(node,holder,after=ready_at,armed_at=armed,
                                      camera_process=process)
             new_z,new_box=depth_and_box(fresh)
-            if overlap(box,new_box)<.7 or abs(new_z-z)>.15:
+            if overlap(box,new_box)<.7:
                 raise RuntimeError('TURN_PREFLIGHT_TARGET_CORRESPONDENCE_LOST')
             fresh_request=steering_request(target_bearing_deg(new_box),
                                            reference_bearing_deg=initial_bearing_deg,
@@ -330,15 +343,16 @@ def main():
             row['post_preflight_bearing_deg']=target_bearing_deg(new_box)
             if fresh_request is None:
                 row['steering']=('ALREADY_CENTERED_AFTER_PREFLIGHT' if args.diagnostic_turn_only
-                                 else 'NO_DRIFT_OR_ALREADY_CENTERED_AFTER_PREFLIGHT')
-                return fresh,check_observation(fresh,armed,time.monotonic()),new_z,new_box
+                                 else 'WITHIN_REFERENCE_DEADBAND_AFTER_PREFLIGHT')
+                return fresh,check_observation(fresh,armed,time.monotonic(),
+                    supervised_rgb_only=True),new_z,new_box
             if fresh_request['endpoint']!=request['endpoint']:
                 raise RuntimeError('TURN_PREFLIGHT_BEARING_DIRECTION_CHANGED')
             audit,z,box,request=fresh,new_z,new_box,fresh_request
             row['steering_request']=request
             result=execute_bounded_turn(audit,armed_at=armed,base_url=args.base_url,
                                         output=root/('turn_'+turn_label),
-                                        ready_status=ready_status,**request)
+                                        ready_status=ready_status,supervised_rgb_only=True,**request)
             row['turn_result']=result['result']
             row['turn_encoder_deg']=result.get('encoder_turn_deg')
             row['turn_terminal_state']=(result.get('terminal_status') or {}).get('last_command_state')
@@ -357,9 +371,12 @@ def main():
             row['bearing_after_turn_deg']=after_bearing
             row['post_turn_cycle_id']=fresh['cycle_id']
             row['post_turn_depth_m']=new_z
-            verify_turn_feedback(z,box,new_z,new_box)
-            row['steering']='CAMERA_ALIGNMENT_IMPROVED'
-            return fresh,check_observation(fresh,armed,time.monotonic()),new_z,new_box
+            verify_turn_feedback(z,box,new_z,new_box,
+                                 reference_bearing_deg=initial_bearing_deg,
+                                 diagnostic_turn_only=args.diagnostic_turn_only)
+            row['steering']='TARGET_COORDINATE_ERROR_REDUCED'
+            return fresh,check_observation(fresh,armed,time.monotonic(),
+                supervised_rgb_only=True),new_z,new_box
         previous_z=previous_box=initial_center_x=initial_bearing_deg=None
         after=armed
         print('Waiting up to 60 s for the first eligible camera frame.')
@@ -372,9 +389,9 @@ def main():
                 initial_center_x=target_center_x(box)
                 initial_bearing_deg=target_bearing_deg(box)
             center_drift_px=target_center_x(box)-initial_center_x
-            if previous_z is not None:
+            if previous_box is not None:
                 if overlap(previous_box,box)<.7: raise RuntimeError('TARGET_CORRESPONDENCE_LOST')
-                delta=previous_z-z
+                delta=diagnostic_depth_delta(previous_z,z)
                 report['steps'][-1]['reobserved_depth_m']=z
                 report['steps'][-1]['observed_depth_decrease_m']=delta
                 report['steps'][-1]['reobserved_rgb_center_x_px']=target_center_x(box)
@@ -406,9 +423,14 @@ def main():
             fresh,evidence=next_observation(node,holder,after=ready_at,armed_at=armed,
                                             camera_process=process)
             new_z,new_box=depth_and_box(fresh)
-            if overlap(box,new_box)<.7 or abs(new_z-z)>.15:
+            if overlap(box,new_box)<.7:
                 raise RuntimeError('FORWARD_PREFLIGHT_TARGET_CORRESPONDENCE_LOST')
             audit,z,box=fresh,new_z,new_box
+            if index == 0:
+                initial_center_x=target_center_x(box)
+                initial_bearing_deg=target_bearing_deg(box)
+                report['initial_target_center_x_px']=initial_center_x
+                report['initial_target_bearing_deg']=initial_bearing_deg
             row['post_forward_preflight_cycle_id']=audit['cycle_id']
             row['post_forward_preflight_bearing_deg']=target_bearing_deg(box)
             row['forward_source_cycle_id']=audit['cycle_id']
@@ -418,7 +440,8 @@ def main():
             result=execute_observed_step(audit,armed_at=armed,base_url=args.base_url,
                                          output=root/('controller_'+str(index+1).zfill(2)),
                                          ready_status=ready_status,
-                                         ready_status_at=ready_at)
+                                         ready_status_at=ready_at,
+                                         supervised_rgb_only=True)
             row['controller_result']=result['result']
             row['controller_error']=result.get('error')
             row['forward_preflight_age_at_dispatch_s']=result.get('preflight_age_at_dispatch_s')
@@ -441,7 +464,7 @@ def main():
             # Last step also needs fresh target feedback after encoder-confirmed progress.
             audit,_=next_observation(node,holder,after=after,armed_at=armed,camera_process=process)
             z,box=depth_and_box(audit)
-            delta=previous_z-z
+            delta=diagnostic_depth_delta(previous_z,z)
             report['steps'][-1]['reobserved_depth_m']=z
             report['steps'][-1]['observed_depth_decrease_m']=delta
             report['steps'][-1]['reobserved_rgb_center_x_px']=target_center_x(box)
@@ -453,6 +476,7 @@ def main():
                 'index':args.max_steps,
                 'source_cycle_id':audit['cycle_id'],
                 'final_bearing_deg':target_bearing_deg(box),
+                'final_drift_from_first_forward_deg':target_bearing_deg(box)-initial_bearing_deg,
                 'steering':'NOT_REQUESTED_AFTER_FINAL_FORWARD_STEP',
             }
             report['result']='BOUNDED_SESSION_COMPLETE'

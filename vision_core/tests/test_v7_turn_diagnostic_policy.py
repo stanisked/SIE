@@ -54,6 +54,25 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
         self.assertTrue(steering_due(1))
         self.assertTrue(steering_due(0, diagnostic_turn_only=True))
 
+    def test_rgb_box_remains_available_without_metric_depth(self):
+        tree = ast.parse(SOURCE.read_text())
+        names = {'depth_and_box', 'diagnostic_depth_delta'}
+        functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                     and node.name in names]
+        namespace = {'math': math}
+        exec(compile(ast.Module(body=functions, type_ignores=[]),
+                     str(SOURCE), 'exec'), namespace)
+        audit = {'ar0234_dynamic_target': {'candidate':
+                 {'bbox_xyxy_px': [300., 100., 700., 900.]}},
+                 'shape_diagnostic': {'mask_depth':
+                 {'status': 'DEPTH_MAD_EXCEEDED'}}}
+        self.assertEqual(namespace['depth_and_box'](audit),
+                         (None, [300., 100., 700., 900.]))
+        self.assertIsNone(namespace['diagnostic_depth_delta'](None, 3.0))
+        main = next(node for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name == 'main')
+        self.assertIn('if previous_box is not None', ast.unparse(main))
+
     def test_encoder_progress_replaces_optical_delta_gate(self):
         valid_budget, progress, tree = load_progress_policy()
         self.assertTrue(valid_budget(5.0, 11))
@@ -83,13 +102,17 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
         self.assertEqual(steer(-2.555, diagnostic_turn_only=True),
                          {'endpoint': '/turn-left', 'angle_deg': 3.0})
         self.assertIsNone(steer(1.4, diagnostic_turn_only=True))
-        self.assertAlmostEqual(steer(2.555)['angle_deg'], 1.2775)
+        self.assertAlmostEqual(steer(2.555, reference_bearing_deg=0.0)['angle_deg'], 1.2775)
 
-    def test_approach_turn_requires_new_drift_and_off_axis_target(self):
+    def test_approach_turn_corrects_displacement_from_initial_target_anywhere(self):
         steer, _ = load_steering()
-        self.assertIsNone(steer(2.0, reference_bearing_deg=1.6))
-        self.assertIsNone(steer(0.5, reference_bearing_deg=3.0))
-        self.assertEqual(steer(-2.0, reference_bearing_deg=1.6)['endpoint'],
+        self.assertIsNone(steer(2.0, reference_bearing_deg=2.0))
+        self.assertIsNone(steer(2.0, reference_bearing_deg=3.0))
+        # An initially right-hand target that shifts left requests a left turn,
+        # even if it has moved closer to the optical axis.
+        self.assertEqual(steer(0.5, reference_bearing_deg=2.5)['endpoint'],
+                         '/turn-left')
+        self.assertEqual(steer(-3.0, reference_bearing_deg=-1.0)['endpoint'],
                          '/turn-left')
         self.assertEqual(steer(3.2, reference_bearing_deg=1.6)['endpoint'],
                          '/turn-right')
@@ -98,6 +121,27 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
                          '/turn-right')
         with self.assertRaisesRegex(ValueError, 'INVALID_REFERENCE_BEARING'):
             steer(2.0, reference_bearing_deg=math.nan)
+        with self.assertRaisesRegex(ValueError, 'INVALID_REFERENCE_BEARING'):
+            steer(2.0)
+
+    def test_turn_feedback_improves_initial_coordinate_even_when_off_axis(self):
+        tree = ast.parse(SOURCE.read_text())
+        names = {'overlap', 'target_center_x', 'target_bearing_deg',
+                 'verify_turn_feedback'}
+        functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                     and node.name in names]
+        namespace = {'math': math, 'RGB_CX_PX': 924.649158,
+                     'RGB_FX_PX': 2021.546012}
+        exec(compile(ast.Module(body=functions, type_ignores=[]),
+                     str(SOURCE), 'exec'), namespace)
+        before = [725., 0., 1125., 800.]
+        after = [745., 0., 1145., 800.]
+        result = namespace['verify_turn_feedback'](
+            None, before, None, after, reference_bearing_deg=2.0)
+        self.assertGreater(result, namespace['target_bearing_deg'](before))
+        with self.assertRaisesRegex(RuntimeError,'TURN_CAMERA_ALIGNMENT_UNCONFIRMED'):
+            namespace['verify_turn_feedback'](
+                None, before, None, after, reference_bearing_deg=-2.0)
 
     def test_turn_only_exits_before_forward_dispatch(self):
         _, tree = load_steering()
