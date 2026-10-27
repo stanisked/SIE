@@ -1,5 +1,7 @@
 # V7 supervised bounded person approach
 
+> **2026-10-27 operator correction:** The desired cart behavior is continuous following of a moving object: acquire a target anywhere in view, start forward, then steer from fresh observations while forward motion is active. The stop/turn/step runner below is historical diagnostic behavior and does not meet that requirement. See [continuous moving-target approach](continuous_moving_target_approach_20261027.md).
+
 Experimental separate launcher; no canonical Measurement or autonomous admission.
 Uses the existing static-v2 camera diagnostic, the V7 one-step observation checks
 and the observed ESP32 stop trial. Nothing runs without the explicit `--execute`
