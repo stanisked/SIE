@@ -135,3 +135,27 @@ the 1.5 degree trigger. The final center drift was about 1.65 degrees, but
 this runner makes no turn after its final forward step. The approach trial
 therefore verifies straight startup and bounded stops, but not steering.
 Camera journal: `/home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_onnxruntime_20261027_113149`.
+
+## Motor-off manual depth A-B-A check (2026-10-27)
+
+With motors powered off, the operator kept the same person stationary and
+measured the camera at the initial cart mark (A), manually translated the
+cart 0.10 m forward without turning (B), then returned it to the original
+mark (A again). Each camera-only preview ran 30 seconds. The built-in summaries
+reported:
+
+| Position | Records | Coherent mask-depth frames | MAD refusals | Median candidate depth | Depth span |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A | 102 | 100 | 0 | 3.1484 m | 0.0326 m |
+| B, 0.10 m forward | 101 | 83 | 16 | 2.9497 m | 0.0720 m |
+| A again | 105 | 94 | 0 | 3.1484 m | 0.0164 m |
+
+The A-to-B depth change was 0.1987 m for the operator-reported 0.10 m cart
+translation. Returning to A restored exactly the prior displayed median.
+Thus the discrepancy reproduces without motor actuation and depends on cart
+position in this setup. The increased MAD refusals and span at B show poorer
+mask-depth consistency there. The evidence does not identify whether stereo
+disparity, person-mask surface selection, geometry, or another position-linked
+factor caused the shift. The 0.01–0.15 m per-step gate remains unchanged; this
+person-mask depth median is not yet a reliable travel odometer at this range.
+Return-position camera journal: `/home/elwis/.local/state/sie/evidence/control_input_preview_half_640x400_single_segmentation_onnxruntime_20261027_122336`.
