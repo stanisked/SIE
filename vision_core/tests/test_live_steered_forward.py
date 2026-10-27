@@ -30,11 +30,16 @@ def preflight(status, *, accepted_builds):
 trial.preflight = preflight
 one = module('vision_core.tools.run_v7_supervised_one_step')
 one.TOPIC = '/test'
-def check_observation(audit, armed, now, *, supervised_rgb_only):
-    assert supervised_rgb_only
+one.EXTRINSIC_SHA = 'extrinsic'
+one.MAX_AGE_S = .5
+one.MODEL_SHA = 'model'
+one.SOURCE_HASHES = {'ar0234_intrinsic': 'rgb',
+                     'ov9281_stereo_calibration': 'stereo'}
+def fake_check_observation(audit, armed, now):
     assert audit['stamp'] >= armed and now - audit['stamp'] < .5
-    return {'oldest_driver_stamp_s': audit['stamp'], 'source_cycle_id': audit['cycle_id']}
-one.check_observation = check_observation
+    return {'oldest_driver_stamp_s': audit['stamp'],
+            'source_cycle_id': audit['cycle_id'],
+            'target_box_xyxy_px': audit['box']}
 approach = module('vision_core.tools.run_v7_supervised_approach')
 approach.depth_and_box = lambda a: (None, a['box'])
 approach.overlap = lambda a, b: max(0, min(a[2], b[2]) - max(a[0], b[0])) / max(a[2]-a[0], b[2]-b[0])
@@ -45,6 +50,8 @@ spec = importlib.util.spec_from_file_location(
     'run_v7_live_steered_forward.py')
 live = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(live)
+real_check_live_rgb_target = live.check_live_rgb_target
+live.check_live_rgb_target = fake_check_observation
 for name, original in saved_modules.items():
     if original is None:
         sys.modules.pop(name, None)
@@ -99,6 +106,45 @@ class FakeController:
 
 
 class LiveSteeringTest(unittest.TestCase):
+    def test_real_rgb_validator_accepts_moving_top_clipped_single_person(self):
+        now = time.monotonic()
+        instance = {'instance_index': 0, 'bbox_xyxy_px': [200, 0, 500, 1100],
+                    'confidence': .91, 'truncated_top': True,
+                    'truncated_left': False, 'truncated_right': False}
+        audit = {'schema_version': 'sie.ar0234_ov9281.control_input_preview.v1',
+                 'cycle_id': 'current',
+                 'calibration': {'ar0234_intrinsic_sha256': 'rgb',
+                                 'ov9281_stereo_sha256': 'stereo',
+                                 'ar0234_to_physical_left_extrinsic_sha256': 'extrinsic'},
+                 'working_targets': {'freshness_policy_id':
+                                     'experimental_freshness_500ms_v1',
+                                     'exposure_to_command_age_max_s': .5},
+                 'segmentation_observation': {'cycle_id': 'current',
+                     'status': 'CURRENT_INSTANCES_DIAGNOSTIC_ONLY',
+                     'model_sha256': 'model', 'class_name': 'person',
+                     'arrays_sha256': 'arrays', 'instances': [instance]},
+                 'ar0234_dynamic_target': {'disposition': 'UNAVAILABLE',
+                     'reason': 'NO_CURRENT_NON_EDGE_TARGET',
+                     'candidate': None, 'current_eligible_count': 0},
+                 'existing_profile_static_gate': {'status': 'FAIL',
+                     'reason': 'MOTION_DETECTED'},
+                 'frame_freshness': {'capture_backend': 'latest_v4l2',
+                     'frames': {'ar0234': {'driver_timestamp_s': now - .1,
+                         'host_packet_received_monotonic_s': now - .05,
+                         'flags': 0x12000}}}}
+        evidence = real_check_live_rgb_target(audit, now - .2, now)
+        self.assertEqual(evidence['target_box_xyxy_px'], instance['bbox_xyxy_px'])
+        self.assertTrue(evidence['top_truncated'])
+        self.assertFalse(evidence['static_depth_gate_used'])
+        audit['segmentation_observation']['instances'].append(dict(instance))
+        with self.assertRaisesRegex(ValueError, 'AMBIGUOUS'):
+            real_check_live_rgb_target(audit, now - .2, now)
+        audit['segmentation_observation']['instances'].pop()
+        instance['bbox_xyxy_px'] = [0, 0, 500, 1100]
+        instance['truncated_left'] = True
+        with self.assertRaisesRegex(ValueError, 'GEOMETRY'):
+            real_check_live_rgb_target(audit, now - .2, now)
+
     def test_bias_and_correspondence(self):
         self.assertEqual(live.steering_bias(0), 0)
         self.assertEqual(live.steering_bias(3), 12)

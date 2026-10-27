@@ -18,8 +18,9 @@ from urllib.parse import urlencode, urlsplit
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from firmware.esp32.tools.run_remote_stop_trial import Http, preflight
-from vision_core.tools.run_v7_supervised_one_step import TOPIC, check_observation
-from vision_core.tools.run_v7_supervised_approach import depth_and_box, overlap, target_bearing_deg
+from vision_core.tools.run_v7_supervised_one_step import (
+    TOPIC, EXTRINSIC_SHA, MAX_AGE_S, MODEL_SHA, SOURCE_HASHES)
+from vision_core.tools.run_v7_supervised_approach import overlap, target_bearing_deg
 
 BUILD = 'v4_2_live_steering_v1'
 DISTANCE_M = 0.10
@@ -29,6 +30,91 @@ STEER_GAIN_PWM_PER_DEG = 4.0
 STEER_DEADBAND_DEG = 0.5
 FEEDBACK_TIMEOUT_S = 0.6  # ESP32 owns the independent 700 ms deadline.
 TERMINAL = {'SUCCESS', 'PARTIAL_PROGRESS', 'STOPPED', 'FAULT'}
+
+
+def check_live_rgb_target(audit, armed_at, now):
+    """Validate a fresh current-frame RGB person without the static depth gate.
+
+    This is a supervised diagnostic target, never an admitted Measurement.
+    It intentionally ignores static-v2 temporal stillness and mask-depth status.
+    """
+    if (type(armed_at) not in (int, float) or not math.isfinite(armed_at) or
+            type(now) not in (int, float) or not math.isfinite(now) or now < armed_at):
+        raise ValueError('INVALID_LOCAL_CLOCK')
+    cid = audit.get('cycle_id')
+    if not isinstance(cid, str) or not cid or \
+            audit.get('schema_version') != 'sie.ar0234_ov9281.control_input_preview.v1':
+        raise ValueError('INVALID_CURRENT_RGB_RECORD')
+    expected = {'ar0234_intrinsic_sha256': SOURCE_HASHES['ar0234_intrinsic'],
+                'ov9281_stereo_sha256': SOURCE_HASHES['ov9281_stereo_calibration'],
+                'ar0234_to_physical_left_extrinsic_sha256': EXTRINSIC_SHA}
+    if audit.get('calibration') != expected:
+        raise ValueError('CALIBRATION_BINDING_MISMATCH')
+    targets = audit.get('working_targets') or {}
+    if (targets.get('freshness_policy_id') != 'experimental_freshness_500ms_v1'
+            or targets.get('exposure_to_command_age_max_s') != MAX_AGE_S):
+        raise ValueError('EXPERIMENTAL_500MS_PROFILE_REQUIRED')
+    segmentation = audit.get('segmentation_observation') or {}
+    target = audit.get('ar0234_dynamic_target') or {}
+    instances = segmentation.get('instances')
+    if (segmentation.get('cycle_id') != cid or
+            segmentation.get('status') != 'CURRENT_INSTANCES_DIAGNOSTIC_ONLY' or
+            segmentation.get('model_sha256') != MODEL_SHA or
+            segmentation.get('class_name') != 'person' or
+            not isinstance(segmentation.get('arrays_sha256'), str) or
+            not segmentation['arrays_sha256']):
+        raise ValueError('CURRENT_RGB_SEGMENTATION_BINDING_MISMATCH')
+    # The existing dynamic selector rejects a person whose head touches the
+    # top image edge, and the static-v2 gate rejects motion. For this RGB-only
+    # diagnostic, use one current segmentation instance directly. A top-clipped
+    # person is still trackable through adjacent-frame box correspondence.
+    if not isinstance(instances, list) or len(instances) != 1 or \
+            not isinstance(instances[0], dict):
+        raise ValueError('CURRENT_RGB_TARGET_UNAVAILABLE_OR_AMBIGUOUS')
+    candidate = instances[0]
+    if candidate.get('instance_index') != 0 or \
+            type(candidate.get('instance_index')) is not int:
+        raise ValueError('CURRENT_RGB_INSTANCE_INDEX_MISSING')
+    if target.get('disposition') == 'OBSERVED' and \
+            (target.get('candidate') != candidate or
+             target.get('current_eligible_count') != 1):
+        raise ValueError('CURRENT_RGB_SELECTOR_DISAGREES_WITH_INSTANCE')
+    if target.get('disposition') != 'OBSERVED' and \
+            target.get('reason') != 'NO_CURRENT_NON_EDGE_TARGET':
+        raise ValueError('CURRENT_RGB_TARGET_SELECTOR_REFUSED')
+    box = candidate.get('bbox_xyxy_px')
+    if (not isinstance(box, list) or len(box) != 4 or
+            not all(type(x) in (int, float) and math.isfinite(x) for x in box) or
+            not 3 < box[0] < box[2] < 1917 or
+            not 0 <= box[1] < box[3] <= 1200 or
+            candidate.get('truncated_left') is not False or
+            candidate.get('truncated_right') is not False or
+            type(candidate.get('confidence')) not in (int, float) or
+            not math.isfinite(candidate['confidence']) or
+            not .70 <= candidate['confidence'] <= 1.0):
+        raise ValueError('CURRENT_RGB_TARGET_GEOMETRY_OR_CONFIDENCE_REFUSED')
+    frame = audit.get('frame_freshness') or {}
+    packet = (frame.get('frames') or {}).get('ar0234') or {}
+    stamp = packet.get('driver_timestamp_s')
+    received = packet.get('host_packet_received_monotonic_s')
+    flags = packet.get('flags')
+    if (frame.get('capture_backend') != 'latest_v4l2' or
+            type(flags) is not int or flags & 0xe000 != 0x2000 or
+            flags & 0x70000 != 0x10000 or
+            type(stamp) not in (int, float) or not math.isfinite(stamp) or
+            type(received) not in (int, float) or not math.isfinite(received) or
+            not armed_at <= stamp <= received <= now):
+        raise ValueError('CURRENT_RGB_DRIVER_FRAME_CLOCK_REFUSED')
+    age = now - stamp
+    if age > MAX_AGE_S:
+        raise ValueError('DRIVER_AGE_AT_DISPATCH_EXCEEDS_500MS')
+    return {'source_cycle_id': cid, 'oldest_driver_stamp_s': stamp,
+            'driver_age_at_check_s': age, 'maximum_age_s': MAX_AGE_S,
+            'target_source': 'CURRENT_FRAME_AR0234_PERSON_SEGMENTATION',
+            'target_box_xyxy_px': box,
+            'top_truncated': candidate.get('truncated_top'),
+            'static_depth_gate_used': False,
+            'measurement_admitted': False}
 
 
 def steering_bias(bearing_deg):
@@ -84,9 +170,8 @@ def preview_session(*, output, camera_factory, duration_s=10.0,
             if audit is None:
                 continue
             try:
-                evidence = check_observation(audit, armed, clock(),
-                                             supervised_rgb_only=True)
-                _, box = depth_and_box(audit)
+                evidence = check_live_rgb_target(audit, armed, clock())
+                box = evidence['target_box_xyxy_px']
             except (ValueError, TypeError, KeyError) as error:
                 target = audit.get('ar0234_dynamic_target') or {}
                 candidate = target.get('candidate') or {}
@@ -216,21 +301,20 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
             if candidate is None:
                 continue
             try:
-                evidence = check_observation(candidate, armed, clock(),
-                                             supervised_rgb_only=True)
+                evidence = check_live_rgb_target(candidate, armed, clock())
                 first = candidate
                 break
             except (ValueError, TypeError, KeyError) as error:
                 report['last_camera_refusal'] = str(error)
         if first is None:
             raise RuntimeError('NO_FRESH_TARGET_WITHIN_60S')
-        _, box = depth_and_box(first)
+        box = evidence['target_box_xyxy_px']
         report['first_camera_evidence'] = evidence
         report['first_box_xyxy_px'] = box
         report['first_bearing_deg'] = target_bearing_deg(box)
         # The first camera detection starts the cart straight, from anywhere
         # in the image. Steering begins with a newly captured second frame.
-        check_observation(first, armed, clock(), supervised_rgb_only=True)
+        check_live_rgb_target(first, armed, clock())
         sent = True  # An ambiguous movement POST is never retried.
         report['movement_posts'] = 1
         code, body = call('POST', '/move-forward-steered',
@@ -260,11 +344,11 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
                 raise RuntimeError('CAMERA_FEEDBACK_TIMEOUT')
             if audit is None:
                 continue
-            evidence = check_observation(audit, armed, now, supervised_rgb_only=True)
+            evidence = check_live_rgb_target(audit, armed, now)
             stamp = evidence['oldest_driver_stamp_s']
             if stamp <= last_frame_stamp:
                 continue
-            _, box = depth_and_box(audit)
+            box = evidence['target_box_xyxy_px']
             if not same_target(previous_box, box):
                 raise RuntimeError('TARGET_CORRESPONDENCE_LOST')
             code, status = call('GET', '/status')
@@ -277,7 +361,7 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
             if status.get('active_command_id') != command_id:
                 raise RuntimeError('ACTIVE_COMMAND_NOT_CONFIRMED')
             # Recheck age after the status read; only this new frame may steer.
-            check_observation(audit, armed, clock(), supervised_rgb_only=True)
+            check_live_rgb_target(audit, armed, clock())
             seq += 1
             # A fresh frame during breakaway keeps feedback alive, but only a
             # frame observed after DRIVING may request a wheel difference.
