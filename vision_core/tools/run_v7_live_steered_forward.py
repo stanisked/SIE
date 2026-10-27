@@ -72,9 +72,11 @@ def preview_session(*, output, camera_factory, duration_s=10.0,
     output.mkdir(parents=True, exist_ok=False)
     armed = clock()
     end = armed + duration_s
-    first_box = previous_box = None
+    previous_box = None
     rows = []
     result = 'NO_TARGET'
+    losses = 0
+    segment = 0
     try:
         for audit in camera_factory(armed):
             if clock() >= end:
@@ -86,28 +88,51 @@ def preview_session(*, output, camera_factory, duration_s=10.0,
                                              supervised_rgb_only=True)
                 _, box = depth_and_box(audit)
             except (ValueError, TypeError, KeyError) as error:
-                if previous_box is None:
-                    continue
-                result = 'TARGET_LOST'
-                rows.append({'refusal': str(error)})
-                break
+                target = audit.get('ar0234_dynamic_target') or {}
+                candidate = target.get('candidate') or {}
+                shape = audit.get('shape_diagnostic') or {}
+                segmentation = audit.get('segmentation_observation') or {}
+                instances = segmentation.get('instances')
+                rows.append({'cycle_id': audit.get('cycle_id'),
+                             'phase': 'TARGET_UNAVAILABLE',
+                             'refusal': str(error),
+                             'camera_status': audit.get('status'),
+                             'current_eligible_count': target.get('current_eligible_count'),
+                             'target_disposition': target.get('disposition'),
+                             'candidate_instance_index': candidate.get('instance_index'),
+                             'mask_instance_index': (shape.get('mask') or {}).get('instance_index'),
+                             'segmentation_instance_count': (len(instances)
+                                                             if isinstance(instances, list) else None)})
+                if previous_box is not None:
+                    losses += 1
+                previous_box = None
+                continue
             if previous_box is not None and not same_target(previous_box, box):
-                result = 'TARGET_CORRESPONDENCE_LOST'
-                break
+                rows.append({'cycle_id': audit['cycle_id'],
+                             'phase': 'CORRESPONDENCE_LOST',
+                             'box_xyxy_px': box,
+                             'previous_box_xyxy_px': previous_box})
+                losses += 1
+                previous_box = None
             bearing = target_bearing_deg(box)
-            bias = 0 if first_box is None else steering_bias(bearing)
+            if previous_box is None:
+                segment += 1
+            bias = 0 if previous_box is None else steering_bias(bearing)
             rows.append({'cycle_id': audit['cycle_id'],
                          'driver_stamp_s': evidence['oldest_driver_stamp_s'],
                          'box_xyxy_px': box, 'bearing_deg': bearing,
                          'intended_bias_pwm': bias,
-                         'phase': 'ACQUIRE_STRAIGHT' if first_box is None else 'LIVE_STEER'})
-            if first_box is None:
-                first_box = box
+                         'segment': segment,
+                         'phase': 'ACQUIRE_STRAIGHT' if previous_box is None else 'LIVE_STEER'})
             previous_box = box
-            result = 'PREVIEW_RECORDED'
+            result = ('PREVIEW_RECORDED_WITH_LOSS' if losses else
+                      'PREVIEW_RECORDED')
     finally:
+        if result != 'NO_TARGET' and losses:
+            result = 'PREVIEW_RECORDED_WITH_LOSS'
         report = {'schema_version': 'sie.live_steering_camera_preview.v1',
                   'result': result, 'motor_posts': 0, 'network_requests': 0,
+                  'target_loss_events': losses, 'acquisition_segments': segment,
                   'measurement_admission_changed': False, 'rows': rows}
         (output / 'summary.json').write_text(json.dumps(report, indent=2,
                                                        allow_nan=False) + '\n')
@@ -387,7 +412,8 @@ def main():
                       'steer_posts=', report['steer_posts'], 'stop_posts=', report['stop_posts'])
             print('Saved:', root / 'summary.json')
             return 0 if report['result'] in ('TERMINAL_OBSERVED_DIAGNOSTIC_ONLY',
-                                             'PREVIEW_RECORDED') else 1
+                                             'PREVIEW_RECORDED',
+                                             'PREVIEW_RECORDED_WITH_LOSS') else 1
         finally:
             if process is not None and process.poll() is None:
                 os.killpg(process.pid, signal.SIGINT)

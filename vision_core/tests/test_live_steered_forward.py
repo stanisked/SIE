@@ -120,6 +120,29 @@ class LiveSteeringTest(unittest.TestCase):
         self.assertEqual(report['rows'][0]['intended_bias_pwm'], 0)
         self.assertGreater(report['rows'][1]['intended_bias_pwm'], 0)
 
+    def test_preview_records_loss_and_reacquires_without_motor_posts(self):
+        import tempfile
+        def camera(armed):
+            yield {'cycle_id': 'first', 'stamp': time.monotonic(),
+                   'box': [40, 0, 60, 100]}
+            yield {'cycle_id': 'missing', 'ar0234_dynamic_target': {
+                   'current_eligible_count': 0}, 'segmentation_observation': {
+                   'instances': []}}
+            yield {'cycle_id': 'new', 'stamp': time.monotonic(),
+                   'box': [30, 0, 50, 100]}
+            yield {'cycle_id': 'moved', 'stamp': time.monotonic(),
+                   'box': [28, 0, 48, 100]}
+        with tempfile.TemporaryDirectory() as root:
+            report = live.preview_session(output=root + '/preview', camera_factory=camera)
+        self.assertEqual(report['result'], 'PREVIEW_RECORDED_WITH_LOSS')
+        self.assertEqual(report['target_loss_events'], 1)
+        self.assertEqual(report['acquisition_segments'], 2)
+        self.assertEqual(report['motor_posts'], 0)
+        self.assertEqual([row['phase'] for row in report['rows']],
+                         ['ACQUIRE_STRAIGHT', 'TARGET_UNAVAILABLE',
+                          'ACQUIRE_STRAIGHT', 'LIVE_STEER'])
+        self.assertLess(report['rows'][-1]['intended_bias_pwm'], 0)
+
     def test_first_frame_straight_second_frame_steers_same_command(self):
         import tempfile
         controller = FakeController()
