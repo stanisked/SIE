@@ -305,3 +305,25 @@ floor turn capability and gearbox lash, not a steering command or a change to
 person approach admission. Run it once with ample clear rotation space and
 no person near the cart, record physical yaw and both wheels, then inspect
 its summary before any additional motion.
+
+## Six-degree v4 floor turn produced visible yaw (2026-10-27)
+
+Evidence root:
+`/home/elwis/.local/state/sie/evidence/floor_turn_20261027_201205_b8474c18`.
+One bounded six-degree left turn and one confirmed `/stop` were sent. The
+controller ended `PARTIAL_PROGRESS`, READY, with no fault latch and zero PWM.
+Targets were 16/16 counts; individual braking began at 10/10, and settled
+counts were 10 right / 9 left. Breakaway PWM was 210 right / 215 left; the
+encoder-estimated final angle was 0.0641 rad (~3.67 degrees). The operator
+observed a physical left chassis turn and approximately 1 cm forward travel
+of the right wheel and 1 cm backward travel of the left wheel. These coarse
+physical estimates are consistent with a few degrees of yaw, but do not
+calibrate the exact angle. The six-degree command did not achieve six degrees;
+it did establish loaded turn capability at this larger bounded request.
+
+The next isolated floor diagnostic accepts a selected five-degree request,
+using the same exact v4 preflight, one turn POST and one confirmed stop. This
+maps the smallest useful physical correction before any camera-guided
+steering change. The result must be assessed from both the journal and a
+physical observation. No person approach or Measurement admission follows
+from this single turn.

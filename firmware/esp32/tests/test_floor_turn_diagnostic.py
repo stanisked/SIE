@@ -41,22 +41,27 @@ class FloorTurnTests(unittest.TestCase):
         self.assertEqual(transport.calls.count(('POST', '/stop')), 1)
         self.assertNotIn(('POST', '/ack-fault'), transport.calls)
 
-    def test_six_degree_request_is_explicit_and_bounded(self):
-        transport = Transport(initially_ready=True)
-        sent_angles = []
-        def request(method, url, timeout):
-            if urlsplit(url).path == '/turn-left':
-                sent_angles.append(parse_qs(urlsplit(url).query)['angle_deg'][0])
-            return transport.request(method, url, timeout)
-        with TemporaryDirectory() as directory:
-            report = run(base_url='http://127.0.0.1',
-                         output=Path(directory) / 'trial', execute=True,
-                         turn_space_clear=True, people_clear=True,
-                         angle_deg=6.0, request=request,
-                         clock=transport.clock, sleep=transport.sleep)
-        self.assertEqual(report['angle_deg'], 6.0)
-        self.assertEqual(sent_angles, ['6.000'])
-        self.assertEqual((report['turn_posts'], report['stop_posts']), (1, 1))
+    def test_selected_larger_angles_are_explicit_and_bounded(self):
+        for angle in (5.0, 6.0):
+            with self.subTest(angle=angle):
+                transport = Transport(initially_ready=True)
+                sent_angles = []
+                def request(method, url, timeout):
+                    if urlsplit(url).path == '/turn-left':
+                        sent_angles.append(
+                            parse_qs(urlsplit(url).query)['angle_deg'][0])
+                    return transport.request(method, url, timeout)
+                with TemporaryDirectory() as directory:
+                    report = run(base_url='http://127.0.0.1',
+                                 output=Path(directory) / 'trial',
+                                 execute=True, turn_space_clear=True,
+                                 people_clear=True, angle_deg=angle,
+                                 request=request, clock=transport.clock,
+                                 sleep=transport.sleep)
+                self.assertEqual(report['angle_deg'], angle)
+                self.assertEqual(sent_angles, [format(angle, '.3f')])
+                self.assertEqual((report['turn_posts'],
+                                  report['stop_posts']), (1, 1))
 
     def test_other_angle_refuses_before_any_io(self):
         transport = Transport(initially_ready=True)

@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
 from firmware.esp32.tools.run_remote_stop_trial import Http, preflight
 
 DEFAULT_ANGLE_DEG = 3.0
-DIAGNOSTIC_ANGLES_DEG = (3.0, 6.0)
+DIAGNOSTIC_ANGLES_DEG = (3.0, 5.0, 6.0)
 EXPECTED_BUILD_ID = 'v4_2_micro_turn_loaded_start_v4'
 TERMINAL = {'SUCCESS', 'PARTIAL_PROGRESS', 'FAULT', 'STOPPED'}
 
