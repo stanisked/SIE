@@ -12,7 +12,7 @@ Recorded 2026-10-27 from the operator's correction. This is the intended behavio
 
 The desired control sequence is **acquire → begin moving → observe and steer during motion → stop at the applicable boundary**. A series of forward steps separated by stop-and-turn commands is a diagnostic predecessor, not this behavior.
 
-## Current implementation gap
+## Baseline implementation gap
 
 `vision_core/tools/run_v7_supervised_approach.py` starts its first 0.10 m step after an eligible detection, then stops and reobserves. Later steering uses a separate `/turn-left` or `/turn-right` request before another straight step. Its original-coordinate comparison is useful diagnostic evidence, but it is not live tracking of a moving target during an active forward command.
 
@@ -25,4 +25,18 @@ The current ESP32 bounded API accepts separate `/move-forward` and `/turn-*` com
 - Add a versioned ESP32 command interface for **one active bounded forward motion** plus command-ID-bound steering updates. It needs encoder feedback for both imperfect motors, a watchdog for missing updates, bounded wheel outputs and travel, and a confirmed stop path. It must reject updates for another boot session or command.
 - Validate the interface with motors lifted, then in clear space without a target person, then with a moving target under an explicitly supervised trial. Record physical path and stopping behavior. Promote none of these diagnostic outputs to canonical Measurement or autonomous motion admission without the separate evidence and contract review.
 
-No new motor command, firmware deployment, or approach admission is implied by this document.
+## Versioned candidate prepared
+
+`traction_control_v4_2_live_steering_v1` adds `/move-forward-steered` and command-bound `/steer-update`. The Pi runner `run_v7_live_steered_forward.py` acquires the current RGB target anywhere in view, sends a straight bounded forward command, and uses later fresh frames to update differential wheel PWM while that command remains active. A missing frame, identity mismatch, rejected update, or controller fault causes `/stop` and zero-PWM confirmation. The first command is bounded to 0.02–0.30 m; the initial physical trial should use 0.10 m. The camera-only `--preview-only` mode journals proposed bias before motor use.
+
+Operator sequence after updating Pi and flashing the candidate ESP32 build:
+
+```bash
+bash vision_core/tools/run_v7_live_steered_forward.sh --preview-only --preview-duration-s 20
+# After reviewing the preview journal and verifying /status, first supervised test:
+bash vision_core/tools/run_v7_live_steered_forward.sh --execute --base-url http://10.13.32.229 --front-clearance-m 2.5 --distance-m 0.10
+```
+
+Use the measured current front clearance and controller address; the example values are not assertions about the next test scene. Inspect the new evidence summary and physical wheel motion before considering a longer command.
+
+The present AR0234 semantic source selects a person instance. The control contract can accept another semantic target adapter later, but arbitrary object classes are not yet detected or tracked. Adjacent-frame box correspondence is conservative and stops on ambiguity; it is not a persistent multi-object tracker. The firmware source is unflashed and uncompiled in this environment, and no physical steering or stopping bound has been established for this candidate. Canonical Measurement and autonomous motion admission are unchanged.
