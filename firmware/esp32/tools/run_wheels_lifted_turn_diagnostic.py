@@ -20,16 +20,19 @@ from firmware.esp32.tools.run_remote_stop_trial import Http, preflight
 ANGLE_DEG = 3.0
 FAULT = 'BREAKAWAY_NOT_FOUND'
 EXPECTED_BUILD_ID = 'v4_2_micro_turn_loaded_start_v4'
+ALLOWED_BENCH_BUILDS = (EXPECTED_BUILD_ID, 'v4_2_micro_turn_power_v5')
 TERMINAL = {'SUCCESS', 'PARTIAL_PROGRESS', 'FAULT', 'STOPPED'}
 
 
 def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
-        clock=time.monotonic, sleep=time.sleep):
+        expected_build_id=EXPECTED_BUILD_ID, clock=time.monotonic, sleep=time.sleep):
     if not execute:
         return {'result': 'NO_EXECUTION', 'turn_posts': 0, 'stop_posts': 0,
                 'fault_ack_posts': 0}
     if wheels_lifted is not True:
         raise ValueError('WHEELS_LIFTED_CONFIRMATION_REQUIRED')
+    if expected_build_id not in ALLOWED_BENCH_BUILDS:
+        raise ValueError('UNREVIEWED_BENCH_FIRMWARE_BUILD')
     parsed = urlsplit(base_url)
     if (parsed.scheme != 'http' or not parsed.hostname or parsed.username or
             parsed.password or parsed.query or parsed.fragment or
@@ -42,7 +45,7 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
     summary = {'schema_version': 'sie.wheels_lifted_turn_diagnostic.v1',
                'command_id': command_id, 'endpoint': '/turn-left',
                'angle_deg': ANGLE_DEG, 'wheels_lifted_operator_assertion': True,
-               'expected_firmware_build_id': EXPECTED_BUILD_ID,
+               'expected_firmware_build_id': expected_build_id,
                'result': 'NOT_STARTED', 'fault_ack_posts': 0,
                'turn_posts': 0, 'stop_posts': 0,
                'measurement_emission': False, 'camera_control_enabled': False}
@@ -72,9 +75,9 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
         summary['initial_status'] = initial
         if code != 200:
             raise RuntimeError('INITIAL_STATUS_UNAVAILABLE')
-        if initial.get('firmware_build_id') != EXPECTED_BUILD_ID:
+        if initial.get('firmware_build_id') != expected_build_id:
             raise RuntimeError('FIRMWARE_BUILD_ID_MISMATCH:expected=' +
-                               EXPECTED_BUILD_ID + ':actual=' +
+                               expected_build_id + ':actual=' +
                                str(initial.get('firmware_build_id')))
         if (initial.get('motion_api_version') != 'v2_bounded_motion_api'
                 or initial.get('active_command_id') is not None
@@ -100,7 +103,7 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
                 raise RuntimeError('READY_STATUS_OR_SESSION_UNAVAILABLE')
         else:
             ready = initial
-        preflight(ready, accepted_builds={EXPECTED_BUILD_ID})
+        preflight(ready, accepted_builds={expected_build_id})
         summary['ready_status'] = ready
         sent_turn = True
         summary['turn_posts'] = 1
@@ -174,6 +177,8 @@ def main(argv=None):
     p.add_argument('--execute', action='store_true')
     p.add_argument('--wheels-lifted', action='store_true',
                    help='operator confirms both driven wheels cannot contact the floor')
+    p.add_argument('--expected-build-id', choices=ALLOWED_BENCH_BUILDS,
+                   default=EXPECTED_BUILD_ID)
     p.add_argument('--base-url')
     p.add_argument('--output', type=Path)
     args = p.parse_args(argv)
@@ -187,7 +192,8 @@ def main(argv=None):
          '_' + uuid.uuid4().hex[:8]))
     print('Wheels-lifted bench only: keep both driven wheels clear of the floor and motor power cutoff accessible.')
     result = run(base_url=args.base_url, output=output, execute=True,
-                 wheels_lifted=True)
+                 wheels_lifted=True,
+                 expected_build_id=args.expected_build_id)
     print('STAND_TURN', result['result'], 'turn_posts=', result['turn_posts'],
           'stop_posts=', result['stop_posts'])
     print('Saved:', output / 'summary.json')

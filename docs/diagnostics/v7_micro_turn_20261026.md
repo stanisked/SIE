@@ -350,3 +350,34 @@ terminal and two-second stop-confirmation deadlines. It still sends one
 turn POST and one stop POST at most, and never extends a deadline due to a
 read timeout. The next five-degree floor result must be assessed afresh; do
 not infer camera-steering capability from this interrupted trial.
+
+## Completed five-degree floor turn and v5 startup-power candidate (2026-10-27)
+
+Evidence root:
+`/home/elwis/.local/state/sie/evidence/floor_turn_20261027_203218_84d36880`.
+The repeated v4 five-degree left turn completed without a status timeout.
+The controller reported `PARTIAL_PROGRESS`, READY, no fault, zero PWM, and
+a confirmed post-terminal `/stop`. Targets were 13/13 counts, individual
+braking began at 7/7, and settled counts were 6 right / 7 left. The
+encoder-estimated final angle was 0.0439 rad (~2.52 degrees); recorded
+breakaway PWM was 200 right / 205 left. The operator observed a small
+physical left turn with approximately 0.5 cm right-wheel forward motion and
+0.5 cm left-wheel backward motion. Those coarse wheel marks support a real
+turn but do not establish exact yaw. The perceived weak launch is consistent
+with the lower recorded breakaway PWM than the six-degree trial's 210/215;
+no motor-supply voltage under load was measured, so power delivery remains
+an open alternative explanation.
+
+The isolated `v4_2_micro_turn_power_v5` candidate responds to the
+operator's request for stronger startup. It begins bounded micro-turns at
+PWM 210, permits ramp to 230 before individual braking, and keeps each
+wheel's observed breakaway PWM while its partner starts. Forward launch
+remains at 180. The v4 absolute per-wheel encoder limit, 450 ms startup
+timeout, short-turn brake points, active-brake settle, fault latch, and remote
+stop path are unchanged. In particular, a three-degree request still brakes
+at about two counts, so higher PWM alone may not yield a useful chassis turn.
+This source is an uncompiled candidate until the operator compiles it on the
+computer and flashes it. The existing supervised approach and floor turn
+runner do not admit v5. The next motor trial is one marked-wheel, wheels-lifted
+three-degree turn after exact live build-ID verification; inspect that result
+before any floor turn.

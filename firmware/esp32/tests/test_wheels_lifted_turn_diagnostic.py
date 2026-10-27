@@ -122,6 +122,24 @@ class WheelsLiftedTurnTests(unittest.TestCase):
         self.assertEqual((report['turn_posts'], report['stop_posts']), (0, 0))
         self.assertEqual(t.calls, [('GET', '/status')])
 
+    def test_v5_requires_explicit_bench_build_selection(self):
+        t = Transport(initially_ready=True)
+        t.data['firmware_build_id'] = 'v4_2_micro_turn_power_v5'
+        refused = self.trial(t)
+        self.assertEqual((refused['turn_posts'], refused['stop_posts']), (0, 0))
+        self.assertIn('FIRMWARE_BUILD_ID_MISMATCH', refused['error'])
+        t = Transport(initially_ready=True)
+        t.data['firmware_build_id'] = 'v4_2_micro_turn_power_v5'
+        with TemporaryDirectory() as directory:
+            report = run(base_url='http://127.0.0.1',
+                         output=Path(directory) / 'trial', execute=True,
+                         wheels_lifted=True,
+                         expected_build_id='v4_2_micro_turn_power_v5',
+                         request=t.request, clock=t.clock, sleep=t.sleep)
+        self.assertEqual(report['expected_firmware_build_id'],
+                         'v4_2_micro_turn_power_v5')
+        self.assertEqual((report['turn_posts'], report['stop_posts']), (1, 1))
+
     def test_default_is_no_execution(self):
         t = Transport()
         report = run(base_url='http://127.0.0.1', output='unused',
