@@ -327,3 +327,26 @@ maps the smallest useful physical correction before any camera-guided
 steering change. The result must be assessed from both the journal and a
 physical observation. No person approach or Measurement admission follows
 from this single turn.
+
+## Five-degree floor trial interrupted by status timeout (2026-10-27)
+
+Evidence root:
+`/home/elwis/.local/state/sie/evidence/floor_turn_20261027_202218_db537383`.
+The v4 controller accepted one five-degree left turn. The first terminal
+status read timed out, so the diagnostic sent its one `/stop` before a
+terminal result was observed. The stop POST returned 202 with
+`stop_pending=true`; the immediate stop-status read also timed out. The
+operator saw a small physical left turn and perceived weak motor output.
+The resulting `TRIAL_REFUSED_OR_UNKNOWN` does not isolate motor torque,
+because the host may have ended the turn early on the first read timeout.
+
+A subsequent operator read-only `/status` confirmed the same boot session
+`E7295D62E5B1FBA4` and command ID, terminal `STOPPED`, READY, no active
+command, `remote_stop_pending=false`, no fault, zero PWM, settled counts
+6 right / 4 left, and breakaway PWM 205 on each side. This establishes final
+rest, not normal completion of the requested five-degree turn. The diagnostic
+now retries only timed-out `GET /status` calls within its original five-second
+terminal and two-second stop-confirmation deadlines. It still sends one
+turn POST and one stop POST at most, and never extends a deadline due to a
+read timeout. The next five-degree floor result must be assessed afresh; do
+not infer camera-steering capability from this interrupted trial.

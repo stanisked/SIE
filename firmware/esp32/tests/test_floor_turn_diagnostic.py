@@ -41,6 +41,35 @@ class FloorTurnTests(unittest.TestCase):
         self.assertEqual(transport.calls.count(('POST', '/stop')), 1)
         self.assertNotIn(('POST', '/ack-fault'), transport.calls)
 
+    def test_read_timeouts_retry_without_repeating_motor_posts(self):
+        transport = Transport(initially_ready=True)
+        failed = {'terminal': False, 'stop': False}
+        def request(method, url, timeout):
+            route = urlsplit(url).path
+            after_turn = transport.command_id is not None
+            after_stop = ('POST', '/stop') in transport.calls
+            phase = 'stop' if after_stop else 'terminal'
+            if (method == 'GET' and route == '/status' and after_turn
+                    and not failed[phase]):
+                failed[phase] = True
+                transport.calls.append((method, route))
+                transport.time += timeout
+                raise TimeoutError('one transient status timeout')
+            return transport.request(method, url, timeout)
+        with TemporaryDirectory() as directory:
+            report = run(base_url='http://127.0.0.1',
+                         output=Path(directory) / 'trial', execute=True,
+                         turn_space_clear=True, people_clear=True,
+                         request=request, clock=transport.clock,
+                         sleep=transport.sleep)
+        self.assertEqual(report['result'], 'TURN_FAULT_OBSERVED')
+        self.assertEqual(report['terminal_status_read_timeouts'], 1)
+        self.assertEqual(report['stop_status_read_timeouts'], 1)
+        self.assertEqual((report['turn_posts'], report['stop_posts']), (1, 1))
+        self.assertEqual(transport.calls.count(('POST', '/turn-left')), 1)
+        self.assertEqual(transport.calls.count(('POST', '/stop')), 1)
+        self.assertIn('post_stop_status', report)
+
     def test_selected_larger_angles_are_explicit_and_bounded(self):
         for angle in (5.0, 6.0):
             with self.subTest(angle=angle):

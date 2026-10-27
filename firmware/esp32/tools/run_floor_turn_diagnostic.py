@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import sys
 import time
+from urllib.error import URLError
 from urllib.parse import urlencode, urlsplit
 import uuid
 
@@ -49,6 +50,8 @@ def run(*, base_url, output, execute=False, turn_space_clear=False,
                'expected_firmware_build_id': EXPECTED_BUILD_ID,
                'result': 'NOT_STARTED', 'fault_ack_posts': 0,
                'turn_posts': 0, 'stop_posts': 0,
+               'terminal_status_read_timeouts': 0,
+               'stop_status_read_timeouts': 0,
                'measurement_emission': False, 'camera_control_enabled': False}
     journal = (output / 'http.jsonl').open('x')
     sent_turn = False
@@ -104,7 +107,19 @@ def run(*, base_url, output, execute=False, turn_space_clear=False,
             raise RuntimeError('TURN_ACCEPTANCE_UNKNOWN')
         deadline = clock() + 5.0
         while clock() < deadline:
-            code, status = call('GET', '/status')
+            try:
+                code, status = call('GET', '/status',
+                                    timeout=min(0.5, deadline - clock()))
+            except (TimeoutError, URLError) as error:
+                if not (isinstance(error, TimeoutError) or
+                        isinstance(getattr(error, 'reason', None), TimeoutError)):
+                    raise
+                summary['terminal_status_read_timeouts'] += 1
+                if clock() < deadline:
+                    sleep(min(0.02, deadline - clock()))
+                continue  # Read-only retry; never repeat the turn POST.
+            if clock() >= deadline:
+                raise RuntimeError('TURN_TERMINAL_DEADLINE_EXPIRED')
             if code != 200 or status.get('boot_session_id') != boot:
                 raise RuntimeError('TURN_STATUS_OR_SESSION_CHANGED')
             if (status.get('last_command_id') == command_id and
@@ -140,7 +155,17 @@ def run(*, base_url, output, execute=False, turn_space_clear=False,
                     raise RuntimeError('STOP_ACCEPTANCE_UNKNOWN')
                 stop_deadline = clock() + 2.0
                 while clock() < stop_deadline:
-                    code, stopped = call('GET', '/status')
+                    try:
+                        code, stopped = call('GET', '/status',
+                                             timeout=min(0.5, stop_deadline - clock()))
+                    except (TimeoutError, URLError) as error:
+                        if not (isinstance(error, TimeoutError) or
+                                isinstance(getattr(error, 'reason', None), TimeoutError)):
+                            raise
+                        summary['stop_status_read_timeouts'] += 1
+                        if clock() < stop_deadline:
+                            sleep(min(0.02, stop_deadline - clock()))
+                        continue  # Read-only retry; never repeat /stop.
                     if (code == 200 and stopped.get('boot_session_id') == boot
                             and stopped.get('remote_stop_pending') is False
                             and stopped.get('right_pwm') == 0
