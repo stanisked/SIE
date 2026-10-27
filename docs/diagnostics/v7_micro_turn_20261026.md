@@ -118,3 +118,37 @@ Do not treat the reported 0.96-degree encoder heading as a verified chassis
 turn when one wheel did not break away. The fault remains latched in the
 supplied terminal status; no automatic fault acknowledgement or approach
 retry is authorized by this result.
+
+## Wheels-lifted actuator isolation prepared (2026-10-27)
+
+The operator confirmed that both wheels rotate freely by hand and motor and
+encoder connectors appear seated, then confirmed that the cart can be securely
+lifted with both driven wheels clear of the floor. A separate diagnostic
+script, `firmware/esp32/tools/run_wheels_lifted_turn_diagnostic.py`, is
+prepared for one three-degree left-turn request with no camera or forward
+command. Its default path opens no network or motor. With explicit
+`--execute --wheels-lifted`, it requires the exact current latched
+`BREAKAWAY_NOT_FOUND` fault, zero PWM and no active command. It acknowledges
+only that fault, checks the same boot session in READY, sends one bounded
+`/turn-left` POST, observes a terminal status, sends one `/stop` even if
+the turn POST is ambiguous, and checks zero PWM afterward. It saves the HTTP
+journal and summary. No motion POST is retried, and the test grants no person
+approach or firmware activation.
+
+After securely lifting the cart, keeping the motor power cutoff accessible,
+and arranging to observe both wheels separately, run from the Pi checkout:
+
+```bash
+python3 firmware/esp32/tools/run_wheels_lifted_turn_diagnostic.py
+python3 firmware/esp32/tools/run_wheels_lifted_turn_diagnostic.py --execute --wheels-lifted --base-url http://10.13.32.229
+```
+
+The first command should report `NO_EXECUTION`. The second may clear the
+specific latched fault before its one bounded turn. If the first status no
+longer has that exact fault, the script refuses without a turn. Record whether
+each wheel physically rotated and in which direction, the `STAND_TURN` line,
+the `Saved:` path, and the saved `summary.json`. A wheel that moves off-floor
+but not under floor load points toward inadequate loaded start torque or
+supply, while no observed left-wheel motion off-floor keeps motor drive,
+encoder wiring and direction logic in scope. These are diagnostic
+interpretations, not established causes.
