@@ -333,10 +333,11 @@ def main():
             return fresh,check_observation(fresh,armed,time.monotonic()),new_z,new_box
         previous_z=previous_box=initial_center_x=initial_bearing_deg=None
         after=armed
+        print('Waiting up to 60 s for the first eligible camera frame.')
         for index in range(args.max_steps):
             if process.poll() is not None: raise RuntimeError('CAMERA_PROCESS_ENDED')
             audit,evidence=next_observation(node,holder,after=after,armed_at=armed,camera_process=process,
-                                             timeout_s=20 if index==0 else 8)
+                                             timeout_s=60 if index==0 else 8)
             z,box=depth_and_box(audit)
             if initial_center_x is None:
                 initial_center_x=target_center_x(box)
