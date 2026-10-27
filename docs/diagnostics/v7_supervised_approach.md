@@ -195,8 +195,7 @@ The first step starts straight; a turn before a later step occurs only when
 current image bearing both leaves the optical deadband and differs from the
 first-frame bearing by more than 1.5 degrees. A turn still requires READY,
 encoder direction and fresh camera improvement; it can refuse without a
-further forward request. No physical result with this encoder-based progress
-policy is recorded yet.
+further forward request. The first physical run with this encoder-based progress policy is recorded below.
 
 ## First-step refusal after encoder policy update (2026-10-27)
 
@@ -209,5 +208,28 @@ The host's two-second age cap on that earlier status caused
 That cap is removed. The status must still be from after operator arming;
 the camera frame must be fresh immediately before dispatch, and firmware
 rechecks session, fault and busy state atomically on the motion request.
-The child controller error is now copied into the approach summary. This
-change has not yet been tested with physical motion.
+The child controller error is now copied into the approach summary. The following three-step trial tested this change with physical motion.
+
+## Three-step supervised floor trial after status-age fix (2026-10-27)
+
+Pi journal: `/home/elwis/.local/state/sie/evidence/v7_supervised_approach_1793111926_44d55c2a/summary.json`.
+The runner reported `BOUNDED_SESSION_COMPLETE`: three forward POSTs, three
+stop POSTs, and zero turn POSTs. Each controller trial reported observed remote
+stop. Per-command mean wheel encoder progress was 0.0481, 0.0392 and 0.0422 m,
+for a sum of 0.1295 m. The operator independently estimated 0.13–0.14 m on
+the floor and about 1.5 degrees of rightward heading deviation. Camera target
+bearing changed from +1.74 degrees at the initial observation to +0.92 and
++0.10 degrees before steps two and three, then -1.15 degrees after step
+three. It moved toward and slightly across the optical axis, so no steering
+request was eligible. The fresh camera ages immediately before the forward
+commands were about 0.245, 0.233 and 0.240 s. The three preliminary ESP32
+status ages at dispatch were about 0.405, 1.176 and 0.616 s.
+
+This trial confirms the host age-cap fix allowed bounded forward commands and
+that encoder progress roughly matched the operator's floor estimate. It did
+not exercise a turn. The diagnostic Measurement policy remains STOP and no
+autonomous motion admission changed. The next supervised steering test can
+request more steps only with a newly measured clear approach path, stationary
+person, clear rotation space and operator access to motor cutoff. It should
+record turn request, terminal encoder turn, fresh image response and physical
+heading after the session.
