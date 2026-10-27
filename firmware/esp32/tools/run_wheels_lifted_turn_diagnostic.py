@@ -100,7 +100,7 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
                 raise RuntimeError('READY_STATUS_OR_SESSION_UNAVAILABLE')
         else:
             ready = initial
-        preflight(ready)
+        preflight(ready, accepted_builds={EXPECTED_BUILD_ID})
         summary['ready_status'] = ready
         sent_turn = True
         summary['turn_posts'] = 1

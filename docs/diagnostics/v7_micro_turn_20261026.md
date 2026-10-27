@@ -241,3 +241,16 @@ refuses before any motor POST if v3 is still active. Verify the sketch, board,
 port, and upload result on the computer and confirm the live `/status`
 `firmware_build_id` before repeating the stand test. Do not use the v3
 result as evidence for v4 or proceed to a floor/person approach test.
+
+## V4 bench preflight refused by shared legacy allowlist (2026-10-27)
+
+After the operator reported the v4 flash, the next wheels-lifted run saved
+`/home/elwis/.local/state/sie/evidence/wheels_lifted_turn_20261027_194830_c8b2dd2b/summary.json`.
+Its initial status confirmed `v4_2_micro_turn_loaded_start_v4`, READY,
+zero PWM, no fault, and boot session `E7295D62E5B1FBA4`. No turn or stop
+POST was sent. The refusal `TrialError: Unexpected firmware build` came
+from the shared remote-stop preflight's legacy build allowlist after the
+stand script had accepted v4. The preflight now accepts an explicit build set
+for this stand-only caller; its default allowlist remains unchanged, so the
+forward trial and supervised approach do not gain v4 admission. The next
+stand test still needs an actual physical result.

@@ -47,8 +47,10 @@ class Http:
         return code, data
 
 
-def preflight(s):
-    if s.get('firmware_build_id') not in ACCEPTED_BUILDS:
+def preflight(s, *, accepted_builds=None):
+    if accepted_builds is None:
+        accepted_builds = ACCEPTED_BUILDS
+    if s.get('firmware_build_id') not in accepted_builds:
         raise TrialError('Unexpected firmware build')
     if s.get('motion_api_version') != 'v2_bounded_motion_api':
         raise TrialError('Unexpected motion API')

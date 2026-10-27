@@ -5,7 +5,8 @@ import tempfile
 import unittest
 from urllib.parse import parse_qs, urlsplit
 from urllib.error import URLError
-from firmware.esp32.tools.run_remote_stop_trial import BUILD, REUSABLE_HISTORY_BUILD, run
+from firmware.esp32.tools.run_remote_stop_trial import (BUILD, REUSABLE_HISTORY_BUILD,
+    TrialError, preflight, run)
 
 class Harness:
     def __init__(self, mode='normal'):
@@ -60,6 +61,13 @@ class Harness:
                     'right_count':50,'left_count':50}
 
 class TrialTests(unittest.TestCase):
+    def test_candidate_build_requires_explicit_preflight_scope(self):
+        _, ready = Harness().request('GET', 'http://127.0.0.1/status', 1.0)
+        ready['firmware_build_id'] = 'v4_2_micro_turn_loaded_start_v4'
+        with self.assertRaises(TrialError):
+            preflight(ready)
+        preflight(ready, accepted_builds={'v4_2_micro_turn_loaded_start_v4'})
+
     def trial(self,mode='normal',execute=True):
         h=Harness(mode)
         with tempfile.TemporaryDirectory() as tmp:
