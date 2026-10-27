@@ -49,9 +49,16 @@ def target_center_x(box):
 def target_bearing_deg(box):
     return math.degrees(math.atan((target_center_x(box) - RGB_CX_PX) / RGB_FX_PX))
 
-def steering_request(bearing_deg, *, diagnostic_turn_only=False):
+def steering_request(bearing_deg, *, reference_bearing_deg=None,
+                     diagnostic_turn_only=False):
     if not math.isfinite(bearing_deg):
         raise ValueError('INVALID_TARGET_BEARING')
+    if reference_bearing_deg is not None:
+        if not math.isfinite(reference_bearing_deg):
+            raise ValueError('INVALID_REFERENCE_BEARING')
+        if (not diagnostic_turn_only and
+                abs(bearing_deg - reference_bearing_deg) <= TURN_DEADBAND_DEG):
+            return None
     if abs(bearing_deg) <= TURN_DEADBAND_DEG:
         return None
     # Image x increases to the right. A left turn brings a left-hand target
@@ -242,7 +249,7 @@ def main():
         print('One camera-directed 3 degree turn followed by fresh camera feedback; no forward request.')
     else:
         print('Up to',args.max_steps,'separate 0.10 m commands, each followed by /stop and a new camera observation.')
-    print('At most one 1–3 degree camera-guided turn before each forward step and after the final step; each turn requires fresh camera feedback.')
+    print('First step starts straight; later steps may turn 1–3 degrees after observed target drift. Each turn requires fresh camera feedback.')
     print('This supervised experiment does not activate Measurement or autonomous motion admission.')
     print('Confirm stationary person, clear approach path and rotation space, cart facing person, and accessible motor power cutoff.')
     armed=time.monotonic()
@@ -271,10 +278,11 @@ def main():
         process=subprocess.Popen(['bash',str(ROOT/'vision_core/tools/run_control_preview_existing_static_v2.sh')],cwd=ROOT,start_new_session=True,env=camera_env)
         def align_once(audit, evidence, z, box, row, *, label=None):
             request=steering_request(target_bearing_deg(box),
+                                     reference_bearing_deg=initial_bearing_deg,
                                      diagnostic_turn_only=args.diagnostic_turn_only)
             row['bearing_before_turn_deg']=target_bearing_deg(box)
             if request is None:
-                row['steering']='ALREADY_CENTERED'
+                row['steering']='ALREADY_CENTERED' if args.diagnostic_turn_only else 'NO_DRIFT_OR_ALREADY_CENTERED'
                 return audit,evidence,z,box
             turn_label=label or str(row['index']).zfill(2)
             ready_status, ready_at=preflight_turn_before_fresh_frame(
@@ -287,11 +295,13 @@ def main():
             if overlap(box,new_box)<.7 or abs(new_z-z)>.15:
                 raise RuntimeError('TURN_PREFLIGHT_TARGET_CORRESPONDENCE_LOST')
             fresh_request=steering_request(target_bearing_deg(new_box),
+                                           reference_bearing_deg=initial_bearing_deg,
                                            diagnostic_turn_only=args.diagnostic_turn_only)
             row['post_preflight_cycle_id']=fresh['cycle_id']
             row['post_preflight_bearing_deg']=target_bearing_deg(new_box)
             if fresh_request is None:
-                row['steering']='ALREADY_CENTERED_AFTER_PREFLIGHT'
+                row['steering']=('ALREADY_CENTERED_AFTER_PREFLIGHT' if args.diagnostic_turn_only
+                                 else 'NO_DRIFT_OR_ALREADY_CENTERED_AFTER_PREFLIGHT')
                 return fresh,check_observation(fresh,armed,time.monotonic()),new_z,new_box
             if fresh_request['endpoint']!=request['endpoint']:
                 raise RuntimeError('TURN_PREFLIGHT_BEARING_DIRECTION_CHANGED')
@@ -321,7 +331,7 @@ def main():
             verify_turn_feedback(z,box,new_z,new_box)
             row['steering']='CAMERA_ALIGNMENT_IMPROVED'
             return fresh,check_observation(fresh,armed,time.monotonic()),new_z,new_box
-        previous_z=previous_box=initial_center_x=None
+        previous_z=previous_box=initial_center_x=initial_bearing_deg=None
         after=armed
         for index in range(args.max_steps):
             if process.poll() is not None: raise RuntimeError('CAMERA_PROCESS_ENDED')
@@ -330,6 +340,7 @@ def main():
             z,box=depth_and_box(audit)
             if initial_center_x is None:
                 initial_center_x=target_center_x(box)
+                initial_bearing_deg=target_bearing_deg(box)
             center_drift_px=target_center_x(box)-initial_center_x
             if previous_z is not None:
                 if overlap(previous_box,box)<.7: raise RuntimeError('TARGET_CORRESPONDENCE_LOST')
@@ -341,7 +352,8 @@ def main():
                 if not .01 <= delta <= .15: raise RuntimeError('DEPTH_PROGRESS_UNCONFIRMED')
             row={'index':index+1,'source_cycle_id':audit['cycle_id'],'depth_before_m':z,
                  'camera_evidence':evidence,'rgb_center_x_px':target_center_x(box),
-                 'center_drift_from_first_px':center_drift_px}
+                 'center_drift_from_first_px':center_drift_px,
+                 'bearing_drift_from_first_deg':target_bearing_deg(box)-initial_bearing_deg}
             report['steps'].append(row)
             # Keep an operator-declared front-clearance budget separate from optical depth.
             if args.front_clearance_m - .1*(index+1) <= 1.0:
