@@ -63,7 +63,8 @@ def preflight(s):
 
 
 def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
-        sleep=time.sleep, timeout=0.5, before_move=None):
+        sleep=time.sleep, timeout=0.5, before_move=None, ready_status=None,
+        ready_status_at=None):
     parsed = urlsplit(base_url)
     if parsed.scheme != 'http' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {'','/'}:
         raise TrialError('Use an explicit http://controller-host[:port] base URL')
@@ -118,9 +119,18 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
         if code not in {200,202} or data.get('accepted') is not True:
             raise TrialError('Stop acknowledgement unavailable or unexpected')
     try:
-        code, status = call('GET','/status')
-        if code != 200:
-            raise TrialError('Status request failed')
+        if ready_status is None:
+            code, status = call('GET','/status')
+            if code != 200:
+                raise TrialError('Status request failed')
+            summary['preflight_source'] = 'HTTP_GET'
+        else:
+            status = ready_status
+            summary['preflight_source'] = 'PROVIDED_BEFORE_FRESH_FRAME'
+            if (type(ready_status_at) not in (int, float)
+                    or not math.isfinite(ready_status_at)
+                    or not 0 <= clock() - ready_status_at <= 2.0):
+                raise TrialError('Provided controller status is stale or unbound')
         preflight(status)
         session = status['boot_session_id']
         summary['boot_session_id'] = session
@@ -129,9 +139,13 @@ def run(*, base_url, output, execute=False, request=None, clock=time.monotonic,
             summary['result'] = 'PREFLIGHT_ONLY_NO_MOVEMENT'
             return summary
         if before_move is not None:
-            # Last-moment external veto, after HTTP preflight and before any
+            # Last-moment external veto, after controller preflight and before any
             # movement flag/POST. Exceptions here do not issue a stop or move.
             summary['external_pre_move_evidence'] = before_move(status)
+        if ready_status is not None:
+            summary['preflight_age_at_dispatch_s'] = clock() - ready_status_at
+            if not 0 <= summary['preflight_age_at_dispatch_s'] <= 2.0:
+                raise TrialError('Provided controller status expired before movement')
         sent_move = True
         summary['movement_posts'] += 1
         started = clock()

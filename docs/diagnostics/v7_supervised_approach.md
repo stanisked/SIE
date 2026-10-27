@@ -22,8 +22,14 @@ and controller turn convention.
 It requires terminal READY, zero PWM, valid encoder direction, and then a
 fresh eligible camera frame of the same person. The new image bearing must
 improve by at least 0.25 degrees before the runner can request the next
-forward motion. There is no turn after the final forward step and no blind
-turn retry. The original ten-step run moved the bbox center from 982.7 to
+forward motion. Before every forward request, the runner reads ESP32
+`/status`, then waits for a newly captured eligible frame of the same target.
+The stop trial validates the supplied status without another pre-move GET and
+rechecks the new frame's 500 ms driver age immediately before dispatch.
+The supplied controller status must also be no more than 2 seconds old. A
+status failure, changed target, or stale frame stops without a move request.
+There is no turn after the final forward step and no blind turn retry.
+The original ten-step run moved the bbox center from 982.7 to
 683.8 px while the operator observed about 12 degrees of rightward drift.
 Those per-step encoder headings were local command estimates, not a global yaw.
 The turn sign and image response still need a short on-floor verification.
@@ -89,3 +95,15 @@ for its startup `snapshot()`; the runner's shutdown signal produced the child's
 `KeyboardInterrupt` traceback. This does not prove that the camera would
 subsequently publish. The initial wait is now 60 seconds; a further zero-frame
 refusal requires camera/capture diagnosis before another approach attempt.
+
+## Forward status ordering checkpoint (2026-10-27)
+
+The first two-step attempt after the longer camera startup wait selected a
+valid first target frame at 3.1648 m, but sent no move or stop POST. ESP32
+`/status` returned `READY` and the accepted firmware build; the subsequent
+pre-move frame check refused with `DRIVER_AGE_AT_DISPATCH_EXCEEDS_500MS`.
+The forward path now reads status first, takes a new eligible frame afterward,
+and rechecks that frame just before the one bounded move request. The previous
+read-then-old-frame ordering remains in the standalone one-step runner unless
+its caller supplies a preflight status; its existing stale-frame veto remains.
+No physical result after this ordering change is recorded.

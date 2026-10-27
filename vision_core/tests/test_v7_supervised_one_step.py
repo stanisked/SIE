@@ -83,6 +83,20 @@ class OneStepTests(unittest.TestCase):
         self.assertEqual([p for m, p in h.calls if m == 'POST'], ['/move-forward', '/stop'])
         self.assertEqual(r['external_pre_move_evidence']['source_cycle_id'], 'one')
 
+    def test_preflight_before_frame_keeps_fresh_evidence(self):
+        h=Harness()
+        _,ready=h.request('GET','http://127.0.0.1/status',.5)
+        h.calls.clear()
+        h.time=1.1
+        with tempfile.TemporaryDirectory() as tmp:
+            r=execute_observed_step(current_audit(),armed_at=.9,
+                base_url='http://127.0.0.1',output=Path(tmp)/'trial',
+                request=h.request,clock=h.clock,sleep=h.sleep,
+                ready_status=ready,ready_status_at=1.0)
+        self.assertEqual(r['result'],'REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY')
+        self.assertEqual(r['external_pre_move_evidence']['source_cycle_id'],'one')
+        self.assertEqual(h.calls[0],('POST','/move-forward'))
+
     def test_slow_preflight_causes_no_move_and_no_stop(self):
         r, h = self.run_trial(preflight_delay=.401)
         self.assertEqual(r['movement_posts'], 0)

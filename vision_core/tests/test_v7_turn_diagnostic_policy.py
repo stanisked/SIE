@@ -97,7 +97,7 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
         _, tree = load_steering()
         function = next(node for node in tree.body
                         if isinstance(node, ast.FunctionDef) and
-                        node.name == 'preflight_turn_before_fresh_frame')
+                        node.name == 'preflight_controller_before_fresh_frame')
         now = [0.0]
         calls = []
         def request(method, url, timeout):
@@ -122,7 +122,7 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
         _, tree = load_steering()
         function = next(node for node in tree.body
                         if isinstance(node, ast.FunctionDef) and
-                        node.name == 'preflight_turn_before_fresh_frame')
+                        node.name == 'preflight_controller_before_fresh_frame')
         now = [0.0]
         calls = []
         def request(method, url, timeout):
@@ -151,7 +151,7 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
         _, tree = load_steering()
         function = next(node for node in tree.body
                         if isinstance(node, ast.FunctionDef) and
-                        node.name == 'preflight_turn_before_fresh_frame')
+                        node.name == 'preflight_controller_before_fresh_frame')
         calls = []
         def request(method, url, timeout):
             calls.append(method)
@@ -168,6 +168,25 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
             self.assertEqual(calls, ['GET', 'GET'])
             self.assertEqual(len(json.loads(output.read_text())['attempts']), 2)
 
+    def test_forward_status_precedes_fresh_frame_and_no_second_get(self):
+        _, tree = load_steering()
+        main = next(node for node in tree.body
+                    if isinstance(node, ast.FunctionDef) and node.name == 'main')
+        loop = next(node for node in ast.walk(main)
+                    if isinstance(node, ast.For) and ast.unparse(node.iter) == 'range(args.max_steps)')
+        calls = [(node.lineno, node.func.id, node) for node in ast.walk(loop)
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                 and node.func.id in {'preflight_controller_before_fresh_frame',
+                                      'next_observation', 'execute_observed_step'}]
+        preflight = max(line for line, name, _ in calls
+                        if name == 'preflight_controller_before_fresh_frame')
+        forward = next((line, node) for line, name, node in calls
+                       if name == 'execute_observed_step')
+        self.assertTrue(any(preflight < line < forward[0] and name == 'next_observation'
+                            for line, name, _ in calls))
+        self.assertIn('ready_status=ready_status', ast.unparse(forward[1]))
+        self.assertIn('ready_status_at=ready_at', ast.unparse(forward[1]))
+
     def test_fresh_camera_frame_follows_preflight_before_turn_post(self):
         _, tree = load_steering()
         main = next(node for node in tree.body
@@ -177,11 +196,11 @@ class TurnDiagnosticPolicyTests(unittest.TestCase):
         calls = {}
         for node in ast.walk(align):
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                    and node.func.id in {'preflight_turn_before_fresh_frame',
+                    and node.func.id in {'preflight_controller_before_fresh_frame',
                                          'next_observation', 'execute_bounded_turn'}):
                 calls[node.func.id] = min(node.lineno,
                                           calls.get(node.func.id, node.lineno))
-        self.assertLess(calls['preflight_turn_before_fresh_frame'],
+        self.assertLess(calls['preflight_controller_before_fresh_frame'],
                         calls['next_observation'])
         self.assertLess(calls['next_observation'], calls['execute_bounded_turn'])
 

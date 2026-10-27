@@ -86,6 +86,36 @@ class TrialTests(unittest.TestCase):
         s,h=self.trial(execute=False)
         self.assertEqual(s['result'],'PREFLIGHT_ONLY_NO_MOVEMENT')
         self.assertEqual(h.calls,[('GET','/status')])
+    def test_supplied_ready_status_skips_status_http_but_is_validated(self):
+        h=Harness()
+        _,ready=h.request('GET','http://127.0.0.1/status',.5)
+        h.calls.clear()
+        ready_at=h.clock()
+        with tempfile.TemporaryDirectory() as tmp:
+            s=run(base_url='http://127.0.0.1',output=Path(tmp)/'trial',
+                  execute=True,request=h.request,clock=h.clock,sleep=h.sleep,
+                  ready_status=ready,ready_status_at=ready_at)
+        self.assertEqual(s['result'],'REMOTE_STOP_OBSERVED_DIAGNOSTIC_ONLY')
+        self.assertEqual(s['preflight_source'],'PROVIDED_BEFORE_FRESH_FRAME')
+        self.assertEqual(h.calls[0],('POST','/move-forward'))
+        self.assertEqual([p for m,p in h.calls if m=='POST'],
+                         ['/move-forward','/stop'])
+        bad={**ready,'state':'DRIVING'}
+        h=Harness()
+        with tempfile.TemporaryDirectory() as tmp:
+            refused=run(base_url='http://127.0.0.1',output=Path(tmp)/'trial',
+                        execute=True,request=h.request,clock=h.clock,sleep=h.sleep,
+                        ready_status=bad,ready_status_at=h.clock())
+        self.assertEqual(refused['movement_posts'],0)
+        self.assertEqual(h.calls,[])
+        h=Harness();h.time=3.0
+        with tempfile.TemporaryDirectory() as tmp:
+            stale=run(base_url='http://127.0.0.1',output=Path(tmp)/'trial',
+                      execute=True,request=h.request,clock=h.clock,sleep=h.sleep,
+                      ready_status=ready,ready_status_at=0.0)
+        self.assertEqual(stale['movement_posts'],0)
+        self.assertEqual(h.calls,[])
+
     def test_stopped_label_with_nonzero_pwm_is_not_confirmed(self):
         h=Harness(); original=h.request
         def request(method,url,timeout):

@@ -112,13 +112,16 @@ def check_observation(audit, armed_at, now):
 
 
 def execute_observed_step(audit, *, armed_at, base_url, output, request=None,
-                          clock=time.monotonic, sleep=time.sleep):
+                          clock=time.monotonic, sleep=time.sleep, ready_status=None,
+                          ready_status_at=None):
     # Freeze the chosen current record; subsequent frames cannot substitute its
-    # identity. Recheck after status HTTP so preflight cannot age it silently.
+    # identity. Recheck immediately before movement, including when a caller
+    # supplies a controller status read before this frame was captured.
     frozen = deepcopy(audit)
     check_observation(frozen, armed_at, clock())
     return stop_trial(base_url=base_url, output=output, execute=True,
-        request=request, clock=clock, sleep=sleep,
+        request=request, clock=clock, sleep=sleep, ready_status=ready_status,
+        ready_status_at=ready_status_at,
         before_move=lambda status: check_observation(frozen, armed_at, clock()))
 
 

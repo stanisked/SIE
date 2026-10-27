@@ -167,7 +167,7 @@ def execute_bounded_turn(audit, *, armed_at, base_url, output, endpoint, angle_d
         journal.close()
         (output/'summary.json').write_text(json.dumps(report,indent=2,allow_nan=False)+'\n')
 
-def preflight_turn_before_fresh_frame(*, base_url, output, request=None,
+def preflight_controller_before_fresh_frame(*, base_url, output, request=None,
                                       clock=time.monotonic):
     """Read controller state before selecting the frame used for the POST."""
     request = request or Http()
@@ -285,7 +285,7 @@ def main():
                 row['steering']='ALREADY_CENTERED' if args.diagnostic_turn_only else 'NO_DRIFT_OR_ALREADY_CENTERED'
                 return audit,evidence,z,box
             turn_label=label or str(row['index']).zfill(2)
-            ready_status, ready_at=preflight_turn_before_fresh_frame(
+            ready_status, ready_at=preflight_controller_before_fresh_frame(
                 base_url=args.base_url,output=root/('turn_'+turn_label+'_preflight.json'))
             # A slow read-only status request may age out the selected frame.
             # The command instead uses a new camera frame captured afterward.
@@ -369,11 +369,27 @@ def main():
             if args.diagnostic_turn_only:
                 report['result']='TURN_ONLY_REOBSERVED' if row.get('turn_posts') else 'TURN_ONLY_ALREADY_CENTERED'
                 break
+            # Read controller status before selecting the frame for forward dispatch.
+            # Reusing the older frame after HTTP would exceed its 500 ms age limit.
+            ready_status,ready_at=preflight_controller_before_fresh_frame(
+                base_url=args.base_url,
+                output=root/('forward_'+str(index+1).zfill(2)+'_preflight.json'))
+            fresh,evidence=next_observation(node,holder,after=ready_at,armed_at=armed,
+                                            camera_process=process)
+            new_z,new_box=depth_and_box(fresh)
+            if overlap(box,new_box)<.7 or abs(new_z-z)>.15:
+                raise RuntimeError('FORWARD_PREFLIGHT_TARGET_CORRESPONDENCE_LOST')
+            audit,z,box=fresh,new_z,new_box
+            row['post_forward_preflight_cycle_id']=audit['cycle_id']
+            row['post_forward_preflight_bearing_deg']=target_bearing_deg(box)
             row['forward_source_cycle_id']=audit['cycle_id']
+            row['forward_camera_evidence']=evidence
             row['forward_depth_m']=z
             row['forward_rgb_center_x_px']=target_center_x(box)
             result=execute_observed_step(audit,armed_at=armed,base_url=args.base_url,
-                                         output=root/('controller_'+str(index+1).zfill(2)))
+                                         output=root/('controller_'+str(index+1).zfill(2)),
+                                         ready_status=ready_status,
+                                         ready_status_at=ready_at)
             row['controller_result']=result['result']
             row['movement_posts']=result['movement_posts']
             row['stop_posts']=result['stop_posts']
