@@ -362,6 +362,7 @@ simply raise PWM or clear the fault and retry in the person-approach run.
 The next planned check is isolated from person approach: with both driven
 wheels securely lifted, run the one-turn bench script recorded in
 `docs/diagnostics/v7_micro_turn_20261026.md`. The script can acknowledge the
-exact latched breakaway fault once, but it refuses any other initial state and
+exact latched breakaway fault once or accept clean READY after reboot, but
+it refuses any other initial state and
 always sends one stop attempt after a turn request. Do not resume floor
 approach until wheel direction and controller response are understood.

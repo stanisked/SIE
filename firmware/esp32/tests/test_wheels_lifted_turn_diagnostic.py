@@ -21,8 +21,11 @@ def status():
 
 
 class Transport:
-    def __init__(self, *, ack=True, turn_timeout=False):
+    def __init__(self, *, ack=True, turn_timeout=False, initially_ready=False):
         self.data = status()
+        if initially_ready:
+            self.data.update(bounded_fault_latched=False,
+                             bounded_fault_reason=None, fault='', state='READY')
         self.calls = []
         self.ack = ack
         self.turn_timeout = turn_timeout
@@ -83,6 +86,14 @@ class WheelsLiftedTurnTests(unittest.TestCase):
             [('GET', '/status'), ('POST', '/ack-fault'), ('GET', '/status'),
              ('POST', '/turn-left'), ('GET', '/status'), ('POST', '/stop'),
              ('GET', '/status')])
+
+    def test_ready_after_reboot_needs_no_fault_ack(self):
+        t = Transport(initially_ready=True)
+        report = self.trial(t)
+        self.assertEqual(report['fault_ack_posts'], 0)
+        self.assertEqual(report['turn_posts'], 1)
+        self.assertNotIn(('POST', '/ack-fault'), t.calls)
+        self.assertEqual(t.calls.count(('POST', '/stop')), 1)
 
     def test_ack_refusal_never_sends_turn(self):
         t = Transport(ack=False)

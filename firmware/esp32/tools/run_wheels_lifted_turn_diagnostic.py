@@ -70,25 +70,29 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
         summary['initial_status'] = initial
         if (code != 200 or initial.get('firmware_build_id') != 'v4_2_micro_turn_watchdog_v3'
                 or initial.get('motion_api_version') != 'v2_bounded_motion_api'
-                or initial.get('bounded_fault_latched') is not True
-                or initial.get('bounded_fault_reason') != FAULT
-                or initial.get('fault') != FAULT
-                or initial.get('state') != 'FAULT'
                 or initial.get('active_command_id') is not None
                 or initial.get('remote_stop_pending') is not False
                 or initial.get('right_pwm') != 0 or initial.get('left_pwm') != 0):
-            raise RuntimeError('EXPECTED_STOPPED_BREAKAWAY_FAULT_NOT_PRESENT')
+            raise RuntimeError('INITIAL_CONTROLLER_NOT_SAFE_FOR_BENCH')
         boot = initial.get('boot_session_id')
         if not isinstance(boot, str) or len(boot) != 16:
             raise RuntimeError('INVALID_BOOT_SESSION')
-        summary['fault_ack_posts'] = 1
-        code, acknowledged = call('POST', '/ack-fault')
-        summary['ack_response'] = {'http_code': code, 'body': acknowledged}
-        if code != 200 or acknowledged.get('acknowledged') is not True or acknowledged.get('previous_fault_reason') != FAULT:
-            raise RuntimeError('FAULT_ACK_NOT_CONFIRMED')
-        code, ready = call('GET', '/status', timeout=1.0)
-        if code != 200 or ready.get('boot_session_id') != boot:
-            raise RuntimeError('READY_STATUS_OR_SESSION_UNAVAILABLE')
+        if initial.get('bounded_fault_latched') is True:
+            if (initial.get('bounded_fault_reason') != FAULT
+                    or initial.get('fault') != FAULT
+                    or initial.get('state') != 'FAULT'):
+                raise RuntimeError('UNEXPECTED_LATCHED_FAULT')
+            summary['fault_ack_posts'] = 1
+            code, acknowledged = call('POST', '/ack-fault')
+            summary['ack_response'] = {'http_code': code, 'body': acknowledged}
+            if (code != 200 or acknowledged.get('acknowledged') is not True
+                    or acknowledged.get('previous_fault_reason') != FAULT):
+                raise RuntimeError('FAULT_ACK_NOT_CONFIRMED')
+            code, ready = call('GET', '/status', timeout=1.0)
+            if code != 200 or ready.get('boot_session_id') != boot:
+                raise RuntimeError('READY_STATUS_OR_SESSION_UNAVAILABLE')
+        else:
+            ready = initial
         preflight(ready)
         summary['ready_status'] = ready
         sent_turn = True
