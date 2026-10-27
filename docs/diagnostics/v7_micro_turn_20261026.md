@@ -281,3 +281,27 @@ forward travel, start cameras, or admit person approach. The operator must
 observe actual chassis yaw and each wheel's behavior on the floor. If a turn
 fails or status/stop confirmation is missing, stop testing and inspect the
 journal before any repeat.
+
+## Three-degree v4 floor turn underreached (2026-10-27)
+
+Evidence root:
+`/home/elwis/.local/state/sie/evidence/floor_turn_20261027_200212_f1a86665`.
+The v4 floor diagnostic sent one bounded three-degree left-turn command and
+one confirmed `/stop`; terminal and post-stop statuses were READY, zero PWM,
+no fault latch, and `PARTIAL_PROGRESS` for the same command. Both wheels
+reached their individual brake-start at two counts and settled at two counts
+from 8/8 targets. Breakaway PWM was 180 right / 190 left, and the encoder
+heading was 0.0135 rad (~0.77 degrees). The operator observed only a brief
+jerk of the chassis, not a useful physical left turn. The higher loaded-start
+ceiling did not activate: neither wheel lagged after the other reached its
+brake point. This result does not validate camera-guided steering.
+
+The next isolated diagnostic allows an explicitly selected six-degree request,
+while retaining the same exact v4 preflight, one-turn/one-stop journal,
+encoder limit, fault and timeout behavior. This larger request leaves more
+encoder travel before predictive braking and permits the existing PWM ramp to
+reach the previously observed loaded breakaway range. It is a diagnostic of
+floor turn capability and gearbox lash, not a steering command or a change to
+person approach admission. Run it once with ample clear rotation space and
+no person near the cart, record physical yaw and both wheels, then inspect
+its summary before any additional motion.

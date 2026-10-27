@@ -2,6 +2,7 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from urllib.parse import parse_qs, urlsplit
 
 from firmware.esp32.tests.test_wheels_lifted_turn_diagnostic import Transport
 from firmware.esp32.tools.run_floor_turn_diagnostic import run
@@ -39,6 +40,31 @@ class FloorTurnTests(unittest.TestCase):
         self.assertEqual(transport.calls.count(('POST', '/turn-left')), 1)
         self.assertEqual(transport.calls.count(('POST', '/stop')), 1)
         self.assertNotIn(('POST', '/ack-fault'), transport.calls)
+
+    def test_six_degree_request_is_explicit_and_bounded(self):
+        transport = Transport(initially_ready=True)
+        sent_angles = []
+        def request(method, url, timeout):
+            if urlsplit(url).path == '/turn-left':
+                sent_angles.append(parse_qs(urlsplit(url).query)['angle_deg'][0])
+            return transport.request(method, url, timeout)
+        with TemporaryDirectory() as directory:
+            report = run(base_url='http://127.0.0.1',
+                         output=Path(directory) / 'trial', execute=True,
+                         turn_space_clear=True, people_clear=True,
+                         angle_deg=6.0, request=request,
+                         clock=transport.clock, sleep=transport.sleep)
+        self.assertEqual(report['angle_deg'], 6.0)
+        self.assertEqual(sent_angles, ['6.000'])
+        self.assertEqual((report['turn_posts'], report['stop_posts']), (1, 1))
+
+    def test_other_angle_refuses_before_any_io(self):
+        transport = Transport(initially_ready=True)
+        with self.assertRaisesRegex(ValueError, 'ANGLE_OUTSIDE_DIAGNOSTIC_SET'):
+            run(base_url='http://127.0.0.1', output='unused',
+                execute=True, turn_space_clear=True, people_clear=True,
+                angle_deg=10.0, request=transport.request)
+        self.assertEqual(transport.calls, [])
 
     def test_latched_fault_refuses_before_turn(self):
         transport = Transport()

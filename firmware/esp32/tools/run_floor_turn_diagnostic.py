@@ -17,19 +17,22 @@ if str(ROOT) not in sys.path:
 
 from firmware.esp32.tools.run_remote_stop_trial import Http, preflight
 
-ANGLE_DEG = 3.0
+DEFAULT_ANGLE_DEG = 3.0
+DIAGNOSTIC_ANGLES_DEG = (3.0, 6.0)
 EXPECTED_BUILD_ID = 'v4_2_micro_turn_loaded_start_v4'
 TERMINAL = {'SUCCESS', 'PARTIAL_PROGRESS', 'FAULT', 'STOPPED'}
 
 
 def run(*, base_url, output, execute=False, turn_space_clear=False,
-        people_clear=False, request=None,
+        people_clear=False, angle_deg=DEFAULT_ANGLE_DEG, request=None,
         clock=time.monotonic, sleep=time.sleep):
     if not execute:
         return {'result': 'NO_EXECUTION', 'turn_posts': 0, 'stop_posts': 0,
                 'fault_ack_posts': 0}
     if turn_space_clear is not True or people_clear is not True:
         raise ValueError('TURN_SPACE_AND_PEOPLE_CLEAR_CONFIRMATION_REQUIRED')
+    if angle_deg not in DIAGNOSTIC_ANGLES_DEG:
+        raise ValueError('ANGLE_OUTSIDE_DIAGNOSTIC_SET')
     parsed = urlsplit(base_url)
     if (parsed.scheme != 'http' or not parsed.hostname or parsed.username or
             parsed.password or parsed.query or parsed.fragment or
@@ -41,7 +44,7 @@ def run(*, base_url, output, execute=False, turn_space_clear=False,
     command_id = 'floor-turn-' + uuid.uuid4().hex
     summary = {'schema_version': 'sie.floor_turn_diagnostic.v1',
                'command_id': command_id, 'endpoint': '/turn-left',
-               'angle_deg': ANGLE_DEG, 'turn_space_clear_operator_assertion': True,
+               'angle_deg': angle_deg, 'turn_space_clear_operator_assertion': True,
                'people_clear_operator_assertion': True,
                'expected_firmware_build_id': EXPECTED_BUILD_ID,
                'result': 'NOT_STARTED', 'fault_ack_posts': 0,
@@ -94,7 +97,7 @@ def run(*, base_url, output, execute=False, turn_space_clear=False,
         summary['turn_posts'] = 1
         code, accepted = call('POST', '/turn-left',
             {'boot_session_id': boot, 'command_id': command_id,
-             'angle_deg': format(ANGLE_DEG, '.3f')})
+             'angle_deg': format(angle_deg, '.3f')})
         summary['turn_response'] = {'http_code': code, 'body': accepted}
         if (code != 202 or accepted.get('accepted') is not True or
                 accepted.get('command_id') != command_id):
@@ -164,6 +167,8 @@ def main(argv=None):
                    help='operator confirms clear space for the cart and its rotation')
     p.add_argument('--people-clear', action='store_true',
                    help='operator confirms no person is in or beside the turn space')
+    p.add_argument('--angle-deg', type=float, choices=DIAGNOSTIC_ANGLES_DEG,
+                   default=DEFAULT_ANGLE_DEG)
     p.add_argument('--base-url')
     p.add_argument('--output', type=Path)
     args = p.parse_args(argv)
@@ -177,7 +182,8 @@ def main(argv=None):
          '_' + uuid.uuid4().hex[:8]))
     print('Floor turn only: keep people out of the turn space and motor power cutoff accessible.')
     result = run(base_url=args.base_url, output=output, execute=True,
-                 turn_space_clear=True, people_clear=True)
+                 turn_space_clear=True, people_clear=True,
+                 angle_deg=args.angle_deg)
     print('FLOOR_TURN', result['result'], 'turn_posts=', result['turn_posts'],
           'stop_posts=', result['stop_posts'])
     print('Saved:', output / 'summary.json')
