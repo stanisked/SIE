@@ -179,3 +179,36 @@ visible marks on each wheel and slow-motion video can establish actual wheel
 rotation and direction; only then choose a bounded loaded-start firmware
 change or electrical repair. Do not infer a physical 1.94-degree chassis
 turn from the stand's encoder heading.
+
+## Marked-wheel repeat and startup correction design (2026-10-27)
+
+The operator repeated the one-shot three-degree left turn on a securely
+lifted cart with visible wheel marks. Both wheels visibly moved for less than
+one second: right forward, left backward. Evidence was supplied as a new
+`wheels_lifted_turn_diagnostic.v1` summary with terminal
+`PARTIAL_PROGRESS`, READY, no fault, one turn POST and one confirmed stop.
+Final settled counts were 4 right / 5 left from 8/8 targets, with individual
+brakes recorded at count 2 on both sides. The controller's reported final
+angle was 0.0304 rad (~1.74 degrees); this is an encoder estimate, not a
+measured chassis yaw. Unlike the first unmarked stand observation, this
+confirms physical motor directions and encoder response off-floor.
+
+Combined evidence is now: both wheels and encoders respond unloaded, while
+the preceding floor trial failed to start the left wheel and latched
+`BREAKAWAY_NOT_FOUND`. A loaded-start deficit is plausible, consistent with
+the 190 PWM cap for a 3-degree request versus the source's 215–225 loaded
+breakaway note; battery delivery, floor traction and current motor condition
+still need checking. Do not infer that simply increasing requested angle or
+removing the camera feedback check fixes the floor behavior.
+
+Proposed firmware correction for review, not yet implemented or flashed:
+during bounded micro-turn STARTING, brake a wheel as soon as its own
+brake-start count is reached; preserve that brake when transitioning to
+DRIVING. Only while the leading wheel is braked should the lagging wheel be
+allowed a higher bounded breakaway ramp, with the absolute per-wheel encoder
+limit, command deadline, stall detection, active-brake settle and latched
+fault behavior unchanged. A changed firmware build ID, compile-only check,
+wheels-lifted observation, and then a single floor turn with no person in the
+path are required before restoring coordinate-based approach. Motor supply
+voltage under load and left driver output remain alternative diagnostics if
+the revised bounded start still fails.
