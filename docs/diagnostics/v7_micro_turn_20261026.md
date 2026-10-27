@@ -108,8 +108,9 @@ Right breakaway registered at PWM 180, left breakaway did not register.
 The firmware's bounded-start ceiling formula gives PWM 190 at a two-count
 brake start, below its own source comment's loaded breakaway observation of
 215–225. That is a specific explanation to challenge, not proof that the
-left motor or encoder is healthy. Physical inspection with motor power off
-and an electrical/encoder diagnosis are needed before any new motion test.
+left motor or encoder is healthy. The operator heard the motors energize but saw no chassis movement during
+this three-degree attempt. Physical inspection with motor power off and an
+electrical/encoder diagnosis are needed before any new motion test.
 Do not treat the reported 0.96-degree encoder heading as a verified chassis
 turn when one wheel did not break away. The fault remains latched in the
 supplied terminal status; no automatic fault acknowledgement or approach
