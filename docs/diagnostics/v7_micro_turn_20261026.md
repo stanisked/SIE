@@ -400,3 +400,27 @@ three-degree request useful: the unchanged early two-count braking still
 terminates movement. A v5 five-degree wheels-lifted diagnostic is now
 available to test a longer bounded request before any floor run. It requires
 an explicit angle and exact v5 build ID. Floor testing on v5 and person approach remain unavailable pending this result.
+
+## V5 five-degree stand overshoot fault; candidate retired (2026-10-27)
+
+Evidence root:
+`/home/elwis/.local/state/sie/evidence/wheels_lifted_turn_20261027_205616_ade14d47`.
+The operator observed both wheels turning in the intended left-turn directions,
+with the left wheel moving more intensely. The v5 controller accepted one
+five-degree turn; terminal and post-stop states were `FAULT` with latched
+`BOUNDED_DISTANCE_LIMIT`. The requested targets were 13/13 counts. Both
+individual brakes began at 7 counts, but settled counts reached 14 right /
+16 left. Breakaway PWM was 215 on both wheels. The encoder-derived 0.1012
+rad angle is not an accepted physical yaw measurement after this fault. The
+single `/stop` returned 200; post-stop status had zero PWM and no active
+command, while the fault latch remained. No fault acknowledgement or repeat
+motion is justified by this outcome.
+
+The stronger v5 startup was physically applied but overshot its bounded
+encoder target off-floor. The v5 sketch is retired for motor use, and the
+bench diagnostic now refuses an explicit v5 selection before network access.
+Do not run a v5 floor test or person approach. The practical rollback is to
+flash the previously tested v4 sketch, then verify its exact live build ID,
+READY state, no fault latch, and zero PWM using a read-only `/status` call.
+Further steering design must account for launch torque and braking distance
+together; raising startup PWM alone has failed this stand test.

@@ -1,3 +1,11 @@
+# RETIRED: v5 overshoot fault on wheels-lifted 5° test
+
+Do not use this build for further motor tests or person approach. On 2026-10-27, the operator observed the left wheel rotating more intensely than the right during a lifted-wheel 5° left turn. Terminal status latched `BOUNDED_DISTANCE_LIMIT`: 14 right / 16 left settled counts against 13/13 targets, despite individual braking beginning at 7/7. Both motors were stopped with zero PWM after `/stop`, but the fault remained latched. The stronger startup caused unacceptable unloaded overshoot. Revert to the previously tested v4 sketch before further motor work.
+
+The original candidate description is retained below for provenance only. Its compile helper does not upload, and the bench diagnostic now rejects v5 before network access.
+
+---
+
 # Bounded micro-turn startup-power candidate v5
 
 The v4 floor tests established a physical left turn for requested 5° and 6° commands, but a 3° command only jerked before the two-count brake point. The 5° result used breakaway PWM 200/205 and settled at 6/7 counts from 13/13; the 6° result used 210/215 and settled at 10/9 from 16/16. These readings support raising the initial micro-turn PWM.

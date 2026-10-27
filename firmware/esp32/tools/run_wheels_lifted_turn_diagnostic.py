@@ -21,7 +21,8 @@ ANGLE_DEG = 3.0
 BENCH_ANGLES_DEG = (3.0, 5.0)
 FAULT = 'BREAKAWAY_NOT_FOUND'
 EXPECTED_BUILD_ID = 'v4_2_micro_turn_loaded_start_v4'
-ALLOWED_BENCH_BUILDS = (EXPECTED_BUILD_ID, 'v4_2_micro_turn_power_v5')
+RETIRED_OVERSHOOT_BUILD_ID = 'v4_2_micro_turn_power_v5'
+ALLOWED_BENCH_BUILDS = (EXPECTED_BUILD_ID, RETIRED_OVERSHOOT_BUILD_ID)
 TERMINAL = {'SUCCESS', 'PARTIAL_PROGRESS', 'FAULT', 'STOPPED'}
 
 
@@ -33,6 +34,8 @@ def run(*, base_url, output, execute=False, wheels_lifted=False, request=None,
                 'fault_ack_posts': 0}
     if wheels_lifted is not True:
         raise ValueError('WHEELS_LIFTED_CONFIRMATION_REQUIRED')
+    if expected_build_id == RETIRED_OVERSHOOT_BUILD_ID:
+        raise ValueError('RETIRED_OVERSHOOT_BUILD_V5')
     if expected_build_id not in ALLOWED_BENCH_BUILDS:
         raise ValueError('UNREVIEWED_BENCH_FIRMWARE_BUILD')
     if (angle_deg not in BENCH_ANGLES_DEG or
@@ -193,6 +196,8 @@ def main(argv=None):
     if not args.execute:
         print('NO_EXECUTION: no network or motor opened')
         return 0
+    if args.expected_build_id == RETIRED_OVERSHOOT_BUILD_ID:
+        p.error('v5 retired after BOUNDED_DISTANCE_LIMIT; no motor request')
     if not args.wheels_lifted or not args.base_url:
         p.error('--execute requires --wheels-lifted and --base-url')
     output = args.output or (Path.home() / '.local/state/sie/evidence' /

@@ -122,41 +122,19 @@ class WheelsLiftedTurnTests(unittest.TestCase):
         self.assertEqual((report['turn_posts'], report['stop_posts']), (0, 0))
         self.assertEqual(t.calls, [('GET', '/status')])
 
-    def test_v5_requires_explicit_bench_build_selection(self):
-        t = Transport(initially_ready=True)
-        t.data['firmware_build_id'] = 'v4_2_micro_turn_power_v5'
-        refused = self.trial(t)
-        self.assertEqual((refused['turn_posts'], refused['stop_posts']), (0, 0))
-        self.assertIn('FIRMWARE_BUILD_ID_MISMATCH', refused['error'])
-        t = Transport(initially_ready=True)
-        t.data['firmware_build_id'] = 'v4_2_micro_turn_power_v5'
-        with TemporaryDirectory() as directory:
-            report = run(base_url='http://127.0.0.1',
-                         output=Path(directory) / 'trial', execute=True,
-                         wheels_lifted=True,
-                         expected_build_id='v4_2_micro_turn_power_v5',
-                         request=t.request, clock=t.clock, sleep=t.sleep)
-        self.assertEqual(report['expected_firmware_build_id'],
-                         'v4_2_micro_turn_power_v5')
-        self.assertEqual((report['turn_posts'], report['stop_posts']), (1, 1))
-
-    def test_v5_five_degree_request_is_explicit(self):
-        t = Transport(initially_ready=True)
-        t.data['firmware_build_id'] = 'v4_2_micro_turn_power_v5'
-        sent_angles = []
-        def request(method, url, timeout):
-            if urlsplit(url).path == '/turn-left':
-                sent_angles.append(parse_qs(urlsplit(url).query)['angle_deg'][0])
-            return t.request(method, url, timeout)
-        with TemporaryDirectory() as directory:
-            report = run(base_url='http://127.0.0.1',
-                         output=Path(directory) / 'trial', execute=True,
-                         wheels_lifted=True, angle_deg=5.0,
-                         expected_build_id='v4_2_micro_turn_power_v5',
-                         request=request, clock=t.clock, sleep=t.sleep)
-        self.assertEqual(report['angle_deg'], 5.0)
-        self.assertEqual(sent_angles, ['5.000'])
-        self.assertEqual((report['turn_posts'], report['stop_posts']), (1, 1))
+    def test_v5_retired_before_network_or_motor(self):
+        for angle in (3.0, 5.0):
+            with self.subTest(angle=angle):
+                t = Transport(initially_ready=True)
+                t.data['firmware_build_id'] = 'v4_2_micro_turn_power_v5'
+                with self.assertRaisesRegex(ValueError,
+                                            'RETIRED_OVERSHOOT_BUILD_V5'):
+                    run(base_url='http://127.0.0.1', output='unused',
+                        execute=True, wheels_lifted=True,
+                        angle_deg=angle,
+                        expected_build_id='v4_2_micro_turn_power_v5',
+                        request=t.request)
+                self.assertEqual(t.calls, [])
 
     def test_five_degree_v4_refused_before_io(self):
         t = Transport(initially_ready=True)
