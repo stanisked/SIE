@@ -254,3 +254,30 @@ stand script had accepted v4. The preflight now accepts an explicit build set
 for this stand-only caller; its default allowlist remains unchanged, so the
 forward trial and supervised approach do not gain v4 admission. The next
 stand test still needs an actual physical result.
+
+## V4 wheels-lifted result and next floor isolation (2026-10-27)
+
+Evidence root:
+`/home/elwis/.local/state/sie/evidence/wheels_lifted_turn_20261027_195341_18329b6a`.
+The v4 controller accepted one three-degree left turn. A terminal `GET /status`
+timed out, so the stand script conservatively reported
+`TRIAL_REFUSED_OR_UNKNOWN`; it still sent one `/stop`. The post-stop status
+bound to the same command and boot session showed `SUCCESS`, READY, no
+fault latch, zero PWM, settled counts 5 right / 6 left from 8/8 targets,
+and encoder-estimated final angle 0.0371 rad (~2.13 degrees). The operator
+observed both wheels physically rotate in the expected directions, right
+forward and left backward, as in the previous v3 stand test. Both breakaway
+PWM readings were 185, so the new higher loaded-start branch was not exercised
+without floor load. The reported SUCCESS is firmware's threshold result,
+not proof of a full physical three-degree chassis turn.
+
+A separate one-shot floor diagnostic is prepared for a clear rotation space
+without a person near the cart. It requires explicit execution and operator
+assertions, the exact v4 build, a clean READY state, zero PWM, no fault latch,
+and one boot session. It sends one bounded three-degree `/turn-left`, never
+retries that POST, always attempts one `/stop` after dispatch, and journals
+the terminal and post-stop states. It does not acknowledge a fault, request
+forward travel, start cameras, or admit person approach. The operator must
+observe actual chassis yaw and each wheel's behavior on the floor. If a turn
+fails or status/stop confirmation is missing, stop testing and inspect the
+journal before any repeat.
