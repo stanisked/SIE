@@ -1,9 +1,13 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 #!/usr/bin/env python3
 """Operator supervised bounded forward command with live RGB steering updates."""
 from __future__ import annotations
 
 import argparse
 import fcntl
+from itertools import chain
 import json
 import math
 import os
@@ -14,6 +18,7 @@ import subprocess
 import sys
 import time
 from urllib.parse import urlencode, urlsplit
+from urllib.error import URLError
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -160,6 +165,11 @@ def valid_controller_url(base_url):
             and p.path in ('', '/'))
 
 
+def is_transport_timeout(error):
+    return isinstance(error, TimeoutError) or (
+        isinstance(error, URLError) and isinstance(error.reason, TimeoutError))
+
+
 def preview_session(*, output, camera_factory, duration_s=10.0,
                     clock=time.monotonic):
     """Journal live camera bearings and intended PWM bias; no HTTP or motors."""
@@ -240,7 +250,7 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
     """Live session; camera_factory yields successive full diagnostic records.
 
     The first observation starts a straight command. Only subsequent records
-    can change wheel PWM. All HTTP operations are journaled without retry.
+    can change wheel PWM. HTTP attempts and any recovery are journaled.
     """
     if not valid_controller_url(base_url) or not math.isfinite(front_clearance_m):
         raise ValueError('INVALID_OPERATOR_ARGUMENTS')
@@ -262,7 +272,8 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
               'operator_front_clearance_m': front_clearance_m,
               'measurement_admission_changed': False,
               'physical_stopping_bound_established': False,
-              'camera_control_enabled': True, 'updates': []}
+              'camera_control_enabled': True, 'updates': [],
+              'unconfirmed_steer_updates': []}
     journal = (output / 'http.jsonl').open('x')
     sent = False
     command_id = 'sie-live-' + secrets.token_hex(12)
@@ -330,12 +341,44 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
         # The first camera detection starts the cart straight, from anywhere
         # in the image. Steering begins with a newly captured second frame.
         check_live_rgb_target(first, armed, clock())
-        sent = True  # An ambiguous movement POST is never retried.
+        sent = True  # A timed-out POST may already have started motion.
         report['movement_posts'] = 1
-        code, body = call('POST', '/move-forward-steered',
-                          {'boot_session_id': boot, 'command_id': command_id,
-                           'distance_m': format(distance_m, '.3f')})
-        if code != 202 or body.get('accepted') is not True or body.get('command_id') != command_id:
+        move_params = {'boot_session_id': boot, 'command_id': command_id,
+                       'distance_m': format(distance_m, '.3f')}
+        retry_audit = None
+        try:
+            code, body = call('POST', '/move-forward-steered', move_params)
+        except (TimeoutError, URLError) as error:
+            if not is_transport_timeout(error):
+                raise
+            # The ESP32 remembers command IDs and reports duplicates without
+            # starting a second motion. Recheck a newer RGB frame before one
+            # retry of the identical request; never issue a new command ID.
+            report['movement_first_response_timeout'] = True
+            retry_deadline = clock() + .35
+            while clock() < retry_deadline:
+                candidate = next(observations)
+                if candidate is None:
+                    continue
+                new_evidence = check_live_rgb_target(candidate, armed, clock())
+                if new_evidence['oldest_driver_stamp_s'] <= evidence['oldest_driver_stamp_s']:
+                    continue
+                if not same_target(box, new_evidence['target_box_xyxy_px']):
+                    raise RuntimeError('TARGET_CORRESPONDENCE_LOST_BEFORE_MOVE_RETRY')
+                if clock() > retry_deadline:
+                    raise RuntimeError('MOVE_RETRY_CAMERA_DEADLINE')
+                retry_audit = candidate
+                report['movement_retry_camera_evidence'] = new_evidence
+                break
+            if retry_audit is None:
+                raise RuntimeError('NO_FRESH_TARGET_FOR_MOVE_RETRY')
+            report['movement_posts'] += 1
+            code, body = call('POST', '/move-forward-steered', move_params)
+        duplicate = (code == 200 and body.get('duplicate') is True and
+                     body.get('command_id') == command_id and
+                     body.get('command_state') in TERMINAL | {'ACCEPTED', 'STARTING', 'DRIVING', 'BRAKING', 'COASTING'})
+        if not ((code == 202 and body.get('accepted') is True and
+                 body.get('command_id') == command_id) or duplicate):
             raise RuntimeError('MOVEMENT_ACCEPTANCE_UNKNOWN')
         last_frame_stamp = evidence['oldest_driver_stamp_s']
         last_feedback = clock()
@@ -343,11 +386,14 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
         seq = 0
         driving_confirmed = False
         terminal_pending_deadline = None
+        pending_steer_ack_deadline = None
         # camera_factory yields fresh full records while the same bounded
         # forward command is active. A missing record is a stop condition.
         last_status_poll = clock()
-        for audit in observations:
+        for audit in chain((retry_audit,) if retry_audit is not None else (), observations):
             now = clock()
+            if pending_steer_ack_deadline is not None and now > pending_steer_ack_deadline:
+                raise RuntimeError('STEER_ACK_RECOVERY_DEADLINE')
             if terminal_pending_deadline is not None and now > terminal_pending_deadline:
                 raise RuntimeError('TERMINAL_OBSERVATION_TIMEOUT')
             if terminal_pending_deadline is not None:
@@ -377,7 +423,8 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
                                            str(status.get('bounded_fault_reason')))
                     if status.get('state') in ('BRAKING', 'COASTING'):
                         terminal_pending_deadline = terminal_pending_deadline or clock() + 3.0
-            if terminal_pending_deadline is None and now - last_feedback > FEEDBACK_TIMEOUT_S:
+            if (terminal_pending_deadline is None and pending_steer_ack_deadline is None
+                    and now - last_feedback > FEEDBACK_TIMEOUT_S):
                 raise RuntimeError('CAMERA_FEEDBACK_TIMEOUT')
             if audit is None:
                 continue
@@ -396,9 +443,23 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
             bias = steering_bias(target_bearing_deg(box))
             drive_state = 'DRIVING' if driving_confirmed else 'UNCONFIRMED'
             report['steer_posts'] += 1
-            code, reply = call('POST', '/steer-update',
-                               {'boot_session_id': boot, 'command_id': command_id,
-                                'seq': seq, 'bias_pwm': bias})
+            try:
+                code, reply = call('POST', '/steer-update',
+                                   {'boot_session_id': boot, 'command_id': command_id,
+                                    'seq': seq, 'bias_pwm': bias})
+            except (TimeoutError, URLError) as error:
+                if not is_transport_timeout(error) or pending_steer_ack_deadline is not None:
+                    raise
+                # One reply may be lost after ESP32 accepted the update. A
+                # newer frame may supersede it once; ESP32 independently
+                # brakes after 700 ms without an accepted fresh update.
+                report['unconfirmed_steer_updates'].append({
+                    'cycle_id': audit['cycle_id'], 'seq': seq,
+                    'driver_stamp_s': stamp, 'bias_pwm': bias})
+                pending_steer_ack_deadline = clock() + .25
+                last_frame_stamp = stamp
+                previous_box = box
+                continue
             if (code == 409 and not driving_confirmed and bias != 0 and
                     reply.get('reason') == 'STEER_ONLY_AFTER_DRIVE_STARTED'):
                 # The rejected request changed no controller state. Send one
@@ -415,6 +476,7 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
                     check_code, terminal_status = call('GET', '/status')
                     last_status_poll = clock()
                     if check_code == 200 and matching_terminal(terminal_status, boot):
+                        pending_steer_ack_deadline = None
                         report['terminal_status'] = terminal_status
                         break
                     if (check_code == 200 and
@@ -427,12 +489,14 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
                             terminal_status.get('state') in ('BRAKING', 'COASTING')):
                         # The bounded command entered its normal stopping
                         # phase between the camera frame and steer request.
+                        pending_steer_ack_deadline = None
                         terminal_pending_deadline = clock() + 3.0
                         continue
                 raise RuntimeError('STEER_UPDATE_NOT_ACKNOWLEDGED')
             if bias != 0:
                 driving_confirmed = True
                 drive_state = 'DRIVING'
+            pending_steer_ack_deadline = None
             report['updates'].append({'cycle_id': audit['cycle_id'],
                                       'driver_stamp_s': stamp,
                                       'bearing_deg': target_bearing_deg(box),

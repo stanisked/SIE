@@ -1,3 +1,6 @@
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
+Failed to create stream fd: Operation not permitted
 """Dry-run contract checks; no ROS, controller, camera or motors required."""
 import importlib.util
 from pathlib import Path
@@ -5,6 +8,7 @@ import sys
 import time
 import types
 import unittest
+from urllib.error import URLError
 from urllib.parse import parse_qs, urlsplit
 
 
@@ -109,6 +113,140 @@ class FakeController:
 
 
 class LiveSteeringTest(unittest.TestCase):
+    def test_transport_timeout_classification(self):
+        self.assertTrue(live.is_transport_timeout(TimeoutError('timed out')))
+        self.assertTrue(live.is_transport_timeout(URLError(TimeoutError('timed out'))))
+        self.assertFalse(live.is_transport_timeout(URLError('connection refused')))
+
+    def test_lost_move_reply_retries_same_id_after_new_camera_frame(self):
+        import tempfile
+        class LostMoveReply(FakeController):
+            def __init__(self):
+                super().__init__()
+                self.move_attempts = 0
+            def __call__(self, method, url, timeout):
+                if urlsplit(url).path == '/move-forward-steered':
+                    self.move_attempts += 1
+                    if self.move_attempts == 1:
+                        super().__call__(method, url, timeout)
+                        raise TimeoutError('reply lost after acceptance')
+                    self.calls.append((method, '/move-forward-steered',
+                        {k: v[0] for k,v in parse_qs(urlsplit(url).query).items()}))
+                    return 200, {'accepted': False, 'duplicate': True,
+                        'command_id': self.command_id, 'command_state': 'STARTING'}
+                return super().__call__(method, url, timeout)
+        controller = LostMoveReply()
+        def camera(armed):
+            for i, center in enumerate((50, 52, 54)):
+                yield {'cycle_id': str(i), 'stamp': time.monotonic(),
+                       'box': [center-10, 0, center+10, 100]}
+            while True:
+                time.sleep(.04)
+                yield None
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://192.0.2.1',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=camera)
+        self.assertEqual(report['result'], 'TERMINAL_OBSERVED_DIAGNOSTIC_ONLY')
+        self.assertEqual(report['movement_posts'], 2)
+        self.assertTrue(report['movement_first_response_timeout'])
+        moves = [c[2] for c in controller.calls if c[1] == '/move-forward-steered']
+        self.assertEqual(len({c['command_id'] for c in moves}), 1)
+
+    def test_lost_move_reply_with_missing_target_stops_without_retry(self):
+        import tempfile
+        class LostMoveReply(FakeController):
+            def __call__(self, method, url, timeout):
+                result = super().__call__(method, url, timeout)
+                if urlsplit(url).path == '/move-forward-steered':
+                    raise TimeoutError('reply lost after acceptance')
+                return result
+        controller = LostMoveReply()
+        def camera(armed):
+            yield {'cycle_id': 'first', 'stamp': time.monotonic(),
+                   'box': [40, 0, 60, 100]}
+            yield {'cycle_id': 'missing', 'stamp': time.monotonic()}
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://192.0.2.1',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=camera)
+        self.assertEqual(report['result'], 'STOPPED_ON_REFUSAL')
+        self.assertEqual(report['movement_posts'], 1)
+        self.assertEqual(report['stop_posts'], 1)
+        self.assertEqual(len([c for c in controller.calls
+                              if c[1] == '/move-forward-steered']), 1)
+
+    def test_non_timeout_move_transport_error_never_retries(self):
+        import tempfile
+        class RejectedMove(FakeController):
+            def __call__(self, method, url, timeout):
+                if urlsplit(url).path == '/move-forward-steered':
+                    self.calls.append((method, '/move-forward-steered', {}))
+                    raise URLError('connection refused')
+                return super().__call__(method, url, timeout)
+        controller = RejectedMove()
+        def camera(armed):
+            yield {'cycle_id': 'first', 'stamp': time.monotonic(),
+                   'box': [40, 0, 60, 100]}
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://192.0.2.1',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=camera)
+        self.assertEqual(report['result'], 'STOPPED_ON_REFUSAL')
+        self.assertEqual(report['movement_posts'], 1)
+        self.assertEqual(report['stop_posts'], 1)
+
+    def test_one_lost_steer_reply_can_be_superseded_by_new_frame(self):
+        import tempfile
+        class LostSteerReply(FakeController):
+            def __init__(self):
+                super().__init__()
+                self.lost = False
+            def __call__(self, method, url, timeout):
+                if urlsplit(url).path == '/steer-update' and not self.lost:
+                    self.lost = True
+                    super().__call__(method, url, timeout)
+                    raise TimeoutError('reply lost after acceptance')
+                return super().__call__(method, url, timeout)
+        controller = LostSteerReply()
+        def camera(armed):
+            for i, center in enumerate((50, 53, 56)):
+                yield {'cycle_id': str(i), 'stamp': time.monotonic(),
+                       'box': [center-10, 0, center+10, 100]}
+            while True:
+                time.sleep(.04)
+                yield None
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://192.0.2.1',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=camera)
+        self.assertEqual(report['result'], 'TERMINAL_OBSERVED_DIAGNOSTIC_ONLY')
+        self.assertEqual(report['steer_posts'], 2)
+        self.assertEqual([x['seq'] for x in report['unconfirmed_steer_updates']], [1])
+        self.assertEqual([x['seq'] for x in report['updates']], [2])
+
+    def test_second_lost_steer_reply_stops(self):
+        import tempfile
+        class LostSteerReplies(FakeController):
+            def __call__(self, method, url, timeout):
+                result = super().__call__(method, url, timeout)
+                if urlsplit(url).path == '/steer-update':
+                    raise TimeoutError('reply lost after acceptance')
+                return result
+        controller = LostSteerReplies()
+        def camera(armed):
+            for i, center in enumerate((50, 53, 56)):
+                yield {'cycle_id': str(i), 'stamp': time.monotonic(),
+                       'box': [center-10, 0, center+10, 100]}
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://192.0.2.1',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=camera)
+        self.assertEqual(report['result'], 'STOPPED_ON_REFUSAL')
+        self.assertEqual(report['steer_posts'], 2)
+        self.assertEqual(report['stop_posts'], 1)
+        self.assertEqual([x['seq'] for x in report['unconfirmed_steer_updates']], [1])
+
     def test_v3_refuses_controller_without_independent_safety_status(self):
         import tempfile
         def controller(method, url, timeout):
