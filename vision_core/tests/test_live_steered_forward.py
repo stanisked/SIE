@@ -153,6 +153,19 @@ class LiveSteeringTest(unittest.TestCase):
         self.assertEqual(evidence['target_box_xyxy_px'], instance['bbox_xyxy_px'])
         self.assertTrue(evidence['top_truncated'])
         self.assertFalse(evidence['static_depth_gate_used'])
+        weak_edge = {'instance_index': 1, 'bbox_xyxy_px': [0, 600, 250, 950],
+                     'confidence': .33, 'truncated_top': False,
+                     'truncated_left': True, 'truncated_right': False}
+        audit['segmentation_observation']['instances'].append(weak_edge)
+        audit['ar0234_dynamic_target'] = {'disposition': 'OBSERVED',
+            'reason': 'DIRECT_CURRENT_FRAME_SINGLE_TARGET',
+            'candidate': instance, 'current_eligible_count': 1}
+        evidence = real_check_live_rgb_target(audit, now - .2, now)
+        self.assertEqual(evidence['target_box_xyxy_px'], instance['bbox_xyxy_px'])
+        weak_edge['confidence'] = .82
+        with self.assertRaisesRegex(ValueError, 'AMBIGUOUS'):
+            real_check_live_rgb_target(audit, now - .2, now)
+        audit['segmentation_observation']['instances'].pop()
         audit['segmentation_observation']['instances'].append(dict(instance))
         with self.assertRaisesRegex(ValueError, 'AMBIGUOUS'):
             real_check_live_rgb_target(audit, now - .2, now)
@@ -427,3 +440,4 @@ class LiveSteeringTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
