@@ -68,19 +68,30 @@ def check_live_rgb_target(audit, armed_at, now):
     # top image edge, and the static-v2 gate rejects motion. For this RGB-only
     # diagnostic, use one current segmentation instance directly. A top-clipped
     # person is still trackable through adjacent-frame box correspondence.
-    if not isinstance(instances, list) or len(instances) != 1 or \
-            not isinstance(instances[0], dict):
+    if not isinstance(instances, list) or not instances or \
+            not all(isinstance(item, dict) for item in instances):
         raise ValueError('CURRENT_RGB_TARGET_UNAVAILABLE_OR_AMBIGUOUS')
-    candidate = instances[0]
-    if candidate.get('instance_index') != 0 or \
-            type(candidate.get('instance_index')) is not int:
+    # Segmentation may include weak, side-clipped false positives while the
+    # dynamic selector still has exactly one current eligible person. Do not
+    # turn that harmless extra instance into a target-loss stop. A second
+    # confident person remains ambiguous and is refused.
+    plausible = [item for item in instances
+                 if type(item.get('confidence')) in (int, float)
+                 and math.isfinite(item['confidence'])
+                 and item['confidence'] >= .70]
+    if len(plausible) != 1:
+        raise ValueError('CURRENT_RGB_TARGET_UNAVAILABLE_OR_AMBIGUOUS')
+    candidate = plausible[0]
+    index = candidate.get('instance_index')
+    if type(index) is not int or not 0 <= index < len(instances) or \
+            instances[index] != candidate:
         raise ValueError('CURRENT_RGB_INSTANCE_INDEX_MISSING')
-    if target.get('disposition') == 'OBSERVED' and \
-            (target.get('candidate') != candidate or
-             target.get('current_eligible_count') != 1):
-        raise ValueError('CURRENT_RGB_SELECTOR_DISAGREES_WITH_INSTANCE')
-    if target.get('disposition') != 'OBSERVED' and \
-            target.get('reason') != 'NO_CURRENT_NON_EDGE_TARGET':
+    if target.get('disposition') == 'OBSERVED':
+        if (target.get('candidate') != candidate or
+                target.get('current_eligible_count') != 1):
+            raise ValueError('CURRENT_RGB_SELECTOR_DISAGREES_WITH_INSTANCE')
+    elif (target.get('reason') != 'NO_CURRENT_NON_EDGE_TARGET' or
+          target.get('current_eligible_count') != 0):
         raise ValueError('CURRENT_RGB_TARGET_SELECTOR_REFUSED')
     box = candidate.get('bbox_xyxy_px')
     if (not isinstance(box, list) or len(box) != 4 or
