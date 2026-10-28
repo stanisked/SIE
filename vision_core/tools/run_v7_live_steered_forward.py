@@ -22,7 +22,7 @@ from vision_core.tools.run_v7_supervised_one_step import (
     TOPIC, EXTRINSIC_SHA, MAX_AGE_S, MODEL_SHA, SOURCE_HASHES)
 from vision_core.tools.run_v7_supervised_approach import overlap, target_bearing_deg
 
-BUILD = 'v4_2_live_steering_v1'
+BUILD = 'v4_2_live_steering_v2'
 DISTANCE_M = 0.10
 MAX_DISTANCE_M = 0.30
 MAX_BIAS_PWM = 20
@@ -257,14 +257,14 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
     command_id = 'sie-live-' + secrets.token_hex(12)
     report['command_id'] = command_id
 
-    def call(method, endpoint, params=None):
+    def call(method, endpoint, params=None, *, timeout_s=.4):
         url = base_url.rstrip('/') + endpoint
         if params is not None:
             url += '?' + urlencode(params)
         row = {'method': method, 'endpoint': endpoint, 'query': params,
                'host_started_monotonic_s': clock()}
         try:
-            code, body = request(method, url, .4)
+            code, body = request(method, url, timeout_s)
             row.update(http_code=code, response=body)
             return code, body
         except BaseException as error:
@@ -326,11 +326,27 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
         last_feedback = clock()
         previous_box = box
         seq = 0
+        terminal_pending_deadline = None
         # camera_factory yields fresh full records while the same bounded
         # forward command is active. A missing record is a stop condition.
         last_status_poll = clock()
         for audit in observations:
             now = clock()
+            if terminal_pending_deadline is not None and now > terminal_pending_deadline:
+                raise RuntimeError('TERMINAL_OBSERVATION_TIMEOUT')
+            if terminal_pending_deadline is not None:
+                if now - last_status_poll >= .1:
+                    code, status = call('GET', '/status')
+                    last_status_poll = clock()
+                    if code != 200:
+                        raise RuntimeError('CONTROLLER_STATUS_UNAVAILABLE_DURING_BRAKE')
+                    if matching_terminal(status, boot):
+                        report['terminal_status'] = status
+                        break
+                    if status.get('bounded_fault_latched') or status.get('state') == 'FAULT':
+                        raise RuntimeError('CONTROLLER_FAULT_DURING_BRAKE:' +
+                                           str(status.get('bounded_fault_reason')))
+                continue
             if audit is None:
                 if now - last_status_poll >= .1:
                     code, status = call('GET', '/status')
@@ -340,7 +356,12 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
                     if matching_terminal(status, boot):
                         report['terminal_status'] = status
                         break
-            if now - last_feedback > FEEDBACK_TIMEOUT_S:
+                    if status.get('bounded_fault_latched') or status.get('state') == 'FAULT':
+                        raise RuntimeError('CONTROLLER_FAULT_DURING_MOVE:' +
+                                           str(status.get('bounded_fault_reason')))
+                    if status.get('state') in ('BRAKING', 'COASTING'):
+                        terminal_pending_deadline = terminal_pending_deadline or clock() + 3.0
+            if terminal_pending_deadline is None and now - last_feedback > FEEDBACK_TIMEOUT_S:
                 raise RuntimeError('CAMERA_FEEDBACK_TIMEOUT')
             if audit is None:
                 continue
@@ -358,8 +379,16 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
             if matching_terminal(status, boot):
                 report['terminal_status'] = status
                 break
+            if status.get('bounded_fault_latched') or status.get('state') == 'FAULT':
+                raise RuntimeError('CONTROLLER_FAULT_DURING_MOVE:' +
+                                   str(status.get('bounded_fault_reason')))
+            if status.get('state') in ('BRAKING', 'COASTING'):
+                terminal_pending_deadline = clock() + 3.0
+                continue
             if status.get('active_command_id') != command_id:
                 raise RuntimeError('ACTIVE_COMMAND_NOT_CONFIRMED')
+            if status.get('state') not in ('STARTING', 'DRIVING'):
+                raise RuntimeError('UNEXPECTED_ACTIVE_DRIVE_STATE')
             # Recheck age after the status read; only this new frame may steer.
             check_live_rgb_target(audit, armed, clock())
             seq += 1
@@ -394,26 +423,31 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
         if sent:
             report['stop_posts'] = 1
             try:
-                code, body = call('POST', '/stop')
+                code, body = call('POST', '/stop', timeout_s=1.0)
                 report['stop_response'] = {'http_code': code, 'body': body}
-                # A stop response is only acceptance; confirm READY/zero PWM.
-                deadline = clock() + 3.0
-                while clock() < deadline:
-                    code, status = call('GET', '/status')
-                    if code == 200 and status.get('boot_session_id') == boot and \
-                            status.get('state') in ('READY', 'FAULT') and \
-                            status.get('right_pwm') == 0 and status.get('left_pwm') == 0 and \
-                            status.get('remote_stop_pending') is False:
-                        report['confirmed_stop_status'] = status
-                        if status.get('state') == 'FAULT' or status.get('bounded_fault_latched'):
-                            report['result'] = 'TERMINAL_FAULT_STOPPED'
-                        break
-                    time.sleep(.04)
-                else:
-                    report['result'] = 'STOP_NOT_CONFIRMED'
             except BaseException as error:
-                report['result'] = 'STOP_NOT_CONFIRMED'
                 report['stop_error'] = type(error).__name__ + ': ' + str(error)
+            # A failed /stop HTTP response may still mean that ESP32 braked.
+            # Observe actual READY/FAULT with zero PWM before classifying it.
+            deadline = clock() + 3.0
+            while clock() < deadline:
+                try:
+                    code, status = call('GET', '/status', timeout_s=.75)
+                except BaseException as error:
+                    report['last_stop_status_error'] = type(error).__name__ + ': ' + str(error)
+                    time.sleep(.04)
+                    continue
+                if code == 200 and status.get('boot_session_id') == boot and \
+                        status.get('state') in ('READY', 'FAULT') and \
+                        status.get('right_pwm') == 0 and status.get('left_pwm') == 0 and \
+                        status.get('remote_stop_pending') is False:
+                    report['confirmed_stop_status'] = status
+                    if status.get('state') == 'FAULT' or status.get('bounded_fault_latched'):
+                        report['result'] = 'TERMINAL_FAULT_STOPPED'
+                    break
+                time.sleep(.04)
+            else:
+                report['result'] = 'STOP_NOT_CONFIRMED'
         journal.close()
         (output / 'summary.json').write_text(json.dumps(report, indent=2, allow_nan=False) + '\n')
     return report

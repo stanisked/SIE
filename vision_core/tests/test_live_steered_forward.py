@@ -248,6 +248,95 @@ class LiveSteeringTest(unittest.TestCase):
         self.assertEqual(report['result'], 'TERMINAL_OBSERVED_DIAGNOSTIC_ONLY')
         self.assertEqual([x['bias_pwm'] for x in report['updates']], [0, 20])
 
+    def test_braking_fault_skips_steering_and_confirms_stop_after_http_timeout(self):
+        import tempfile
+        class BrakingFaultController:
+            def __init__(self):
+                self.calls = []
+                self.moved = False
+                self.stop_attempted = False
+            def __call__(self, method, url, timeout):
+                endpoint = urlsplit(url).path
+                self.calls.append(endpoint)
+                if endpoint == '/status':
+                    state = ('FAULT' if self.stop_attempted else
+                             'BRAKING' if self.moved else 'READY')
+                    return 200, {'firmware_build_id': live.BUILD,
+                        'steering_api_version': 'v1_active_forward_pwm_bias',
+                        'boot_session_id': 'A1B2C3D4E5F60708', 'state': state,
+                        'bounded_fault_latched': self.moved,
+                        'bounded_fault_reason': 'BREAKAWAY_NOT_FOUND' if self.moved else None,
+                        'active_command_id': self.command_id if self.moved and not self.stop_attempted else None,
+                        'last_command_id': self.command_id if self.stop_attempted else None,
+                        'last_command_state': 'FAULT' if self.stop_attempted else None,
+                        'remote_stop_pending': False, 'right_pwm': 0, 'left_pwm': 0}
+                if endpoint == '/move-forward-steered':
+                    self.command_id = parse_qs(urlsplit(url).query)['command_id'][0]
+                    self.moved = True
+                    return 202, {'accepted': True, 'command_id': self.command_id}
+                if endpoint == '/stop':
+                    self.stop_attempted = True
+                    raise TimeoutError('response lost after stop')
+                raise AssertionError('unexpected endpoint ' + endpoint)
+        controller = BrakingFaultController()
+        def camera(armed):
+            yield {'cycle_id': 'first', 'stamp': time.monotonic(),
+                   'box': [40, 0, 60, 100]}
+            yield {'cycle_id': 'second', 'stamp': time.monotonic() + .001,
+                   'box': [43, 0, 63, 100]}
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://10.13.32.229',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=camera)
+        self.assertEqual(report['result'], 'TERMINAL_FAULT_STOPPED')
+        self.assertIn('CONTROLLER_FAULT_DURING_MOVE', report['error'])
+        self.assertEqual(report['steer_posts'], 0)
+        self.assertEqual(report['stop_posts'], 1)
+        self.assertIn('stop_error', report)
+        self.assertEqual(report['confirmed_stop_status']['state'], 'FAULT')
+        self.assertNotIn('/steer-update', controller.calls)
+
+    def test_normal_braking_waits_for_terminal_without_steer_updates(self):
+        import tempfile
+        class BrakingController(FakeController):
+            def __init__(self):
+                super().__init__()
+                self.braking_reads = 0
+            def __call__(self, method, url, timeout):
+                endpoint = urlsplit(url).path
+                if endpoint == '/status' and self.active:
+                    self.calls.append((method, endpoint, {}))
+                    self.braking_reads += 1
+                    base = {'firmware_build_id': live.BUILD,
+                        'steering_api_version': 'v1_active_forward_pwm_bias',
+                        'boot_session_id': 'A1B2C3D4E5F60708',
+                        'state': 'BRAKING', 'active_command_id': self.command_id,
+                        'last_command_id': None, 'last_command_state': None,
+                        'bounded_fault_latched': False,
+                        'remote_stop_pending': False, 'right_pwm': 0, 'left_pwm': 0}
+                    if self.braking_reads >= 3:
+                        self.active = False
+                        base.update(state='READY', active_command_id=None,
+                                    last_command_id=self.command_id,
+                                    last_command_state='SUCCESS')
+                    return 200, base
+                return super().__call__(method, url, timeout)
+        controller = BrakingController()
+        def camera(armed):
+            yield {'cycle_id': 'first', 'stamp': time.monotonic(),
+                   'box': [40, 0, 60, 100]}
+            while True:
+                time.sleep(.04)
+                yield {'cycle_id': 'moving', 'stamp': time.monotonic(),
+                       'box': [43, 0, 63, 100]}
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://10.13.32.229',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=camera)
+        self.assertEqual(report['result'], 'TERMINAL_OBSERVED_DIAGNOSTIC_ONLY')
+        self.assertEqual(report['steer_posts'], 0)
+        self.assertEqual(report['terminal_status']['last_command_state'], 'SUCCESS')
+
 
 if __name__ == '__main__':
     unittest.main()
