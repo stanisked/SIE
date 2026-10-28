@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 #!/usr/bin/env python3
 """Operator supervised bounded forward command with live RGB steering updates."""
 from __future__ import annotations

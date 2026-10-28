@@ -1,6 +1,3 @@
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
-Failed to create stream fd: Operation not permitted
 """Dry-run contract checks; no ROS, controller, camera or motors required."""
 import importlib.util
 from pathlib import Path
