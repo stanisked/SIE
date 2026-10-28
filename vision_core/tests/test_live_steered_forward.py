@@ -60,12 +60,12 @@ for name, original in saved_modules.items():
 
 
 class FakeController:
-    def __init__(self, terminal_after=2, starting_reads=0):
+    def __init__(self, terminal_after=1, starting_steer_rejections=0):
         self.calls = []
         self.active = False
         self.status_reads_during_active = 0
         self.terminal_after = terminal_after
-        self.starting_reads = starting_reads
+        self.starting_steer_rejections = starting_steer_rejections
 
     def __call__(self, method, url, timeout):
         endpoint = urlsplit(url).path
@@ -88,9 +88,7 @@ class FakeController:
                     base.update(last_command_id=self.command_id,
                                 last_command_state='SUCCESS')
                 else:
-                    state = ('STARTING' if self.status_reads_during_active <= self.starting_reads
-                             else 'DRIVING')
-                    base.update(state=state, active_command_id=self.command_id,
+                    base.update(state='DRIVING', active_command_id=self.command_id,
                                 right_pwm=170, left_pwm=135)
             return 200, base
         if endpoint == '/move-forward-steered':
@@ -99,6 +97,10 @@ class FakeController:
             return 202, {'accepted': True, 'command_id': self.command_id}
         if endpoint == '/steer-update':
             assert self.active
+            if query['bias_pwm'] != '0' and self.starting_steer_rejections:
+                self.starting_steer_rejections -= 1
+                return 409, {'accepted': False,
+                             'reason': 'STEER_ONLY_AFTER_DRIVE_STARTED'}
             return 200, {'accepted': True, 'seq': int(query['seq'])}
         if endpoint == '/stop':
             self.active = False
@@ -240,11 +242,13 @@ class LiveSteeringTest(unittest.TestCase):
         self.assertEqual(report['stop_posts'], 1)
         paths = [x[1] for x in controller.calls]
         self.assertLess(paths.index('/move-forward-steered'), paths.index('/steer-update'))
+        self.assertNotIn('/status', paths[paths.index('/move-forward-steered') + 1:
+                                          paths.index('/steer-update')])
         self.assertEqual(controller.calls[paths.index('/steer-update')][2]['bias_pwm'], '20')
 
     def test_confirmed_driving_uses_steer_ack_without_per_frame_status(self):
         import tempfile
-        controller = FakeController(terminal_after=2)
+        controller = FakeController()
         def camera(armed):
             for i, center in enumerate((50, 53, 56)):
                 yield {'cycle_id': str(i), 'stamp': time.monotonic(),
@@ -284,7 +288,7 @@ class LiveSteeringTest(unittest.TestCase):
 
     def test_startup_updates_are_zero_until_driving(self):
         import tempfile
-        controller = FakeController(terminal_after=3, starting_reads=1)
+        controller = FakeController(starting_steer_rejections=1)
         def camera(armed):
             for i, center in enumerate((50, 53, 56)):
                 yield {'cycle_id': str(i), 'stamp': time.monotonic(),
@@ -298,6 +302,10 @@ class LiveSteeringTest(unittest.TestCase):
                 request=controller, camera_factory=camera)
         self.assertEqual(report['result'], 'TERMINAL_OBSERVED_DIAGNOSTIC_ONLY')
         self.assertEqual([x['bias_pwm'] for x in report['updates']], [0, 20])
+        self.assertEqual(report['steer_posts'], 3)
+        attempts = [call[2] for call in controller.calls if call[1] == '/steer-update']
+        self.assertEqual([x['bias_pwm'] for x in attempts], ['12', '0', '20'])
+        self.assertEqual([x['seq'] for x in attempts], ['1', '1', '2'])
 
     def test_braking_fault_skips_steering_and_confirms_stop_after_http_timeout(self):
         import tempfile
@@ -329,6 +337,9 @@ class LiveSteeringTest(unittest.TestCase):
                 if endpoint == '/stop':
                     self.stop_attempted = True
                     raise TimeoutError('response lost after stop')
+                if endpoint == '/steer-update':
+                    return 409, {'accepted': False,
+                                 'reason': 'NO_MATCHING_ACTIVE_STEERED_FORWARD'}
                 raise AssertionError('unexpected endpoint ' + endpoint)
         controller = BrakingFaultController()
         def camera(armed):
@@ -342,11 +353,11 @@ class LiveSteeringTest(unittest.TestCase):
                 request=controller, camera_factory=camera)
         self.assertEqual(report['result'], 'TERMINAL_FAULT_STOPPED')
         self.assertIn('CONTROLLER_FAULT_DURING_MOVE', report['error'])
-        self.assertEqual(report['steer_posts'], 0)
+        self.assertEqual(report['steer_posts'], 1)
         self.assertEqual(report['stop_posts'], 1)
         self.assertIn('stop_error', report)
         self.assertEqual(report['confirmed_stop_status']['state'], 'FAULT')
-        self.assertNotIn('/steer-update', controller.calls)
+        self.assertEqual(report['updates'], [])
 
     def test_normal_braking_waits_for_terminal_without_steer_updates(self):
         import tempfile
@@ -356,6 +367,10 @@ class LiveSteeringTest(unittest.TestCase):
                 self.braking_reads = 0
             def __call__(self, method, url, timeout):
                 endpoint = urlsplit(url).path
+                if endpoint == '/steer-update':
+                    self.calls.append((method, endpoint, {}))
+                    return 409, {'accepted': False,
+                                 'reason': 'NO_MATCHING_ACTIVE_STEERED_FORWARD'}
                 if endpoint == '/status' and self.active:
                     self.calls.append((method, endpoint, {}))
                     self.braking_reads += 1
@@ -387,7 +402,7 @@ class LiveSteeringTest(unittest.TestCase):
                 front_clearance_m=2.5, output=root + '/run',
                 request=controller, camera_factory=camera)
         self.assertEqual(report['result'], 'TERMINAL_OBSERVED_DIAGNOSTIC_ONLY')
-        self.assertEqual(report['steer_posts'], 0)
+        self.assertEqual(report['steer_posts'], 1)
         self.assertEqual(report['terminal_status']['last_command_state'], 'SUCCESS')
 
     def test_steer_rejected_after_bounded_braking_waits_for_terminal(self):
