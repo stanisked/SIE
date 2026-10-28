@@ -1,8 +1,8 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-10-26 (supervised V7 turn handoff; earlier checkpoints retain their own dates)
+**Snapshot date:** 2026-10-27 (moving-target live-steering handoff; earlier checkpoints retain their own dates)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** active engineering validation, not autonomous operation.
+**Status:** active engineering validation; live steering is a diagnostic candidate, not autonomous operation.
 
 ## Update rule
 
@@ -13,7 +13,72 @@ This file is the change-controlled snapshot of the active project state.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
 
-## 2026-10-26: current supervised V7 turn checkpoint
+## 2026-10-27: current moving-target approach checkpoint
+
+The operator's target-following requirement is **acquire a moving semantic
+target anywhere usable in the RGB image, start moving straight, then update
+left/right wheel drive from later fresh observations while the same forward
+command remains active**. The target need not be centered before starting;
+separate stop-and-turn commands are the historical diagnostic, not the intended
+controller. A changed, lost, stale, or ambiguous target requires a stop.
+The current camera adapter detects a person; arbitrary object classes remain
+future adapter work. The target's image coordinate is updated on every frame
+and is not assumed fixed.
+
+The active branch is `codex/sie-ros2-integration-v1`. The implementation
+checkpoint before this context revision is `66ac08a`. The versioned
+`traction_control_v4_2_live_steering_v1` firmware candidate, based on the
+loaded-start v4 controller, adds `/move-forward-steered` (0.02–0.30 m) and
+command/boot-session-bound `/steer-update` calls with a rising sequence
+number. It starts with zero steering bias; later observations may request
+bounded differential forward PWM (±20). A nonzero update is accepted only
+after the drive enters `DRIVING`. The ESP32 feedback watchdog stops directed
+drive after 700 ms without an update. Existing encoder cutoffs, bounded
+timeout, fault latch, and observed `/stop` remain in place. The Pi runner is
+`vision_core/tools/run_v7_live_steered_forward.sh`; it also has a
+`--preview-only` camera mode with no HTTP or motor requests. Code and
+contract: [moving-target approach diagnostic](docs/diagnostics/continuous_moving_target_approach_20261027.md).
+
+The first camera-only preview recorded 44 unique frames over 8.77 s, with
+one straight acquisition and subsequent proposed bias of +5 or +6 PWM for a
+person about 1.19–1.42 degrees right of the optical axis. It posted no motor
+or network requests. A moving-person preview then recorded 67 frames but
+accepted only one under the older static-v2/mask check. The saved camera
+journal showed `MOTION_DETECTED` during lateral movement; from frame 11
+onward the person's box repeatedly touched the top image edge (top y about
+0–3 px). The segmentation still reported one person, generally about
+0.84–0.93 confidence. These are observed refusal causes, not proof of
+continuous tracking. Evidence roots:
+`v7_live_steering_preview_1793126913_6ed87990`,
+`v7_live_steering_preview_1793127837_e6838a67`, and
+`control_input_preview_half_640x400_single_segmentation_onnxruntime_20261027_220358`
+under the Pi's `/home/elwis/.local/state/sie/evidence/`.
+
+Commit `66ac08a` separated the supervised moving-target RGB check from the
+static-v2 stillness and stereo-mask checks. It binds current segmentation,
+calibration and AR0234 driver timestamp, accepts a top-clipped person if it is
+the sole high-confidence instance, and checks adjacent-frame box
+correspondence. Side clipping, multiple instances, stale frames, and
+unconfirmed correspondence still refuse or stop the trial. This change
+does not alter the static profile, admitted metric Measurement, or autonomous
+motion admission. Seven local tests and Python compilation passed; C++
+static analysis passed for the earlier firmware candidate. There is **no
+camera preview after `66ac08a` and no compiled, flashed, or physically
+tested live-steering firmware evidence yet**. The actual ESP32 build now
+installed must be rechecked from `/status`; do not infer it from source.
+
+Next: update the Pi branch and repeat the 20 s **camera-only**
+`--preview-only` trial while the person moves across the optical axis.
+Inspect the new summary for sustained tracking, positive and negative
+proposed bias, target-loss events, and zero motor/network posts. If that
+passes, compile and flash the versioned candidate on the operator's
+computer, confirm its exact build and zero-PWM READY state through
+`/status`, then begin a separately observed short bounded motor test.
+The physical steering response, stopping distance, and dynamic target
+continuity remain unestablished. Do not promote the preview to an admitted
+Measurement or autonomous approach.
+
+## 2026-10-26: historical supervised V7 turn checkpoint
 
 The active branch is `codex/sie-ros2-integration-v1`. The latest source and
 documentation checkpoint before this update is `6578a71`. The separate
