@@ -417,6 +417,13 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
                     if check_code == 200 and matching_terminal(terminal_status, boot):
                         report['terminal_status'] = terminal_status
                         break
+                    if (check_code == 200 and
+                            terminal_status.get('active_command_id') == command_id and
+                            terminal_status.get('state') in ('BRAKING', 'COASTING')):
+                        # The bounded command entered its normal stopping
+                        # phase between the camera frame and steer request.
+                        terminal_pending_deadline = clock() + 3.0
+                        continue
                 raise RuntimeError('STEER_UPDATE_NOT_ACKNOWLEDGED')
             report['updates'].append({'cycle_id': audit['cycle_id'],
                                       'driver_stamp_s': stamp,
