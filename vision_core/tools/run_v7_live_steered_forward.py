@@ -22,7 +22,7 @@ from vision_core.tools.run_v7_supervised_one_step import (
     TOPIC, EXTRINSIC_SHA, MAX_AGE_S, MODEL_SHA, SOURCE_HASHES)
 from vision_core.tools.run_v7_supervised_approach import overlap, target_bearing_deg
 
-BUILD = 'v4_2_live_steering_v3'
+BUILD = 'v4_2_live_steering_v4'
 DISTANCE_M = 0.10
 MAX_DISTANCE_M = 0.30
 MAX_BIAS_PWM = 20
@@ -570,3 +570,4 @@ def main():
 
 if __name__ == '__main__':
     raise SystemExit(main())
+
