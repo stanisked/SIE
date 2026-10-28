@@ -285,7 +285,9 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
         return False
 
     try:
-        code, ready = call('GET', '/status')
+        # This read precedes every motor command. A Wi-Fi delay here is safe
+        # to wait through; the tighter active-command deadlines stay intact.
+        code, ready = call('GET', '/status', timeout_s=2.0)
         if code != 200:
             raise RuntimeError('CONTROLLER_STATUS_UNAVAILABLE')
         preflight(ready, accepted_builds={BUILD})
