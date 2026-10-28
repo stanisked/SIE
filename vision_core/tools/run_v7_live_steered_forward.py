@@ -22,7 +22,7 @@ from vision_core.tools.run_v7_supervised_one_step import (
     TOPIC, EXTRINSIC_SHA, MAX_AGE_S, MODEL_SHA, SOURCE_HASHES)
 from vision_core.tools.run_v7_supervised_approach import overlap, target_bearing_deg
 
-BUILD = 'v4_2_live_steering_v2'
+BUILD = 'v4_2_live_steering_v3'
 DISTANCE_M = 0.10
 MAX_DISTANCE_M = 0.30
 MAX_BIAS_PWM = 20
@@ -291,6 +291,8 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
         preflight(ready, accepted_builds={BUILD})
         if ready.get('steering_api_version') != 'v1_active_forward_pwm_bias':
             raise RuntimeError('STEERING_API_MISMATCH')
+        if ready.get('steered_safety_latched') is not False:
+            raise RuntimeError('INDEPENDENT_STEERED_SAFETY_NOT_READY')
         boot = ready['boot_session_id']
         armed = clock()
         observations = camera_factory(armed)
@@ -326,6 +328,7 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
         last_feedback = clock()
         previous_box = box
         seq = 0
+        driving_confirmed = False
         terminal_pending_deadline = None
         # camera_factory yields fresh full records while the same bounded
         # forward command is active. A missing record is a stop condition.
@@ -348,7 +351,7 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
                                            str(status.get('bounded_fault_reason')))
                 continue
             if audit is None:
-                if now - last_status_poll >= .1:
+                if now - last_status_poll >= .5:
                     code, status = call('GET', '/status')
                     last_status_poll = clock()
                     if code != 200:
@@ -372,41 +375,52 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
             box = evidence['target_box_xyxy_px']
             if not same_target(previous_box, box):
                 raise RuntimeError('TARGET_CORRESPONDENCE_LOST')
-            code, status = call('GET', '/status')
-            last_status_poll = clock()
-            if code != 200:
-                raise RuntimeError('CONTROLLER_STATUS_UNAVAILABLE_DURING_MOVE')
-            if matching_terminal(status, boot):
-                report['terminal_status'] = status
-                break
-            if status.get('bounded_fault_latched') or status.get('state') == 'FAULT':
-                raise RuntimeError('CONTROLLER_FAULT_DURING_MOVE:' +
-                                   str(status.get('bounded_fault_reason')))
-            if status.get('state') in ('BRAKING', 'COASTING'):
-                terminal_pending_deadline = clock() + 3.0
-                continue
-            if status.get('active_command_id') != command_id:
-                raise RuntimeError('ACTIVE_COMMAND_NOT_CONFIRMED')
-            if status.get('state') not in ('STARTING', 'DRIVING'):
-                raise RuntimeError('UNEXPECTED_ACTIVE_DRIVE_STATE')
-            # Recheck age after the status read; only this new frame may steer.
+            drive_state = 'DRIVING'
+            if not driving_confirmed:
+                code, status = call('GET', '/status')
+                last_status_poll = clock()
+                if code != 200:
+                    raise RuntimeError('CONTROLLER_STATUS_UNAVAILABLE_DURING_MOVE')
+                if matching_terminal(status, boot):
+                    report['terminal_status'] = status
+                    break
+                if status.get('bounded_fault_latched') or status.get('state') == 'FAULT':
+                    raise RuntimeError('CONTROLLER_FAULT_DURING_MOVE:' +
+                                       str(status.get('bounded_fault_reason')))
+                if status.get('state') in ('BRAKING', 'COASTING'):
+                    terminal_pending_deadline = clock() + 3.0
+                    continue
+                if status.get('active_command_id') != command_id:
+                    raise RuntimeError('ACTIVE_COMMAND_NOT_CONFIRMED')
+                drive_state = status.get('state')
+                if drive_state not in ('STARTING', 'DRIVING'):
+                    raise RuntimeError('UNEXPECTED_ACTIVE_DRIVE_STATE')
+                driving_confirmed = drive_state == 'DRIVING'
+            # Once DRIVING has been confirmed, fresh steer acknowledgements
+            # replace a redundant /status before every camera frame.
             check_live_rgb_target(audit, armed, clock())
             seq += 1
             # A fresh frame during breakaway keeps feedback alive, but only a
             # frame observed after DRIVING may request a wheel difference.
             bias = (steering_bias(target_bearing_deg(box))
-                    if status.get('state') == 'DRIVING' else 0)
+                    if driving_confirmed else 0)
             report['steer_posts'] += 1
             code, reply = call('POST', '/steer-update',
                                {'boot_session_id': boot, 'command_id': command_id,
                                 'seq': seq, 'bias_pwm': bias})
             if code != 200 or reply.get('accepted') is not True or reply.get('seq') != seq:
+                if code == 409:
+                    check_code, terminal_status = call('GET', '/status')
+                    last_status_poll = clock()
+                    if check_code == 200 and matching_terminal(terminal_status, boot):
+                        report['terminal_status'] = terminal_status
+                        break
                 raise RuntimeError('STEER_UPDATE_NOT_ACKNOWLEDGED')
             report['updates'].append({'cycle_id': audit['cycle_id'],
                                       'driver_stamp_s': stamp,
                                       'bearing_deg': target_bearing_deg(box),
                                       'bias_pwm': bias, 'seq': seq,
-                                      'drive_state_at_update': status.get('state')})
+                                      'drive_state_at_update': drive_state})
             last_frame_stamp = stamp
             previous_box = box
             last_feedback = clock()

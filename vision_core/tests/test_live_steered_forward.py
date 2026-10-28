@@ -77,6 +77,7 @@ class FakeController:
                 'state': 'READY', 'right_pwm': 0, 'left_pwm': 0,
                 'remote_stop_pending': False,
                 'bounded_fault_latched': False,
+                'steered_safety_latched': False,
                 'active_command_id': None,
                 'last_command_id': None, 'last_command_state': None}
         if endpoint == '/status':
@@ -106,6 +107,22 @@ class FakeController:
 
 
 class LiveSteeringTest(unittest.TestCase):
+    def test_v3_refuses_controller_without_independent_safety_status(self):
+        import tempfile
+        def controller(method, url, timeout):
+            self.assertEqual(urlsplit(url).path, '/status')
+            return 200, {'firmware_build_id': live.BUILD,
+                'steering_api_version': 'v1_active_forward_pwm_bias',
+                'boot_session_id': 'A1B2C3D4E5F60708', 'state': 'READY',
+                'bounded_fault_latched': False, 'active_command_id': None,
+                'remote_stop_pending': False, 'right_pwm': 0, 'left_pwm': 0}
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://10.13.32.229',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=lambda armed: iter(()))
+        self.assertEqual(report['movement_posts'], 0)
+        self.assertIn('INDEPENDENT_STEERED_SAFETY_NOT_READY', report['error'])
+
     def test_real_rgb_validator_accepts_moving_top_clipped_single_person(self):
         now = time.monotonic()
         instance = {'instance_index': 0, 'bbox_xyxy_px': [200, 0, 500, 1100],
@@ -212,6 +229,27 @@ class LiveSteeringTest(unittest.TestCase):
         self.assertLess(paths.index('/move-forward-steered'), paths.index('/steer-update'))
         self.assertEqual(controller.calls[paths.index('/steer-update')][2]['bias_pwm'], '20')
 
+    def test_confirmed_driving_uses_steer_ack_without_per_frame_status(self):
+        import tempfile
+        controller = FakeController(terminal_after=2)
+        def camera(armed):
+            for i, center in enumerate((50, 53, 56)):
+                yield {'cycle_id': str(i), 'stamp': time.monotonic(),
+                       'box': [center-10, 0, center+10, 100]}
+            while True:
+                time.sleep(.04)
+                yield None
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://10.13.32.229',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=camera)
+        self.assertEqual(report['result'], 'TERMINAL_OBSERVED_DIAGNOSTIC_ONLY')
+        paths = [call[1] for call in controller.calls]
+        first_update = paths.index('/steer-update')
+        second_update = paths.index('/steer-update', first_update + 1)
+        self.assertNotIn('/status', paths[first_update + 1:second_update])
+        self.assertEqual(len(report['updates']), 2)
+
     def test_lost_camera_stream_stops_without_steering(self):
         import tempfile
         controller = FakeController(terminal_after=999)
@@ -265,6 +303,7 @@ class LiveSteeringTest(unittest.TestCase):
                         'steering_api_version': 'v1_active_forward_pwm_bias',
                         'boot_session_id': 'A1B2C3D4E5F60708', 'state': state,
                         'bounded_fault_latched': self.moved,
+                        'steered_safety_latched': False,
                         'bounded_fault_reason': 'BREAKAWAY_NOT_FOUND' if self.moved else None,
                         'active_command_id': self.command_id if self.moved and not self.stop_attempted else None,
                         'last_command_id': self.command_id if self.stop_attempted else None,
@@ -313,6 +352,7 @@ class LiveSteeringTest(unittest.TestCase):
                         'state': 'BRAKING', 'active_command_id': self.command_id,
                         'last_command_id': None, 'last_command_state': None,
                         'bounded_fault_latched': False,
+                        'steered_safety_latched': False,
                         'remote_stop_pending': False, 'right_pwm': 0, 'left_pwm': 0}
                     if self.braking_reads >= 3:
                         self.active = False
