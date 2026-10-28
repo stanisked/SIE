@@ -377,6 +377,53 @@ class LiveSteeringTest(unittest.TestCase):
         self.assertEqual(report['steer_posts'], 0)
         self.assertEqual(report['terminal_status']['last_command_state'], 'SUCCESS')
 
+    def test_steer_rejected_after_bounded_braking_waits_for_terminal(self):
+        import tempfile
+        class BrakingRaceController(FakeController):
+            def __init__(self):
+                super().__init__(terminal_after=999)
+                self.braking = False
+                self.braking_reads = 0
+            def __call__(self, method, url, timeout):
+                endpoint = urlsplit(url).path
+                if endpoint == '/steer-update':
+                    self.calls.append((method, endpoint, {}))
+                    self.braking = True
+                    return 409, {'accepted': False,
+                                 'reason': 'NO_MATCHING_ACTIVE_STEERED_FORWARD'}
+                if endpoint == '/status' and self.braking and self.active:
+                    self.calls.append((method, endpoint, {}))
+                    self.braking_reads += 1
+                    if self.braking_reads == 1:
+                        return 200, {'boot_session_id': 'A1B2C3D4E5F60708',
+                                     'state': 'BRAKING',
+                                     'active_command_id': self.command_id,
+                                     'last_command_id': None,
+                                     'last_command_state': None}
+                    self.active = False
+                    return 200, {'boot_session_id': 'A1B2C3D4E5F60708',
+                                 'state': 'READY', 'active_command_id': None,
+                                 'last_command_id': self.command_id,
+                                 'last_command_state': 'SUCCESS'}
+                return super().__call__(method, url, timeout)
+        controller = BrakingRaceController()
+        def camera(armed):
+            yield {'cycle_id': 'first', 'stamp': time.monotonic(),
+                   'box': [40, 0, 60, 100]}
+            yield {'cycle_id': 'second', 'stamp': time.monotonic(),
+                   'box': [43, 0, 63, 100]}
+            while True:
+                time.sleep(.04)
+                yield None
+        with tempfile.TemporaryDirectory() as root:
+            report = live.run_session(base_url='http://10.13.32.229',
+                front_clearance_m=2.5, output=root + '/run',
+                request=controller, camera_factory=camera)
+        self.assertEqual(report['result'], 'TERMINAL_OBSERVED_DIAGNOSTIC_ONLY')
+        self.assertEqual(report['steer_posts'], 1)
+        self.assertEqual(report['stop_posts'], 1)
+        self.assertEqual(report['terminal_status']['last_command_state'], 'SUCCESS')
+
 
 if __name__ == '__main__':
     unittest.main()
