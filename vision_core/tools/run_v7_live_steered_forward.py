@@ -388,39 +388,28 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
             box = evidence['target_box_xyxy_px']
             if not same_target(previous_box, box):
                 raise RuntimeError('TARGET_CORRESPONDENCE_LOST')
-            drive_state = 'DRIVING'
-            if not driving_confirmed:
-                code, status = call('GET', '/status')
-                last_status_poll = clock()
-                if code != 200:
-                    raise RuntimeError('CONTROLLER_STATUS_UNAVAILABLE_DURING_MOVE')
-                if matching_terminal(status, boot):
-                    report['terminal_status'] = status
-                    break
-                if status.get('bounded_fault_latched') or status.get('state') == 'FAULT':
-                    raise RuntimeError('CONTROLLER_FAULT_DURING_MOVE:' +
-                                       str(status.get('bounded_fault_reason')))
-                if status.get('state') in ('BRAKING', 'COASTING'):
-                    terminal_pending_deadline = clock() + 3.0
-                    continue
-                if status.get('active_command_id') != command_id:
-                    raise RuntimeError('ACTIVE_COMMAND_NOT_CONFIRMED')
-                drive_state = status.get('state')
-                if drive_state not in ('STARTING', 'DRIVING'):
-                    raise RuntimeError('UNEXPECTED_ACTIVE_DRIVE_STATE')
-                driving_confirmed = drive_state == 'DRIVING'
-            # Once DRIVING has been confirmed, fresh steer acknowledgements
-            # replace a redundant /status before every camera frame.
+            # A command-bound nonzero steer acknowledgement proves that the
+            # ESP32 is DRIVING: the firmware rejects it during STARTING. This
+            # avoids a large /status response on the time-critical first frame.
             check_live_rgb_target(audit, armed, clock())
             seq += 1
-            # A fresh frame during breakaway keeps feedback alive, but only a
-            # frame observed after DRIVING may request a wheel difference.
-            bias = (steering_bias(target_bearing_deg(box))
-                    if driving_confirmed else 0)
+            bias = steering_bias(target_bearing_deg(box))
+            drive_state = 'DRIVING' if driving_confirmed else 'UNCONFIRMED'
             report['steer_posts'] += 1
             code, reply = call('POST', '/steer-update',
                                {'boot_session_id': boot, 'command_id': command_id,
                                 'seq': seq, 'bias_pwm': bias})
+            if (code == 409 and not driving_confirmed and bias != 0 and
+                    reply.get('reason') == 'STEER_ONLY_AFTER_DRIVE_STARTED'):
+                # The rejected request changed no controller state. Send one
+                # zero-bias heartbeat with the same sequence while starting.
+                bias = 0
+                drive_state = 'STARTING'
+                check_live_rgb_target(audit, armed, clock())
+                report['steer_posts'] += 1
+                code, reply = call('POST', '/steer-update',
+                                   {'boot_session_id': boot, 'command_id': command_id,
+                                    'seq': seq, 'bias_pwm': 0})
             if code != 200 or reply.get('accepted') is not True or reply.get('seq') != seq:
                 if code == 409:
                     check_code, terminal_status = call('GET', '/status')
@@ -429,6 +418,11 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
                         report['terminal_status'] = terminal_status
                         break
                     if (check_code == 200 and
+                            (terminal_status.get('bounded_fault_latched') or
+                             terminal_status.get('state') == 'FAULT')):
+                        raise RuntimeError('CONTROLLER_FAULT_DURING_MOVE:' +
+                                           str(terminal_status.get('bounded_fault_reason')))
+                    if (check_code == 200 and
                             terminal_status.get('active_command_id') == command_id and
                             terminal_status.get('state') in ('BRAKING', 'COASTING')):
                         # The bounded command entered its normal stopping
@@ -436,6 +430,9 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
                         terminal_pending_deadline = clock() + 3.0
                         continue
                 raise RuntimeError('STEER_UPDATE_NOT_ACKNOWLEDGED')
+            if bias != 0:
+                driving_confirmed = True
+                drive_state = 'DRIVING'
             report['updates'].append({'cycle_id': audit['cycle_id'],
                                       'driver_stamp_s': stamp,
                                       'bearing_deg': target_bearing_deg(box),
