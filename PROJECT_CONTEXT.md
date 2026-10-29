@@ -1,19 +1,251 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-10-27 (moving-target live-steering handoff; earlier checkpoints retain their own dates)
+**Snapshot date:** 2026-10-29 (Shadow UART and dynamic camera diagnostic checkpoint; earlier checkpoints retain their own dates)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** active engineering validation; live steering is a diagnostic candidate, not autonomous operation.
+**Status:** Shadow is an engineering candidate. PAUSE/RESUME was observed on lifted wheels; autonomous floor following is not validated.
 
 ## Update rule
 
 This file is the change-controlled snapshot of the active project state.
 
-- Update it only after the user gives the exact command **`обновить документ`**.
+- The current `PROJECT_CONTEXT.md` is stored in two places: this local laptop file and its matching [private Google Drive copy](https://drive.google.com/file/d/1mRj9UluoMptShOMPMz4h_MbCFczlVn0o/view) in the `SIE Active Projector` folder. Keep their contents synchronized when an update is authorized.
+- The local file is the working copy. The Drive copy is the second current copy, not a public release. Historical copies elsewhere do not replace either current copy.
+- Update both the current Drive copy and the ChatGPT Library copy when the user gives the command **`обнови документ`**. Recreate the Library copy if it is absent, and keep their contents identical.
+- Do not update either copy without that command.
 - Do not silently update it after code edits, tests, experiments, or conversation summaries.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
 
-## 2026-10-27: current moving-target approach checkpoint
+## 2026-10-29: current Shadow checkpoint
+
+The operator's Shadow objective is to detect a person with AR0234, begin moving
+after a fresh observation, follow a moving person, and pause the *same*
+`command_id` whenever the target is lost or scene and encoders disagree. After
+fresh reacquisition and a distance check, that command resumes through further
+bounded segments; the intended hold distance is 0.8 m from the robot front.
+RGB detection may initiate or reacquire a target, including when OV9281 depth is
+temporarily unavailable; a future LiDAR may supply associated range. Neither an
+unassociated depth sample nor optical camera Z is robot-front clearance. The
+0.8 m hold and 0.95 m resume thresholds in the candidate range gate are
+experimental, without an established physical stopping bound. The runner has
+no public motor `--execute` route until fresh target ownership, range-to-front,
+age, and disagreement checks can be supplied and validated.
+
+The flashed ESP32 candidate reports
+`FIRMWARE_BUILD_ID=v4_2_uart_shadow_v1_candidate` and
+`shadow_api_version=v1_paused_segment`. A motor-power-off probe confirmed
+PAUSE/RESUME with the same `command_id`. An initial lifted-wheels attempt with
+motor power off correctly reached terminal `BREAKAWAY_NOT_FOUND`; it is not a
+successful movement test. After powering the motors and lifting the wheels, a
+second probe observed two approximately 0.02 m segments with the same ID,
+zero encoder drift during PAUSED intervals, both wheels stopped on PAUSE and
+rotating again after RESUME, and confirmed STOP. This proves those transitions
+in that setup, not floor following or physical stopping at a person.
+
+The opt-in camera-only dynamic Shadow preview preserves existing static-v2
+gate results in its audit while reporting separate current-RGB and masked-depth
+diagnostics. It can consider one high-confidence person clipped by an image
+edge and record adjacent-box continuity; that continuity cannot establish
+persistent person identity. The initial 130-record preview yielded 42 selected
+RGB targets and 88 refusals, including 55 refusals with detections; only 4 of
+the 42 selected targets had coherent masked depth. The next 94-record preview
+admitted three clipped targets but exposed seven near-right-edge geometry
+refusals. The subsequent 104-record preview exercised the near-edge diagnostic
+override: 16 geometry overrides, 10 clipped selections, 93 mask diagnostics,
+20 coherent and 73 `DEPTH_MAD_EXCEEDED` results. One person was detected in
+all 104 records; nine frames fell below confidence 0.7 and one box was too
+narrow. Adjacent boxes stayed continuous for 92 frames, with a loss around
+frames 39–48 and a new segment at frame 49. This is diagnostic association,
+not proven reacquisition of the same person. The 0.05 m mask-depth MAD gate
+remains unchanged. The compact preview did not retain synchronized raw stereo
+and mask images, so the cause of MAD refusals remains open. None of these
+camera records authorizes a motor command or admits metric Measurement.
+
+The active stereo calibration remains **OV9281 Pi v7**, SHA-256
+`39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`;
+V6 is historical. The immediate next engineering step is a camera-only capture
+of matched masks, disparities and timing around coherent and MAD-refused
+frames, followed by a reviewed front-clearance and target-continuity input for
+the Shadow supervisor. Keep the motor runner disabled while those inputs are
+unavailable; later perform a supervised floor trial with independent power
+cutoff and explicit observation of both wheels.
+
+The implementation candidate is the separate Shadow firmware, UART facade,
+supervisor, range gate and probes (commit `6370a23`), plus an opt-in ROS preview
+node with a diagnostic helper and wrapper (commit `b935d13`). The last camera
+overlay archive has SHA-256
+`904f072f47298448ee5e3310c4ce2fa0940448ed8701a632fc636e2b5a1bafa8`.
+
+## 2026-10-29: earlier UART and moving-target control checkpoint
+
+This is the current continuation point. The 2026-10-28 v4 handoff below is
+historical. **OV9281 Pi v7 remains the active stereo calibration** with SHA-256
+`39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`;
+no new calibration or metric Measurement admission has occurred.
+
+The operator's control objective is unchanged: detect the person anywhere
+usable in the AR0234 image, start one bounded forward command straight, then
+adjust left/right drive from later fresh observations during that same command.
+The person may move. Current segmentation is person-specific, and this
+supervised diagnostic is not autonomous navigation.
+
+The v4 Wi-Fi-controlled firmware was loaded and one supervised 0.20 m floor
+run was measured by floor marks at about 0.20 m. The person stood with slight
+sway; the cart turned right in that run. This single observation does not
+establish reliable tracking of a laterally moving person. A later run sent a
+movement POST but stopped after an HTTP timeout. Its journal showed the
+`/move-forward-steered` POST itself timed out at 0.403 s, followed by a
+successful `/stop`; the operator observed no movement. Other camera-loaded
+trials showed intermittent HTTP status and steering-update timeouts.
+
+With motors off, 30 read-only `/status` calls succeeded 30/30 without camera
+load (maximum 67 ms). Under camera preview, one series succeeded 23/30,
+another 25/30 with Pi Wi-Fi power save off, and a later one 27/30; 0.4 s
+timeouts remained. A simultaneous 30-ping series lost 4/30 before disabling
+Pi Wi-Fi power save and 0/30 in later series. The mobile hotspot is
+`SIE-Mobile`, 2.4 GHz only; Pi and ESP32 share it. These observations show an
+intermittent control-path delay under camera load, not a proven cause in the
+camera process, Pi scheduling, radio, phone hotspot, or ESP32 HTTP server.
+
+The alternative GPIO UART link uses Raspberry Pi 5 pin 8/GPIO14 TX to ESP32
+RX2/GPIO16, Pi pin 10/GPIO15 RX from ESP32 TX2/GPIO17, and common GND. On the
+Pi, `dtoverlay=uart0-pi5` is active, serial console was removed from kernel
+arguments, `/dev/ttyAMA0` exists, and `serial-getty@ttyAMA0` is inactive.
+The motor-power-off diagnostic image `v4_2_uart_diag_v1` returned 30/30
+matching PINGs while idle (median 7.93 ms, max 7.96 ms) and 100/100 during
+30 s camera preview (median 7.92 ms, max 10.71 ms); preview exited normally.
+Both series reported boot session `81621C29240F9A3E`. This validates the
+physical serial link for diagnostics, not active motor control. See
+`firmware-build/uart-link-diagnostic-20261028/README.md`.
+
+The first active UART image `v4_2_uart_motion_v1` was flashed with motors
+unpowered. Its very first host STATUS request timed out. USB serial evidence
+showed a repeated `xQueueSemaphoreTake` assertion and reboot immediately
+after `UART_ONLY_WIFI_DISABLED`. Decoding its backtrace located the crash in
+`WebServer::begin()`/`NetworkServer::begin()`: the image started an HTTP
+listener after disabling Wi-Fi. That image is withdrawn. The follow-up
+`v4_2_uart_motion_v1b` removed the server start, compiled and passed 21 host
+tests, but the operator supplied a long unreadable serial capture (`□p`
+repeated) with no version or readiness lines. The cause of that capture has
+not been established; do not claim v1b passed hardware startup or UART.
+
+The v1c Arduino sketch is
+`firmware-build/uart-motion-v1c-20261029/source/traction_control_v4_2_uart_motion_v1c/traction_control_v4_2_uart_motion_v1c.ino`,
+with its two headers in the same folder. V1c removes Wi-Fi initialization,
+HTTP listener registration and service, and the Wi-Fi credential dependency
+from its startup path. Local ESP32 core 3.3.12 compilation succeeds (496811
+bytes flash, 70552 bytes globals); 21 Python host transport/runner tests pass.
+The matching private merged image has SHA-256
+`e54c325da4f15d97407fd9cd6d6802195c1bdd88e8acc2ea1bc38e089363cc15`.
+The operator flashed v1c and supplied a fresh USB boot log showing
+`FIRMWARE_BUILD_ID=v4_2_uart_motion_v1c`,
+`UART_ONLY_NETWORK_NOT_STARTED`, and `SIE_UART_READY`, with one
+`POWERON_RESET` and no repeated reset in the supplied capture. A direct
+UART STATUS read returned HTTP 200, exact v1c build ID, boot session
+`27F906E8AAFBC92F`, `READY`, no active command or latched fault, and zero
+left/right PWM. The first probe attempt failed before I/O because `elwis`
+lacked membership in the Pi's `dialout` group. After access was corrected,
+the installed `probe_uart_motion_off.py` rejected the v1c response because
+its expected build string was still `v4_2_uart_motion_v1`; the operator
+changed that exact check to `v4_2_uart_motion_v1c` locally and retained a
+`.py.bak` copy. This local probe edit has not been reported as committed.
+
+With motor power off, the corrected probe completed 100/100 UART STATUS
+requests at idle (median 61.94 ms, max 61.97 ms) and rejected a deliberately
+wrong boot-session movement request with HTTP 409
+`BOOT_SESSION_MISMATCH`; final state was `READY`. A second 100/100 series
+ran during a 45 s camera-only preview, with operator-confirmed overlap:
+median 61.93 ms, max 68.25 ms, the same boot session, wrong-boot request
+rejected, and final state `READY`. The preview exited normally with 186
+frames, zero journal drops/errors, and motor access disabled. It recorded
+48 `TARGET_UNAVAILABLE` frames and 138 masked-depth diagnostic frames;
+the control decision was `STOP` in all 186. Its 125 coherent masked-depth
+results are diagnostic only, not admitted metric Measurement.
+
+**Next:** preserve motor power off. Put the exact v1c probe expectation into
+the versioned source and inspect the UART command/stop path in a bounded
+motor-off test before considering any floor run. The invalid-boot rejection
+and read-only STATUS series do not establish valid-command behavior,
+stopping behavior under motor power, or reliable target following. Keep
+supervised diagnostics separate from admitted Measurement and autonomous
+operation; do not infer that the earlier Wi-Fi timeout cause has been proved.
+
+## 2026-10-28: active calibration and moving-target control checkpoint
+
+This dated section is the current continuation point. Older dated sections and
+their `Next` or `Current` labels below are preserved as historical checkpoints;
+they do not supersede this section.
+
+**Active stereo calibration is OV9281 Pi v7**, not V6. The Pi artifact is
+`/home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz`,
+expected SHA-256 `39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`.
+The AR0234 intrinsic remains `ar0234_intrinsic_v5_final_20260910` with SHA-256
+`e9454ed3d93ab36a6b159aa8c8e2356353cca8a6b0480e73c371199937ae7096`;
+the AR0234-to-physical-left-OV9281 extrinsic remains v1 with SHA-256
+`10b5fdd9b3467ba5e04a8bd6d2daad8440382798374c39bfd4b9037c2bf5b9cc`.
+These identities are bound in
+[decision-chain activation](docs/calibration/ar0234_ov9281_decision_chain_activation_v1.md).
+OV9281 v8 and v8b were rejected and are not active. The
+`vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/V6_HANDOFF.md`
+describes an earlier V6 calibration/runtime and remains relevant when changing
+V6 files; it is **not** the active stereo calibration for this RGB + stereo
+experiment. V7 far-range metric accuracy and current-frame rectification
+remain under investigation. A plausible diagnostic depth is not an admitted
+metric Measurement or a physical error bound.
+
+The intended target behavior remains: acquire the person at any usable RGB
+position, start one bounded forward command straight, then use later fresh
+frames to adjust the two forward wheels within that same command. The target
+may move. Current segmentation is a person-specific adapter; arbitrary object
+classes and autonomous tracking are not established.
+
+The latest **v3 floor trial** requested 0.20 m and ended in ESP32 `SUCCESS`,
+`READY`, zero PWM, no active command, no bounded fault, and no independent
+steered-safety latch. The operator measured about 0.20 m floor travel and
+about 1.5° leftward body turn. During the command the RGB target bearing was
+8.5–11.7° **right**; five accepted `DRIVING` updates requested the maximum
++20 PWM rightward correction. Encoders nevertheless reported right 0.2010 m,
+left 0.1939 m, center 0.1974 m and heading +0.0244 rad, consistent with the
+operator's leftward observation. Thus v3 completed and stopped normally but
+did not steer toward the target in that trial. Evidence:
+`/home/elwis/.local/state/sie/evidence/v7_live_steered_forward_1793187350_8e0ba8d8/summary.json`.
+The preceding v3 raised-wheel trial accepted two negative steering updates;
+its third update received HTTP 409 because the controller had already entered
+`BRAKING`. The runner's normal-braking handling was corrected in commits
+`10eecc4` and `a2ab40b`. A separate initial read-only `/status` timeout sent
+zero movement posts; its preliminary timeout was raised from 0.4 to 2.0 s in
+`a3dd2c6`. These host fixes did not change the installed firmware.
+
+**V4 is the next unflashed diagnostic candidate**, committed to
+`codex/sie-ros2-integration-v1` as `d58aaec5e254f70fd85af67948f66b431ee11ec3`.
+The v3 wheel synchronization still targeted equal travel while the camera
+requested a curve. V4 instead accumulates the desired left-minus-right
+encoder travel difference from subsequent center travel and the latest
+command-bound camera bias; full bias requests 0.18 m wheel difference per
+metre of subsequent center travel. The initial command still starts straight.
+Existing center, wheel and heading caps, independent 300 ms motor guard,
+700 ms feedback deadline and `/stop` remain. The Pi runner requires the exact
+`v4_2_live_steering_v4` build. Source, reasoning and limits:
+[v4 steering record](docs/diagnostics/live_steering_direction_v4_20261028.md).
+The v4 sketch compiled for ESP32 core 3.3.12; twelve Pi runner dry-run tests
+passed. Its private 4 MB merged image is on the operator computer at
+`/home/kestabor/Документы/ChatGPT/SIEE/firmware-build/live-steering-v4-20261028/sie_live_steering_v4_esp32_4mb.bin`,
+SHA-256 `a386d6bae8a20b51594aac7734ee13c574529804345b18727fae76fec5e02c94`.
+It embeds local Wi-Fi credentials and must not be published. No v4 `/status`
+or physical motor observation has been supplied; do not claim that v4 steers
+correctly on the floor.
+
+**Next:** with motor power off, load v4 and verify `/status` reports exact v4
+build, `READY`, no active command, zero PWM and no faults. Update the Pi branch
+to `d58aaec`, measure the available front path, and conduct one operator
+observed 0.20 m floor trial with accessible motor cutoff. Record the camera
+bearing/update sequence, final encoder distances and heading, measured floor
+travel, actual turn direction and confirmed stop. If the target is lost, the
+status faults, or the stop is unconfirmed, stop and inspect the saved evidence
+before another movement. This supervised experiment does not activate
+canonical Measurement or autonomous motion admission.
+
+## 2026-10-27: historical moving-target approach checkpoint
 
 The operator's target-following requirement is **acquire a moving semantic
 target anywhere usable in the RGB image, start moving straight, then update
@@ -137,7 +369,7 @@ Read in this order before changing SIE:
 1. `AI_CONTEXT.md` for the normative architecture and precedence rules.
 2. This `PROJECT_CONTEXT.md` for the current cross-project state.
 3. `AGENTS.md` for operational rules.
-4. The relevant version-specific handoff, especially `vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/V6_HANDOFF.md` before V6 work.
+4. The relevant version-specific handoff. Read `vision_core/vision_benchmark/hardware_audit/stereo_calibration_v6/V6_HANDOFF.md` before modifying V6 files; check the active v7 artifact and activation record for current RGB + stereo work.
 5. The implementation, tests, reports, activation profile, and `git status` for the task at hand.
 
 If these sources conflict, use the precedence in `AI_CONTEXT.md`; do not guess.
@@ -203,7 +435,7 @@ The current dynamic diagnostic node intentionally does **not** require MediaPipe
 
 A diagnostic result is useful only when it can be audited. Each cycle must either retain the complete evidence set named in the approved next sequence or explicitly identify which source was unavailable. Its outcome must be one of: `ASSOCIATED_DIAGNOSTIC_ONLY`, `TARGET_UNAVAILABLE`, `ASSOCIATION_UNAVAILABLE`, or a more specific evidence-backed rejection. Diagnostic evidence is not a Metric Measurement and must never be silently promoted to World State, navigation, or an actuator command.
 
-## Current continuation checkpoint: 2026-10-14
+## Historical continuation checkpoint: 2026-10-14
 
 This checkpoint supersedes older next-step descriptions about repeating manual
 board sweeps, diagnosing the same six saved MAD refusals, or using the old
@@ -336,13 +568,19 @@ The following artifacts are bound into the current ROS2 work. Their SHA-256 valu
 | Artifact | Identifier / SHA-256 |
 | --- | --- |
 | AR0234 intrinsic | `ar0234_intrinsic_v5_final_20260910`, `e9454ed3d93ab36a6b159aa8c8e2356353cca8a6b0480e73c371199937ae7096` |
-| OV9281 stereo calibration | active v7 Pi artifact SHA-256 `39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`; its far-range metric accuracy is under re-validation |
+| OV9281 stereo calibration | **active v7** at `/home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz`, SHA-256 `39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`; its far-range metric accuracy is under re-validation |
 | OV9281 v8 candidate | `ov9281_pi_stereo_candidate_v8`, SHA-256 `6b037ec3a79bd6d340875586353ea0554cc78f5332db8b4929462e80e944d956`; **rejected**, not active, after comparative physical-depth checks |
 | OV9281 v8b candidate | `ov9281_pi_stereo_candidate_v8b`, SHA-256 `6691a86dd8daaa84d87cf5c124ba4309471ff92416f200bf4799843299dcf76d`; **rejected**, not active, after same-setup 1.5 m comparative check |
 | AR0234 -> OV9281 physical-left extrinsic | `ar0234_ov9281_physical_left_extrinsic_v1`, `10b5fdd9b3467ba5e04a8bd6d2daad8440382798374c39bfd4b9037c2bf5b9cc` |
 | RGB + stereo decision profile | `runtime_artifacts/ar0234_ov9281_decision_chain_0p5_to_4p5m_v2/ar0234_ov9281_decision_chain_activation.json` |
 
 The 0.5 to 4.5 m v2 profile remains a conditional supervised diagnostic/recommendation constraint. It is not current evidence that v7 has physically validated metric accuracy across that whole interval, and it is not an authorization for dynamic fusion, autonomous navigation, or motors.
+
+The V6 handoff and V6 runtime policy describe an earlier, separate calibration
+chain. They must not be substituted for the SHA-bound active OV9281 v7 artifact
+in this RGB + stereo diagnostic. V7 is the calibration version here; the
+`run_v7_*` runner names also identify supervised experiment scripts and do not
+by themselves select a calibration.
 
 The current Pi copy of the 0.5 to 4.5 m v2 profile has SHA-256 `c835a304cc2758843747400c30f09a567b5ac74ebfd7908ea8ee14a013f519d9` and status `ACTIVE_CONDITIONAL_SUPERVISED_DECISION_RECOMMENDATION_ONLY`. A diagnostic run outside 2.0 m must not silently fall back to the frozen original profile `ar0234_ov9281_decision_chain_v1`, whose authorized range is only 0.5 to 2.0 m.
 
@@ -671,7 +909,7 @@ The intended MVP combines AR0234 semantic detection, OV9281 relative range, base
 
 This remains a proposed operational MVP. The later separate supervised trial does not change the diagnostic camera's motor-disabled boundary or approve autonomous motion. Operational bounded motion still requires a separate versioned Measurement policy, fresh physical ground truth, estimator validation, obstacle and stop behavior, and explicit authorization.
 
-## Approved next sequence
+## Historical next sequence from the 2026-10-14 checkpoint
 
 1. **Keep the demonstrated path.** Preserve v7 calibration and capture geometry,
    explicit 640x400 diagnostic matching and the single-segmentation frontend.
@@ -708,6 +946,12 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-10-29 | Added the current Shadow objective and boundaries, flashed candidate and lifted-wheel same-ID PAUSE/RESUME evidence, and 130/94/104-record dynamic camera preview findings. Kept active OV9281 v7 and unchanged MAD gate; documented missing person continuity, robot-front distance, exposure age, physical bound, and floor trial. |
+| 2026-10-29 | Confirmed v1c hardware boot, idle UART STATUS 100/100 and wrong-boot rejection, then another UART 100/100 during an operator-confirmed 45 s camera-only preview (186 frames, no journal errors, all control decisions STOP). Recorded the local stale probe build-ID correction and motor-off command-path test as the next step; no motor or Measurement admission. |
+| 2026-10-29 | Updated the document maintenance rule: `обнови документ` now authorizes synchronized updates of the Drive and ChatGPT Library copies; recreate the Library copy if absent. No engineering state was changed in this revision. |
+| 2026-10-29 | Recorded v4 camera-loaded HTTP timeouts, the 30/30 and 100/100 motor-off UART link results, v1 boot assertion, unresolved v1b serial capture, and locally compiled but hardware-unverified v1c sketch. Updated the next step to boot and read-only UART checks with motors unpowered; retained active OV9281 v7 calibration and diagnostic-only movement scope. |
+| 2026-10-28 | Recorded the user's storage rule: the current `PROJECT_CONTEXT.md` is kept locally on the laptop and as a synchronized private Google Drive copy in the SIE project folder. |
+| 2026-10-28 | Clarified active OV9281 Pi v7 calibration path and SHA, historical V6 handoff, rejected v8/v8b and remaining v7 accuracy limits. Recorded the v3 0.20 m floor `SUCCESS` with leftward turn despite rightward camera bias, the normal-braking runner fix, and compiled but unflashed v4 wheel-difference controller at `d58aaec`. Superseded older next-step labels with one observed v4 floor trial after build/status verification. |
 | 2026-10-26 | Updated the active handoff through `6578a71`: documented two read-only `/status` preflight timeouts with zero motion POSTs, the single 1 s then 2 s read retry, fresh-frame checks before any turn POST, and the unverified physical watchdog-v3 turn. The supervised trial remains separate from canonical Measurement and autonomous admission. |
 | 2026-10-14 | Recorded shape-aware mask diagnostics, 22-cycle resolution replay, 640x400 live mode, one segmentation inference for bbox/mask and latest 25 completed Pi cycles (867 ms host median, 25/25 coherent mask-depth diagnostics). Adopted the operator-selected motion targets as implementation requirements, preserved disabled movement and unvalidated physical/exposure bounds, and prioritized offline ONNX segmentation comparison over repeated scene trials. |
 | 2026-10-11 | Recorded the 21-cycle component/mask replay and 25-cycle live shadow capture, diagnosed the active 2.0 m range refusal, and added explicit 0.5 to 4.5 m offline masked-depth results (16/22 passed, six MAD refusals, three no target). Kept activation, Measurement and motors unchanged; prioritized saved-failure analysis and replaceable hardware interfaces before bounded motion. |
