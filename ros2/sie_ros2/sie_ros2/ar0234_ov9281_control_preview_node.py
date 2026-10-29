@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import os
 import time
 
 import rclpy
@@ -26,6 +27,9 @@ from vision_core.person_localization.diagnostic_stereo_resolution import half_ma
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from vision_core.person_localization.control_input_shadow import evaluate_control_input_shadow
+from vision_core.person_localization.dynamic_shadow_diagnostic import (
+    dynamic_shadow_diagnostic, continue_after_static_gate,
+    select_edge_candidate, allow_near_edge_geometry, DiagnosticContinuity)
 from vision_core.person_localization.existing_static_profile_preview import (
     load_existing_static_profile, StaticProfilePreviewGate, REVIEWED_SHA)
 
@@ -111,6 +115,11 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self.declare_parameter("preview_diagnostic_range_max_m", 4.5)
         self._activated_range = [self.range_min_m, self.range_max_m]
         self.declare_parameter("preview_existing_static_profile_v2", False)
+        self.declare_parameter("preview_dynamic_shadow_diagnostic",
+            os.environ.get("SIE_PREVIEW_DYNAMIC_SHADOW_DIAGNOSTIC") == "true")
+        self._dynamic_shadow_diagnostic = bool(
+            self.get_parameter("preview_dynamic_shadow_diagnostic").value)
+        self._shadow_continuity = DiagnosticContinuity() if self._dynamic_shadow_diagnostic else None
         self._existing_static_gate = None
         if bool(self.get_parameter("preview_existing_static_profile_v2").value):
             if not self._target_crop or self._rgb_backend != "single_segmentation":
@@ -429,6 +438,14 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     minimum_iou=self.temporal_target_minimum_iou,
                     maximum_center_displacement_relative=self.temporal_target_maximum_center_displacement_relative,
                     minimum_match_margin=self.temporal_target_minimum_match_margin, minimum_confidence=self.confidence_threshold)
+                if self._dynamic_shadow_diagnostic:
+                    selected, edge_override = select_edge_candidate(
+                        segmentation, dynamic, min_confidence=self.confidence_threshold)
+                    if edge_override:
+                        audit["legacy_dynamic_target"] = dynamic
+                        dynamic = selected
+                        audit["dynamic_shadow_edge_override"] = {
+                            "status": "DIAGNOSTIC_ONLY", "movement_authorized": False}
             else:
                 detector_start = time.monotonic()
                 events['rgb_call_start']=detector_start
@@ -450,6 +467,16 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 return
             candidate = dynamic["candidate"]
             geometry = self._dynamic_target_geometry(candidate, 1920 if jpeg_rgb else ar.shape[1])
+            if (self._dynamic_shadow_diagnostic and single and
+                    allow_near_edge_geometry(segmentation, candidate, geometry,
+                                             min_confidence=self.confidence_threshold)):
+                audit["dynamic_shadow_geometry_override"] = {
+                    "status": "DIAGNOSTIC_ONLY", "movement_authorized": False,
+                    "original_geometry": geometry}
+                geometry = {**geometry, "accepted": True,
+                    "reason": "NEAR_EDGE_SHADOW_DIAGNOSTIC_ONLY",
+                    "original_geometry_reason": geometry.get("reason"),
+                    "movement_authorized": False}
             audit["target_geometry"] = geometry
             if not geometry["accepted"]:
                 audit.update(status="TARGET_UNAVAILABLE", reason=geometry["reason"])
@@ -462,8 +489,19 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     dynamic.get("current_eligible_count"), time.monotonic())
                 audit["existing_profile_static_gate"] = gate
                 if gate["status"] != "PASS":
-                    audit.update(status="TARGET_UNAVAILABLE", reason=gate["reason"], association=None)
-                    return
+                    if not continue_after_static_gate(
+                            gate, dynamic_diagnostic_enabled=self._dynamic_shadow_diagnostic):
+                        audit.update(status="TARGET_UNAVAILABLE", reason=gate["reason"], association=None)
+                        return
+                    # Continue to an independent same-frame MASK DIAGNOSTIC.
+                    # The static profile remains refused and no motor decision
+                    # or approved Measurement is produced from this branch.
+                    audit["dynamic_shadow_static_gate_override"] = {
+                        "status": "DIAGNOSTIC_ONLY",
+                        "original_gate_status": gate["status"],
+                        "original_gate_reason": gate["reason"],
+                        "movement_authorized": False,
+                    }
             foreground['target_selection_geometry_s']=time.monotonic()-selection_started
             if getattr(self,"_target_crop",False):
                 events['stereo_submit']=time.monotonic()
@@ -534,8 +572,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 shape = audit["shape_diagnostic"]
                 audit.update(status=shape["status"], reason="HALF_RESOLUTION_SHAPE_DIAGNOSTIC",
                              association=None)
-            if association is not None or (single and audit["shape_diagnostic"].get("mask_depth",{}).get("status")
-                                           == "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY"):
+            if not any(key in audit for key in (
+                    "dynamic_shadow_edge_override", "dynamic_shadow_geometry_override")) and (
+                    association is not None or (single and audit["shape_diagnostic"].get("mask_depth",{}).get("status")
+                                                == "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY")):
                 self._confirm_current_target_track(candidate, observation)
         except Exception as error:
             audit.update(status="PROCESSING_REFUSED", reason=type(error).__name__, error_detail=str(error)[:400], association=None)
@@ -623,6 +663,20 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if not getattr(self,"_local_enabled",True):
                 audit["local_surface_async"]={"status":"DISABLED_BY_EXPLICIT_PREVIEW_CONFIGURATION",
                     "scheduled_cycle":False,"admission_authorized":False}
+            if self._dynamic_shadow_diagnostic:
+                audit["dynamic_shadow_diagnostic"] = dynamic_shadow_diagnostic(
+                    audit, now_s=time.monotonic())
+                audit["dynamic_shadow_diagnostic"]["static_gate_bypassed_for_diagnostic"] = (
+                    "dynamic_shadow_static_gate_override" in audit)
+                candidate = ((audit.get("ar0234_dynamic_target") or {}).get("candidate")
+                             if (audit.get("target_geometry") or {}).get("accepted") and
+                             audit.get("status") != "PROCESSING_REFUSED" else None)
+                audit["dynamic_shadow_diagnostic"]["continuity"] = (
+                    self._shadow_continuity.observe(candidate, now_s=time.monotonic()))
+                audit["dynamic_shadow_diagnostic"]["edge_clipped_selection"] = (
+                    "dynamic_shadow_edge_override" in audit)
+                audit["dynamic_shadow_diagnostic"]["near_edge_geometry_override"] = (
+                    "dynamic_shadow_geometry_override" in audit)
             audit["control_depth_quality_shadow"] = assess_control_depth(audit)
             control_started = time.monotonic()
             bound = evaluate_control_input_shadow(audit)
