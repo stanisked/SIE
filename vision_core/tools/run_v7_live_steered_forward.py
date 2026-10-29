@@ -25,6 +25,7 @@ from vision_core.tools.run_v7_supervised_one_step import (
 from vision_core.tools.run_v7_supervised_approach import overlap, target_bearing_deg
 
 BUILD = 'v4_2_live_steering_v4'
+UART_BUILD = 'v4_2_uart_motion_v1c'
 DISTANCE_M = 0.10
 MAX_DISTANCE_M = 0.30
 MAX_BIAS_PWM = 20
@@ -243,11 +244,12 @@ def preview_session(*, output, camera_factory, duration_s=10.0,
 
 
 def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, request=None,
+                expected_build=BUILD,
                 clock=time.monotonic, camera_factory=None):
     """Live session; camera_factory yields successive full diagnostic records.
 
     The first observation starts a straight command. Only subsequent records
-    can change wheel PWM. HTTP attempts and any recovery are journaled.
+    can change wheel PWM. Transport attempts and recovery are journaled.
     """
     if not valid_controller_url(base_url) or not math.isfinite(front_clearance_m):
         raise ValueError('INVALID_OPERATOR_ARGUMENTS')
@@ -304,12 +306,12 @@ def run_session(*, base_url, front_clearance_m, output, distance_m=DISTANCE_M, r
         return False
 
     try:
-        # This read precedes every motor command. A Wi-Fi delay here is safe
+        # This read precedes every motor command. A transport delay here is safe
         # to wait through; the tighter active-command deadlines stay intact.
         code, ready = call('GET', '/status', timeout_s=2.0)
         if code != 200:
             raise RuntimeError('CONTROLLER_STATUS_UNAVAILABLE')
-        preflight(ready, accepted_builds={BUILD})
+        preflight(ready, accepted_builds={expected_build})
         if ready.get('steering_api_version') != 'v1_active_forward_pwm_bias':
             raise RuntimeError('STEERING_API_MISMATCH')
         if ready.get('steered_safety_latched') is not False:
@@ -552,7 +554,9 @@ def main():
     mode.add_argument('--preview-only', action='store_true',
                       help='Observe target and journal intended steering, no network or motors')
     p.add_argument('--preview-duration-s', type=float, default=10.0)
-    p.add_argument('--base-url')
+    transport = p.add_mutually_exclusive_group()
+    transport.add_argument('--base-url')
+    transport.add_argument('--serial-port', help='GPIO UART port for v1c, e.g. /dev/ttyAMA0')
     p.add_argument('--front-clearance-m', type=float)
     p.add_argument('--distance-m', type=float, default=DISTANCE_M,
                    help='Bounded active command length, 0.02 to 0.30 m; first trial use 0.10 m')
@@ -560,9 +564,9 @@ def main():
     if not args.execute and not args.preview_only:
         print('NO_EXECUTION: no camera, network or motor opened')
         return 0
-    if args.execute and (not valid_controller_url(args.base_url) or
-                         args.front_clearance_m is None):
-        p.error('Require --base-url and --front-clearance-m')
+    if args.execute and (args.front_clearance_m is None or
+            (args.serial_port is None and not valid_controller_url(args.base_url))):
+        p.error('Require --front-clearance-m and exactly one valid transport')
     lockpath = Path.home() / '.local/state/sie/v7_operator_one_step.lock'
     lockpath.parent.mkdir(parents=True, exist_ok=True)
     with lockpath.open('a') as lock:
@@ -614,10 +618,19 @@ def main():
                                          duration_s=args.preview_duration_s)
                 print('LIVE_STEER_PREVIEW', report['result'], 'frames=', len(report['rows']))
             else:
-                report = run_session(base_url=args.base_url,
-                    front_clearance_m=args.front_clearance_m,
-                    distance_m=args.distance_m, output=root,
-                    camera_factory=camera)
+                if args.serial_port is not None:
+                    from vision_core.tools.uart_http_transport import UartHttp
+                    with UartHttp(args.serial_port) as request:
+                        report = run_session(base_url='http://uart.local',
+                            front_clearance_m=args.front_clearance_m,
+                            distance_m=args.distance_m, output=root,
+                            request=request, expected_build=UART_BUILD,
+                            camera_factory=camera)
+                else:
+                    report = run_session(base_url=args.base_url,
+                        front_clearance_m=args.front_clearance_m,
+                        distance_m=args.distance_m, output=root,
+                        camera_factory=camera)
                 print('LIVE_STEER', report['result'], 'movement_posts=', report['movement_posts'],
                       'steer_posts=', report['steer_posts'], 'stop_posts=', report['stop_posts'])
             print('Saved:', root / 'summary.json')

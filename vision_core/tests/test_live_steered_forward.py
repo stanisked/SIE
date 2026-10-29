@@ -110,6 +110,42 @@ class FakeController:
 
 
 class LiveSteeringTest(unittest.TestCase):
+    def test_uart_build_binding_and_command_lifecycle_with_fake_transport(self):
+        import tempfile
+        class UartController(FakeController):
+            def __call__(self, method, url, timeout):
+                code, body = super().__call__(method, url, timeout)
+                if urlsplit(url).path == '/status':
+                    body['firmware_build_id'] = live.UART_BUILD
+                return code, body
+
+        def camera(armed):
+            yield {'cycle_id': 'first', 'stamp': time.monotonic(),
+                   'box': [40, 0, 60, 100]}
+            yield {'cycle_id': 'second', 'stamp': time.monotonic() + .001,
+                   'box': [45, 0, 65, 100]}
+            while True:
+                time.sleep(.04)
+                yield None
+
+        with tempfile.TemporaryDirectory() as root:
+            rejected = UartController()
+            report = live.run_session(base_url='http://uart.local',
+                front_clearance_m=2.5, output=root + '/wrong-build',
+                request=rejected, camera_factory=camera)
+            self.assertEqual(report['movement_posts'], 0)
+            self.assertEqual(len(rejected.calls), 1)
+
+            accepted = UartController()
+            report = live.run_session(base_url='http://uart.local',
+                front_clearance_m=2.5, output=root + '/v1c',
+                request=accepted, expected_build=live.UART_BUILD,
+                camera_factory=camera)
+            self.assertEqual(report['result'], 'TERMINAL_OBSERVED_DIAGNOSTIC_ONLY')
+            self.assertEqual(report['movement_posts'], 1)
+            self.assertEqual(report['stop_posts'], 1)
+            self.assertEqual([path for _, path, _ in accepted.calls].count('/stop'), 1)
+
     def test_transport_timeout_classification(self):
         self.assertTrue(live.is_transport_timeout(TimeoutError('timed out')))
         self.assertTrue(live.is_transport_timeout(URLError(TimeoutError('timed out'))))
