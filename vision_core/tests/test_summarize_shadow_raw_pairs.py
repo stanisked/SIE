@@ -13,8 +13,8 @@ class RawPairSummaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             cycle = "cycle-0001"
-            directory = root / cycle
-            directory.mkdir()
+            directory = root / "run-id" / cycle
+            directory.mkdir(parents=True)
             mask = directory / (cycle + ".png")
             rgb = directory / "ar0234_source.jpg"
             mask.write_bytes(b"mask")

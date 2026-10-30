@@ -14,7 +14,7 @@ def summarize(root: Path):
     examples = {"COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY": [],
                 "DEPTH_MAD_EXCEEDED": []}
     incomplete = []
-    for audit_file in sorted(root.glob("*/audit.json")):
+    for audit_file in sorted(root.glob("*/*/audit.json")):
         row = json.loads(audit_file.read_text(encoding="utf-8"))
         cycle = row.get("cycle_id")
         if cycle != audit_file.parent.name:
