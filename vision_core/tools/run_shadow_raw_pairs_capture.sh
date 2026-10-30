@@ -8,10 +8,20 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
 companion=/home/elwis/dev_ws/runtime_envs/sie_seg_offline/bin/python
 runtime=/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python
-evidence_root="/home/elwis/.local/state/sie/evidence/shadow_raw_pairs_$(date +%Y%m%d_%H%M%S)"
+default_evidence_root="/home/elwis/.local/state/sie/evidence/shadow_raw_pairs_$(date +%Y%m%d_%H%M%S)"
+evidence_root="${SHADOW_RAW_EVIDENCE_ROOT:-$default_evidence_root}"
+duration_s="${SHADOW_CAPTURE_DURATION_S:-35}"
+if [[ ! "$duration_s" =~ ^(0|[1-9][0-9]*)$ ]] || (( duration_s < 10 || duration_s > 120 )); then
+  echo "SHADOW_CAPTURE_DURATION_S must be an integer from 10 to 120" >&2
+  exit 2
+fi
+if [[ -e "$evidence_root" ]]; then
+  echo "Evidence root already exists: $evidence_root" >&2
+  exit 2
+fi
 echo "Evidence root: $evidence_root"
 exit_code=0
-timeout --signal=INT --kill-after=10s 35s "$runtime" \
+timeout --signal=INT --kill-after=10s "${duration_s}s" "$runtime" \
   install/sie_ros2/lib/sie_ros2/ar0234_ov9281_dynamic_association_audit_node \
   --ros-args \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \
