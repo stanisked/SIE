@@ -1,0 +1,230 @@
+{
+  "schema_version": "sie.shadow_rgb_detector_offline.v1",
+  "status": "OFFLINE_DIAGNOSTIC_ONLY",
+  "score_source": "operator_reported_partial_JPEG_scores",
+  "model_sha256": null,
+  "metric_measurement_authorized": false,
+  "navigation_eligible": false,
+  "actuator_access": false,
+  "summary": {
+    "labeled_frames": 13,
+    "evaluated_frames": 9,
+    "positive_frames_evaluated": 9,
+    "negative_frames_evaluated": 0,
+    "positive_frames_above_threshold": {
+      "0.7": 4,
+      "0.4": 5,
+      "0.1": 6
+    },
+    "negative_frames_above_threshold": {
+      "0.7": 0,
+      "0.4": 0,
+      "0.1": 0
+    },
+    "false_positive_rate": null
+  },
+  "frames": [
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000003",
+      "person_visible": true,
+      "image_sha256": "2bd3617d90f5f2c527df7aeb5f7b1f8516a4c5c39a224399b80de04d977e87e5",
+      "audit_sha256": "fc809e182468c009eb311761fef90bd23135b39c27654505406611b322189b29",
+      "original_rgb_target_status": "SINGLE_TARGET",
+      "original_rgb_candidate": true,
+      "original_audit_status": "ASSOCIATION_UNAVAILABLE",
+      "original_audit_reason": "FRUSTUM_DEPTH_SAMPLES_OUT_OF_RANGE",
+      "saved_jpeg_max_confidence": 0.7089,
+      "above_threshold": {
+        "0.7": true,
+        "0.4": true,
+        "0.1": true
+      }
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000004",
+      "person_visible": true,
+      "image_sha256": "95635b70a4a753cc350a077994d5da12d3ce111a252d4bf2d829d91ce803f987",
+      "audit_sha256": "742d9e6f80d8641251318bd70e6dd858787ef04ea70688f916c378c610bf4648",
+      "original_rgb_target_status": "NO_TARGET",
+      "original_rgb_candidate": false,
+      "original_audit_status": "TARGET_UNAVAILABLE",
+      "original_audit_reason": "NO_TARGET",
+      "saved_jpeg_max_confidence": 0.7311,
+      "above_threshold": {
+        "0.7": true,
+        "0.4": true,
+        "0.1": true
+      }
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000005",
+      "person_visible": true,
+      "image_sha256": "9a65318886e74f1faba08fa87888f4f21dc043eac430bdfdfd2ac1b749fe8c5b",
+      "audit_sha256": "e0878b4a346a431ee3764b85a22bc955531f379f28b46130c2113a614072e074",
+      "original_rgb_target_status": "NO_TARGET",
+      "original_rgb_candidate": false,
+      "original_audit_status": "TARGET_UNAVAILABLE",
+      "original_audit_reason": "NO_TARGET",
+      "saved_jpeg_max_confidence": 0.0859,
+      "above_threshold": {
+        "0.7": false,
+        "0.4": false,
+        "0.1": false
+      }
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000006",
+      "person_visible": true,
+      "image_sha256": "e0c5cfaa9fa5c9c04490b91692cf92b9736098542b532c4e916067a1b49c0023",
+      "audit_sha256": "e22a76ccd3ee2d142b57f3aaaeeee6a86077119df17505a896140cd5e88bdd0c",
+      "original_rgb_target_status": "NO_TARGET",
+      "original_rgb_candidate": false,
+      "original_audit_status": "TARGET_UNAVAILABLE",
+      "original_audit_reason": "NO_TARGET",
+      "saved_jpeg_max_confidence": 0.0431,
+      "above_threshold": {
+        "0.7": false,
+        "0.4": false,
+        "0.1": false
+      }
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000009",
+      "person_visible": true,
+      "image_sha256": "053ee0922569d0ab75571e556569fe3b1662db5fb9403698389e46fac06f50c6",
+      "audit_sha256": "a7e3f432bc46f47f521f98f437d67ef4d3dc921c3ac7001801c70170ba313227",
+      "original_rgb_target_status": "SINGLE_TARGET",
+      "original_rgb_candidate": true,
+      "original_audit_status": "ASSOCIATION_UNAVAILABLE",
+      "original_audit_reason": "FRUSTUM_DEPTH_SAMPLES_OUT_OF_RANGE",
+      "saved_jpeg_max_confidence": null,
+      "above_threshold": null
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000017",
+      "person_visible": true,
+      "image_sha256": "5ef0da649a1ec02ded1857c916cf25f415d5bb35d3bab5964251ecc8ab3c9138",
+      "audit_sha256": "bc8a5e3717c5c693096f59e5e9999aa0c88aae273982c858ebbda8279aaacbe0",
+      "original_rgb_target_status": "SINGLE_TARGET",
+      "original_rgb_candidate": true,
+      "original_audit_status": "ASSOCIATION_UNAVAILABLE",
+      "original_audit_reason": "FRUSTUM_DEPTH_SAMPLES_OUT_OF_RANGE",
+      "saved_jpeg_max_confidence": null,
+      "above_threshold": null
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000019",
+      "person_visible": true,
+      "image_sha256": "70d0302e53f33e5fdcc0d3b689d99460a86209afe13b1c8e03d408f62af69ee0",
+      "audit_sha256": "eafa60b459b3b87c5babc87ed9014593edd0a6ec80089e36ffbba68cdd70ed3c",
+      "original_rgb_target_status": "SINGLE_TARGET",
+      "original_rgb_candidate": true,
+      "original_audit_status": "ASSOCIATION_UNAVAILABLE",
+      "original_audit_reason": "FRUSTUM_DEPTH_SAMPLES_OUT_OF_RANGE",
+      "saved_jpeg_max_confidence": null,
+      "above_threshold": null
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000020",
+      "person_visible": true,
+      "image_sha256": "388e0ec5795b7ba1f035d1ae0805f82613087e82b5084d4ed7a7ac81ee7c75c6",
+      "audit_sha256": "4e350386a7ae79f62697a0c90b304d45ed021fd8bcb7186e12c0515fafe65c7a",
+      "original_rgb_target_status": "SINGLE_TARGET",
+      "original_rgb_candidate": true,
+      "original_audit_status": "TARGET_UNAVAILABLE",
+      "original_audit_reason": "BBOX_NEAR_LEFT_IMAGE_EDGE",
+      "saved_jpeg_max_confidence": null,
+      "above_threshold": null
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000021",
+      "person_visible": true,
+      "image_sha256": "8ab5460442c936e59d796fa76a66bae344fb3165abeb931050308d8a58dd0d58",
+      "audit_sha256": "3c7bf9e3129eadec4a25706738a3a9dc9fa9ec131a9af79c0b6878c50c575884",
+      "original_rgb_target_status": "SINGLE_TARGET",
+      "original_rgb_candidate": true,
+      "original_audit_status": "TARGET_UNAVAILABLE",
+      "original_audit_reason": "BBOX_NEAR_LEFT_IMAGE_EDGE",
+      "saved_jpeg_max_confidence": 0.8134,
+      "above_threshold": {
+        "0.7": true,
+        "0.4": true,
+        "0.1": true
+      }
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000022",
+      "person_visible": true,
+      "image_sha256": "4a7ef64c29108c91b1d3d7467df3bd0b4ed7e4234f73350ebb7ae998438a4e7b",
+      "audit_sha256": "3b63bdfb87a4d11309b27f9c1704b32c2149a5ece2a9bdaa0ec1d2959509909a",
+      "original_rgb_target_status": "NO_TARGET",
+      "original_rgb_candidate": false,
+      "original_audit_status": "TARGET_UNAVAILABLE",
+      "original_audit_reason": "NO_TARGET",
+      "saved_jpeg_max_confidence": 0.6912,
+      "above_threshold": {
+        "0.7": false,
+        "0.4": true,
+        "0.1": true
+      }
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000023",
+      "person_visible": true,
+      "image_sha256": "a2bd2b638517a1290a75ffae47ab626b132cce426a2051bc0bc5c2ec71a9b5b6",
+      "audit_sha256": "96014c60c5c6bf700231916a6e14fa23fd6b563aedfe06174eb23f501fe215f7",
+      "original_rgb_target_status": "NO_TARGET",
+      "original_rgb_candidate": false,
+      "original_audit_status": "TARGET_UNAVAILABLE",
+      "original_audit_reason": "NO_TARGET",
+      "saved_jpeg_max_confidence": 0.3391,
+      "above_threshold": {
+        "0.7": false,
+        "0.4": false,
+        "0.1": true
+      }
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000024",
+      "person_visible": true,
+      "image_sha256": "74c1ac5e035c98251443d66805b049978eb0132246b603f7daec38a7ef6eea2f",
+      "audit_sha256": "62c14ebdfde49727c76e7f30419f78a51e7821f12f6a7da6b290975bd7bb213d",
+      "original_rgb_target_status": "NO_TARGET",
+      "original_rgb_candidate": false,
+      "original_audit_status": "TARGET_UNAVAILABLE",
+      "original_audit_reason": "NO_TARGET",
+      "saved_jpeg_max_confidence": 0.0401,
+      "above_threshold": {
+        "0.7": false,
+        "0.4": false,
+        "0.1": false
+      }
+    },
+    {
+      "cycle_id": "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000025",
+      "person_visible": true,
+      "image_sha256": "aca84b930ffd0090f655ad28efc925ac3ab152e09fc9719f85f29cb73fa86b2e",
+      "audit_sha256": "e56822519d7dec975f93c3a12826ddae500b6e77b717eedae9fa4353a35192a8",
+      "original_rgb_target_status": "SINGLE_TARGET",
+      "original_rgb_candidate": true,
+      "original_audit_status": "ASSOCIATION_UNAVAILABLE",
+      "original_audit_reason": "FRUSTUM_DEPTH_SAMPLES_OUT_OF_RANGE",
+      "saved_jpeg_max_confidence": 0.7975,
+      "above_threshold": {
+        "0.7": true,
+        "0.4": true,
+        "0.1": true
+      }
+    }
+  ],
+  "limitations": [
+    "Scores are from redecoded saved JPEGs, not original in-memory frames.",
+    "A high proposal score does not establish person localization or identity; no human boxes were annotated.",
+    "This selected positive-heavy sample does not estimate operational recall.",
+    "False-positive rate requires annotated frames without a person.",
+    "No depth, metric Measurement or motion policy is changed."
+  ],
+  "labels_sha256": "37b64263cf4a9489077b99e6bbc7f124e1b55155d6222aac8c88933744de8fd9",
+  "source_root": "/workspace/scratch/46260cd4bfcf/shadow_rgb_dropouts",
+  "reported_scores_sha256": "88576cc46bac9c292dccf2e9a12645928e83b8d25e3618c2b28e62ff0bcb5d7f"
+}

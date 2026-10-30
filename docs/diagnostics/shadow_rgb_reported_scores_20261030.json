@@ -1,0 +1,15 @@
+{
+  "schema_version": "sie.shadow_rgb_operator_scores.v1",
+  "provenance": "Operator-reported maxima from offline ONNX replay of frozen JPEGs, 2026-10-30; selected frames only, not original in-memory scores",
+  "scores": {
+    "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000003": {"max_confidence": 0.7089},
+    "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000004": {"max_confidence": 0.7311},
+    "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000005": {"max_confidence": 0.0859},
+    "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000006": {"max_confidence": 0.0431},
+    "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000021": {"max_confidence": 0.8134},
+    "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000022": {"max_confidence": 0.6912},
+    "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000023": {"max_confidence": 0.3391},
+    "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000024": {"max_confidence": 0.0401},
+    "ar0234-ov9281-dynamic-audit-4c94c2957574bb99-00000025": {"max_confidence": 0.7975}
+  }
+}
