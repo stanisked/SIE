@@ -17,13 +17,20 @@ import time
 
 import cv2
 import numpy as np
-import scipy
 
 from analyze_ar0234_stereo_component_ambiguity import load_calibrations, sha256
 from compare_shadow_mask_depth_median import in_roi, owned, project, verify_baseline
 from replay_shadow_mask_depth_range import replay
 from vision_core.person_localization.instance_mask_stereo_fusion import masked_depth_hypothesis
-from vision_core.person_localization.local_surface_diagnostic import analyze_local_surfaces
+
+try:
+    import scipy
+    from vision_core.person_localization.local_surface_diagnostic import analyze_local_surfaces
+except ModuleNotFoundError as error:
+    if error.name != "scipy":
+        raise
+    scipy = None
+    analyze_local_surfaces = None
 
 
 def matcher(profile: str, min_disparity: int):
@@ -83,12 +90,14 @@ def evaluate(disparity: np.ndarray, consistent: np.ndarray, mask: np.ndarray,
         raise ValueError("projected mask support differs from hypothesis")
     grid = np.zeros(disparity.shape, dtype=bool)
     grid[v[selected], u[selected]] = True
-    if selected.sum() >= 12:
+    if selected.sum() >= 12 and analyze_local_surfaces is not None:
         surface, _ = analyze_local_surfaces(u[selected], v[selected], d[selected],
             abs(float(cal["P2"][0, 3])) / 1000.0, stride=stride)
         local = {key: surface[key] for key in (
             "patch_count", "fitted_patch_count", "fitted_sample_fraction",
             "patch_status_counts", "pooled_held_out_axial_residual")}
+    elif analyze_local_surfaces is None:
+        local = {"status": "UNAVAILABLE_SCIPY_NOT_INSTALLED"}
     else:
         local = {"status": "INSUFFICIENT_OWNED_STEREO_SAMPLES"}
     return {"mask_depth": hypothesis, "local_surface": local,
@@ -260,7 +269,8 @@ def main() -> None:
                          "alternate": "paired JPEG StereoBM 15px, XSOBEL 9/31, texture 10",
                          "common": "128 disparities, uniqueness 10, speckle 100/2, LR 1.5px"},
               "environment": {"python": platform.python_version(), "opencv": cv2.__version__,
-                              "numpy": np.__version__, "scipy": scipy.__version__},
+                              "numpy": np.__version__,
+                              "scipy": scipy.__version__ if scipy is not None else None},
               "code_sha256": {"tool": sha256(Path(__file__)),
                               "replay": sha256(Path(__file__).with_name("replay_shadow_mask_depth_range.py")),
                               "mask_depth": sha256(Path(__file__).resolve().parents[1] /
@@ -268,6 +278,7 @@ def main() -> None:
               "cycles": rows,
               "limitations": ["Saved rectified JPEGs were re-encoded after in-memory stereo matching; exact original disparity reproduction is not expected.",
                               "Wider blocks can erase thin features or mix background with a moving subject; StereoBM may refuse low-texture areas.",
+                              "Local surface fits are unavailable when SciPy is not installed; masked-depth and LR comparisons still run.",
                               "No independent physical range truth or exposure synchronization.",
                               "A lower MAD, local residual or changed diagnostic status cannot authorize Measurement or motion."]}
     destination = args.output_dir / "report.json"
