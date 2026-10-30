@@ -1,8 +1,8 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-10-29 (Shadow UART and dynamic camera diagnostic checkpoint; earlier checkpoints retain their own dates)
+**Snapshot date:** 2026-10-31 (Shadow RGB reviewed datasets and Colab v2 preparation; earlier checkpoints retain their own dates)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** Shadow is an engineering candidate. PAUSE/RESUME was observed on lifted wheels; autonomous floor following is not validated.
+**Status:** Shadow is an engineering candidate. PAUSE/RESUME was observed on lifted wheels; a revised RGB detector is prepared for Colab training but has not been trained. Autonomous floor following is not validated.
 
 ## Update rule
 
@@ -15,6 +15,68 @@ This file is the change-controlled snapshot of the active project state.
 - Do not silently update it after code edits, tests, experiments, or conversation summaries.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
+
+## 2026-10-31: Shadow RGB evidence and model-training handoff
+
+The active camera calibration is still **OV9281 Pi v7**, SHA-256
+`39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`.
+No new calibration, admitted metric Measurement, robot-front clearance, or
+autonomous motion claim follows from the RGB work below.
+
+Saved moving-person stereo evidence remains insufficient for reliable Shadow
+range: a 14-cycle masked-depth replay yielded two coherent diagnostic frames,
+three MAD refusals, and nine frames without stereo geometry. A separate
+26-cycle moving-person series had 15 RGB candidate cycles and only two
+coherent masked-depth cycles (2/15), separated by 15.55 s and seven refused
+cycles. A saved matcher comparison and a median-filter replay did not change
+the relevant acceptance/refusal classification. The 650 nm projector was
+present in the reviewed moving-person series; it is **not** used for the new
+RGB two-person training capture or the planned blind evaluation. Existing
+stereo calibration and the 0.05 m diagnostic MAD gate were not relaxed.
+
+The operator recorded three 10-minute AR0234 RGB sessions, each with 1200
+frames and no skipped slots, then selected 120 frames per session for manual
+review. The first training session and the separate validation session were
+recorded with the projector on; the later session with people appearing in
+turn had the projector off. The checked two-person LabelMe archive has SHA-256
+`4ee79b52c1c421fdeb91be9abedf938c6bf85afc777f97819a3a8cfdd41d97af`.
+The combined reviewed training pool contains 230 images (208 positive upper-
+body boxes, 22 clean negatives); ten ambiguous frames were excluded from the
+240 selected source frames. Session prefixes prevent filename collisions.
+The separate 120-image development validation has 89 positive and 31 negative
+frames and zero byte-identical overlap with training. It was already inspected
+and used in diagnosis, so it is not a blind test. The existing ONNX detector
+(SHA-256 `dde42238b5742f9c0b79c29863c44bc97b678aa75b86a4db5bb602a2d72c259c`)
+matched 71/89 positives at confidence 0.40 and box IoU >= 0.50, with 0/31
+false-positive negative frames in this development set. The original Colab
+model's stronger internal test result came from a single capture environment
+and is not evidence of generalization.
+
+The previous training artifacts were located in Drive: YOLO11n Detect,
+one `person_upper_body` class, Tesla T4, input 640, batch 16, up to 100 epochs,
+patience 20, best epoch 27 and early stop after 47. Crucially, its `best.pt`
+checkpoint still exists. The prepared Shadow v2 Colab notebook starts from
+that checkpoint with `resume=False`, trains on the 230-image pool, compares
+both checkpoints on the 120-image development validation, and exports a
+640x640 static ONNX with opset 17. Its data packages and notebook are in the
+[Drive Colab v2 folder](https://drive.google.com/drive/folders/1d9OYCDuvjT4cKxyN86foeagra9lVpd_p).
+The three archive SHA-256 values are
+`9a6a65a800c0847bdac646cd05c631de92aeacc976226160f9ec720ea03e4ebb`
+(training session 1),
+`76550684e0826f210d93989a62f233443ae12af179066365e6bd53f38c191feb`
+(training session 2), and
+`80b74757e35c0a76a7d13f21c43bc0f9ef3813c5af0f4156053c9a26ed706c6c`
+(development validation). The notebook is prepared and syntax checked; **no
+Shadow v2 training run or deployment has happened yet**. The reproducibility
+record is [Shadow Colab v2 handoff](docs/diagnostics/shadow_rgb_yolo11n_v2_training_handoff_20261031.md).
+
+Next: run the notebook on Colab T4, review `comparison.json` and inspect
+per-frame misses, then collect a fresh blind projector-off two-person session
+and check deployment ONNX with the same Pi preprocessing and timing. Do not
+infer stable person identity, valid range, 0.8 m stopping, or motor readiness
+from RGB detector scores. Shadow motor execution remains disabled pending
+fresh target ownership, associated robot-front range, timing, disagreement,
+and physical stopping evidence.
 
 ## 2026-10-29: current Shadow checkpoint
 
@@ -946,6 +1008,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-10-31 | Recorded 14-cycle and 26-cycle Shadow depth limits, three reviewed 120-frame RGB subsets, the 230-image training pool and 120-image development validation, the 71/89 and 0/31 frozen ONNX baseline, preserved Colab v1 `best.pt`, and the prepared but unrun Colab v2 handoff. No calibration, Measurement, or motor activation changed. |
 | 2026-10-29 | Added the current Shadow objective and boundaries, flashed candidate and lifted-wheel same-ID PAUSE/RESUME evidence, and 130/94/104-record dynamic camera preview findings. Kept active OV9281 v7 and unchanged MAD gate; documented missing person continuity, robot-front distance, exposure age, physical bound, and floor trial. |
 | 2026-10-29 | Confirmed v1c hardware boot, idle UART STATUS 100/100 and wrong-boot rejection, then another UART 100/100 during an operator-confirmed 45 s camera-only preview (186 frames, no journal errors, all control decisions STOP). Recorded the local stale probe build-ID correction and motor-off command-path test as the next step; no motor or Measurement admission. |
 | 2026-10-29 | Updated the document maintenance rule: `обнови документ` now authorizes synchronized updates of the Drive and ChatGPT Library copies; recreate the Library copy if absent. No engineering state was changed in this revision. |
