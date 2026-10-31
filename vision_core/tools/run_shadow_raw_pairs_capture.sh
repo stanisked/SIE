@@ -8,6 +8,12 @@ export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 
 companion=/home/elwis/dev_ws/runtime_envs/sie_seg_offline/bin/python
 runtime=/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python
+rgb_model=/home/elwis/best.onnx
+rgb_model_sha=5583d645afebd3d52706b76655662cb4ce16110b2a0b224af2cc806d0292d07b
+if [[ ! -f "$rgb_model" ]] || [[ "$(sha256sum "$rgb_model" | cut -d ' ' -f1)" != "$rgb_model_sha" ]]; then
+  echo "Shadow RGB v2 model missing or SHA mismatch: $rgb_model" >&2
+  exit 2
+fi
 default_evidence_root="/home/elwis/.local/state/sie/evidence/shadow_raw_pairs_$(date +%Y%m%d_%H%M%S)"
 evidence_root="${SHADOW_RAW_EVIDENCE_ROOT:-$default_evidence_root}"
 duration_s="${SHADOW_CAPTURE_DURATION_S:-35}"
@@ -26,7 +32,7 @@ timeout --signal=INT --kill-after=10s "${duration_s}s" "$runtime" \
   --ros-args \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \
   -p project_root:="$PWD" \
-  -p model_path:=/home/elwis/dev_ws/model_artifacts/ar0234_person_upper_body_yolo11n_v1/best.onnx \
+  -p model_path:="$rgb_model" -p confidence_threshold:=0.40 \
   -p ar_intrinsic:=/home/elwis/dev_ws/runtime_artifacts/ar0234_intrinsic_v5_final_20260910/calibration_fullres.json \
   -p stereo_calibration:=/home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz \
   -p activation_profile:=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json \

@@ -11,6 +11,8 @@ from pathlib import Path
 
 def summarize(root: Path):
     counts = Counter()
+    stereo_counts = Counter()
+    missing_stereo = []
     examples = {"COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY": [],
                 "DEPTH_MAD_EXCEEDED": []}
     incomplete = []
@@ -19,6 +21,23 @@ def summarize(root: Path):
         cycle = row.get("cycle_id")
         if cycle != audit_file.parent.name:
             raise ValueError(f"cycle directory mismatch: {audit_file}")
+        stereo = row.get("stereo_pair_evidence") or {}
+        stereo_status = stereo.get("status", "LEGACY_NOT_RECORDED")
+        stereo_counts[stereo_status] += 1
+        if stereo_status == "SAVED_DIAGNOSTIC_ONLY":
+            required_stereo = (
+                "ov9281_physical_left_rectified.jpg",
+                "ov9281_physical_right_rectified.jpg",
+                "disparity_raw_px.npy",
+                "disparity_lr_consistent_px.npy",
+                "lr_consistency_mask.png",
+            )
+            files = set((row.get("evidence_capture") or {}).get("files") or [])
+            missing = [name for name in required_stereo
+                       if name not in files or not (audit_file.parent / name).is_file()]
+            if stereo.get("source_cycle_id") != cycle or missing:
+                missing_stereo.append({"cycle_id": cycle, "missing": missing,
+                                       "wrong_source_cycle": stereo.get("source_cycle_id") != cycle})
         depth = (row.get("stereo_geometry") or {}).get("shadow_mask_depth") or {}
         status = depth.get("status", "NO_MASK_DEPTH_RESULT")
         counts[status] += 1
@@ -54,6 +73,8 @@ def summarize(root: Path):
             "motor_requests": 0, "records": sum(counts.values()),
             "mask_depth_status_counts": dict(counts), "examples": examples,
             "incomplete_examples": incomplete,
+            "stereo_pair_evidence_status_counts": dict(stereo_counts),
+            "missing_declared_stereo_evidence": missing_stereo,
             "note": "Full-resolution audit differs from the half-resolution control preview; compare failures, do not treat outcomes as interchangeable."}
 
 
@@ -66,9 +87,11 @@ def main():
     out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps({"summary": str(out), "records": report["records"],
                       "status_counts": report["mask_depth_status_counts"],
+                      "stereo_evidence_status_counts": report["stereo_pair_evidence_status_counts"],
                       "complete_examples": {key: len(value) for key, value in report["examples"].items()},
-                      "incomplete_examples": len(report["incomplete_examples"])}, ensure_ascii=False))
-    return 0 if report["records"] else 1
+                      "incomplete_examples": len(report["incomplete_examples"]),
+                      "missing_declared_stereo_evidence": len(report["missing_declared_stereo_evidence"])}, ensure_ascii=False))
+    return 0 if report["records"] and not report["missing_declared_stereo_evidence"] else 1
 
 
 if __name__ == "__main__":

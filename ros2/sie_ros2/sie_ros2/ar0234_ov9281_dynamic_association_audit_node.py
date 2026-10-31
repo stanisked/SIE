@@ -641,6 +641,8 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         observation: dict[str, Any],
         left_rectified: Any,
         right_rectified: Any,
+        *,
+        prepared_stereo: tuple[Any, Any] | None = None,
     ) -> tuple[dict[str, Any] | None, str, dict[str, Any]]:
         """Associate AR semantics with stereo geometry without a stereo classifier.
 
@@ -651,10 +653,13 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         """
         ar_inner_roi = self._ar_inner_roi(observation)
         frustum_roi = self._stereo_frustum_search_roi(ar_inner_roi)
-        left_gray = self.cv2.cvtColor(left_rectified, self.cv2.COLOR_BGR2GRAY)
-        right_gray = self.cv2.cvtColor(right_rectified, self.cv2.COLOR_BGR2GRAY)
-        disparity, lr_consistent = self._left_right_disparity(left_gray, right_gray)
-        self._persist_disparity_evidence(disparity, lr_consistent)
+        if prepared_stereo is None:
+            left_gray = self.cv2.cvtColor(left_rectified, self.cv2.COLOR_BGR2GRAY)
+            right_gray = self.cv2.cvtColor(right_rectified, self.cv2.COLOR_BGR2GRAY)
+            disparity, lr_consistent = self._left_right_disparity(left_gray, right_gray)
+            self._persist_disparity_evidence(disparity, lr_consistent)
+        else:
+            disparity, lr_consistent = prepared_stereo
         self._write_frustum_debug(
             left_rectified, right_rectified, disparity, lr_consistent, frustum_roi
         )
@@ -1193,6 +1198,24 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "lr_consistency_mask.png", lr_consistent.astype(self.np.uint8) * 255
         )
 
+    def _prepare_stereo_pair(self, combined: Any) -> tuple[Any, Any, Any, Any]:
+        """Save calibrated same-cycle stereo evidence before RGB target selection."""
+        width = self.stereo_size[0]
+        # The first stream half is physical_right; the second is physical_left.
+        physical_right, physical_left = combined[:, :width], combined[:, width:]
+        left = self._timed_call("rectify_left", self.cv2.remap,
+            physical_left, self.map_left_1, self.map_left_2, self.cv2.INTER_LINEAR
+        )
+        right = self._timed_call("rectify_right", self.cv2.remap,
+            physical_right, self.map_right_1, self.map_right_2, self.cv2.INTER_LINEAR
+        )
+        self._persist_rectified_evidence(left, right)
+        left_gray = self.cv2.cvtColor(left, self.cv2.COLOR_BGR2GRAY)
+        right_gray = self.cv2.cvtColor(right, self.cv2.COLOR_BGR2GRAY)
+        disparity, lr_consistent = self._left_right_disparity(left_gray, right_gray)
+        self._persist_disparity_evidence(disparity, lr_consistent)
+        return left, right, disparity, lr_consistent
+
     def _attach_evidence_record(self, audit: dict[str, Any]) -> None:
         if self._active_evidence_cycle_dir is None:
             audit["evidence_capture"] = {"enabled": False}
@@ -1349,6 +1372,17 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
 
         try:
             self._begin_cycle_evidence(cycle_id, ar_frame, combined)
+            # Retain the stereo pair on opt-in evidence cycles even when RGB
+            # selection refuses. The original association still owns its
+            # decision, and the matcher runs only once on accepted candidates.
+            prepared = (self._timed_call("stereo_evidence_prepare",
+                self._prepare_stereo_pair, combined)
+                if self.evidence_capture_enabled else None)
+            audit["stereo_pair_evidence"] = {
+                "status": "SAVED_DIAGNOSTIC_ONLY" if prepared is not None else "DISABLED",
+                "source_cycle_id": cycle_id if prepared is not None else None,
+                "metric_measurement_authorized": False,
+            }
             raw = validate_ar0234_observation(
                 self._timed_call("rgb_detector", self.observer.observe, ar_frame, captured_at_utc=timestamp, cycle_id=cycle_id)
             )
@@ -1422,22 +1456,26 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             self._persist_ar_target_evidence(ar_frame, observation)
             audit["shadow_instance_mask"] = self._timed_call("shadow_mask_round_trip", self._shadow_instance_mask, cycle_id, candidate)
 
-            # Pi stream identity is fixed by the validated calibration: first
-            # half is physical_right, second half is physical_left.
-            physical_right = combined[:, : self.stereo_size[0]]
-            physical_left = combined[:, self.stereo_size[0] :]
-            left_rectified = self._timed_call("rectify_left", self.cv2.remap,
-                physical_left, self.map_left_1, self.map_left_2, self.cv2.INTER_LINEAR
-            )
-            right_rectified = self._timed_call("rectify_right", self.cv2.remap,
-                physical_right, self.map_right_1, self.map_right_2, self.cv2.INTER_LINEAR
-            )
-            self._persist_rectified_evidence(left_rectified, right_rectified)
+            if prepared is None:
+                # Outside evidence capture, preserve the existing lazy path.
+                width = self.stereo_size[0]
+                physical_right, physical_left = combined[:, :width], combined[:, width:]
+                left_rectified = self._timed_call("rectify_left", self.cv2.remap,
+                    physical_left, self.map_left_1, self.map_left_2, self.cv2.INTER_LINEAR
+                )
+                right_rectified = self._timed_call("rectify_right", self.cv2.remap,
+                    physical_right, self.map_right_1, self.map_right_2, self.cv2.INTER_LINEAR
+                )
+                self._persist_rectified_evidence(left_rectified, right_rectified)
+                match = None
+            else:
+                left_rectified, right_rectified, disparity, lr_consistent = prepared
+                match = (disparity, lr_consistent)
             # Do not run a second person classifier on OV9281.  The calibrated
             # AR inner ROI defines a 0.5–4.5 m stereo frustum; disparity points
             # survive only if their 3D back-projection lands inside that ROI.
             association, reason, geometry = self._timed_call("stereo_association", self._frustum_associate,
-                observation, left_rectified, right_rectified
+                observation, left_rectified, right_rectified, prepared_stereo=match
             )
             audit["stereo_person"] = "NOT_USED_AR0234_IS_SEMANTIC_AUTHORITY"
             audit["stereo_geometry"] = geometry
