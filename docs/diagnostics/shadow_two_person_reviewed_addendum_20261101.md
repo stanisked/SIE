@@ -51,8 +51,10 @@ separately validate depth, target ownership, front clearance, and stopping.
 
 ## Colab v3 preparation
 
-The new notebook `SIEE_Shadow_RGB_YOLO11n_v3_Two_People_Colab.ipynb` has
-SHA-256 `f7972bb7896eed13697b9ed9276c3179c471fe962c6e952fcc3ef43e737916a6`.
+The repository source of notebook
+`SIEE_Shadow_RGB_YOLO11n_v3_Two_People_Colab.ipynb` has SHA-256
+`e77badf0540f24cf8a5f2b3cce10363e20ec276da5d1f5c9dd20da398292c022`.
+Colab adds execution metadata to the Drive copy, changing its file hash.
 It is stored beside the three original v2 dataset parts and the addendum in
 the [Shadow v2 Drive folder](https://drive.google.com/drive/folders/1d9OYCDuvjT4cKxyN86foeagra9lVpd_p).
 The starting v2 `best.pt` has the recorded SHA-256
@@ -65,3 +67,8 @@ exports a static 640×640 ONNX. It also checks both boxes on the six training
 frames and labels that result as training-set diagnostics. Results are saved
 under a new `ar0234_shadow_person_upper_body_yolo11n_v3_two_people` folder.
 This notebook is prepared and syntax checked; training has **not** been run.
+The geometry check uses a `1e-8` tolerance when reconstructing edges from
+nine-decimal YOLO coordinates. Three source boxes touch image row zero; their
+rounded labels reconstruct `-5e-10` rather than exactly zero. All 12 labels
+pass the corrected check. Restart the Colab runtime before rerunning the
+notebook after the earlier partial extraction created its guarded data folder.
