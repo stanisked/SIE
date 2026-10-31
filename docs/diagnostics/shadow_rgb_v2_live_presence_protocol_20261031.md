@@ -12,19 +12,20 @@ gain=0. Рабочая стереокалибровка OV9281 не изменя
 ```bash
 cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
 git fetch origin codex/shadow-rgb-detector-20261030
-git worktree add --detach /home/elwis/dev_ws/sie_shadow_rgb_v2_live_20261031 \
-  origin/codex/shadow-rgb-detector-20261030
+git worktree add --detach /home/elwis/dev_ws/sie_shadow_rgb_v2_live_20261031 FETCH_HEAD
 ```
 
-Найти файл v2, сверить SHA-256
-`5583d645afebd3d52706b76655662cb4ce16110b2a0b224af2cc806d0292d07b`.
-Выбрать путь найденного файла в переменную `MODEL`. Не подменять активную v1:
+В предыдущем прогоне v2 модель лежала в `/home/elwis/best.onnx`, за пределами
+`model_artifacts`. Сверить SHA-256
+`5583d645afebd3d52706b76655662cb4ce16110b2a0b224af2cc806d0292d07b`:
 
 ```bash
-find /home/elwis/dev_ws/model_artifacts -type f -name '*.onnx' -print
-MODEL=/полный/путь/к/v2/best.onnx
+MODEL=/home/elwis/best.onnx
 sha256sum "$MODEL"
 ```
+
+Если файл был перемещён, сначала найти его через `find /home/elwis -type f
+-name '*.onnx' -print`. Не подменять активную v1.
 
 С выключенными моторами и проектором:
 
