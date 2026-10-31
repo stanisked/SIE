@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Camera-only, full-resolution evidence capture for mask-depth refusals.
 set -eo pipefail
-cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
