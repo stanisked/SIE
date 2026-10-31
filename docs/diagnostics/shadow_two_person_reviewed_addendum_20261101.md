@@ -48,3 +48,20 @@ These six frames were chosen because the current detector missed the nearer
 person. No model accuracy improvement has been measured yet. Before robot
 use, evaluate the retrained model on a fresh two-person blind capture and
 separately validate depth, target ownership, front clearance, and stopping.
+
+## Colab v3 preparation
+
+The new notebook `SIEE_Shadow_RGB_YOLO11n_v3_Two_People_Colab.ipynb` has
+SHA-256 `f7972bb7896eed13697b9ed9276c3179c471fe962c6e952fcc3ef43e737916a6`.
+It is stored beside the three original v2 dataset parts and the addendum in
+the [Shadow v2 Drive folder](https://drive.google.com/drive/folders/1d9OYCDuvjT4cKxyN86foeagra9lVpd_p).
+The starting v2 `best.pt` has the recorded SHA-256
+`575c480b03b1722222211f474fae2dc8c7c6fe5e02c9078433d5d9e16667b395`.
+The notebook refuses a checkpoint, archive, image, or label mismatch, merges
+six pairs only into training, and writes a distinct 236-image dataset YAML.
+It trains with `resume=False` from the v2 weights, compares the v2 and v3
+checkpoints on the previously inspected 120-image development split, and
+exports a static 640×640 ONNX. It also checks both boxes on the six training
+frames and labels that result as training-set diagnostics. Results are saved
+under a new `ar0234_shadow_person_upper_body_yolo11n_v3_two_people` folder.
+This notebook is prepared and syntax checked; training has **not** been run.
