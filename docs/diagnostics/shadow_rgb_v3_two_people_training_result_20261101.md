@@ -35,6 +35,10 @@ from stale `frames` values until its frame-metrics cell is rerun.
 The six selected failure frames were included in training, and the 120-image
 development set was previously inspected. Neither measures fresh two-person
 generalization. The extra false-positive empty image also needs visual review.
+The existing offline ONNX evaluator now accepts the pinned v3 hash for its
+single-person reviewed subsets. It rejects more than one labeled person per
+frame, so it cannot score a new two-person session without a separate
+multi-person annotation and matching evaluator.
 Collect a new, projector-off blind session with two people jointly visible,
 one-person and empty intervals, occlusion and edge cases. Freeze labels before
 comparing v2 and v3 ONNX on Pi with the same preprocessing and threshold.

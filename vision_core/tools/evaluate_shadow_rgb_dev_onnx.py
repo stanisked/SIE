@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline evaluation of the v1/v2 AR0234 upper-body ONNX on reviewed development JPEGs.
+"""Offline evaluation of the v1/v2/v3 AR0234 ONNX on reviewed development JPEGs.
 
 Reads files only. Does not open a camera, serial port, ROS node or motor API.
 The fixed 0.40 confidence is the existing YOLO11 upper-body preview policy.
@@ -19,6 +19,7 @@ import time
 MODEL_SHA256 = {
     'v1': 'dde42238b5742f9c0b79c29863c44bc97b678aa75b86a4db5bb602a2d72c259c',
     'v2': '5583d645afebd3d52706b76655662cb4ce16110b2a0b224af2cc806d0292d07b',
+    'v3': 'fccd45fbcf490134eb786ab3b38cf115dd03466edd85801ad44c8353f38549f5',
 }
 EXPECTED_LABEL_ARCHIVE_SHA256 = '795511dd6d3e863902630550af347152bfb9a0c99b863c130c699b6d18c6dc44'
 CONFIDENCE_THRESHOLD = 0.40
@@ -108,8 +109,8 @@ def main() -> None:
     import cv2
     import onnxruntime as ort
     from vision_core.person_localization import yolo11_person_upper_body as yolo
-    # Keep the production v1 binding intact. This diagnostic explicitly loads
-    # its hashed v2 file, without changing the active camera runner's model.
+    # Keep the production v1 binding intact. Diagnostics load a separately
+    # hashed model without changing the active camera runner's model.
     if yolo.MODEL_SHA256 != MODEL_SHA256['v1']:
         raise ValueError('REPOSITORY_PREPROCESS_CONTRACT_MISMATCH')
     module_sha256=sha256(Path(yolo.__file__))
