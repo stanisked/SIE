@@ -34,22 +34,52 @@ stereo depth, or safe approach.
 
 ## Reproduce on Pi without motors
 
-Place the verified v2 `best.onnx` on Pi, and use the exact 120 original JPEGs
-and labels archive. The evaluator does not open a camera, UART or motor port.
+Download the verified v2 `best.onnx` from the Colab output folder onto the
+laptop, and obtain the exact `shadow_rgb_validation_yolo_labels_20261030.tar.gz`
+archive (SHA-256 shown above). Copy both from the laptop to Pi:
+
+```bash
+scp /path/to/downloaded/best.onnx \
+    /path/to/shadow_rgb_validation_yolo_labels_20261030.tar.gz \
+    elwis@100.70.100.29:/home/elwis/
+```
+
+On Pi, first verify both digests. Use an isolated worktree so this check does
+not overwrite the main workspace or its untracked files. The evaluator does
+not open a camera, UART or motor port.
 
 ```bash
 cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+git fetch origin codex/shadow-rgb-detector-20261030
+git worktree add --detach /home/elwis/dev_ws/sie_shadow_v2_eval_478d444 FETCH_HEAD
+cd /home/elwis/dev_ws/sie_shadow_v2_eval_478d444
+sha256sum /home/elwis/best.onnx \
+  /home/elwis/shadow_rgb_validation_yolo_labels_20261030.tar.gz
 /home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python \
   vision_core/tools/evaluate_shadow_rgb_dev_onnx.py \
   --repo-root . --model-version v2 \
-  --model /path/to/v2/best.onnx \
-  --images-dir /path/to/validation/images \
-  --labels-archive /path/to/shadow_rgb_validation_yolo_labels_20261030.tar.gz \
-  --output /home/elwis/shadow_v2_onnx_dev_120.json
+  --model /home/elwis/best.onnx \
+  --images-dir /home/elwis/.local/state/sie/evidence/shadow_rgb_presence_20261030_204750_ba9d67/annotation_subset_5s_v1/images \
+  --labels-archive /home/elwis/shadow_rgb_validation_yolo_labels_20261030.tar.gz \
+  --output /home/elwis/shadow_v2_onnx_pi_120.json
 ```
+
+The result includes per-frame inference and complete JPEG-to-detections timing
+on that Pi. If the source directory was moved, locate the corresponding
+`annotation_subset_5s_v1/images` before running the command.
 
 Before the next model decision, collect a **new** 10-minute, projector-off
 session with two people entering and leaving alternately, plus empty frames.
 Keep this session unseen by training and threshold selection. Label people and
 absence independently, then report presence, IoU and negative-frame false
 positives for v1 and v2 under the same Pi pipeline. Motor power remains off.
+
+The existing camera-only capture command on Pi is:
+
+```bash
+cd /home/elwis/dev_ws/sie_v6_temperature_disabled_mvp
+/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python \
+  vision_core/tools/capture_shadow_rgb_presence.py \
+  --scenario 'two_people_alternating_with_empty_frames_blind' \
+  --projector-state off --duration-s 600 --sample-hz 2
+```

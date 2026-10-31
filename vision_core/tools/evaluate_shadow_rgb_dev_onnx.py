@@ -10,8 +10,11 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import platform
+import statistics
 import sys
 import tarfile
+import time
 
 MODEL_SHA256 = {
     'v1': 'dde42238b5742f9c0b79c29863c44bc97b678aa75b86a4db5bb602a2d72c259c',
@@ -119,27 +122,35 @@ def main() -> None:
         raise ValueError('UNEXPECTED_MODEL_INPUT')
     evaluated=[]
     for i,row in enumerate(labels,1):
+        frame_started=time.perf_counter()
         frame=cv2.imread(str(args.images_dir/Path(row['image']).name),cv2.IMREAD_COLOR)
         if frame is None or frame.shape!=(1200,1920,3):
             raise ValueError('INVALID_JPEG:' + row['image'])
         tensor,transform=yolo.letterbox_bgr(frame)
+        infer_started=time.perf_counter()
         outputs=session.run(None,{inputs[0].name:tensor})
+        infer_finished=time.perf_counter()
         if len(outputs)!=1:raise ValueError('UNEXPECTED_MODEL_OUTPUT')
         detections=yolo.decode_yolo11_one_class_output(outputs[0],transform=transform,
                          confidence_threshold=CONFIDENCE_THRESHOLD,
                          nms_iou_threshold=NMS_IOU_THRESHOLD)
+        frame_finished=time.perf_counter()
         predicted=[{'box_xyxy_px':list(d.bbox_xyxy_px),'confidence':d.confidence}
                    for d in detections]
         best=max((box_iou(row['box_xyxy_px'],d['box_xyxy_px']) for d in predicted),default=0.0) if row['box_xyxy_px'] else None
         evaluated.append({'image':row['image'],'source_sha256':row['source_sha256'],
                           'person_visible':row['person_visible'],
                           'ground_truth_box_xyxy_px':row['box_xyxy_px'],
-                          'detections':predicted,'best_iou':best})
+                          'detections':predicted,'best_iou':best,
+                          'inference_ms':round((infer_finished-infer_started)*1000,3),
+                          'decode_to_detections_ms':round((frame_finished-frame_started)*1000,3)})
         if i%20==0:print(f'EVALUATED {i}/{len(labels)}',flush=True)
     report={'schema_version':'sie.shadow.rgb_reviewed_dev_onnx.v1',
             'status':'OFFLINE_DIAGNOSTIC_ONLY',
             'model_version':args.model_version,
             'model_sha256':expected_model_sha256,
+            'runtime':{'machine':platform.machine(), 'onnxruntime':ort.__version__,
+                       'opencv':cv2.__version__, 'provider':'CPUExecutionProvider'},
             'preprocess_postprocess_module_sha256':module_sha256,
             'labels_archive_sha256':sha256(args.labels_archive),
             'source_archive_sha256':manifest['source_archive_sha256'],
@@ -150,10 +161,16 @@ def main() -> None:
                            'Only this set and exact labeled frames are evaluated.',
                            'Individual 5-second samples are not a continuous tracking or motion test.',
                            'No depth, safe clearance or motor control was evaluated.']}
+    report['timing_ms']={name:{'median':round(statistics.median(values),3),
+                              'p95':round(sorted(values)[int(.95*(len(values)-1))],3),
+                              'max':round(max(values),3)}
+                         for name,values in ((field,[r[field] for r in evaluated]) for field in
+                             ('inference_ms','decode_to_detections_ms'))}
     with args.output.open('x',encoding='utf-8') as f:
         json.dump(report,f,indent=2,allow_nan=False)
         f.write('\n')
     print('SUMMARY',json.dumps(report['summary'],ensure_ascii=False))
+    print('TIMING_MS',json.dumps(report['timing_ms']))
     print('Saved:',args.output)
 
 
