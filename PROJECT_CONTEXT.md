@@ -1,8 +1,8 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-10-31 (Shadow RGB reviewed datasets and Colab v2 preparation; earlier checkpoints retain their own dates)
+**Snapshot date:** 2026-11-01 (Shadow RGB v3 Colab result and next independent capture; earlier checkpoints retain their own dates)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** Shadow is an engineering candidate. PAUSE/RESUME was observed on lifted wheels; a revised RGB detector is prepared for Colab training but has not been trained. Autonomous floor following is not validated.
+**Status:** Shadow is an engineering candidate. PAUSE/RESUME was observed on lifted wheels. RGB v3 was trained in Colab and exported to ONNX, but has not passed a fresh independent test or been deployed for motion. Autonomous floor following is not validated.
 
 ## Update rule
 
@@ -15,6 +15,74 @@ This file is the change-controlled snapshot of the active project state.
 - Do not silently update it after code edits, tests, experiments, or conversation summaries.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
+
+## 2026-11-01: Shadow RGB v3 training result and next check
+
+The active stereo calibration remains **OV9281 Pi v7**, SHA-256
+`39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`.
+No new stereo calibration, admitted metric Measurement, target identity,
+robot-front clearance or physical stopping bound has been established.
+Nothing in this RGB training authorizes Shadow motor execution.
+
+The operator corrected six two-person LabelMe images and confirmed review.
+The reviewed archive SHA-256 is
+`8b79e947ef381825440bfe2a826b463ac4568d42182b62917e1cb606b792438f`.
+Their source JPEGs were unchanged. A derived training addendum with six
+images and 12 upper-body boxes has SHA-256
+`8e5038c5eb2c98150a5ab5c1110fb5ce69d111a0a7b939c76ec2175bf8445612`.
+It extends the 230-image reviewed training pool to 236 images. The six
+images were chosen after seeing v2 misses and are training data, never an
+independent holdout. The original LabelMe archive retains its review flags;
+the derived addendum carries the operator-review record.
+
+The [Shadow v3 Colab notebook](https://drive.google.com/file/d/1rKV1cHTnkp3uewSWEPTdkud6NIqa-Gi_/view?usp=drivesdk)
+started from the saved v2 `best.pt` (SHA-256
+`575c480b03b1722222211f474fae2dc8c7c6fe5e02c9078433d5d9e16667b395`)
+with `resume=False`, trained on a Tesla T4 with Ultralytics 8.4.152 and
+torch 2.11.0+cu130, and exported v3. The new checkpoint SHA-256 is
+`e5d7e67f7ab2b53f6a8548e3eec13fdf52e84d390cf0e58088ba40dca79989db`;
+the [v3 ONNX](https://drive.google.com/file/d/1cX7vboJDX9u4rfAf80zmMtnSZAmrtfyk/view?usp=drivesdk)
+SHA-256 is
+`fccd45fbcf490134eb786ab3b38cf115dd03466edd85801ad44c8353f38549f5`.
+The supplied ONNX bytes matched that digest. Colab checked the export with
+`onnx.checker`; inference on Pi with the production preprocessing remains
+pending. The v3 hash is now accepted by the offline one-person evaluator as
+a diagnostic model, without changing the active camera runner's model.
+
+On the same previously inspected 120-image development set, v2 localized
+88/89 positive frames at confidence 0.40 and IoU >= 0.50, with detections
+on 1/31 empty frames. V3 localized 89/89 and detected on 2/31 empty frames.
+The Colab mAP50–95 changed from 0.78947 (v2) to 0.81349 (v3). On the six
+selected *training* frames, both people matched in 1/6 with v2 and 6/6 with
+v3. These results do not establish generalization or continuous tracking;
+the extra empty-frame false positive needs inspection.
+
+The original Colab [`comparison.json`](https://drive.google.com/file/d/1UiXGi6Z0xDdXcJ5Jzowc0jeh34XdZr9r/view?usp=drivesdk)
+mistakenly labeled its per-frame entries `v1`/`v2`, although its actual
+`old_model` and `new_model` were v2/v3. Its numeric values and the correctly
+labeled `ap` section were unaffected. The original remains unchanged,
+SHA-256 `3595740d77535415a60ddc08657efd2ea0749ca0b968e49e08550fb867c40ee1`.
+The [corrected derivative](https://drive.google.com/file/d/1KrxcwhtNdqBKoS0RFC3CyQJUbBWwWDHM/view?usp=drivesdk),
+SHA-256 `10a1a14c280bf45ba929e10058b8eab2265974c5eedf8b81ae8b3c6d4399086a`,
+records the source hash and exact label mapping. The notebook source was
+fixed. The [result handoff](docs/diagnostics/shadow_rgb_v3_two_people_training_result_20261101.md)
+and [v3 hash pin](vision_core/tools/evaluate_shadow_rgb_dev_onnx.py)
+are committed on branch `codex/shadow-rgb-detector-20261030`, commit
+`edafd6df40ea9e881764827017a8b1a0fb51a527`.
+
+**Next:** with motor power off and projector off, collect a *new* 10-minute
+AR0234 session of one moving person entering, crossing and leaving the frame,
+with empty-room intervals. The operator currently has only one person
+available. Freeze the reviewed labels before comparing v2 and v3 ONNX with
+the same Pi preprocessing and threshold; assess misses, empty-frame false
+positives and timing. This checks single-person regression only. Later,
+record a separate two-person session with both people simultaneously visible
+and build a matching multi-person evaluator; the existing reviewed-subset
+evaluator rejects more than one labeled person per frame. Nearer-person
+selection, cross-person identity, stereo/robot-front range, 0.8 m stopping
+and automatic Shadow motion remain unvalidated.
+
+Older dated sections below preserve what was known at those checkpoints.
 
 ## 2026-10-31: Shadow RGB evidence and model-training handoff
 
@@ -66,12 +134,14 @@ The three archive SHA-256 values are
 `76550684e0826f210d93989a62f233443ae12af179066365e6bd53f38c191feb`
 (training session 2), and
 `80b74757e35c0a76a7d13f21c43bc0f9ef3813c5af0f4156053c9a26ed706c6c`
-(development validation). The notebook is prepared and syntax checked; **no
-Shadow v2 training run or deployment has happened yet**. The reproducibility
-record is [Shadow Colab v2 handoff](docs/diagnostics/shadow_rgb_yolo11n_v2_training_handoff_20261031.md).
+(development validation). At this dated checkpoint the notebook was prepared
+and syntax checked but had not yet run. The later training result is recorded
+above. The reproducibility record is
+[Shadow Colab v2 handoff](docs/diagnostics/shadow_rgb_yolo11n_v2_training_handoff_20261031.md).
 
-Next: run the notebook on Colab T4, review `comparison.json` and inspect
-per-frame misses, then collect a fresh blind projector-off two-person session
+The next step at that checkpoint was to run the notebook on Colab T4,
+review `comparison.json` and inspect per-frame misses, then collect a fresh
+blind projector-off two-person session
 and check deployment ONNX with the same Pi preprocessing and timing. Do not
 infer stable person identity, valid range, 0.8 m stopping, or motor readiness
 from RGB detector scores. Shadow motor execution remains disabled pending
