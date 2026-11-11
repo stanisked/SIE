@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-terminal RGB + stereo + Shadow UART experiment. Preview is the default.
-set -euo pipefail
+set -eo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 source /opt/ros/jazzy/setup.bash
 runtime=/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python
