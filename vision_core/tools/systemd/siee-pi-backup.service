@@ -1,0 +1,7 @@
+[Unit]
+Description=Encrypted SIEE Pi backup to Google Drive
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/elwis/dev_ws/sie_shadow_blind_v3_20261110/vision_core/tools/backup_siee_pi.py
+TimeoutStartSec=6h
