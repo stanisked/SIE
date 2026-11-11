@@ -1,7 +1,7 @@
 from datetime import datetime, timezone, timedelta
 
 from vision_core.tools.shadow_live_bridge import (
-    AR_INTRINSIC_SHA256, observation_from_audit,
+    AR_INTRINSIC_SHA256, observation_from_audit, preview_record,
 )
 from vision_core.tools.shadow_range_gate import ACTIVE_STEREO_SHA256, select_target_range
 
@@ -47,3 +47,19 @@ def test_missing_ownership_wrong_calibration_and_stale_frame_refuse():
     row["calibration"]["ov9281_stereo_sha256"] = "0" * 64
     assert convert(row).ranges == ()
     assert convert(sample(), age=2.).target is None
+
+
+def test_preview_preserves_stereo_refusal_and_capture_latency():
+    row = sample()
+    row.update(status="ASSOCIATION_UNAVAILABLE", reason="FRUSTUM_DEPTH_SAMPLES_OUT_OF_RANGE",
+               association=None, stereo_geometry={
+                   "lr_consistent_disparity_sample_count": 300,
+                   "in_range_depth_sample_count": 0,
+                   "pre_range_depth_diagnostic": {
+                       "depth_percentiles_m": [2.7, 2.8, 3., 3.2, 3.4, 3.6, 3.8]}})
+    result = preview_record(row, convert(row), now_s=20.,
+        received_utc=datetime(2026, 11, 11, 12, 0, 1, tzinfo=timezone.utc))
+    assert result["audit_reason"] == "FRUSTUM_DEPTH_SAMPLES_OUT_OF_RANGE"
+    assert result["lr_samples"] == 300
+    assert result["capture_to_receive_s"] == 1.
+    assert result["decision"] == "PAUSE"

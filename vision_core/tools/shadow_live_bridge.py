@@ -102,6 +102,43 @@ def live_audits(node, *, duration_s: float):
         node.destroy_subscription(subscription)
 
 
+def preview_record(audit: dict | None, observation: ShadowObservation,
+                   *, now_s: float, received_utc: datetime | None = None,
+                   minimum_confidence: float = .40) -> dict:
+    """Expose the upstream refusal instead of hiding it as a missing RGB target."""
+    decision = select_target_range(observation.target, list(observation.ranges),
+        now_s, expected_rgb_calibration_id=AR_INTRINSIC_SHA256,
+        minimum_confidence=minimum_confidence)
+    audit = audit or {}
+    geometry = audit.get("stereo_geometry") or {}
+    pre_range = geometry.get("pre_range_depth_diagnostic") or {}
+    timestamp = audit.get("timestamp")
+    age_s = None
+    if received_utc is not None and isinstance(timestamp, str):
+        try:
+            captured = datetime.fromisoformat(timestamp)
+            if captured.tzinfo is not None:
+                age_s = round((received_utc - captured).total_seconds(), 3)
+        except ValueError:
+            pass
+    return {
+        "cycle_id": audit.get("cycle_id"),
+        "audit_status": audit.get("status"), "audit_reason": audit.get("reason"),
+        "rgb_reason": (audit.get("ar0234_dynamic_target") or {}).get("reason"),
+        "candidate_geometry": (audit.get("ar0234_candidate_geometry") or {}).get("reason"),
+        "lr_samples": geometry.get("lr_consistent_disparity_sample_count"),
+        "in_range_samples": pre_range.get("in_range_sample_count", geometry.get("in_range_depth_sample_count")),
+        "reprojected_samples": geometry.get("reprojected_inside_ar_inner_roi_count"),
+        "plausible_components": geometry.get("plausible_spatial_component_count"),
+        "depth_clusters": geometry.get("plausible_depth_cluster_count"),
+        "depth_percentiles_m": pre_range.get("depth_percentiles_m"),
+        "capture_to_receive_s": age_s,
+        "host_processing_s": (audit.get("processing_timing") or {}).get("host_capture_start_to_result_ready_s"),
+        "decision": decision.action, "decision_reason": decision.reason,
+        "distance_m": None if decision.selected is None else decision.selected.distance_m,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--front-rim-forward-of-optical-m", type=float, required=True,
@@ -147,13 +184,10 @@ def main() -> None:
                 except (ValueError, TypeError, KeyError, AttributeError):
                     observation = ShadowObservation(None, ())
                 if not args.execute:
-                    decision = select_target_range(observation.target, list(observation.ranges),
-                        time.monotonic(), expected_rgb_calibration_id=AR_INTRINSIC_SHA256,
-                        minimum_confidence=args.minimum_confidence)
-                    print(json.dumps({"cycle_id": audit.get("cycle_id") if isinstance(audit, dict) else None,
-                                      "decision": decision.action, "reason": decision.reason,
-                                      "distance_m": None if decision.selected is None else decision.selected.distance_m}),
-                          flush=True)
+                    row = preview_record(audit, observation, now_s=time.monotonic(),
+                                         received_utc=utc,
+                                         minimum_confidence=args.minimum_confidence)
+                    print(json.dumps(row, allow_nan=False), flush=True)
                 yield observation
         stream = observations()
         if args.execute:

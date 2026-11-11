@@ -136,3 +136,20 @@ For a floor session, use the measured offset and add `--execute`. The bridge
 requires the user to supply that number explicitly. Its journal path must be
 new for each execution. At present the Pi has not run this bridge, and the
 motor-facing path has no physical validation.
+
+### First Pi preview, 2026-11-11
+
+The separate Pi checkout at `cca5ade` started the live cameras successfully.
+Thirteen audit cycles arrived in approximately 30 s; all reported
+`ASSOCIATION_UNAVAILABLE` and the bridge printed `RGB_TARGET_UNAVAILABLE`.
+The latter was a lossy bridge display, not proof that RGB detection failed:
+each cycle ran stereo association and full stereo matching. Host processing
+was about 1.5–1.8 s, with parallel stereo matching about 1.0–1.2 s.
+No UART device was opened and the cart did not move. The audit's specific
+refusal reason was omitted from the bridge output, so the cause of the
+association failure is still unknown. The preview now prints that original
+reason, sample counts, depth distribution and capture-to-receive age. A short
+follow-up preview can distinguish an out-of-range target from missing stereo
+surface or a geometry mismatch. Even an associated frame from this current
+pipeline would exceed the 0.5 s input age limit, so reducing latency is a
+separate concrete implementation task before live motion.
