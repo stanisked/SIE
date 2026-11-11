@@ -19,6 +19,8 @@ case "$model_version" in v2|v3) ;; *) echo 'Model version must be v2 or v3' >&2;
   -p stereo_calibration:=/home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz \
   -p activation_profile:=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \
+  -p shadow_association_range_mode:=diagnostic \
+  -p shadow_diagnostic_range_min_m:=0.5 -p shadow_diagnostic_range_max_m:=4.5 \
   -p shadow_instance_mask_enabled:=false -p evidence_capture_enabled:=false &
 camera_pid=$!
 trap 'kill -INT "$camera_pid" 2>/dev/null || true; wait "$camera_pid" 2>/dev/null || true' EXIT

@@ -153,3 +153,22 @@ follow-up preview can distinguish an out-of-range target from missing stereo
 surface or a geometry mismatch. Even an associated frame from this current
 pipeline would exceed the 0.5 s input age limit, so reducing latency is a
 separate concrete implementation task before live motion.
+
+### Four-cycle diagnostic range finding, 2026-11-11
+
+The follow-up Pi preview at `a164cd3` showed one current, non-edge RGB target
+in each of four reported cycles, with accepted candidate box geometry. Each
+cycle had approximately 5,183–5,700 LR-consistent disparity samples in the
+frustum, yet zero samples in the activated 0.5–2.0 m Measurement interval.
+The stereo depth distributions had central values around 3.2–3.7 m. The
+refusal `FRUSTUM_DEPTH_SAMPLES_OUT_OF_RANGE` therefore explains this particular
+run; it is not an RGB detector failure or evidence of zero disparity.
+Capture-to-receive age was 1.39–1.66 s. No paired person surface or moving
+robot-front clearance was established and no motors ran.
+
+The live follow wrapper now opts into the already declared 0.5–4.5 m
+**diagnostic** Shadow range for frustum projection, disparity sample selection
+and clustering. The original activation and its 0.5–2.0 m Measurement range
+remain untouched. The audit records both ranges and still emits no canonical
+Measurement. The separate range may surface background layers or spatial
+ambiguity; a successful association and its timing must be observed on Pi.

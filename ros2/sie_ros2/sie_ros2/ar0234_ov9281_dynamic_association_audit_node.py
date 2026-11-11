@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from std_msgs.msg import String
 from .diagnostic_timing import StageTimings, timed_stage
 from .stereo_pair_executor import StereoPairExecutor
@@ -84,6 +85,14 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         lo, hi = self.shadow_diagnostic_range
         if not (math.isfinite(lo) and math.isfinite(hi) and 0 < lo < hi <= 4.5):
             raise ValueError("invalid shadow-only diagnostic depth range")
+        self.declare_parameter("shadow_association_range_mode", "activated")
+        association_mode = str(self.get_parameter("shadow_association_range_mode").value)
+        if association_mode not in ("activated", "diagnostic"):
+            raise ValueError("invalid Shadow association range mode")
+        self._shadow_association_range_m = (
+            tuple(self.shadow_diagnostic_range) if association_mode == "diagnostic"
+            else (self.range_min_m, self.range_max_m)
+        )
         self.declare_parameter("frustum_sample_stride_px", 4)
         self.declare_parameter("ar_inner_roi_x_margin_fraction", 0.20)
         self.declare_parameter("ar_inner_roi_top_fraction", 0.30)
@@ -260,6 +269,11 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "AR0234 is the only semantic detector; metric Measurement, navigation, "
             "and actuator access remain disabled"
         )
+        self.get_logger().info(
+            f"association diagnostic range={self._association_range()} m; "
+            f"activated Measurement range={(self.range_min_m, self.range_max_m)} m; "
+            "no Measurement emitted"
+        )
         if self.shadow_local_surfaces_enabled:
             self.get_logger().info(
                 f"local surface shadow diagnostic range={self.shadow_diagnostic_range} m; "
@@ -415,6 +429,10 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             raise ContractError("AR inner ROI is empty")
         return result
 
+    def _association_range(self) -> tuple[float, float]:
+        return getattr(self, "_shadow_association_range_m",
+                       (self.range_min_m, self.range_max_m))
+
     def _stereo_frustum_search_roi(
         self, ar_inner_roi: tuple[float, float, float, float]
     ) -> tuple[int, int, int, int]:
@@ -428,7 +446,7 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             (normalized, self.np.ones((normalized.shape[0],), dtype=self.np.float64))
         )
         projected: list[Any] = []
-        for depth_m in (self.range_min_m, self.range_max_m):
+        for depth_m in self._association_range():
             points_ar = rays_ar * depth_m
             points_left = (
                 self.r_ar_to_left @ points_ar.T + self.t_ar_to_left_m
@@ -551,9 +569,10 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         finite = self.np.isfinite(depth_values) & self.np.isfinite(disparity_values)
         depth_values = depth_values[finite]
         disparity_values = disparity_values[finite]
+        range_min_m, range_max_m = self._association_range()
         if not int(depth_values.size):
             return {
-                "configured_depth_range_m": [self.range_min_m, self.range_max_m],
+                "configured_depth_range_m": [range_min_m, range_max_m],
                 "sample_count": 0,
                 "below_range_sample_count": 0,
                 "in_range_sample_count": 0,
@@ -563,8 +582,8 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             }
 
         in_range = (
-            (depth_values >= self.range_min_m)
-            & (depth_values <= self.range_max_m)
+            (depth_values >= range_min_m)
+            & (depth_values <= range_max_m)
         )
         percentile_levels = (0, 5, 25, 50, 75, 95, 100)
         depth_percentiles = self.np.percentile(depth_values, percentile_levels)
@@ -573,15 +592,15 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         )
         focal_baseline_m_px = abs(float(self.p2[0, 3])) / 1000.0
         return {
-            "configured_depth_range_m": [self.range_min_m, self.range_max_m],
+            "configured_depth_range_m": [range_min_m, range_max_m],
             "configured_disparity_range_px": [
-                focal_baseline_m_px / self.range_max_m,
-                focal_baseline_m_px / self.range_min_m,
+                focal_baseline_m_px / range_max_m,
+                focal_baseline_m_px / range_min_m,
             ],
             "sample_count": int(depth_values.size),
-            "below_range_sample_count": int((depth_values < self.range_min_m).sum()),
+            "below_range_sample_count": int((depth_values < range_min_m).sum()),
             "in_range_sample_count": int(in_range.sum()),
-            "above_range_sample_count": int((depth_values > self.range_max_m).sum()),
+            "above_range_sample_count": int((depth_values > range_max_m).sum()),
             "percentile_levels": list(percentile_levels),
             "depth_percentiles_m": [float(value) for value in depth_percentiles],
             "disparity_percentiles_px": [
@@ -688,9 +707,10 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
         depth_range_diagnostic = self._depth_range_diagnostic(
             rectified_depth, disparity_values
         )
+        range_min_m, range_max_m = self._association_range()
         in_range = (
-            (rectified_depth >= self.range_min_m)
-            & (rectified_depth <= self.range_max_m)
+            (rectified_depth >= range_min_m)
+            & (rectified_depth <= range_max_m)
         )
         if int(in_range.sum()) < self.min_depth_samples:
             return None, "FRUSTUM_DEPTH_SAMPLES_OUT_OF_RANGE", {
@@ -1268,6 +1288,8 @@ class Ar0234Ov9281DynamicAssociationAuditNode(
             "timestamp": timestamp.isoformat(),
             "cycle_id": cycle_id,
             "reference_frame": "ov9281_physical_left_optical_frame",
+            "association_diagnostic_range_m": list(self._association_range()),
+            "activated_measurement_range_m": [self.range_min_m, self.range_max_m],
             "stereo_execution": {
                 "mode": self.stereo_match_execution,
                 "requested_opencv_threads": self.stereo_opencv_threads,
@@ -1552,7 +1574,7 @@ def main(args: list[str] | None = None) -> None:
     node = Ar0234Ov9281DynamicAssociationAuditNode()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
