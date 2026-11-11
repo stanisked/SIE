@@ -22,7 +22,10 @@ For every engineering task:
 4. Read the applicable canonical architecture, rules, data-model, spatial-model, Evidence Graph, and Data Contract documents.
 5. Read this `AGENTS.md` for operational working rules.
 6. Read the version-specific handoff, such as `V6_HANDOFF.md`.
-7. Inspect the implementation, tests, reports, and current working tree.
+7. For Shadow/cart work, read `docs/handoffs/WORKING_BASELINE.md` for already
+   demonstrated Pi results and the exact boundary of each result. Consult its
+   linked primary reports before contradicting or repeating a completed step.
+8. Inspect the implementation, tests, reports, and current working tree.
 
 Reading order does not change normative precedence. If documents disagree, use the precedence defined below.
 
