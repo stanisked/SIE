@@ -246,6 +246,63 @@ class ShadowRunnerTests(unittest.TestCase):
         self.assertEqual(report["operations"], ["START", "STEER", "RESUME"])
         self.assertEqual(report["result"], "SESSION_ENDED")
 
+    def test_settled_segment_requires_new_rgb_and_range_pair(self):
+        class AutoPause(FakeController):
+            def __call__(self, method, url, timeout):
+                code, body = super().__call__(method, url, timeout)
+                if urlsplit(url).path == "/steer-update":
+                    self.state = "PAUSED"
+                return code, body
+
+        clock, controller = FakeClock(), AutoPause()
+
+        def stream():
+            for _ in range(3):
+                rgb = RgbTarget("p", 10., 0., .9, "rgb")
+                rng = TargetRange("LIDAR", "p", 10., 1.5, .9,
+                                  FRONT_FRAME, "lidar", "old-pair")
+                yield ShadowObservation(rgb, (rng,))
+                clock.now += .2
+
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_session(request=controller, observations=stream(),
+                journal_path=Path(directory) / "shadow.jsonl", clock=clock,
+                rgb_calibration_id="rgb", lidar_calibration_id="lidar",
+                lock_path=Path(directory) / "operator.lock")
+        self.assertEqual(report["operations"], ["START", "STEER"])
+        self.assertEqual(report["segments_started"], 1)
+        self.assertEqual(report["reused_pair_refusals"], 1)
+        self.assertFalse(any(path == "/shadow-resume" for path, _ in controller.posts))
+        self.assertEqual(controller.posts[-1][0], "/stop")
+
+    def test_segment_limit_stops_after_first_settled_step(self):
+        class AutoPause(FakeController):
+            def __call__(self, method, url, timeout):
+                code, body = super().__call__(method, url, timeout)
+                if urlsplit(url).path == "/steer-update":
+                    self.state = "PAUSED"
+                return code, body
+
+        clock, controller = FakeClock(), AutoPause()
+
+        def stream():
+            for index in range(3):
+                rgb = RgbTarget("p", clock(), 0., .9, "rgb")
+                rng = TargetRange("LIDAR", "p", clock(), 1.5, .9,
+                                  FRONT_FRAME, "lidar", f"pair-{index}")
+                yield ShadowObservation(rgb, (rng,))
+                clock.now += .2
+
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_session(request=controller, observations=stream(),
+                journal_path=Path(directory) / "shadow.jsonl", clock=clock,
+                rgb_calibration_id="rgb", lidar_calibration_id="lidar",
+                max_segments=1, lock_path=Path(directory) / "operator.lock")
+        self.assertEqual(report["operations"], ["START", "STEER"])
+        self.assertEqual(report["reason"], "SEGMENT_LIMIT_REACHED")
+        self.assertEqual(report["segments_started"], 1)
+        self.assertEqual(controller.posts[-1][0], "/stop")
+
     def test_shadow_uart_fields(self):
         fields = UartHttp._fields("POST", "http://uart.local/shadow-resume?"
             "boot_session_id=boot-1&command_id=one&seq=2&distance_m=0.300")

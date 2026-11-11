@@ -53,3 +53,29 @@ been deployed or tested on the cart. The floor result establishes one short,
 operator-supervised forward step and terminal STOP. It does not establish a
 person-following loop, a front-clearance measurement, an emergency stopping
 distance, or general UART reliability under camera load.
+
+## 2026-11-11: lead/follower segment boundary in the host runner
+
+For the intended turtlesim-like lead/follower experiment, the follower must
+observe the leader again after each completed bounded segment. The Shadow
+runner now retains the RGB and associated-range observation times that
+authorized START or RESUME. When the same command reaches PAUSED after a
+segment, RESUME requires **both** a newer RGB target and a newer associated
+range. A cached pair can still be used for steering within its freshness
+window during an active segment, but it cannot start the next segment. A
+caller may set `max_segments` to a positive integer to end a supervised
+session after that many attempted START/RESUME segments; the runner then
+requests terminal STOP and records `SEGMENT_LIMIT_REACHED`. No public motor
+CLI or live camera-to-runner adapter is added by this change.
+
+The host tests cover stale-pair refusal, a fresh-pair resume, and a
+single-segment limit. They use an injected controller, not the Pi cameras or
+powered wheels. The existing audit reports optical depth and diagnostic
+target continuity, but does not supply validated exposure age, persistent
+person ownership, or robot-front clearance for `ShadowObservation`. The
+operator-confirmed 0.210 m lens-rim setback and 15 degree mount pitch are
+partial geometry only; the remaining optical-centre offset and physical
+uncertainties are not filled in. Therefore this code change does not activate
+automatic following or establish the proposed 0.8 m hold distance. The next
+integration step is to verify a live, target-owned, fresh front-clearance
+producer and its timing under camera load before connecting it to the runner.

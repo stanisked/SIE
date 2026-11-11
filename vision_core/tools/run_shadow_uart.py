@@ -33,7 +33,7 @@ class ShadowObservation:
 
 def run_session(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
-                segment_m=SEGMENT_M, max_observations=None,
+                segment_m=SEGMENT_M, max_observations=None, max_segments=None,
                 lock_path=None):
     """Use the same operator lock as the current bounded steering runner."""
     lockpath = Path(lock_path) if lock_path is not None else (
@@ -44,29 +44,38 @@ def run_session(*, request, observations, journal_path, rgb_calibration_id,
         return _run_session_unlocked(request=request, observations=observations,
             journal_path=journal_path, rgb_calibration_id=rgb_calibration_id,
             lidar_calibration_id=lidar_calibration_id, clock=clock,
-            segment_m=segment_m, max_observations=max_observations)
+            segment_m=segment_m, max_observations=max_observations,
+            max_segments=max_segments)
 
 
 def _run_session_unlocked(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
-                segment_m=SEGMENT_M, max_observations=None):
+                segment_m=SEGMENT_M, max_observations=None, max_segments=None):
     """Run until source ends or operator interrupts; always request terminal STOP.
 
     `observations` must yield an observation or None frequently even if the
     camera has no new frame. This function cannot establish identity or
-    distance calibration on its own. Do not call on a physical cart without
-    a validated target/range producer and an independent motor cutoff.
+    distance calibration on its own. A new RGB/range pair is required for each
+    RESUME; `max_segments` bounds attempted START/RESUME segments. Do not call
+    on a physical cart without a validated target/range producer and an
+    independent motor cutoff.
     """
     if not .02 <= segment_m <= .30:
         raise ValueError("INVALID_SHADOW_SEGMENT")
+    if max_segments is not None and (type(max_segments) is not int or
+                                     max_segments < 1):
+        raise ValueError("INVALID_MAX_SEGMENTS")
     output = Path(journal_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     report = {"result": "NO_COMMAND", "command_id": None,
-              "operations": [], "measurement_admission_changed": False}
+              "operations": [], "segments_started": 0,
+              "reused_pair_refusals": 0,
+              "measurement_admission_changed": False}
     supervisor = None
     latest = None
     seen = 0
     last_steer_at = 0.0
+    last_segment_pair = None
 
     with output.open("x") as journal:
         def call(method, endpoint, params=None, timeout=.3):
@@ -234,6 +243,18 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     break
                 if observed.get("state") in ("BRAKING", "COASTING"):
                     continue
+                if supervisor.state == "PAUSED":
+                    if max_segments is not None and report["segments_started"] >= max_segments:
+                        report["reason"] = "SEGMENT_LIMIT_REACHED"
+                        break
+                    # A settled segment cannot resume on the observations
+                    # that authorized it, even while their age is below .5 s.
+                    if (decision.action == "FOLLOW_ELIGIBLE" and
+                            last_segment_pair is not None and
+                            (target.observed_s <= last_segment_pair[0] or
+                             decision.selected.observed_s <= last_segment_pair[1])):
+                        report["reused_pair_refusals"] += 1
+                        continue
                 if (supervisor.state == "ACTIVE" and decision.action == "FOLLOW_ELIGIBLE"
                         and now - last_steer_at < .15):
                     continue
@@ -244,6 +265,10 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 if intent is None:
                     continue
                 report["operations"].append(intent.operation)
+                if intent.operation in ("START", "RESUME"):
+                    last_segment_pair = (target.observed_s,
+                                         decision.selected.observed_s)
+                    report["segments_started"] += 1
                 issue(intent, target)
             report["result"] = "SESSION_ENDED"
         except BaseException as error:
