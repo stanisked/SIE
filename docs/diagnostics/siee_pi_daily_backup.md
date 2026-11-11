@@ -33,7 +33,16 @@ capacity and decide retention separately.
 
 ## One-time Pi setup
 
-First confirm the source checkout and paths listed in
+Keep the active detached-HEAD checkout and its local `build/`, `install/`, and
+`log/` untouched. Clone the published backup tools into a separate directory:
+
+```bash
+git clone --branch codex/shadow-rgb-detector-20261030 --single-branch \
+  https://github.com/stanisked/SIE.git /home/elwis/dev_ws/sie_backup_tools
+cd /home/elwis/dev_ws/sie_backup_tools
+```
+
+Confirm the source checkout and paths listed in
 `vision_core/tools/backup_siee_pi.py`. Check installed tools before installing:
 
 ```bash
@@ -55,7 +64,8 @@ an independent copy. Initialize the repository **once** under that folder:
 export RESTIC_REPOSITORY='rclone:siee-drive:restic'
 export RESTIC_PASSWORD_FILE=/home/elwis/.config/sie/backup-restic-password
 restic init
-python3 vision_core/tools/backup_siee_pi.py --preflight
+python3 vision_core/tools/backup_siee_pi.py \
+  --project-root /home/elwis/dev_ws/sie_shadow_blind_v3_20261110 --preflight
 ```
 
 Do not paste the password or OAuth token into a command, report, or chat.
@@ -63,7 +73,8 @@ Run the first backup manually, inspect the result and the dated Drive report,
 then install the user timer:
 
 ```bash
-python3 vision_core/tools/backup_siee_pi.py
+python3 vision_core/tools/backup_siee_pi.py \
+  --project-root /home/elwis/dev_ws/sie_shadow_blind_v3_20261110
 mkdir -p ~/.config/systemd/user
 cp vision_core/tools/systemd/siee-pi-backup.{service,timer} ~/.config/systemd/user/
 systemctl --user daemon-reload

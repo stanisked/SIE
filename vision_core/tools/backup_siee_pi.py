@@ -70,6 +70,7 @@ def preflight(home: Path, repo: Path) -> tuple[list[Path], dict[str, str]]:
     missing = [str(path) for path in paths if not path.exists()]
     if missing:
         raise RuntimeError("BACKUP_SOURCE_MISSING:" + ",".join(missing))
+    run("git", "-C", str(repo), "rev-parse", "HEAD")
     env = os.environ.copy()
     env.update(RESTIC_REPOSITORY=REPOSITORY,
                RESTIC_PASSWORD_FILE=str(password_file))
@@ -140,9 +141,11 @@ def backup(home: Path, repo: Path) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--preflight", action="store_true")
+    parser.add_argument("--project-root", required=True, type=Path,
+                        help="The active Pi checkout to back up, not the tools checkout")
     args = parser.parse_args()
     home = Path.home()
-    repo = Path(__file__).resolve().parents[2]
+    repo = args.project_root.resolve()
     try:
         if args.preflight:
             paths, _ = preflight(home, repo)
