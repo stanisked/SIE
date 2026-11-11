@@ -49,12 +49,19 @@ Confirm the source checkout and paths listed in
 command -v restic; command -v rclone; command -v git
 ```
 
-If missing, install `restic` and `rclone` from Ubuntu packages. Configure a
-remote named `siee-drive` with `rclone config`: type `drive`,
+If missing, install `restic` and `rclone` from Ubuntu packages. Create your
+own Google Drive OAuth desktop client ID and secret following
+[rclone's current Drive instructions](https://rclone.org/drive/#making-your-own-client-id).
+The shared rclone client ID is being retired during 2026, so the backup
+preflight rejects a remote without a custom client ID and secret. Keep them
+private. Configure a remote named `siee-drive` with `rclone config`: type
+`drive`, custom client ID/secret, and advanced option
 `root_folder_id=1roTCxsE8S8SehwLz2Q6-tnfxxB1J7yrK`. On the headless Pi,
-follow [rclone's remote setup](https://rclone.org/remote_setup/) using a
-browser on the laptop. Keep the rclone configuration readable only by
-`elwis`. The script checks the remote type and exact folder ID before upload.
+follow [rclone's SSH tunnel setup](https://rclone.org/remote_setup/#configuring-using-ssh-tunnel)
+using a browser on the laptop. Keep the rclone configuration readable only by
+`elwis`. The script checks the remote type, custom OAuth client and exact
+folder ID before upload. Run `rclone about siee-drive:` to confirm free
+space before starting the first 18+ GB backup.
 
 Create a unique strong restic password in a password manager, write it to
 `/home/elwis/.config/sie/backup-restic-password` with mode `0600`, and keep

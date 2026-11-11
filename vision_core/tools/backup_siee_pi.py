@@ -62,6 +62,9 @@ def preflight(home: Path, repo: Path) -> tuple[list[Path], dict[str, str]]:
             config.get(REMOTE_NAME, "type", fallback="") != "drive" or
             config.get(REMOTE_NAME, "root_folder_id", fallback="") != DRIVE_FOLDER_ID):
         raise RuntimeError("DRIVE_REMOTE_NOT_PINNED_TO_SIEE_BACKUP_FOLDER")
+    if (not config.get(REMOTE_NAME, "client_id", fallback="").strip() or
+            not config.get(REMOTE_NAME, "client_secret", fallback="").strip()):
+        raise RuntimeError("DRIVE_CUSTOM_OAUTH_CLIENT_MISSING")
     password_file = home / ".config/sie/backup-restic-password"
     if (not password_file.is_file() or not password_file.read_bytes() or
             stat.S_IMODE(password_file.stat().st_mode) & 0o077):

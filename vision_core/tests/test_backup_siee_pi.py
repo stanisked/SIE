@@ -46,6 +46,22 @@ class PiBackupTests(unittest.TestCase):
             self.assertFalse(any(args[:2] == ("rclone", "copyto") for args in calls))
             self.assertEqual(list((home / ".local/state/sie/backup").iterdir()), [])
 
+    def test_preflight_requires_custom_oauth_client(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory)
+            config = home / ".config/rclone/rclone.conf"
+            config.parent.mkdir(parents=True)
+            config.write_text("[siee-drive]\ntype = drive\nroot_folder_id = "
+                              + backup.DRIVE_FOLDER_ID + "\n")
+            password = home / ".config/sie/backup-restic-password"
+            password.parent.mkdir(parents=True)
+            password.write_text("private test password\n")
+            os.chmod(password, 0o600)
+            with patch.object(backup.shutil, "which", return_value="/usr/bin/fake"):
+                with self.assertRaisesRegex(RuntimeError,
+                                            "DRIVE_CUSTOM_OAUTH_CLIENT_MISSING"):
+                    backup.preflight(home, home)
+
     def test_success_report_is_read_back_from_drive(self):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
