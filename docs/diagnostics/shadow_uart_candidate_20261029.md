@@ -172,3 +172,19 @@ and clustering. The original activation and its 0.5–2.0 m Measurement range
 remain untouched. The audit records both ranges and still emits no canonical
 Measurement. The separate range may surface background layers or spatial
 ambiguity; a successful association and its timing must be observed on Pi.
+
+### First 0.5–4.5 m Pi preview, 2026-11-11
+
+Four current RGB targets passed the non-edge geometry check. Every cycle had
+one plausible spatial component and one depth cluster, with 1,739–2,835
+reprojected samples. Three were rejected by the unchanged absolute 0.05 m
+depth-MAD diagnostic threshold: 0.0799, 0.0623 and 0.0561 m. One was reported
+`ASSOCIATED_DIAGNOSTIC_ONLY`. This is one diagnostic association in four frames,
+not continuous target-owned depth. The bridge correctly printed PAUSE even on
+the associated cycle because capture-to-receive ages were 1.29–1.37 s, above
+its 0.5 s input age. No motors ran. The present printout hid the associated
+optical range and confidence when the later age gate refused it; the bridge
+now shows those diagnostic values separately. Do not raise the MAD limit to
+make these four frames pass: MAD is surface spread, not a physical error bound.
+Next implementation work is a faster, target-owned depth path, with its own
+timing and association evidence, before physical following.
