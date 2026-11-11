@@ -149,6 +149,33 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                         "command_id": heartbeat.command_id,
                         "seq": heartbeat.transition_seq, "bias_pwm": 0})
                     if code != 200 or reply.get("accepted") is not True:
+                        # A short segment can begin braking between
+                        # STATUS=STARTING and the heartbeat. Read only STATUS
+                        # until that same segment is stationary and PAUSED.
+                        if (code == 409 and
+                                reply.get("reason") ==
+                                "NO_MATCHING_ACTIVE_STEERED_FORWARD"):
+                            settle_deadline = time.monotonic() + 1.6
+                            while True:
+                                settled = status()
+                                if (settled.get("active_command_id") !=
+                                        intent.command_id or
+                                        settled.get("shadow_transition_seq") !=
+                                        intent.transition_seq or
+                                        settled.get("right_pwm") != 0 or
+                                        settled.get("left_pwm") != 0 or
+                                        settled.get("bounded_fault_latched") or
+                                        settled.get("steered_safety_latched") or
+                                        settled.get("remote_stop_pending")):
+                                    break
+                                if settled.get("state") == "PAUSED":
+                                    reconcile(settled)
+                                    return
+                                if (settled.get("state") not in
+                                        ("BRAKING", "COASTING") or
+                                        time.monotonic() >= settle_deadline):
+                                    break
+                                time.sleep(.04)
                         raise RuntimeError("SHADOW_START_HEARTBEAT_REFUSED")
                     last_heartbeat = clock()
                 if state == "PAUSED" and observed.get("active_command_id") == intent.command_id:

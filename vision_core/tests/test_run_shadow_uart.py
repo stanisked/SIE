@@ -116,6 +116,107 @@ class ShadowRunnerTests(unittest.TestCase):
                              for path, _ in controller.posts))
         self.assertEqual(controller.posts, [])
 
+    def test_start_heartbeat_refusal_after_segment_pause_is_reconciled(self):
+        class PauseBeforeHeartbeat(FakeController):
+            def __call__(self, method, url, timeout):
+                path = urlsplit(url).path
+                if path == "/shadow-start":
+                    code, body = super().__call__(method, url, timeout)
+                    self.state = "STARTING"
+                    return code, body
+                if path == "/steer-update":
+                    self.posts.append((path, {}))
+                    self.state = "PAUSED"
+                    return 409, {"accepted": False,
+                                 "reason": "NO_MATCHING_ACTIVE_STEERED_FORWARD"}
+                return super().__call__(method, url, timeout)
+
+        clock, controller = FakeClock(), PauseBeforeHeartbeat()
+        rgb = RgbTarget("p", clock(), 0., .9, "rgb")
+        rng = TargetRange("LIDAR", "p", clock(), 1.5, .9,
+                          FRONT_FRAME, "lidar", "association-1")
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_session(request=controller,
+                observations=[ShadowObservation(rgb, (rng,))],
+                journal_path=Path(directory) / "shadow.jsonl", clock=clock,
+                rgb_calibration_id="rgb", lidar_calibration_id="lidar",
+                lock_path=Path(directory) / "operator.lock")
+        self.assertEqual(report["result"], "SESSION_ENDED")
+        self.assertEqual(report["operations"], ["START"])
+        self.assertEqual(controller.state, "READY")
+        self.assertEqual([path for path, _ in controller.posts].count("/shadow-start"), 1)
+        self.assertEqual(controller.posts[-1][0], "/stop")
+
+    def test_start_heartbeat_refusal_waits_for_matching_brake_to_pause(self):
+        class BrakingBeforePause(FakeController):
+            def __init__(self):
+                super().__init__()
+                self.braking_reads = 0
+
+            def __call__(self, method, url, timeout):
+                path = urlsplit(url).path
+                if path == "/shadow-start":
+                    code, body = super().__call__(method, url, timeout)
+                    self.state = "STARTING"
+                    return code, body
+                if path == "/steer-update":
+                    self.posts.append((path, {}))
+                    self.state = "BRAKING"
+                    return 409, {"accepted": False,
+                                 "reason": "NO_MATCHING_ACTIVE_STEERED_FORWARD"}
+                if method == "GET" and self.state == "BRAKING":
+                    self.braking_reads += 1
+                    if self.braking_reads == 3:
+                        self.state = "PAUSED"
+                return super().__call__(method, url, timeout)
+
+        clock, controller = FakeClock(), BrakingBeforePause()
+        rgb = RgbTarget("p", clock(), 0., .9, "rgb")
+        rng = TargetRange("LIDAR", "p", clock(), 1.5, .9,
+                          FRONT_FRAME, "lidar", "association-1")
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_session(request=controller,
+                observations=[ShadowObservation(rgb, (rng,))],
+                journal_path=Path(directory) / "shadow.jsonl", clock=clock,
+                rgb_calibration_id="rgb", lidar_calibration_id="lidar",
+                lock_path=Path(directory) / "operator.lock")
+        self.assertEqual(report["result"], "SESSION_ENDED")
+        self.assertEqual(controller.braking_reads, 3)
+        self.assertEqual(report["operations"], ["START"])
+        self.assertEqual(controller.posts[-1][0], "/stop")
+
+    def test_start_heartbeat_refusal_wrong_command_stops(self):
+        class WrongPausedCommand(FakeController):
+            def __call__(self, method, url, timeout):
+                path = urlsplit(url).path
+                if path == "/shadow-start":
+                    code, body = super().__call__(method, url, timeout)
+                    self.state = "STARTING"
+                    return code, body
+                if path == "/steer-update":
+                    self.posts.append((path, {}))
+                    self.state = "PAUSED"
+                    return 409, {"accepted": False,
+                                 "reason": "NO_MATCHING_ACTIVE_STEERED_FORWARD"}
+                code, body = super().__call__(method, url, timeout)
+                if method == "GET" and self.state == "PAUSED":
+                    body["active_command_id"] = "other-command"
+                return code, body
+
+        clock, controller = FakeClock(), WrongPausedCommand()
+        rgb = RgbTarget("p", clock(), 0., .9, "rgb")
+        rng = TargetRange("LIDAR", "p", clock(), 1.5, .9,
+                          FRONT_FRAME, "lidar", "association-1")
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_session(request=controller,
+                observations=[ShadowObservation(rgb, (rng,))],
+                journal_path=Path(directory) / "shadow.jsonl", clock=clock,
+                rgb_calibration_id="rgb", lidar_calibration_id="lidar",
+                lock_path=Path(directory) / "operator.lock")
+        self.assertEqual(report["result"], "STOPPED_ON_REFUSAL")
+        self.assertIn("SHADOW_START_HEARTBEAT_REFUSED", report["error"])
+        self.assertEqual(controller.posts[-1][0], "/stop")
+
     def test_automatic_segment_pause_then_resume(self):
         class AutoPause(FakeController):
             def __call__(self, method, url, timeout):
