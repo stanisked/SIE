@@ -150,9 +150,12 @@ refusal reason was omitted from the bridge output, so the cause of the
 association failure is still unknown. The preview now prints that original
 reason, sample counts, depth distribution and capture-to-receive age. A short
 follow-up preview can distinguish an out-of-range target from missing stereo
-surface or a geometry mismatch. Even an associated frame from this current
-pipeline would exceed the 0.5 s input age limit, so reducing latency is a
-separate concrete implementation task before live motion.
+surface or a geometry mismatch. Even an associated frame from this particular
+full-resolution audit pipeline would exceed the 0.5 s input age limit. The
+existing optimized control-input preview has already demonstrated sub-0.5 s
+driver-to-result age on Pi; its fast current-frame depth path must be adapted
+to the Shadow target and observation contract, rather than treating this slow
+audit as the fastest available camera path.
 
 ### Four-cycle diagnostic range finding, 2026-11-11
 
@@ -186,5 +189,16 @@ its 0.5 s input age. No motors ran. The present printout hid the associated
 optical range and confidence when the later age gate refused it; the bridge
 now shows those diagnostic values separately. Do not raise the MAD limit to
 make these four frames pass: MAD is surface spread, not a physical error bound.
-Next implementation work is a faster, target-owned depth path, with its own
-timing and association evidence, before physical following.
+This 1.29–1.37 s result applies to the new full-resolution audit and bridge,
+not to the previously measured optimized preview. The new-RGB live preview
+(`20261015_190656`) reported AR/OV driver-to-result age median/max
+266.59/275.70 and 266.79/287.59 ms, respectively; its host cycle including
+new-frame wait was 263.54/299.43 ms. The later 99-cycle control preview had
+98/98 steady coherent driver ages within 250 ms and host median/max
+195.3/242.2 ms. These are diagnostics, not exposure-to-command age. The fast
+half-resolution mode deliberately skips the original full-resolution frustum
+association, and its mask-depth result is not yet a ShadowObservation with
+confirmed target continuity and robot-front clearance. Next, adapt that
+established fast capture/depth path to the Shadow observation contract and
+measure age through the runner decision; resolve the target-owned depth
+refusals separately before physical following.
