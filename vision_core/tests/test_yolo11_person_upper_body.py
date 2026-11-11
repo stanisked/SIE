@@ -3,6 +3,11 @@ from __future__ import annotations
 import json
 
 import numpy as np
+import pytest
+
+from vision_core.person_localization.yolo11_person_upper_body_runtime import (
+    expected_model_sha256,
+)
 
 from vision_core.person_localization.yolo11_person_upper_body import (
     LetterboxTransform,
@@ -82,3 +87,11 @@ def test_bbox_truncation_flags_describe_each_image_boundary() -> None:
         "truncated_top": True,
         "truncated_bottom": False,
     }
+
+
+def test_live_observer_pins_each_reviewed_model_version() -> None:
+    assert expected_model_sha256("v1") == "dde42238b5742f9c0b79c29863c44bc97b678aa75b86a4db5bb602a2d72c259c"
+    assert expected_model_sha256("v2") == "5583d645afebd3d52706b76655662cb4ce16110b2a0b224af2cc806d0292d07b"
+    assert expected_model_sha256("v3") == "fccd45fbcf490134eb786ab3b38cf115dd03466edd85801ad44c8353f38549f5"
+    with pytest.raises(ValueError, match="UNKNOWN_PERSON_MODEL_VERSION"):
+        expected_model_sha256("unreviewed")

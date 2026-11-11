@@ -79,3 +79,60 @@ uncertainties are not filled in. Therefore this code change does not activate
 automatic following or establish the proposed 0.8 m hold distance. The next
 integration step is to verify a live, target-owned, fresh front-clearance
 producer and its timing under camera load before connecting it to the runner.
+
+## 2026-11-11: selectable RGB model in the live audit
+
+The earlier Pi raw-pair capture stopped before opening the cameras because the
+ROS observer pinned the v1 ONNX SHA while the installed `/home/elwis/best.onnx`
+was the known v2 artifact. The observer and ROS node now accept a named
+`model_version` (`v1`, `v2`, or `v3`) and verify that version's exact SHA-256.
+The raw-pair wrapper selects the installed v2 by default and can select v3
+with `SHADOW_RGB_MODEL_VERSION=v3` and `SHADOW_RGB_MODEL_PATH` pointing to a
+locally installed v3 ONNX. It will still reject an absent or mismatched file.
+This repairs a configuration mismatch; it does not claim v3 is on the Pi or
+that the camera/ESP32 loop is integrated.
+
+## 2026-11-11: live audit to Shadow UART bridge candidate
+
+`vision_core/tools/run_shadow_live_follow.sh` starts the existing calibrated
+dynamic AR0234/OV9281 audit and the new `shadow_live_bridge.py` in one terminal.
+By default it prints each current range decision without opening UART. An
+explicit `--execute` connects its observations to the existing Shadow UART
+runner. The bridge accepts only a same-cycle confirmed track, known AR0234 v5
+and OV9281 Pi v7 hashes, a finite 3D association, and an audit received within
+0.5 s of the reported capture start. It does not reuse an old pair for RESUME.
+It converts raw physical-left optical XYZ to the cart-front longitudinal frame
+using the operator-reported 15 degree upward pitch and 0.210 m setback. The
+optical-centre to rim forward component must be supplied as a separate input;
+the previously reported approximately 0.0123–0.0125 m is an estimate, not a
+surveyed physical error bound. This path is an experimental control input and
+does not publish a canonical SIE Measurement or change calibration admission.
+The minimum detector confidence for this experiment is 0.40, while a loss of
+target, stale association, controller fault, or UART failure still stops or
+pauses the cart. The runner shortens a requested segment near the 0.95 m hold
+boundary; its firmware watchdog and terminal STOP are unchanged.
+
+The standalone bridge cannot establish that the current Pi processing takes
+less than 0.5 s, that the optical offset is accurate, or that a moving person
+has reliable stereo surface coverage. A prior saved 19-cycle two-person replay
+yielded two coherent depths in only one frame. The new code has passed host
+synthetic adapter tests and 11 runner tests, not a Pi camera or motor test.
+One short live preview will expose whether a current single-person stream
+produces `FOLLOW_ELIGIBLE`; repeated old captures cannot establish this.
+
+On the Pi, put this branch in a *separate* checkout, with the active cart
+checkout untouched. Select v3 only after its ONNX file is present and its SHA
+matches `fccd45fbcf490134eb786ab3b38cf115dd03466edd85801ad44c8353f38549f5`.
+An initial no-motor preview can use the explicitly labelled operator estimate:
+
+```bash
+SHADOW_RGB_MODEL_VERSION=v3 SHADOW_RGB_MODEL_PATH=/absolute/path/to/shadow_v3_best.onnx \
+  bash vision_core/tools/run_shadow_live_follow.sh \
+  --front-rim-forward-of-optical-m 0.0125 --duration-s 30 \
+  --journal /home/elwis/.local/state/sie/evidence/shadow_bridge_preview.jsonl
+```
+
+For a floor session, use the measured offset and add `--execute`. The bridge
+requires the user to supply that number explicitly. Its journal path must be
+new for each execution. At present the Pi has not run this bridge, and the
+motor-facing path has no physical validation.

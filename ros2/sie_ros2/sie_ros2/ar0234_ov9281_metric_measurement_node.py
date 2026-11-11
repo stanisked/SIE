@@ -109,6 +109,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         super().__init__("sie_ar0234_ov9281_metric_measurement")
         self.declare_parameter("project_root", "")
         self.declare_parameter("model_path", "")
+        self.declare_parameter("model_version", "v1")
         self.declare_parameter(
             "activation_profile",
             "/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/"
@@ -154,6 +155,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
 
         self.project_root = absolute_parameter(self, "project_root")
         self.model_path = absolute_parameter(self, "model_path")
+        self.model_version = str(self.get_parameter("model_version").value)
         self._stereo_person_detector_required = not getattr(
             self, "_disable_stereo_person_detector", False
         )
@@ -240,7 +242,8 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.np = np
         self._load_profile()
         self.observer = OnnxRuntimeYolo11PersonUpperBodyObserver(
-            self.model_path, confidence_threshold=self.confidence_threshold
+            self.model_path, confidence_threshold=self.confidence_threshold,
+            model_version=self.model_version
         )
         self.stereo_person_detector = None
         self.stereo_person_model_sha256: str | None = None

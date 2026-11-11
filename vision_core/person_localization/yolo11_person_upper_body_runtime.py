@@ -29,6 +29,18 @@ YOLO_PRIMARY_KEY = "primary_person_observation"
 SINGLE_TARGET = "SINGLE_TARGET"
 NO_TARGET = "NO_TARGET"
 MULTIPLE_TARGETS = "MULTIPLE_TARGETS"
+MODEL_SHA256_BY_VERSION = {
+    "v1": MODEL_SHA256,
+    "v2": "5583d645afebd3d52706b76655662cb4ce16110b2a0b224af2cc806d0292d07b",
+    "v3": "fccd45fbcf490134eb786ab3b38cf115dd03466edd85801ad44c8353f38549f5",
+}
+
+
+def expected_model_sha256(version: str) -> str:
+    try:
+        return MODEL_SHA256_BY_VERSION[version]
+    except (KeyError, TypeError) as error:
+        raise ValueError("UNKNOWN_PERSON_MODEL_VERSION") from error
 
 
 def _timestamp(value: datetime) -> str:
@@ -40,7 +52,8 @@ def _timestamp(value: datetime) -> str:
 class OnnxRuntimeYolo11PersonUpperBodyObserver:
     """Keep one ONNX session and emit an image-space observation per AR frame."""
 
-    def __init__(self, model_path: Path, *, confidence_threshold: float = 0.40) -> None:
+    def __init__(self, model_path: Path, *, confidence_threshold: float = 0.40,
+                 model_version: str = "v1") -> None:
         if (
             type(confidence_threshold) not in (int, float)
             or not math.isfinite(confidence_threshold)
@@ -48,7 +61,9 @@ class OnnxRuntimeYolo11PersonUpperBodyObserver:
         ):
             raise ValueError("confidence_threshold must be finite and in [0, 1]")
         self.model_path = model_path
-        self.model_sha256 = verify_model_sha256(model_path, MODEL_SHA256)
+        self.model_sha256 = verify_model_sha256(
+            model_path, expected_model_sha256(model_version))
+        self.model_version = model_version
         self.confidence_threshold = float(confidence_threshold)
         try:
             import onnxruntime as ort

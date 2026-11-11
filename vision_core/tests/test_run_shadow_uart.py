@@ -70,6 +70,22 @@ class FakeController:
 
 
 class ShadowRunnerTests(unittest.TestCase):
+    def test_experimental_confidence_and_segment_fit(self):
+        clock, controller = FakeClock(), FakeController()
+        rgb = RgbTarget("person-7", clock(), 0., .5, "rgb-v5")
+        rng = TargetRange("OV9281", "person-7", clock(), 1.02, .5,
+            FRONT_FRAME, "39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52",
+            "association-1")
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_session(request=controller,
+                observations=[ShadowObservation(rgb, (rng,))],
+                journal_path=Path(directory) / "shadow.jsonl", clock=clock,
+                rgb_calibration_id="rgb-v5", minimum_confidence=.4,
+                segment_m=.1, lock_path=Path(directory) / "operator.lock")
+        self.assertEqual(report["operations"], ["START"])
+        start = next(args for path, args in controller.posts if path == "/shadow-start")
+        self.assertEqual(start["distance_m"], "0.050")
+
     def test_pause_resume_same_id_and_lidar_failover(self):
         clock = FakeClock()
         controller = FakeController()

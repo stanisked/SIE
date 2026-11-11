@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import fcntl
 import json
+import math
 import secrets
 import time
 from pathlib import Path
@@ -34,7 +35,7 @@ class ShadowObservation:
 def run_session(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
                 segment_m=SEGMENT_M, max_observations=None, max_segments=None,
-                lock_path=None):
+                minimum_confidence=.8, lock_path=None):
     """Use the same operator lock as the current bounded steering runner."""
     lockpath = Path(lock_path) if lock_path is not None else (
         Path.home() / ".local/state/sie/v7_operator_one_step.lock")
@@ -45,12 +46,13 @@ def run_session(*, request, observations, journal_path, rgb_calibration_id,
             journal_path=journal_path, rgb_calibration_id=rgb_calibration_id,
             lidar_calibration_id=lidar_calibration_id, clock=clock,
             segment_m=segment_m, max_observations=max_observations,
-            max_segments=max_segments)
+            max_segments=max_segments, minimum_confidence=minimum_confidence)
 
 
 def _run_session_unlocked(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
-                segment_m=SEGMENT_M, max_observations=None, max_segments=None):
+                segment_m=SEGMENT_M, max_observations=None, max_segments=None,
+                minimum_confidence=.8):
     """Run until source ends or operator interrupts; always request terminal STOP.
 
     `observations` must yield an observation or None frequently even if the
@@ -65,6 +67,10 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     if max_segments is not None and (type(max_segments) is not int or
                                      max_segments < 1):
         raise ValueError("INVALID_MAX_SEGMENTS")
+    if (type(minimum_confidence) not in (float, int) or
+            not 0 < minimum_confidence <= 1 or
+            not math.isfinite(minimum_confidence)):
+        raise ValueError("INVALID_MINIMUM_CONFIDENCE")
     output = Path(journal_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     report = {"result": "NO_COMMAND", "command_id": None,
@@ -115,7 +121,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 fault_latched=body.get("bounded_fault_latched") or
                               body.get("steered_safety_latched"))
 
-        def issue(intent, original_target=None):
+        def issue(intent, original_target=None, selected_range=None):
             nonlocal last_steer_at
             endpoint = {"START": "/shadow-start", "PAUSE": "/shadow-pause",
                         "RESUME": "/shadow-resume", "STOP": "/shadow-stop",
@@ -124,7 +130,12 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                       "command_id": intent.command_id,
                       "seq": intent.transition_seq}
             if intent.operation in ("START", "RESUME"):
-                params["distance_m"] = format(segment_m, ".3f")
+                # The next finite step must fit before the hold boundary.
+                # Allow 20 mm for rounding and unobserved motion after capture.
+                available = selected_range.distance_m - (.8 + .15 + .02)
+                if available < .02:
+                    raise RuntimeError("SHADOW_STEP_CLEARANCE_TOO_SMALL")
+                params["distance_m"] = format(min(segment_m, available), ".3f")
             if intent.operation == "STEER":
                 params["bias_pwm"] = intent.bias_pwm
             try:
@@ -235,7 +246,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 now = clock()
                 decision = select_target_range(target, ranges, now,
                     expected_rgb_calibration_id=rgb_calibration_id,
-                    expected_lidar_calibration_id=lidar_calibration_id)
+                    expected_lidar_calibration_id=lidar_calibration_id,
+                    minimum_confidence=minimum_confidence)
                 # Poll every input tick: a bounded segment can end on its own.
                 observed = status()
                 reconcile(observed)
@@ -269,7 +281,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     last_segment_pair = (target.observed_s,
                                          decision.selected.observed_s)
                     report["segments_started"] += 1
-                issue(intent, target)
+                issue(intent, target, decision.selected)
             report["result"] = "SESSION_ENDED"
         except BaseException as error:
             report["result"] = "STOPPED_ON_REFUSAL"
