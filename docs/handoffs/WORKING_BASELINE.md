@@ -119,3 +119,16 @@ In this saved bridge journal, the no-target rows were incorrectly labeled
 The old summary also counted missing v3 data as zero boxes. These bookkeeping
 fields have been corrected for future journals; the decisions and driver
 timestamps above are unaffected.
+
+**Full-audit follow-up:** The 124 saved upstream JSON records show that the
+fast front `p05` is computed over every mask-owned depth point, whereas the
+MAD gate checks only the one selected plausible depth layer. Ten of the 21
+bridge-eligible cycles contain another supported layer, and 14 use more front
+points than candidate-layer points. Cycle 19 has 321 near-layer samples at
+1.282 m and 2529 far-layer samples at 2.383 m; the all-point front p05 is
+1.045 m. Cycle 96 shows a large p05-versus-median gap even with one reported
+layer. All 124 upstream previews remained STOP. The full evidence, source
+hashes, examples and limits are in the [front-layer audit](../diagnostics/shadow_fast_front_layer_audit_20261112.md).
+The front range does not yet satisfy selected-layer ownership, so fast-mask
+motor execution remains disabled. No fresh Pi run is needed to establish this
+particular mismatch.
