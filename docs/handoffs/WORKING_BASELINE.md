@@ -148,3 +148,16 @@ decision separately, review the saved frames to explain the front layer and
 range jumps, and keep all motor actions disabled. Two-person live evidence
 remains pending because the operator currently has one person available.
 See [source snapshot design](../diagnostics/shadow_fast_front_layer_audit_20261112.md#opt-in-source-snapshots-for-the-next-camera-only-run).
+
+**Source snapshot Pi result, 2026-11-12:** The 75-second motor-off run saved
+9/9 exact source bundles. All 296 camera cycles had driver-declared age to
+Bridge decision below 500 ms; the AR0234/OV9281 medians were 176.76/175.51
+ms and maxima 359.34/355.10 ms. One segmented person was present on cycles
+1–48 and absent on 49–296; there was no post-exit reappearance. Thirteen
+coherent mask-depth cycles formed five intervals with new track IDs after
+MAD refusals; the same person did not become one uninterrupted track. All
+decisions remained PAUSE. The all-point and numerical candidate front p05
+differed by at most 29.2 mm in this scene, so the older two-layer mismatch
+was not reproduced here. The archived source arrays exactly replay the Pi
+depth/front calculations, but physical person ownership and optical datum
+remain unverified. [Full run report](../diagnostics/shadow_fast_source_snapshot_run_20261112.md).

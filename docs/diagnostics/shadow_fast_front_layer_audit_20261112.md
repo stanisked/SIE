@@ -141,4 +141,8 @@ separately from the earlier ~250 ms median without snapshots. Source JPEG
 decoding is checked against the segmentation worker's RGB payload SHA, but
 the physical surface still needs image review. The launcher remains motor-off;
 the adapter still refuses the all-point front as a control range. No Pi run
-for this mode has been performed yet.
+had not been performed at the time of implementation.
+
+The first opt-in Pi run has since been completed. Its nine verified source
+bundles, 296 camera cycles, decision ages and front-point comparison are in
+[the 19:34:49 run report](shadow_fast_source_snapshot_run_20261112.md).
