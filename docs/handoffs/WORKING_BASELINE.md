@@ -95,3 +95,22 @@ payload and individual mask hashes from the worker; this is an integration
 error, not a failed latency measurement. The next commit enables those hashes
 for both Shadow semantic modes. Recheck the complete binding on Pi before
 drawing any conclusion about FOLLOW_ELIGIBLE or motion.
+
+**Second isolated mask-only Pi run, 2026-11-12:** The bridge journal
+`shadow_fast_20261112_133000/bridge.jsonl` has 122 camera cycles. All 122
+driver-declared ages to the bridge decision were within 500 ms (AR median/max
+252.20/287.93 ms; OV 249.84/282.68 ms). The first 19 cycles had one eligible
+person, cycles 20–71 had no eligible non-edge target, and cycles 72–122 again
+had one. This supports an observed disappearance and return, without asserting
+the operator's exact movements from the journal alone. The bridge emitted 21
+`FOLLOW_ELIGIBLE` *diagnostic decisions* and 101 PAUSE. Of 64 cycles with a
+current eligible target and masked-depth audit, 21 passed the unchanged MAD
+gate and 43 did not. The 21 eligible decisions were split across 13 track IDs;
+the longest uninterrupted eligible run was five cycles. Nine diagnostic ranges
+were over the separate 2.0 m activated Measurement limit. Two same-track
+range jumps were 2.041→1.032 m in 0.272 s and 1.571→2.289 m in 0.267 s.
+The journal does not explain their physical cause. No motion was executed,
+and these results do not establish stable target-owned range or safe floor
+following. Inspect source frames and full per-cycle diagnostics before
+considering a continuity policy; do not adjust MAD or activate motors from
+these results.
