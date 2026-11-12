@@ -117,6 +117,8 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
     shape = audit.get("shape_diagnostic") or {}
     masked = shape.get("mask_depth") or {}
     front = shape.get("front_geometry") or {}
+    selected_instance = (audit.get("ar0234_dynamic_target") or {}).get("candidate") or {}
+    v3_diagnostic = audit.get("shadow_v3_observation_diagnostic") or {}
     timestamp = audit.get("timestamp")
     age_s = None
     if received_utc is not None and isinstance(timestamp, str):
@@ -149,6 +151,10 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "track_id": (audit.get("shadow_track_confirmation") or {}).get("track_id"),
         "v3_mask_match": (audit.get("shadow_v3_mask_match") or {}).get("status"),
         "v3_detection_count": (audit.get("shadow_v3_mask_match") or {}).get("v3_detection_count"),
+        "v3_detections": v3_diagnostic.get("detections"),
+        "v3_inference_s": audit.get("shadow_v3_inference_s"),
+        "selected_mask_instance_bbox_xyxy_px": selected_instance.get("bbox_xyxy_px"),
+        "selected_mask_instance_confidence": selected_instance.get("confidence"),
         "front_known_p05_m": (front.get("known_term_m") or {}).get("p05"),
         "depth_percentiles_m": pre_range.get("depth_percentiles_m"),
         "capture_to_receive_s": age_s,

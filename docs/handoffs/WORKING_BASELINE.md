@@ -44,7 +44,15 @@ age at its decision and journals the original driver stamps. The separate
 `run_shadow_fast_preview.sh` launcher cannot execute motors. See the
 [candidate detail](../diagnostics/shadow_uart_candidate_20261029.md#fast-shadow-input-local-candidate-2026-11-11).
 
-This code has only local contract tests. On a future Pi camera-only run,
-check the combined v3 + mask latency, loss, reacquisition and two-person
-refusals before changing the motor boundary. An old full-resolution audit
-speed benchmark and another straight-wheel proof are unnecessary.
+Local contract tests passed before the first Pi run. The combined v3 + mask
+age, reacquisition and two-person cases still require live evidence before
+changing the motor boundary. An old full-resolution audit speed benchmark
+and another straight-wheel proof are unnecessary.
+
+**First combined Pi run, 2026-11-12:** 117 camera cycles, all PAUSE. The
+selected one-person COCO target appeared in three intervals separated by
+two 15-cycle losses. In all 87 selected cycles v3 reported two boxes, so
+there was no accepted v3-to-mask match or Shadow track. Both driver-to-decision
+ages had about 668 ms median and exceeded 500 ms on every cycle. This is a
+new combined-path blocker, not a contradiction of the older mask-only
+sub-500 ms results. [Per-cycle findings](../diagnostics/shadow_uart_candidate_20261029.md#first-fast-shadow-pi-camera-only-journal-2026-11-12)

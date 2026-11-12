@@ -251,3 +251,36 @@ nearest-person selection is not established. Use the new Pi evidence to
 decide whether the v3 + segmentation combination still meets the 500 ms
 experimental decision budget. The timestamp is the V4L2 driver's declared
 SOE; physical exposure timing remains independently unverified.
+
+### First fast Shadow Pi camera-only journal, 2026-11-12
+
+Operator-supplied `shadow_fast_20261112_122628/bridge.jsonl` contains 117
+camera cycles over about 76 seconds after startup and 1672 no-new-frame
+polls. Motors stayed disabled; upstream journal reported zero dropped records
+and zero write errors. The one-person target was selected in 87 cycles, in
+three runs of 6, 25 and 56 cycles separated by two 15-cycle intervals of
+`TARGET_UNAVAILABLE`. Of the 87 mask-depth evaluations, 60 were coherent and
+27 were refused by the existing depth MAD gate. This shows loss and renewed
+segmentation selection, but **not** verified Shadow reacquisition: no cycle
+produced a Shadow track or FOLLOW decision.
+
+In all 87 selected-target cycles the pinned v3 detector reported two
+above-threshold boxes while the COCO instance selector reported one eligible
+person. The v3-to-mask adapter therefore refused all of them, as required;
+the existing bridge journal lacks the v3 box coordinates and scores needed
+to distinguish duplicate detection from a second target or background
+false positive. All 117 camera decisions were PAUSE. Independently, both
+driver-declared SOE-to-bridge-decision age distributions exceed the 500 ms
+experimental limit on every cycle: AR median/max 668/757 ms, OV 668/769 ms.
+The selected-target host-processing median was 676 ms, range 594–771 ms;
+no-target median 567 ms, range 507–658 ms. This is the **new v3 + mask**
+path, not a reversal of the earlier, separate sub-500 ms fast mask preview.
+The last `CANCELLED_SHUTDOWN` cycle is outside the received bridge journal
+and cannot stand in for the steady run.
+
+Next motor-off diagnostic: record compact v3 boxes/confidences on every
+cycle and its per-cycle inference duration, then distinguish duplicate
+boxes from real second-person evidence. Profile the added v3 stage and
+restore the decision-age budget through a measured change, without raising
+the 500 ms limit or bypassing ambiguous detections. Do not enable UART
+motor execution from this journal.

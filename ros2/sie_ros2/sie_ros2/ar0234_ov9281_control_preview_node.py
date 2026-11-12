@@ -334,7 +334,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._stage_timings = None
         stamp = datetime.now(timezone.utc)
         cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
-        rgb_future=None;rgb_async_times={};v3_future=None
+        rgb_future=None;rgb_async_times={};v3_future=None;v3_async_times={}
         if isinstance(self.ar_capture,LatestV4L2Capture):
             stage=time.monotonic()
             try:
@@ -352,8 +352,13 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         if getattr(self, "_shadow_v3_mask_match", False) and ar is not None:
             if isinstance(ar, bytes):
                 raise ValueError("v3-to-mask binding requires decoded current RGB")
-            v3_future = self._v3_worker.submit(self.observer.observe, ar,
-                captured_at_utc=stamp, cycle_id=cycle_id)
+            def observe_v3_current_frame():
+                v3_async_times["start"] = time.monotonic()
+                try:
+                    return self.observer.observe(ar, captured_at_utc=stamp, cycle_id=cycle_id)
+                finally:
+                    v3_async_times["end"] = time.monotonic()
+            v3_future = self._v3_worker.submit(observe_v3_current_frame)
         if getattr(self,"_overlap_stereo_decode",False) and ar is not None:
             stage=time.monotonic()
             rgb_future=self._perception_worker.submit(self._infer_current_segmentation,cycle_id,ar,rgb_async_times)
@@ -651,9 +656,24 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     "definition":"RGB RPC overlaps foreground decode of frozen stereo packet; exclusive foreground timers do not sum worker wall duration"}
             if v3_future is not None:
                 try:
-                    v3_future.result()
+                    v3_result = v3_future.result()
+                    audit["shadow_v3_observation_diagnostic"] = {
+                        "source_cycle_id": v3_result.get("source_cycle_id"),
+                        "model_sha256": v3_result.get("model_sha256"),
+                        "target_status": v3_result.get("target_status"),
+                        "detection_count": v3_result.get("detection_count"),
+                        "detections": [
+                            {"bbox_xyxy_px": detection.get("bbox_xyxy_px"),
+                             "confidence": detection.get("confidence")}
+                            for detection in v3_result.get("detections", [])
+                        ],
+                        "scope": "DIAGNOSTIC_ONLY; boxes are not instance masks",
+                    }
                 except Exception as error:
                     audit["shadow_v3_error"] = type(error).__name__
+                if "start" in v3_async_times and "end" in v3_async_times:
+                    audit["shadow_v3_inference_s"] = (
+                        v3_async_times["end"] - v3_async_times["start"])
             if self._existing_static_gate is not None and (
                     "existing_profile_static_gate" not in audit
                     or audit["status"] in ("CANCELLED_SHUTDOWN", "PROCESSING_REFUSED")):
