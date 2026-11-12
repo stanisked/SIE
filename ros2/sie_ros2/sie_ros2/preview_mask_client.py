@@ -233,6 +233,15 @@ class PreviewMaskClient:
                     front.get('profile_sha256')!=profile_hash(front_profile) or
                     front.get('distance_from_front_m') is not None or front.get('actuator_access') is not False):
                 raise ValueError('front geometry current-frame/profile binding mismatch')
+            layer=result.get('candidate_layer_front_geometry')
+            if layer is not None and (layer.get('provenance')!=expected or
+                    layer.get('profile_sha256')!=front['profile_sha256'] or
+                    layer.get('point_set')!='NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY' or
+                    layer.get('semantic_ownership_verified') is not False or
+                    layer.get('point_count')!=(result.get('mask_depth') or {}).get('candidate_sample_count') or
+                    layer.get('distance_from_front_m') is not None or
+                    layer.get('actuator_access') is not False):
+                raise ValueError('candidate layer current-frame/profile binding mismatch')
         result['mask_s']=segmentation.get('mask_s')
         result['inference_round_trip_s']=segmentation.get('round_trip_s')
         result['round_trip_scope']='FUSION_ONLY_AFTER_SEGMENTATION'

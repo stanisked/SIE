@@ -117,6 +117,7 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
     shape = audit.get("shape_diagnostic") or {}
     masked = shape.get("mask_depth") or {}
     front = shape.get("front_geometry") or {}
+    candidate_front = shape.get("candidate_layer_front_geometry") or {}
     selected_instance = (audit.get("ar0234_dynamic_target") or {}).get("candidate") or {}
     v3_diagnostic = audit.get("shadow_v3_observation_diagnostic") or {}
     timestamp = audit.get("timestamp")
@@ -146,6 +147,8 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "associated_confidence": (audit.get("association") or {}).get("confidence"),
         "mask_status": masked.get("status"),
         "mask_candidate_samples": masked.get("candidate_sample_count"),
+        "mask_depth_layers": masked.get("depth_layers"),
+        "mask_candidate_mad_m": masked.get("candidate_mad_m"),
         "mask_sha256": shape.get("mask_sha256"),
         "segmentation_model_sha256": shape.get("model_sha256"),
         "track_id": (audit.get("shadow_track_confirmation") or {}).get("track_id"),
@@ -158,7 +161,12 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "selected_mask_instance_bbox_xyxy_px": selected_instance.get("bbox_xyxy_px"),
         "selected_mask_instance_confidence": selected_instance.get("confidence"),
         "front_known_p05_m": (front.get("known_term_m") or {}).get("p05"),
+        "front_known_median_m": (front.get("known_term_m") or {}).get("median"),
         "front_point_set": front.get("point_set"),
+        "candidate_front_known_p05_m": (candidate_front.get("known_term_m") or {}).get("p05"),
+        "candidate_front_known_median_m": (candidate_front.get("known_term_m") or {}).get("median"),
+        "candidate_front_point_count": candidate_front.get("point_count"),
+        "candidate_front_point_set": candidate_front.get("point_set"),
         "depth_percentiles_m": pre_range.get("depth_percentiles_m"),
         "capture_to_receive_s": age_s,
         "host_processing_s": (audit.get("processing_timing") or {}).get("host_capture_start_to_result_ready_s"),

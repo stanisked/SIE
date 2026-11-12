@@ -64,3 +64,21 @@ def test_preview_preserves_stereo_refusal_and_capture_latency():
     assert result["capture_to_receive_s"] == 1.
     assert result["decision"] == "PAUSE"
     assert result["semantic_source"] is None
+
+
+def test_preview_keeps_all_points_and_numeric_candidate_separate():
+    row=sample()
+    row['shape_diagnostic']={
+        'mask_depth':{'depth_layers':[{'sample_count':120,'median_depth_m':1.2},
+                                      {'sample_count':600,'median_depth_m':2.4}],
+                      'candidate_sample_count':600,'candidate_mad_m':.02},
+        'front_geometry':{'point_set':'ALL_CURRENT_MASK_OWNED_STEREO_POINTS',
+                          'known_term_m':{'p05':.95,'median':2.1}},
+        'candidate_layer_front_geometry':{
+            'point_set':'NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY',
+            'point_count':600,'known_term_m':{'p05':2.1,'median':2.11}}}
+    result=preview_record(row,convert(row),now_s=20.)
+    assert result['front_known_p05_m']==.95
+    assert result['candidate_front_known_p05_m']==2.1
+    assert result['candidate_front_point_count']==600
+    assert result['mask_depth_layers']==row['shape_diagnostic']['mask_depth']['depth_layers']

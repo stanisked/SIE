@@ -91,3 +91,29 @@ With the new guard, the same records give 21
 target-unavailable refusals, and 122 PAUSE. This verifies the refusal on
 recorded inputs, not live Pi behavior. No new camera or motor run is needed
 to prove the original point-set mismatch.
+
+## Local candidate-layer diagnostic after the archived replay
+
+The current working candidate adds a second front diagnostic derived from the
+**exact numerical sample indices** of the one plausible depth group. The
+existing `front_geometry` remains the all-mask-owned-point result and retains
+its `ALL_CURRENT_MASK_OWNED_STEREO_POINTS` marker. The new
+`candidate_layer_front_geometry` has its own point count, front p05/median,
+same-cycle mask/calibration provenance, and the explicit marker
+`NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY`. It is absent when there is no
+unique plausible group. The bridge journal records both point sets, their
+front summaries, the candidate MAD and the supported depth groups.
+
+The public depth report is unchanged for existing callers. The adapter does
+not consume the new candidate front as a range, so the current producer still
+leads to `FRONT_LAYER_BINDING_UNVERIFIED` and PAUSE. Selecting the numerical
+depth group does **not** establish physical person ownership or remove nearer
+obstacle evidence. The 2026-11-12 archived JSON files lack the source arrays,
+so this implementation cannot be retroactively applied to those frames.
+
+Local synthetic two-layer checks and the affected preview, ownership, front,
+adapter, bridge and depth tests passed (41 tests, 15 subtests). No Pi latency,
+camera behavior or physical distance was measured for this change. On the next
+camera-only Pi run, retain same-cycle source RGB and stereo/disparity arrays
+for selected disagreement/refusal cycles and compare both front values with
+the actual image. Do not repeat the old run to rediscover its proven mismatch.

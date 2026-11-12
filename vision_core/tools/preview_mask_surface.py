@@ -7,7 +7,9 @@ import cv2
 import numpy as np
 from compare_shadow_mask_depth_median import project, owned, in_roi
 from analyze_shadow_local_surfaces import coarse_coverage
-from vision_core.person_localization.instance_mask_stereo_fusion import masked_depth_hypothesis, depth_from_owned_samples
+from vision_core.person_localization.instance_mask_stereo_fusion import (
+    masked_depth_hypothesis,
+    depth_from_owned_samples_with_candidate_indices)
 from vision_core.person_localization.local_surface_diagnostic import analyze_local_surfaces
 
 
@@ -56,7 +58,7 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
     if stride!=int(4*scale) or not np.isfinite(fb) or fb<=0:raise ValueError('invalid prepared geometry metadata')
     # One equivalent 5x5 constant-zero erosion and one ownership selection.
     # Reuse them for depth statistics and (when scheduled) local-fit inputs.
-    selected = interior = None
+    selected = interior = candidate_indices = None
     if ownership_backend == "reference_numpy":
         in_box = in_roi(xy, roi)
         depth = masked_depth_hypothesis(xy[in_box], z[in_box], mask)
@@ -64,8 +66,8 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
         interior = cv2.erode(mask.astype(np.uint8), np.ones((5,5),np.uint8),
                              borderType=cv2.BORDER_CONSTANT, borderValue=0)
         selected = owned(xy, interior, roi)
-        depth = depth_from_owned_samples(z[selected], int(np.count_nonzero(mask)),
-                                         int(np.count_nonzero(interior)))
+        depth, candidate_indices = depth_from_owned_samples_with_candidate_indices(
+            z[selected], int(np.count_nonzero(mask)), int(np.count_nonzero(interior)))
     fast=None
     if fast_local:
         import time
@@ -78,7 +80,7 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
             stride=stride,tile_px=int(32*scale))
         fast['fit_s']=time.monotonic()-started
         fast['rgb_coverage_status']='NOT_COMPUTED_IN_FAST_CURRENT_FRAME_PATH'
-    front=None
+    front=layer_front=None
     if front_geometry is not None:
         import time
         from vision_core.person_localization.robot_front_geometry import describe_front
@@ -90,9 +92,25 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
             front_geometry['profile'],scale=scale,source_depth_status=depth.get('status'))
         front['point_set']='ALL_CURRENT_MASK_OWNED_STEREO_POINTS'
         front['processing_s']=time.monotonic()-started
+        if candidate_indices is None:
+            check, candidate_indices = depth_from_owned_samples_with_candidate_indices(
+                z[selected], int(np.count_nonzero(mask)), int(np.count_nonzero(interior)))
+            if check != depth:
+                raise ValueError('reference and current owned depth layers disagree')
+        if len(candidate_indices):
+            owned_u,owned_v,owned_z=u[selected],v[selected],z[selected]
+            layer_started=time.monotonic()
+            layer_front=describe_front(owned_u[candidate_indices],owned_v[candidate_indices],
+                owned_z[candidate_indices],front_geometry['P1'],front_geometry['R1'],
+                front_geometry['profile'],scale=scale,source_depth_status=depth.get('status'))
+            # Numerical depth grouping alone cannot identify the physical person.
+            layer_front['point_set']='NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY'
+            layer_front['semantic_ownership_verified']=False
+            layer_front['processing_s']=time.monotonic()-layer_started
     def attach(result):
         if fast is not None:result['fast_local_consistency']=fast
         if front is not None:result['front_geometry']=front
+        if layer_front is not None:result['candidate_layer_front_geometry']=layer_front
         return result
     if defer_local and not prepare_local:
         return attach(diagnostic_result(depth,scale,lower,upper,

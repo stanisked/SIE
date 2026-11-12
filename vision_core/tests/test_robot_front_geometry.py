@@ -8,7 +8,8 @@ from types import SimpleNamespace
 import unittest
 import numpy as np
 from vision_core.person_localization.robot_front_geometry import load_profile, forward_terms, describe_front, profile_hash
-from vision_core.person_localization.instance_mask_stereo_fusion import depth_from_owned_samples
+from vision_core.person_localization.instance_mask_stereo_fusion import (
+    depth_from_owned_samples_with_candidate_indices)
 
 ROOT=Path(__file__).resolve().parents[2]
 PROFILE=ROOT/'vision_core/config/diagnostics/robot_front_mount_operator_v1.json'
@@ -58,7 +59,7 @@ class FrontGeometryTests(unittest.TestCase):
         self.assertNotEqual(profile_hash(profile()),profile_hash(changed))
 
 class FrontIntegrationTests(unittest.TestCase):
-    def client(self, corrupt=False):
+    def client(self, corrupt=False, corrupt_layer=False):
         spec=importlib.util.spec_from_file_location('front_client',ROOT/'ros2/sie_ros2/sie_ros2/preview_mask_client.py')
         m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
         c=object.__new__(m.PreviewMaskClient);c.model_sha256='model'
@@ -68,8 +69,16 @@ class FrontIntegrationTests(unittest.TestCase):
             provenance={'source_cycle_id':cycle,'mask_sha256':'mask','instance_index':0,'model_sha256':'model',
                         'rgb_arrays_sha256':'rgb','fusion_arrays_sha256':'fusion'}
             if corrupt:provenance['source_cycle_id']='old'
-            return {'arrays_sha256':'fusion','mask_sha256':'mask','front_geometry':{
-                'provenance':provenance,'profile_sha256':profile_hash(profile()),'distance_from_front_m':None,'actuator_access':False}}
+            layer_provenance={**provenance,'source_cycle_id':'old' if corrupt_layer else cycle}
+            return {'arrays_sha256':'fusion','mask_sha256':'mask',
+                'mask_depth':{'candidate_sample_count':120},'front_geometry':{
+                    'provenance':provenance,'profile_sha256':profile_hash(profile()),
+                    'distance_from_front_m':None,'actuator_access':False},
+                'candidate_layer_front_geometry':{
+                    'provenance':layer_provenance,'profile_sha256':profile_hash(profile()),
+                    'point_set':'NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY',
+                    'semantic_ownership_verified':False,'point_count':120,
+                    'distance_from_front_m':None,'actuator_access':False}}
         c._array_request=request
         return c
     def test_selected_mask_cycle_binding_is_checked(self):
@@ -80,12 +89,15 @@ class FrontIntegrationTests(unittest.TestCase):
         self.assertIsNone(r['front_geometry']['distance_from_front_m'])
         with self.assertRaisesRegex(ValueError,'binding mismatch'):
             self.client(corrupt=True).evaluate_selected(*args,scale=.5,front_profile=profile())
+        with self.assertRaisesRegex(ValueError,'candidate layer.*binding mismatch'):
+            self.client(corrupt_layer=True).evaluate_selected(*args,scale=.5,front_profile=profile())
     def test_optional_front_math_keeps_original_depth_and_owned_selection(self):
         # Exercise actual evaluate_prepared/diagnostic_result with mocked image ownership.
         # No OpenCV behavior is claimed by this test.
         path=ROOT/'vision_core/tools/preview_mask_surface.py';tree=ast.parse(path.read_text())
         funcs=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in {'evaluate_prepared','diagnostic_result'}]
-        ns={'np':np,'depth_from_owned_samples':depth_from_owned_samples,
+        ns={'np':np,'depth_from_owned_samples_with_candidate_indices':
+            depth_from_owned_samples_with_candidate_indices,
             'cv2':SimpleNamespace(erode=lambda a,*x,**k:a,BORDER_CONSTANT=0),
             'owned':lambda xy,interior,roi:np.arange(len(xy))%2==0}
         exec(compile(ast.Module(body=funcs,type_ignores=[]),str(path),'exec'),ns)

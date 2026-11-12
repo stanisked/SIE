@@ -14,7 +14,8 @@ import numpy as np
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'vision_core/tools'))
 sys.path.insert(0,str(ROOT/'ros2/sie_ros2/sie_ros2'))
-from preview_mask_surface import evaluate
+from preview_mask_surface import evaluate, evaluate_prepared
+from vision_core.person_localization.robot_front_geometry import load_profile
 from benchmark_stereo_resolution import scaled_configs, paired_delta
 from benchmark_stereo_sgbm_parallel import runtime_parameters, compute_pair, consistency
 from preview_mask_client import PreviewMaskClient
@@ -32,6 +33,43 @@ def calibration(w=128,h=96):
 
 
 class PreviewMaskSurfaceTests(unittest.TestCase):
+    def test_candidate_front_stays_separate_from_nearer_mask_owned_layer(self):
+        # 120 near points are a supported layer but fail the 25% support rule
+        # against 600 far points. The all-point p05 must not become a range.
+        near, far = 120, 600
+        z=np.r_[np.full(near,1.2),np.full(far,2.4)]
+        n=len(z)
+        points={'u':np.full(n,64.),'v':np.full(n,48.),'d':np.full(n,30.),
+                'z':z,'xy':np.tile([100.,100.],(n,1)),
+                'fb':np.asarray(60.),'stride':np.asarray(4),'scale':np.asarray(1.),
+                'lower':np.asarray(.5),'upper':np.asarray(4.5)}
+        mask=np.ones((1200,1920),bool)
+        mount=load_profile(ROOT/'vision_core/config/diagnostics/robot_front_mount_operator_v1.json')
+        args={'profile':mount,'P1':calibration()['P1'],'R1':np.eye(3)}
+        result,_=evaluate_prepared(points,mask,[0,0,1920,1200],defer_local=True,
+                                   prepare_local=False,front_geometry=args)
+        depth=result['mask_depth'];front=result['front_geometry']
+        candidate=result['candidate_layer_front_geometry']
+        self.assertEqual(depth['status'],'COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY')
+        self.assertEqual(depth['candidate_sample_count'],far)
+        self.assertEqual(front['point_count'],n)
+        self.assertEqual(candidate['point_count'],far)
+        self.assertLess(front['known_term_m']['p05'],candidate['known_term_m']['p05']-.5)
+        self.assertEqual(front['point_set'],'ALL_CURRENT_MASK_OWNED_STEREO_POINTS')
+        self.assertEqual(candidate['point_set'],'NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY')
+        self.assertFalse(candidate['semantic_ownership_verified'])
+        self.assertFalse(candidate['actuator_access'])
+        without,_=evaluate_prepared(points,mask,[0,0,1920,1200],defer_local=True,
+                                    prepare_local=False)
+        self.assertEqual(without['mask_depth'],depth)
+        # Two equally supported surfaces have no numerical candidate.
+        points['z']=np.r_[np.full(360,1.2),np.full(360,2.4)]
+        ambiguous,_=evaluate_prepared(points,mask,[0,0,1920,1200],defer_local=True,
+                                      prepare_local=False,front_geometry=args)
+        self.assertEqual(ambiguous['mask_depth']['status'],
+                         'MULTIPLE_OR_NO_PLAUSIBLE_DEPTH_LAYERS')
+        self.assertNotIn('candidate_layer_front_geometry',ambiguous)
+
     def test_scaled_constant_plane_preserves_metric_depth_and_no_duplicate_samples(self):
         cal=calibration();mask=np.ones((1200,1920),bool)
         counts=[]

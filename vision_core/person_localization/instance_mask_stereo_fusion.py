@@ -77,6 +77,24 @@ def depth_from_owned_samples(sample, mask_pixel_count, interior_pixel_count, *,
     Shared by the reference NumPy selector and the equivalent OpenCV selector.
     Input sample order is preserved; no filtering, clipping or new thresholds.
     """
+    report, _ = depth_from_owned_samples_with_candidate_indices(
+        sample, mask_pixel_count, interior_pixel_count,
+        minimum_samples=minimum_samples, depth_gap_m=depth_gap_m,
+        relative_depth_gap=relative_depth_gap,
+        minimum_layer_support_fraction=minimum_layer_support_fraction,
+        maximum_depth_mad_m=maximum_depth_mad_m)
+    return report
+
+
+def depth_from_owned_samples_with_candidate_indices(sample, mask_pixel_count,
+    interior_pixel_count, *, minimum_samples=100, depth_gap_m=.15,
+    relative_depth_gap=.04, minimum_layer_support_fraction=.25,
+    maximum_depth_mad_m=.05):
+    """Return the unchanged depth report and indices into its owned sample array.
+
+    Indices identify the one plausible depth group, even if its MAD fails.
+    They establish numerical group membership, not physical person ownership.
+    """
     sample=np.asarray(sample,dtype=np.float64)
     if sample.ndim!=1 or not np.isfinite(sample).all() or np.any(sample<=0):
         raise ValueError('owned samples must be finite positive one-dimensional depths')
@@ -91,8 +109,9 @@ def depth_from_owned_samples(sample, mask_pixel_count, interior_pixel_count, *,
         "diagnostic_only": True,
         "semantic_ownership_verified": False,
     }
+    no_candidate = np.empty(0, dtype=np.intp)
     if sample.size < minimum_samples:
-        return report
+        return report, no_candidate
     order = np.argsort(sample)
     ordered = sample[order]
     gap = max(depth_gap_m, relative_depth_gap * float(np.median(ordered)))
@@ -103,24 +122,26 @@ def depth_from_owned_samples(sample, mask_pixel_count, interior_pixel_count, *,
             continue
         values = sample[indices]
         median = float(np.median(values))
-        layers.append({"sample_count": int(len(indices)), "median_depth_m": median,
-                       "mad_m": float(np.median(np.abs(values - median)))})
-    report["depth_layers"] = layers
+        layers.append(({"sample_count": int(len(indices)), "median_depth_m": median,
+                        "mad_m": float(np.median(np.abs(values - median)))}, indices))
+    report["depth_layers"] = [layer for layer, _ in layers]
     if not layers:
         report["status"] = "NO_SUPPORTED_DEPTH_LAYER"
-        return report
+        return report, no_candidate
     support_limit = max(minimum_samples, math.ceil(
-        max(layer["sample_count"] for layer in layers) * minimum_layer_support_fraction))
-    plausible = [layer for layer in layers if layer["sample_count"] >= support_limit]
+        max(layer["sample_count"] for layer, _ in layers) * minimum_layer_support_fraction))
+    plausible = [(layer, indices) for layer, indices in layers
+                 if layer["sample_count"] >= support_limit]
     report["plausible_layer_count"] = len(plausible)
     if len(plausible) != 1:
         report["status"] = "MULTIPLE_OR_NO_PLAUSIBLE_DEPTH_LAYERS"
-        return report
-    report["candidate_depth_m"] = plausible[0]["median_depth_m"]
-    report["candidate_mad_m"] = plausible[0]["mad_m"]
-    report["candidate_sample_count"] = plausible[0]["sample_count"]
-    if plausible[0]["mad_m"] > maximum_depth_mad_m:
+        return report, no_candidate
+    candidate, candidate_indices = plausible[0]
+    report["candidate_depth_m"] = candidate["median_depth_m"]
+    report["candidate_mad_m"] = candidate["mad_m"]
+    report["candidate_sample_count"] = candidate["sample_count"]
+    if candidate["mad_m"] > maximum_depth_mad_m:
         report["status"] = "DEPTH_MAD_EXCEEDED"
-        return report
+        return report, candidate_indices
     report["status"] = "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY"
-    return report
+    return report, candidate_indices

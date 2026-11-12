@@ -195,7 +195,8 @@ def main():
                         result['surface_s']=time.monotonic()-started
                     result.update(mask=info,
                                   mask_sha256=hashlib.sha256(mask.tobytes()).hexdigest())
-                for feature in ('fast_local_consistency','front_geometry'):
+                for feature in ('fast_local_consistency','front_geometry',
+                                'candidate_layer_front_geometry'):
                     if feature in result:
                         result[feature]['provenance']={
                             'source_cycle_id':request['cycle_id'],'mask_sha256':result['mask_sha256'],
