@@ -114,3 +114,8 @@ and these results do not establish stable target-owned range or safe floor
 following. Inspect source frames and full per-cycle diagnostics before
 considering a continuity policy; do not adjust MAD or activate motors from
 these results.
+In this saved bridge journal, the no-target rows were incorrectly labeled
+`V3_MASK_BINDING` by a preview fallback even though v3 inference was absent.
+The old summary also counted missing v3 data as zero boxes. These bookkeeping
+fields have been corrected for future journals; the decisions and driver
+timestamps above are unaffected.

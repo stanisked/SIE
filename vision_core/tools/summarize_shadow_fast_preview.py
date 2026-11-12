@@ -44,7 +44,9 @@ def summarize(rows: list[dict]) -> dict:
         "v3_detection_counts": dict(Counter(r.get("v3_detection_count") for r in cycles)),
         "v3_raw_detection_counts": dict(Counter(r.get("v3_raw_detection_count")
                                                  if r.get("v3_raw_detection_count") is not None
-                                                 else len(r.get("v3_detections") or [])
+                                                 else (len(r["v3_detections"])
+                                                       if isinstance(r.get("v3_detections"), list)
+                                                       else None)
                                                  for r in cycles)),
         "v3_inference": time_stats("v3_inference_s"),
         "host_processing": time_stats("host_processing_s"),

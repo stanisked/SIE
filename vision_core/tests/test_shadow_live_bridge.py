@@ -63,3 +63,4 @@ def test_preview_preserves_stereo_refusal_and_capture_latency():
     assert result["lr_samples"] == 300
     assert result["capture_to_receive_s"] == 1.
     assert result["decision"] == "PAUSE"
+    assert result["semantic_source"] is None

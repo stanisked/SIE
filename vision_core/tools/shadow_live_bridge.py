@@ -153,7 +153,7 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "v3_detection_count": (audit.get("shadow_v3_mask_match") or {}).get("v3_detection_count"),
         "v3_raw_detection_count": v3_diagnostic.get("detection_count"),
         "v3_detections": v3_diagnostic.get("detections"),
-        "semantic_source": audit.get("shadow_semantic_source") or "V3_MASK_BINDING",
+        "semantic_source": audit.get("shadow_semantic_source"),
         "v3_inference_s": audit.get("shadow_v3_inference_s"),
         "selected_mask_instance_bbox_xyxy_px": selected_instance.get("bbox_xyxy_px"),
         "selected_mask_instance_confidence": selected_instance.get("confidence"),
@@ -244,6 +244,8 @@ def main() -> None:
                     row = preview_record(audit, observation, now_s=now,
                         received_utc=utc, minimum_confidence=args.minimum_confidence)
                     row.update(source=args.source, adapter_reason=refusal,
+                        semantic_source=(args.semantic_source if args.source == "fast_mask"
+                                         else "dynamic_audit"),
                         decision_monotonic_s=now,
                         driver_timestamp_s={k: v.get("driver_timestamp_s") for k, v in
                             ((audit or {}).get("frame_freshness") or {}).get("frames", {}).items()
