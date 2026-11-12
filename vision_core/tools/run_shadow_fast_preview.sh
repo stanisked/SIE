@@ -9,10 +9,16 @@ segmenter_python=/home/elwis/dev_ws/runtime_envs/sie_seg_onnx_benchmark/bin/pyth
 model=/home/elwis/.local/state/sie/evidence/segmentation_input_size_20261015_123033/input_256x384/checkpoint.onnx
 report=/home/elwis/.local/state/sie/evidence/segmentation_input_size_20261015_123033/comparison.json
 v3="${SHADOW_RGB_MODEL_PATH:-}"
+semantic_source="${SHADOW_FAST_SEMANTIC_SOURCE:-v3_mask_binding}"
+case "$semantic_source" in
+  v3_mask_binding) shadow_parameter='preview_shadow_v3_mask_match:=true' ;;
+  segmentation_mask) shadow_parameter='preview_shadow_segmentation_input:=true' ;;
+  *) echo "Unsupported Shadow semantic source: $semantic_source" >&2; exit 2 ;;
+esac
 [[ -n "$v3" ]] || { echo 'Set SHADOW_RGB_MODEL_PATH to reviewed v3 ONNX' >&2; exit 2; }
 for arg in "$@"; do
   case "$arg" in
-    --execute|--source|--source=*|--journal|--journal=*|--segmentation-model-sha256|--segmentation-model-sha256=*)
+    --execute|--source|--source=*|--journal|--journal=*|--semantic-source|--semantic-source=*|--segmentation-model-sha256|--segmentation-model-sha256=*)
       echo "Unsupported preview argument: $arg" >&2; exit 2 ;;
   esac
 done
@@ -31,7 +37,7 @@ evidence="/home/elwis/.local/state/sie/evidence/shadow_fast_$(date +%Y%m%d_%H%M%
 mkdir -p "$evidence"
 "$runtime" -c 'from sie_ros2.ar0234_ov9281_control_preview_node import main; main()' \
   --ros-args -p project_root:="$PWD" -p model_path:="$v3" -p model_version:=v3 \
-  -p confidence_threshold:=0.40 -p preview_shadow_v3_mask_match:=true \
+  -p confidence_threshold:=0.40 -p "$shadow_parameter" \
   -p ar_intrinsic:=/home/elwis/dev_ws/runtime_artifacts/ar0234_intrinsic_v5_final_20260910/calibration_fullres.json \
   -p stereo_calibration:=/home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz \
   -p activation_profile:=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/ar0234_ov9281_decision_chain_activation.json \
@@ -50,6 +56,7 @@ mkdir -p "$evidence"
 camera_pid=$!
 trap 'kill -INT "$camera_pid" 2>/dev/null || true; wait "$camera_pid" 2>/dev/null || true; rm -rf -- "$native_dir"' EXIT
 "$runtime" vision_core/tools/shadow_live_bridge.py --source fast_mask \
+  --semantic-source "$semantic_source" \
   --segmentation-model-sha256 "$(sha256sum "$model" | cut -d ' ' -f 1)" \
   --journal "$evidence/bridge.jsonl" "$@"
 "$runtime" vision_core/tools/summarize_shadow_fast_preview.py "$evidence/bridge.jsonl"

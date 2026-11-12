@@ -67,7 +67,38 @@ def convert(row, now=10.):
         expected_segmentation_model_sha256="seg-model")
 
 
+def convert_mask_only(row, now=10.):
+    return from_control_preview(row, now_s=now,
+        rim_forward_of_optical_center_m=.0125,
+        expected_front_profile_sha256=front_profile_sha256(),
+        expected_segmentation_model_sha256="seg-model",
+        semantic_source="segmentation_mask")
+
+
 class FastAdapterTests(unittest.TestCase):
+    def test_separate_segmentation_semantics_has_explicit_provenance(self):
+        row = source()
+        row.pop("shadow_v3_mask_match")
+        row["shadow_semantic_source"] = "COCO_CURRENT_INSTANCE_MASK"
+        observation, reason = convert_mask_only(row)
+        self.assertEqual(reason, "CURRENT_FAST_MASK_OBSERVATION")
+        self.assertIsNotNone(observation.target)
+        self.assertIsNone(convert(row)[0].target)
+        row.pop("shadow_semantic_source")
+        self.assertIsNone(convert_mask_only(row)[0].target)
+
+    def test_segmentation_semantics_pauses_for_two_instances_or_age(self):
+        row = source()
+        row.pop("shadow_v3_mask_match")
+        row["shadow_semantic_source"] = "COCO_CURRENT_INSTANCE_MASK"
+        row["segmentation_observation"]["instances"].append(
+            {"instance_index": 1, "confidence": .8})
+        row["segmentation_observation"]["instance_mask_sha256"].append("second")
+        self.assertIsNone(convert_mask_only(row)[0].target)
+        row["segmentation_observation"]["instances"].pop()
+        row["segmentation_observation"]["instance_mask_sha256"].pop()
+        self.assertIsNone(convert_mask_only(row, now=10.51)[0].target)
+
     def test_exact_cycle_yields_one_target_and_front_range(self):
         observation, reason = convert(source())
         self.assertEqual(reason, "CURRENT_FAST_MASK_OBSERVATION")

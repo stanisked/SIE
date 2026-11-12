@@ -100,11 +100,16 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._rgb_backend = str(self.get_parameter("preview_rgb_backend").value)
         self.declare_parameter("preview_shadow_v3_mask_match", False)
         self._shadow_v3_mask_match = bool(self.get_parameter("preview_shadow_v3_mask_match").value)
+        self.declare_parameter("preview_shadow_segmentation_input", False)
+        self._shadow_segmentation_input = bool(self.get_parameter("preview_shadow_segmentation_input").value)
+        self._shadow_fast_input = self._shadow_v3_mask_match or self._shadow_segmentation_input
+        if self._shadow_v3_mask_match and self._shadow_segmentation_input:
+            raise ValueError("choose one Shadow semantic source")
         if self._rgb_backend not in ("two_model_reference", "single_segmentation"):
             raise ValueError("invalid preview RGB backend")
-        if self._shadow_v3_mask_match and (self._rgb_backend != "single_segmentation" or
-                                          self.model_version != "v3"):
-            raise ValueError("v3-to-mask binding requires pinned v3 and single segmentation")
+        if self._shadow_fast_input and (self._rgb_backend != "single_segmentation" or
+                                        self.model_version != "v3"):
+            raise ValueError("Shadow input requires pinned startup model and single segmentation")
         self._v3_worker = (ThreadPoolExecutor(max_workers=1, thread_name_prefix="sie-shadow-v3")
                            if self._shadow_v3_mask_match else None)
         if self._rgb_backend == "single_segmentation":
@@ -487,6 +492,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 audit.update(status="TARGET_UNAVAILABLE", reason=dynamic["reason"])
                 return
             candidate = dynamic["candidate"]
+            if getattr(self, "_shadow_segmentation_input", False):
+                audit["shadow_semantic_source"] = "COCO_CURRENT_INSTANCE_MASK"
             if getattr(self, "_shadow_v3_mask_match", False):
                 import hashlib
                 from vision_core.tools.shadow_fast_adapter import match_v3_to_mask_instance
@@ -603,9 +610,11 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if (not getattr(self, "_shadow_v3_mask_match", False) or
                     (audit.get("shadow_v3_mask_match") or {}).get("status") == "BOUND_TO_CURRENT_MASK_INSTANCE") and not any(key in audit for key in (
                     "dynamic_shadow_edge_override", "dynamic_shadow_geometry_override")) and (
+                    not getattr(self, "_shadow_fast_input", False) or
+                    len((segmentation or {}).get("instances") or []) == 1) and (
                     association is not None or (single and audit["shape_diagnostic"].get("mask_depth",{}).get("status")
                                                 == "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY")):
-                if getattr(self, "_shadow_v3_mask_match", False):
+                if getattr(self, "_shadow_fast_input", False):
                     centre = self.np.asarray([[[candidate["center_x_px"],
                                                  (candidate["bbox_xyxy_px"][1] +
                                                   candidate["bbox_xyxy_px"][3]) / 2]]],
@@ -618,7 +627,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 confirmation = self._confirm_current_target_track(candidate, observation)
                 # Publish the identity committed for this exact RGB/mask/stereo
                 # cycle. Depth is not persisted as a track attribute.
-                if getattr(self, "_shadow_v3_mask_match", False):
+                if getattr(self, "_shadow_fast_input", False):
                     audit["shadow_track_confirmation"] = confirmation
         except Exception as error:
             audit.update(status="PROCESSING_REFUSED", reason=type(error).__name__, error_detail=str(error)[:400], association=None)
@@ -630,7 +639,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 audit.update(status="CANCELLED_SHUTDOWN", reason="ROS_SHUTDOWN", association=None)
             # A gap or refused mask/stereo cycle breaks Shadow identity. Never
             # reuse a pre-loss track ID when a single person reappears.
-            if (getattr(self, "_shadow_v3_mask_match", False) and
+            if (getattr(self, "_shadow_fast_input", False) and
                     ("shadow_track_confirmation" not in audit or
                      audit.get("status") in ("PROCESSING_REFUSED", "CANCELLED_SHUTDOWN"))):
                 self._confirmed_target_track = None

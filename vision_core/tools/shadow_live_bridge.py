@@ -151,7 +151,9 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "track_id": (audit.get("shadow_track_confirmation") or {}).get("track_id"),
         "v3_mask_match": (audit.get("shadow_v3_mask_match") or {}).get("status"),
         "v3_detection_count": (audit.get("shadow_v3_mask_match") or {}).get("v3_detection_count"),
+        "v3_raw_detection_count": v3_diagnostic.get("detection_count"),
         "v3_detections": v3_diagnostic.get("detections"),
+        "semantic_source": audit.get("shadow_semantic_source") or "V3_MASK_BINDING",
         "v3_inference_s": audit.get("shadow_v3_inference_s"),
         "selected_mask_instance_bbox_xyxy_px": selected_instance.get("bbox_xyxy_px"),
         "selected_mask_instance_confidence": selected_instance.get("confidence"),
@@ -177,6 +179,8 @@ def main() -> None:
     parser.add_argument("--source", choices=("dynamic_audit", "fast_mask"),
                         default="dynamic_audit")
     parser.add_argument("--segmentation-model-sha256", default="")
+    parser.add_argument("--semantic-source", choices=("v3_mask_binding", "segmentation_mask"),
+                        default="v3_mask_binding")
     parser.add_argument("--execute", action="store_true",
                         help="Enable physical motion; without this flag only decisions are printed")
     args = parser.parse_args()
@@ -226,7 +230,8 @@ def main() -> None:
                             audit, now_s=time.monotonic(),
                             rim_forward_of_optical_center_m=args.front_rim_forward_of_optical_m,
                             expected_front_profile_sha256=profile_sha,
-                            expected_segmentation_model_sha256=args.segmentation_model_sha256)
+                            expected_segmentation_model_sha256=args.segmentation_model_sha256,
+                            semantic_source=args.semantic_source)
                     else:
                         observation = observation_from_audit(
                             audit, rim_forward_of_optical_center_m=args.front_rim_forward_of_optical_m,

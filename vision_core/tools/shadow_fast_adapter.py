@@ -80,9 +80,12 @@ def from_control_preview(audit: dict, *, now_s: float,
                          rim_forward_of_optical_center_m: float,
                          expected_front_profile_sha256: str,
                          expected_segmentation_model_sha256: str,
+                         semantic_source: str = "v3_mask_binding",
                          max_age_s: float = .5) -> tuple[ShadowObservation, str]:
     """Return current evidence or a precise PAUSE reason; no cached fallback."""
     empty = ShadowObservation(None, ())
+    if semantic_source not in ("v3_mask_binding", "segmentation_mask"):
+        raise ValueError("unsupported Shadow semantic source")
     if not isinstance(audit, dict):
         return empty, "AUDIT_UNAVAILABLE"
     if (type(rim_forward_of_optical_center_m) not in (int, float) or
@@ -119,6 +122,7 @@ def from_control_preview(audit: dict, *, now_s: float,
             not expected_segmentation_model_sha256 or
             seg.get("model_sha256") != expected_segmentation_model_sha256 or
             not isinstance(instances, list) or
+            len(instances) != 1 or
             not isinstance(mask_hashes, list) or
             type(person.get("instance_index")) is not int or
             not 0 <= person["instance_index"] < len(instances) or
@@ -133,13 +137,18 @@ def from_control_preview(audit: dict, *, now_s: float,
             not shape.get("mask_sha256") or
             shape.get("mask_sha256") != mask_hashes[person["instance_index"]] or
             not shape.get("arrays_sha256") or
-            v3.get("status") != "BOUND_TO_CURRENT_MASK_INSTANCE" or
-            v3.get("v3_model_sha256") != SHADOW_V3_SHA256 or
-            v3.get("source_cycle_id") != cid or
-            v3.get("source_rgb_arrays_sha256") != seg.get("arrays_sha256") or
-            not v3.get("rgb_payload_sha256") or
-            v3.get("rgb_payload_sha256") != seg.get("rgb_payload_sha256") or
-            v3.get("mask_instance_index") != person["instance_index"] or
+            (semantic_source == "v3_mask_binding" and (
+                audit.get("shadow_semantic_source") is not None or
+                v3.get("status") != "BOUND_TO_CURRENT_MASK_INSTANCE" or
+                v3.get("v3_model_sha256") != SHADOW_V3_SHA256 or
+                v3.get("source_cycle_id") != cid or
+                v3.get("source_rgb_arrays_sha256") != seg.get("arrays_sha256") or
+                not v3.get("rgb_payload_sha256") or
+                v3.get("rgb_payload_sha256") != seg.get("rgb_payload_sha256") or
+                v3.get("mask_instance_index") != person["instance_index"])) or
+            (semantic_source == "segmentation_mask" and (
+                audit.get("shadow_semantic_source") != "COCO_CURRENT_INSTANCE_MASK" or
+                audit.get("shadow_v3_mask_match") is not None)) or
             confirmation.get("state") != "CONFIRMED_BY_CURRENT_RGB_STEREO_ASSOCIATION" or
             confirmation.get("confirmed_observation_id") != f"segmentation-preview:{cid}:{person['instance_index']}" or
             not confirmation.get("track_id")):

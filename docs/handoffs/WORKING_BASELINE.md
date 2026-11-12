@@ -56,3 +56,25 @@ there was no accepted v3-to-mask match or Shadow track. Both driver-to-decision
 ages had about 668 ms median and exceeded 500 ms on every cycle. This is a
 new combined-path blocker, not a contradiction of the older mask-only
 sub-500 ms results. [Per-cycle findings](../diagnostics/shadow_uart_candidate_20261029.md#first-fast-shadow-pi-camera-only-journal-2026-11-12)
+
+**Second combined Pi run, 2026-11-12:** The 43 camera cycles from
+`shadow_fast_20261112_124510/bridge.jsonl` were all PAUSE. In 26 cycles the
+segmentation model found no person; in 17 it found one. The v3 detector
+reported a left-edge box in all 43 cycles, including all 26 no-person cycles,
+and an additional box over the segmented person in 15 cycles. The left-edge
+box cannot be declared a false positive without inspecting the RGB image.
+Its presence makes the strict v3-to-mask binding unavailable. v3 inference
+alone had a 490.44 ms median; driver-to-bridge-decision median was 551.13 ms
+for AR and 566.01 ms for OV. Every cycle exceeded 500 ms for at least one
+camera. No two-person scene was tested.
+
+**Next isolated test:** `vision_core/tools/run_shadow_fast_mask_preview.sh`
+uses the already reviewed COCO instance mask as the sole semantic source,
+with its own explicit source marker. It retains exact RGB/mask/stereo hashes,
+one-instance and confirmed-track requirements, front geometry, driver stamps
+and the 500 ms decision-age gate. It cannot execute motors. The v3-plus-mask
+launcher stays strict and separate. This mode needs a Pi run with a person
+appearing, disappearing and returning, followed by a two-person scene before
+any motor authorization. Record one RGB still of the left camera edge to
+explain the persistent v3 box. A fast mask-only age remains a diagnostic
+result, not a certified exposure-to-command age.
