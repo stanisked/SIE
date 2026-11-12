@@ -232,3 +232,22 @@ identity, two-person ambiguity, stale stamps and mismatched RGB/mask/front
 provenance. The established UART runner already sends steering updates under
 one active command ID and checks build/READY/zero PWM before START. No Pi
 camera, firmware, UART or motor execution occurred for this candidate.
+
+### Pi camera-only field protocol, prepared 2026-11-12
+
+The fast launcher checks the pinned v3 ONNX hash before camera startup and
+rejects motor or source overrides. Its segmentation request now overlaps the
+stereo decode, as in the previously measured fast preview. It prints a
+summary of cycle counts, mask/v3/adapter refusals, both driver-to-decision
+ages and two-person counts after the run; retain the full `bridge.jsonl` for
+chronological loss/reacquisition review. The summary never grants motion.
+
+Start with one person in the frame, briefly remove them, then let the same
+person reappear; finally place two people in view, including the nearer
+person on image right if possible. Record which interval is which. The
+current adapter deliberately refuses two eligible people; the older offline
+two-mask report passed both 50 mm MAD gates in only 1/19 saved frames, so
+nearest-person selection is not established. Use the new Pi evidence to
+decide whether the v3 + segmentation combination still meets the 500 ms
+experimental decision budget. The timestamp is the V4L2 driver's declared
+SOE; physical exposure timing remains independently unverified.

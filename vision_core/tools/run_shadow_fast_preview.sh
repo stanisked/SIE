@@ -10,9 +10,19 @@ model=/home/elwis/.local/state/sie/evidence/segmentation_input_size_20261015_123
 report=/home/elwis/.local/state/sie/evidence/segmentation_input_size_20261015_123033/comparison.json
 v3="${SHADOW_RGB_MODEL_PATH:-}"
 [[ -n "$v3" ]] || { echo 'Set SHADOW_RGB_MODEL_PATH to reviewed v3 ONNX' >&2; exit 2; }
+for arg in "$@"; do
+  case "$arg" in
+    --execute|--source|--source=*|--journal|--journal=*|--segmentation-model-sha256|--segmentation-model-sha256=*)
+      echo "Unsupported preview argument: $arg" >&2; exit 2 ;;
+  esac
+done
 for required in "$runtime" "$segmenter_python" "$model" "$report" "$v3"; do
   [[ -f "$required" ]] || { echo "Missing reviewed input: $required" >&2; exit 2; }
 done
+v3_sha=$(sha256sum "$v3" | cut -d ' ' -f 1)
+[[ "$v3_sha" = fccd45fbcf490134eb786ab3b38cf115dd03466edd85801ad44c8353f38549f5 ]] || {
+  echo "Shadow v3 ONNX SHA-256 mismatch: $v3_sha" >&2; exit 2;
+}
 export PYTHONPATH="$PWD/ros2/sie_ros2:$PWD/vision_core/tools:$PWD${PYTHONPATH:+:$PYTHONPATH}"
 export YOLO_AUTOINSTALL=false
 native_dir=$(mktemp -d /tmp/sie-shadow-native-XXXXXX)
@@ -30,6 +40,7 @@ mkdir -p "$evidence"
   -p preview_onnx_threads:=2 -p preview_rgb_backend:=single_segmentation \
   -p preview_rgb_transport:=mmap -p preview_local_surfaces_enabled:=false \
   -p preview_defer_local_surfaces:=true -p preview_capture_backend:=latest_v4l2 \
+  -p preview_overlap_stereo_decode:=true \
   -p preview_native_capture_executable:="$native_dir/capture" \
   -p preview_native_rgb_trigger:=true -p preview_target_crop:=true \
   -p preview_crop_lookup_backend:=blocked -p preview_stereo_mode:=half_640x400 \
@@ -41,3 +52,5 @@ trap 'kill -INT "$camera_pid" 2>/dev/null || true; wait "$camera_pid" 2>/dev/nul
 "$runtime" vision_core/tools/shadow_live_bridge.py --source fast_mask \
   --segmentation-model-sha256 "$(sha256sum "$model" | cut -d ' ' -f 1)" \
   --journal "$evidence/bridge.jsonl" "$@"
+"$runtime" vision_core/tools/summarize_shadow_fast_preview.py "$evidence/bridge.jsonl"
+echo "Evidence: $evidence"
