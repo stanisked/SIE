@@ -35,6 +35,11 @@ native_dir=$(mktemp -d /tmp/sie-shadow-native-XXXXXX)
 cc -std=c11 -O2 -Wall -Wextra -Werror vision_core/tools/stream_v4l2_mjpeg.c -o "$native_dir/capture"
 evidence="/home/elwis/.local/state/sie/evidence/shadow_fast_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$evidence"
+case "${SHADOW_CAPTURE_SNAPSHOTS:-0}" in
+  0) unset SIE_SHADOW_SOURCE_SNAPSHOTS ;;
+  1) export SIE_SHADOW_SOURCE_SNAPSHOTS=1 ;;
+  *) echo 'SHADOW_CAPTURE_SNAPSHOTS must be 0 or 1' >&2; exit 2 ;;
+esac
 "$runtime" -c 'from sie_ros2.ar0234_ov9281_control_preview_node import main; main()' \
   --ros-args -p project_root:="$PWD" -p model_path:="$v3" -p model_version:=v3 \
   -p confidence_threshold:=0.40 -p "$shadow_parameter" \
@@ -59,5 +64,11 @@ trap 'kill -INT "$camera_pid" 2>/dev/null || true; wait "$camera_pid" 2>/dev/nul
   --semantic-source "$semantic_source" \
   --segmentation-model-sha256 "$(sha256sum "$model" | cut -d ' ' -f 1)" \
   --journal "$evidence/bridge.jsonl" "$@"
+kill -INT "$camera_pid" 2>/dev/null || true
+wait "$camera_pid" 2>/dev/null || true
 "$runtime" vision_core/tools/summarize_shadow_fast_preview.py "$evidence/bridge.jsonl"
 echo "Evidence: $evidence"
+if [[ "${SHADOW_CAPTURE_SNAPSHOTS:-0}" = 1 ]]; then
+  "$runtime" vision_core/tools/summarize_shadow_source_snapshots.py \
+    "$evidence/bridge.jsonl" "$evidence/shadow-source-snapshots"
+fi

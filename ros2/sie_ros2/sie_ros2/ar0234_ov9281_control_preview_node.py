@@ -152,6 +152,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._perception_worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="sie-preview-stereo")
         self._cached_stereo = None
         self._writer = LatestDiagnosticWriter(self.evidence_dir / ("control-preview-" + self.run_id))
+        self._source_snapshot_writer = None
+        self._source_snapshot_failures = 0
         self.declare_parameter("preview_defer_local_surfaces", False)
         self._defer_local=bool(self.get_parameter("preview_defer_local_surfaces").value)
         self.declare_parameter("preview_local_surface_every_n_cycles", 1)
@@ -226,9 +228,15 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 self.ar_capture.release()
                 if isinstance(self.stereo_capture,LatestV4L2Capture):self.stereo_capture.release()
                 raise
+        if os.environ.get('SIE_SHADOW_SOURCE_SNAPSHOTS') == '1':
+            if not self._shadow_fast_input or self._capture_backend != 'latest_v4l2':
+                raise ValueError('source snapshots require current fast Shadow native capture')
+            from vision_core.person_localization.shadow_source_snapshot import LatestSourceSnapshotWriter
+            self._source_snapshot_writer = LatestSourceSnapshotWriter(
+                self.evidence_dir / 'shadow-source-snapshots')
         self.get_logger().info(
             f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; decode_overlap={self._overlap_stereo_decode}; original_rgb_jpeg={self._native_rgb_jpeg}; fresh_stereo_during_rgb={self._fresh_stereo_during_rgb}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; fast_local={self._fast_local_consistency}; immediate publish; "
-            "background compact journal; current mask/local diagnostics; no persistent images; no Measurement or motor command"
+            "background compact journal; current mask/local diagnostics; optional bounded source snapshots; no Measurement or motor command"
         )
 
     def _infer_current_segmentation(self,cycle_id,ar,times):
@@ -254,11 +262,15 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 if (capture.width,capture.height)!=(1920,1200) or not isinstance(payload,bytes) or not payload.startswith(b"\xff\xd8"):
                     raise ValueError("invalid original RGB JPEG packet")
                 self._native_capture_metadata[name]=metadata
+                if getattr(self,'_source_snapshot_writer',None) is not None:
+                    self._source_packets[name]=payload
                 return payload,round(metadata['driver_timestamp_s']*1e9)
             frame=self.cv2.imdecode(self.np.frombuffer(payload,dtype=self.np.uint8),self.cv2.IMREAD_COLOR)
             if frame is None or frame.shape!=(capture.height,capture.width,3):
                 raise ValueError("native JPEG decode size mismatch")
             self._native_capture_metadata[name]=metadata
+            if getattr(self,'_source_snapshot_writer',None) is not None:
+                self._source_packets[name]=payload
             return frame,round(metadata['driver_timestamp_s']*1e9)
         except Exception as error:
             self._native_capture_metadata[name]={"status":"CAPTURE_UNAVAILABLE","reason":type(error).__name__,"detail":str(error)[:300]}
@@ -331,8 +343,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         foreground={};events={}
         self._native_capture_metadata={}
         self._selected_native_packets={}
+        self._source_packets={}
         self._last_stereo_start=self._last_stereo_end=None
         self._cached_stereo = None
+        source_snapshot_payload=source_snapshot_disparity=source_snapshot_lr=source_snapshot_cal=None
         self._last_stereo_worker_timings = None
         # Parent LR code calls _timed_call/decorators. Never share a mutable
         # timing collector across its worker and the foreground.
@@ -582,13 +596,22 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                            "R":self.r_ar_to_left, "T":self.t_ar_to_left_m.reshape(3),
                            "K":self.k_ar, "D":self.d_ar, "size":self.stereo_size}
                     if single:
-                        audit["shape_diagnostic"] = client.evaluate_selected(cycle_id, current, cal,
+                        shape_result = client.evaluate_selected(cycle_id, current, cal,
                             candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
                             segmentation, scale=scale,
+                            **({'source_snapshot':True,'snapshot_periodic':self.sequence%10==0,
+                                'snapshot_reacquire':self._confirmed_target_track is None}
+                               if getattr(self,'_source_snapshot_writer',None) is not None else {}),
                             **({"fast_local":True} if getattr(self,"_fast_local_consistency",False) else {}),
                             **({"front_profile":self._front_profile} if getattr(self,"_front_profile",None) is not None else {}),
                             **({"defer_local":True, **({"prepare_local":False} if not local_scheduled else {})}
                                if getattr(self,"_defer_local",False) else {}))
+                        source_snapshot_payload=shape_result.pop('_shadow_source_mask_snapshot',None)
+                        if source_snapshot_payload is not None:
+                            source_snapshot_disparity=disparity
+                            source_snapshot_lr=lr
+                            source_snapshot_cal=cal
+                        audit["shape_diagnostic"] = shape_result
                         surface_job=audit["shape_diagnostic"].pop("_surface_job",None)
                         if not getattr(self,"_local_enabled",True):
                             if surface_job is not None:raise RuntimeError("unexpected disabled local job")
@@ -764,11 +787,42 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             audit.update(bound)
             audit["control_input_shadow"]["assessment_processing_s"] = time.monotonic() - control_started
             audit["control_input_shadow"]["freshness_basis"] = "driver age sampled before assessment; not exposure-to-command age"
+            if source_snapshot_payload is not None and rclpy.ok():
+                audit['source_snapshot_evidence']={
+                    'status':'REQUESTED_AFTER_PRIMARY_PUBLISH',
+                    'reason':source_snapshot_payload['reason'],
+                    'file':cycle_id+'.npz',
+                    'mask_sha256':source_snapshot_payload['mask_sha256'],
+                    'scope':'DIAGNOSTIC_ONLY; artifact presence verified after shutdown'}
             message = String()
             message.data = encode(audit)
             if rclpy.ok():
                 self.preview_publisher.publish(message)  # FIRST, before any journal disk write.
             self._writer.submit(audit)
+            if (source_snapshot_payload is not None and rclpy.ok() and
+                    self._source_snapshot_writer is not None):
+                try:
+                    shape=audit.get('shape_diagnostic') or {}
+                    self._source_snapshot_writer.submit(cycle_id,
+                        self._source_packets.get('ar0234'),self._source_packets.get('ov9281'),
+                        source_snapshot_disparity,source_snapshot_lr,source_snapshot_cal,
+                        source_snapshot_payload,
+                        {'capture_reason':source_snapshot_payload['reason'],
+                         'frame_freshness':audit.get('frame_freshness'),
+                         'calibration':audit.get('calibration'),
+                         'stereo_resolution':audit.get('stereo_resolution'),
+                         'segmentation_rgb_payload_sha256':(
+                             audit.get('segmentation_observation') or {}).get('rgb_payload_sha256'),
+                         'fusion_arrays_sha256':shape.get('arrays_sha256'),
+                         'segmentation_model_sha256':shape.get('model_sha256'),
+                         'track_id':(audit.get('shadow_track_confirmation') or {}).get('track_id'),
+                         'selected_instance_index':((audit.get('ar0234_dynamic_target') or {}).get('candidate') or {}).get('instance_index'),
+                         'mask_depth':shape.get('mask_depth'),
+                         'front_geometry':shape.get('front_geometry'),
+                         'candidate_layer_front_geometry':shape.get('candidate_layer_front_geometry')})
+                except Exception as error:
+                    self._source_snapshot_failures += 1
+                    self._log_preview(f'SOURCE_SNAPSHOT_REFUSED {cycle_id} {type(error).__name__}')
             if deferred is not None and surface_job is not None and audit["status"]!="CANCELLED_SHUTDOWN":
                 shape=audit["shape_diagnostic"]
                 deferred.submit(cycle_id,surface_job,{
@@ -822,6 +876,12 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         if writer is not None:
             writer.close()
             self._log_preview(f"CONTROL_PREVIEW_JOURNAL dropped={writer.dropped} errors={writer.errors}")
+        source_writer=getattr(self,'_source_snapshot_writer',None)
+        if source_writer is not None:
+            source_writer.close()
+            self._log_preview(f'SOURCE_SNAPSHOTS accepted={source_writer.accepted} '
+                f'completed={source_writer.completed} skipped={source_writer.skipped} '
+                f'errors={source_writer.errors} refusals={self._source_snapshot_failures}')
         return super().destroy_node()
 
 

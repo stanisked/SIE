@@ -117,3 +117,28 @@ camera behavior or physical distance was measured for this change. On the next
 camera-only Pi run, retain same-cycle source RGB and stereo/disparity arrays
 for selected disagreement/refusal cycles and compare both front values with
 the actual image. Do not repeat the old run to rediscover its proven mismatch.
+
+## Opt-in source snapshots for the next camera-only run
+
+`SHADOW_CAPTURE_SNAPSHOTS=1` on the Fast Shadow launcher enables bounded
+source snapshots. The worker returns the exact selected instance mask only
+for a front-point-set p05 difference of at least 0.15 m, the first coherent
+candidate after track loss, or every tenth selected cycle. The node queues a
+bundle **after** publishing its primary diagnostic: original AR0234 and
+OV9281 JPEG packets, current half-resolution disparity and LR-consistency,
+the exact calibration arrays used for projection,
+the full-resolution instance mask, cycle metadata and both driver timestamps.
+The background writer keeps at most one pending bundle and accepts at most
+24 per session. A corresponding JSON manifest records source hashes; the
+post-run summarizer checks the bundle against the Bridge journal and reports
+requested cycles with missing files. An absent or failed bundle is not
+evidence of physical ownership.
+
+This capture mode is **opt-in diagnostic instrumentation**. Packing the mask
+into the worker response and copying arrays into a background queue may add
+time to selected cycles; the next Pi run must report age with capture enabled
+separately from the earlier ~250 ms median without snapshots. Source JPEG
+decoding is checked against the segmentation worker's RGB payload SHA, but
+the physical surface still needs image review. The launcher remains motor-off;
+the adapter still refuses the all-point front as a control range. No Pi run
+for this mode has been performed yet.

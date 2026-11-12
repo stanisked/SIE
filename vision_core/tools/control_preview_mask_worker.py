@@ -195,6 +195,17 @@ def main():
                         result['surface_s']=time.monotonic()-started
                     result.update(mask=info,
                                   mask_sha256=hashlib.sha256(mask.tobytes()).hexdigest())
+                    if request.get('shadow_source_snapshot') is True:
+                        from vision_core.person_localization.shadow_source_snapshot import (
+                            capture_reason, pack_mask)
+                        reason=capture_reason(result.get('mask_depth') or {},
+                            result.get('front_geometry') or {},
+                            result.get('candidate_layer_front_geometry') or {},
+                            periodic=request.get('snapshot_periodic') is True,
+                            reacquire=request.get('snapshot_reacquire') is True)
+                        if reason is not None:
+                            result['_shadow_source_mask_snapshot']={**pack_mask(mask),
+                                'reason':reason,'cycle_id':request['cycle_id']}
                 for feature in ('fast_local_consistency','front_geometry',
                                 'candidate_layer_front_geometry'):
                     if feature in result:

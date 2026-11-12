@@ -135,3 +135,16 @@ particular mismatch.
 The adapter now refuses the current all-mask front point set with
 `FRONT_LAYER_BINDING_UNVERIFIED`; replaying the 122 archived bridge cycles
 produced 122 PAUSE. This is an offline fail-closed check, not a new Pi run.
+
+**Next camera-only evidence run:** Enable `SHADOW_CAPTURE_SNAPSHOTS=1` on the
+mask-only launcher for one one-person enter/leave/reappear scene. Selected
+cycles with a front-point-set disagreement, first coherent reacquisition, or
+periodic sample retain the original RGB and stereo JPEG packets, exact
+instance mask, disparity/LR arrays, calibration arrays and driver timestamps.
+The launcher stops the camera process and drains the background writer before
+verifying those bundles against the Bridge journal. This is new opt-in
+instrumentation, not a repeat of the earlier speed proof. Compare its age at
+decision separately, review the saved frames to explain the front layer and
+range jumps, and keep all motor actions disabled. Two-person live evidence
+remains pending because the operator currently has one person available.
+See [source snapshot design](../diagnostics/shadow_fast_front_layer_audit_20261112.md#opt-in-source-snapshots-for-the-next-camera-only-run).

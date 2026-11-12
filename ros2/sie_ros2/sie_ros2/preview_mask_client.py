@@ -199,7 +199,7 @@ class PreviewMaskClient:
         return self._array_request(cycle_id,{'rgb':rgb},{'operation':'infer_instances',
             'diagnostic_mask_hashes':diagnostic_mask_hashes})
 
-    def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale, defer_local=False, prepare_local=True, prepared_geometry=None, fast_local=False, front_profile=None):
+    def evaluate_selected(self, cycle_id, disparity, cal, candidate, roi, depth_range, segmentation, *, scale, defer_local=False, prepare_local=True, prepared_geometry=None, fast_local=False, front_profile=None, source_snapshot=False, snapshot_periodic=False, snapshot_reacquire=False):
         if segmentation.get('cycle_id')!=cycle_id or segmentation.get('model_sha256')!=self.model_sha256:
             raise ValueError('segmentation cycle/model mismatch')
         arrays={'disparity':disparity,**cal} if prepared_geometry is None else {'geometry_'+k:v for k,v in prepared_geometry.items()}
@@ -215,7 +215,14 @@ class PreviewMaskClient:
             **front_args,'operation':'evaluate_selected_instance','prepared_geometry':prepared_geometry is not None,'instance_index':candidate['instance_index'],
             'bbox_xyxy_px':candidate['bbox_xyxy_px'],'rgb_arrays_sha256':segmentation['arrays_sha256'],
             'roi':list(roi),'range':list(depth_range),'scale':scale,'defer_local':defer_local,'prepare_local':prepare_local,
+            **({'shadow_source_snapshot':True,'snapshot_periodic':snapshot_periodic,
+                'snapshot_reacquire':snapshot_reacquire} if source_snapshot else {}),
             **({'fast_local':True} if fast_local else {})})
+        payload=result.get('_shadow_source_mask_snapshot')
+        if payload is not None and (not source_snapshot or
+                payload.get('cycle_id') != cycle_id or
+                payload.get('mask_sha256') != result.get('mask_sha256')):
+            raise ValueError('source snapshot mask binding mismatch')
         if fast_local and result.get('status')!='MASK_SURFACE_UNAVAILABLE':
             fast=result.get('fast_local_consistency') or {}
             expected={'source_cycle_id':cycle_id,'mask_sha256':result.get('mask_sha256'),
