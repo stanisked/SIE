@@ -132,3 +132,6 @@ hashes, examples and limits are in the [front-layer audit](../diagnostics/shadow
 The front range does not yet satisfy selected-layer ownership, so fast-mask
 motor execution remains disabled. No fresh Pi run is needed to establish this
 particular mismatch.
+The adapter now refuses the current all-mask front point set with
+`FRONT_LAYER_BINDING_UNVERIFIED`; replaying the 122 archived bridge cycles
+produced 122 PAUSE. This is an offline fail-closed check, not a new Pi run.

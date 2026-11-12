@@ -88,6 +88,7 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
         started=time.monotonic()
         front=describe_front(u[selected],v[selected],z[selected],front_geometry['P1'],front_geometry['R1'],
             front_geometry['profile'],scale=scale,source_depth_status=depth.get('status'))
+        front['point_set']='ALL_CURRENT_MASK_OWNED_STEREO_POINTS'
         front['processing_s']=time.monotonic()-started
     def attach(result):
         if fast is not None:result['fast_local_consistency']=fast

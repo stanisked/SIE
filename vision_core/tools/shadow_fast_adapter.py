@@ -169,6 +169,12 @@ def from_control_preview(audit: dict, *, now_s: float,
             type(front.get("point_count")) is not int or
             front["point_count"] < depth["candidate_sample_count"]):
         return empty, "CURRENT_STEREO_FRONT_BINDING_INVALID"
+    # The current producer's front p05 uses every mask-owned stereo point,
+    # while depth MAD checks only one plausible layer. A profile/cycle hash
+    # cannot establish that these are the same point set.
+    if (front.get("point_set") != "SELECTED_PLAUSIBLE_DEPTH_LAYER" or
+            front["point_count"] != depth["candidate_sample_count"]):
+        return empty, "FRONT_LAYER_BINDING_UNVERIFIED"
     frame = audit.get("frame_freshness") or {}
     stamps = frame.get("frames") or {}
     ages = frame.get("driver_declared_soe_to_result_s") or {}

@@ -73,3 +73,21 @@ near-surface evidence separately, define and challenge an ownership and
 ambiguity rule with source frames and physical reference, then verify the
 end-to-end decision again. Do not simply discard the nearer layer or relax
 the MAD gate.
+
+## Fail-closed integration fix
+
+The front diagnostic producer now marks its point set explicitly as
+`ALL_CURRENT_MASK_OWNED_STEREO_POINTS`. The fast Shadow adapter requires a
+separately demonstrated `SELECTED_PLAUSIBLE_DEPTH_LAYER` point set with the
+exact candidate-layer count before it can form a range. Current producer
+output therefore returns `FRONT_LAYER_BINDING_UNVERIFIED` and PAUSE. This
+does not claim that filtering to the largest layer would establish person
+ownership; no producer currently emits the accepted point-set marker.
+
+An offline replay of the 122 archived bridge cycles first reproduced the
+original 21 `FOLLOW_ELIGIBLE`, 101 PAUSE and all 122 adapter reasons exactly.
+With the new guard, the same records give 21
+`FRONT_LAYER_BINDING_UNVERIFIED`, 43 earlier RGB/mask/track refusals, 58
+target-unavailable refusals, and 122 PAUSE. This verifies the refusal on
+recorded inputs, not live Pi behavior. No new camera or motor run is needed
+to prove the original point-set mismatch.

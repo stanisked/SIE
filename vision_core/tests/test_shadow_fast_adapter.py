@@ -45,7 +45,8 @@ def source():
             "mask_depth": {"status": "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY",
                            "candidate_sample_count": 200, "plausible_layer_count": 1},
             "front_geometry": {"status": "PARTIAL_FRONT_GEOMETRY_DIAGNOSTIC_ONLY",
-                "known_term_m": {"p05": 1.5}, "point_count": 250,
+                "known_term_m": {"p05": 1.5}, "point_count": 200,
+                "point_set": "SELECTED_PLAUSIBLE_DEPTH_LAYER",
                 "source_depth_status": "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY",
                 "profile_sha256": front_profile_sha256(), "provenance": provenance}},
         "frame_freshness": {"capture_backend": "latest_v4l2",
@@ -76,6 +77,18 @@ def convert_mask_only(row, now=10.):
 
 
 class FastAdapterTests(unittest.TestCase):
+    def test_all_mask_points_cannot_qualify_as_selected_depth_layer(self):
+        row = source()
+        row["shape_diagnostic"]["front_geometry"]["point_set"] = (
+            "ALL_CURRENT_MASK_OWNED_STEREO_POINTS")
+        observation, reason = convert(row)
+        self.assertIsNone(observation.target)
+        self.assertEqual(reason, "FRONT_LAYER_BINDING_UNVERIFIED")
+        row["shape_diagnostic"]["front_geometry"]["point_set"] = (
+            "SELECTED_PLAUSIBLE_DEPTH_LAYER")
+        row["shape_diagnostic"]["front_geometry"]["point_count"] = 250
+        self.assertEqual(convert(row)[1], "FRONT_LAYER_BINDING_UNVERIFIED")
+
     def test_separate_segmentation_semantics_has_explicit_provenance(self):
         row = source()
         row.pop("shadow_v3_mask_match")
