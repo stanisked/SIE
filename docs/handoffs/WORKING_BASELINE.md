@@ -78,3 +78,17 @@ appearing, disappearing and returning, followed by a two-person scene before
 any motor authorization. Record one RGB still of the left camera edge to
 explain the persistent v3 box. A fast mask-only age remains a diagnostic
 result, not a certified exposure-to-command age.
+
+**First isolated mask-only Pi run, 2026-11-12:** The bridge journal
+`shadow_fast_20261112_130853/bridge.jsonl` has 115 camera cycles. Both
+driver-declared ages to the bridge decision stayed below 500 ms in every
+cycle: medians 257.80 ms (AR) and 262.27 ms (OV), maxima 289.03/284.86 ms.
+The host processing median/max was 261.77/309.38 ms. The segmentation model
+found exactly one eligible instance throughout, so this run did not test loss,
+reacquisition or two people. Mask depth was coherent in 26 cycles, exceeded
+the unchanged MAD gate in 88 and had multiple/no plausible layers in one.
+Every decision remained PAUSE because the new mode failed to request RGB
+payload and individual mask hashes from the worker; this is an integration
+error, not a failed latency measurement. The next commit enables those hashes
+for both Shadow semantic modes. Recheck the complete binding on Pi before
+drawing any conclusion about FOLLOW_ELIGIBLE or motion.

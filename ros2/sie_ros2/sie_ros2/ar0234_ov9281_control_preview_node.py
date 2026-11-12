@@ -238,7 +238,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 if not isinstance(ar,bytes):raise ValueError("original RGB JPEG bytes required")
                 return self._mask_client.infer_jpeg(cycle_id,ar)
             return self._mask_client.infer(cycle_id, ar,
-                diagnostic_mask_hashes=getattr(self, "_shadow_v3_mask_match", False))
+                diagnostic_mask_hashes=getattr(self, "_shadow_fast_input", False))
         finally:times['end']=time.monotonic()
 
     def _read(self,capture):
