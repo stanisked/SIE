@@ -1,6 +1,6 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-11-11 (operational update-rule clarification; technical state through 2026-11-10)
+**Snapshot date:** 2026-11-12 (storage rule clarified; technical state through 2026-11-10)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
 **Status:** Shadow is an engineering candidate. PAUSE/RESUME was observed on lifted wheels. RGB v3 has passed a reviewed, sampled, independent two-person detection check, and older stereo evidence distinguishes two torso regions offline. Neither test validates target ownership, continuous tracking, safe distance, or autonomous floor following. The camera-driven Shadow motor runner remains disabled.
 
@@ -10,11 +10,21 @@ This file is the change-controlled snapshot of the active project state.
 
 - The current `PROJECT_CONTEXT.md` is stored in two places: this local laptop file and its matching [private Google Drive copy](https://drive.google.com/file/d/1mRj9UluoMptShOMPMz4h_MbCFczlVn0o/view) in the `SIE Active Projector` folder. Keep their contents synchronized when an update is authorized.
 - The local file is the working copy. The Drive copy is the second current copy, not a public release. Historical copies elsewhere do not replace either current copy.
-- Update both the current Drive copy and the ChatGPT Library copy when the user gives either **`обнови документ`** or **`обновить документ`**. These commands are equivalent. Recreate the Library copy if it is absent, and keep their contents identical.
-- Do not update either copy without one of these commands.
+- Update this repository file and the current Drive copy when the user gives either **`обнови документ`** or **`обновить документ`**. These commands are equivalent.
+- A ChatGPT Library copy, if present, is optional reading material. It may be outdated and is not an authoritative or required synchronized copy. Do not recreate or update it as part of the required maintenance workflow.
+- Do not update the repository or Drive copy without an explicit operator instruction to update this document or its maintenance rule.
 - Do not silently update it after code edits, tests, experiments, or conversation summaries.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
+
+## 2026-11-12: repository and Drive are the current copies
+
+The operator removed the requirement to maintain a ChatGPT Library copy.
+The repository file and private Drive copy remain the two synchronized current
+copies. A Library copy may be read for convenience, but its contents are
+historical unless checked against the current repository or Drive file.
+The earlier Library synchronization rule is superseded. This changes no
+camera calibration, measurement admission or motor state.
 
 ## 2026-11-11: equivalent context-update commands
 
@@ -1152,6 +1162,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-12 | Removed mandatory ChatGPT Library synchronization at the operator's request. The repository and private Drive file are the two current copies; any Library copy is optional reading material and may be stale. Technical state and motor boundaries unchanged. |
 | 2026-11-10 | Recorded the operator-reviewed fresh 120-frame two-person blind RGB check: v2/v3 presence 88/88 with 0/32 empty-frame detections, and at least two detections in 56/62 versus 60/62 two-person frames. Separated it from older 29-frame stereo material: 19 frames have two distinct box-depth medians, but ten lack disparity and none passes the 50 mm MAD gate for both boxes. Kept active v7, Measurement and Shadow motor boundaries unchanged; specified a fresh mask-owned depth and occlusion check. |
 | 2026-10-31 | Recorded 14-cycle and 26-cycle Shadow depth limits, three reviewed 120-frame RGB subsets, the 230-image training pool and 120-image development validation, the 71/89 and 0/31 frozen ONNX baseline, preserved Colab v1 `best.pt`, and the prepared but unrun Colab v2 handoff. No calibration, Measurement, or motor activation changed. |
 | 2026-10-29 | Added the current Shadow objective and boundaries, flashed candidate and lifted-wheel same-ID PAUSE/RESUME evidence, and 130/94/104-record dynamic camera preview findings. Kept active OV9281 v7 and unchanged MAD gate; documented missing person continuity, robot-front distance, exposure age, physical bound, and floor trial. |
