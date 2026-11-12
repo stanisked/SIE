@@ -111,7 +111,8 @@ Keep durable knowledge separate from session state:
 - update the handoff in the same change that materially alters a validated implementation, activation state, operating envelope, or next-step sequence.
 
 `PROJECT_CONTEXT.md` is the change-controlled project snapshot. Do not update it
-automatically: edit it only after the user gives the exact command `обновить документ`.
+automatically: edit it only after the user gives `обновить документ` or
+`обнови документ`. The operator confirmed these two commands are equivalent.
 
 Changes to frozen SIE contracts follow this lifecycle:
 

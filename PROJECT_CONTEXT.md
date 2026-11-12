@@ -1,8 +1,8 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-11-01 (Shadow RGB v3 Colab result and next independent capture; earlier checkpoints retain their own dates)
+**Snapshot date:** 2026-11-11 (operational update-rule clarification; technical state through 2026-11-10)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** Shadow is an engineering candidate. PAUSE/RESUME was observed on lifted wheels. RGB v3 was trained in Colab and exported to ONNX, but has not passed a fresh independent test or been deployed for motion. Autonomous floor following is not validated.
+**Status:** Shadow is an engineering candidate. PAUSE/RESUME was observed on lifted wheels. RGB v3 has passed a reviewed, sampled, independent two-person detection check, and older stereo evidence distinguishes two torso regions offline. Neither test validates target ownership, continuous tracking, safe distance, or autonomous floor following. The camera-driven Shadow motor runner remains disabled.
 
 ## Update rule
 
@@ -10,11 +10,85 @@ This file is the change-controlled snapshot of the active project state.
 
 - The current `PROJECT_CONTEXT.md` is stored in two places: this local laptop file and its matching [private Google Drive copy](https://drive.google.com/file/d/1mRj9UluoMptShOMPMz4h_MbCFczlVn0o/view) in the `SIE Active Projector` folder. Keep their contents synchronized when an update is authorized.
 - The local file is the working copy. The Drive copy is the second current copy, not a public release. Historical copies elsewhere do not replace either current copy.
-- Update both the current Drive copy and the ChatGPT Library copy when the user gives the command **`обнови документ`**. Recreate the Library copy if it is absent, and keep their contents identical.
-- Do not update either copy without that command.
+- Update both the current Drive copy and the ChatGPT Library copy when the user gives either **`обнови документ`** or **`обновить документ`**. These commands are equivalent. Recreate the Library copy if it is absent, and keep their contents identical.
+- Do not update either copy without one of these commands.
 - Do not silently update it after code edits, tests, experiments, or conversation summaries.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
+
+## 2026-11-11: equivalent context-update commands
+
+The operator confirmed that `обнови документ` and `обновить документ` are
+equivalent commands for this change-controlled file. This clarification
+changes no camera calibration, measurement admission or motor state.
+
+## 2026-11-10: Shadow RGB v3 independent review and two-person stereo diagnostic
+
+The active camera calibration is unchanged: **OV9281 Pi v7**, SHA-256
+`39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`;
+AR0234 v5 intrinsic SHA-256
+`e9454ed3d93ab36a6b159aa8c8e2356353cca8a6b0480e73c371199937ae7096`;
+AR0234-to-physical-left extrinsic SHA-256
+`10b5fdd9b3467ba5e04a8bd6d2daad8440382798374c39bfd4b9037c2bf5b9cc`.
+No new calibration or admitted metric Measurement follows from these tests.
+
+**Independent RGB detection check.** A fresh projector-off two-person
+AR0234 session saved 1200 frames; a verified 5 s subset contains 120 images.
+Source subset SHA-256:
+`2e508576c2a9582a523c19d86023c33e3a38f29a46720411ed888afe0ad8b7b8`.
+The operator reviewed all 120 LabelMe records and adjusted boxes on eight
+frames. Reviewed archive SHA-256:
+`b976002ee51f0e41a8f1a7de85826fd57cf16e98551e7b54b02506a5df477efe`.
+The reviewed sample has 32 empty, 26 one-person, and 62 two-person frames
+(150 labeled people). In offline CPU ONNX evaluation with the same confidence
+0.40 and NMS IoU 0.45, both v2 and v3 detect a person in all 88 positive
+frames and none of the 32 empty frames. On two-person frames v2 returns at
+least two boxes in 56/62, v3 in 60/62. V3 still returns only one box in
+`ar0234_000601.jpg` and `ar0234_000660.jpg`; v2 returns two in those frames.
+The v2 and v3 ONNX SHA-256 values are respectively
+`5583d645afebd3d52706b76655662cb4ce16110b2a0b224af2cc806d0292d07b`
+and `fccd45fbcf490134eb786ab3b38cf115dd03466edd85801ad44c8353f38549f5`.
+The evaluated boxes largely originated as v3 drafts, though all were
+operator-reviewed, so IoU localization comparisons favor v3; the count and
+presence figures are the more useful comparison. Five-second samples do not
+prove uninterrupted detection, identity across occlusions, or tracking. The
+[reviewed comparison](https://chatgpt.com/library?file_id=libfile_67d846ee50008191b583fe03e4699304&account_id=personal)
+has SHA-256
+`1f63ca416d20c11702e29b849a30fd73a84294a3e1e4ec6b3d8a8a0d068cfdfc`.
+
+**Separate stereo feasibility check.** The older 2026-10-31 two-person
+stereo archive (SHA-256
+`b8d0437995ff81b9b6ddcd24029ecfb0857571729614566fa97c70796b2b1cbb`)
+contains 29 RGB frames with two v3 detections each, but only 19 have saved
+LR-consistent disparity. This archive is separate from the 2026-11-10 blind
+RGB subset and may overlap v3 training; it is not an independent detector
+test. Offline projection of v7 stereo samples into the two inner RGB box
+regions gives 1201–3982 depth samples per region in those 19 frames. The
+nearer region has median optical z 1.653 m (range 1.640–1.697 m), the
+farther 2.293 m (range 2.246–2.355 m); the smallest per-frame median
+separation is 0.549 m. In both recorded setups the nearer region is image
+left, so closer-person selection with the nearer person on the right is
+untested. Rectangular boxes do not establish person-specific ownership of
+depth samples; no pair of box regions jointly passes the existing 50 mm
+global MAD gate in the 19 frames. Ten frames lack saved disparity, and
+physical distance ground truth and exposure synchronization are missing.
+These optical depths are not measured robot-front clearance or evidence for
+the intended 0.8 m hold. Full method and per-cycle data are in the
+[stereo diagnostic](https://chatgpt.com/library?file_id=libfile_979024524dc88191886866502a76b22a&account_id=personal),
+SHA-256 `4937eed7f074a6b405426174fcb8f2eff68fe72337cb7f84e83ea964537f3906`.
+
+**Next:** with motors off, collect a fresh paired two-person sequence with
+current-frame individual masks and their RGB-to-stereo bindings, calibrated
+depth and quality per person, exposure age, crossing/occlusion, and a scene
+where the closer person is image right. Choose the nearer person only when
+both person-owned depths pass a validated quality and separation rule;
+otherwise report `AMBIGUOUS_OR_UNAVAILABLE` and keep Shadow `PAUSED`.
+Preserve the active v7 calibration and the existing MAD gate. Continuous
+target ownership, front-relative range, physical stopping bound, and
+camera-driven floor motion remain unvalidated; this check does not authorize
+motor execution.
+
+Older dated sections below preserve what was known at those checkpoints.
 
 ## 2026-11-01: Shadow RGB v3 training result and next check
 
@@ -1078,6 +1152,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-10 | Recorded the operator-reviewed fresh 120-frame two-person blind RGB check: v2/v3 presence 88/88 with 0/32 empty-frame detections, and at least two detections in 56/62 versus 60/62 two-person frames. Separated it from older 29-frame stereo material: 19 frames have two distinct box-depth medians, but ten lack disparity and none passes the 50 mm MAD gate for both boxes. Kept active v7, Measurement and Shadow motor boundaries unchanged; specified a fresh mask-owned depth and occlusion check. |
 | 2026-10-31 | Recorded 14-cycle and 26-cycle Shadow depth limits, three reviewed 120-frame RGB subsets, the 230-image training pool and 120-image development validation, the 71/89 and 0/31 frozen ONNX baseline, preserved Colab v1 `best.pt`, and the prepared but unrun Colab v2 handoff. No calibration, Measurement, or motor activation changed. |
 | 2026-10-29 | Added the current Shadow objective and boundaries, flashed candidate and lifted-wheel same-ID PAUSE/RESUME evidence, and 130/94/104-record dynamic camera preview findings. Kept active OV9281 v7 and unchanged MAD gate; documented missing person continuity, robot-front distance, exposure age, physical bound, and floor trial. |
 | 2026-10-29 | Confirmed v1c hardware boot, idle UART STATUS 100/100 and wrong-boot rejection, then another UART 100/100 during an operator-confirmed 45 s camera-only preview (186 frames, no journal errors, all control decisions STOP). Recorded the local stale probe build-ID correction and motor-off command-path test as the next step; no motor or Measurement admission. |
