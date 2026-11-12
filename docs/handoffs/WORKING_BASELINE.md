@@ -73,10 +73,13 @@ uses the already reviewed COCO instance mask as the sole semantic source,
 with its own explicit source marker. It retains exact RGB/mask/stereo hashes,
 one-instance and confirmed-track requirements, front geometry, driver stamps
 and the 500 ms decision-age gate. It cannot execute motors. The v3-plus-mask
-launcher stays strict and separate. This mode needs a Pi run with a person
-appearing, disappearing and returning, followed by a two-person scene before
-any motor authorization. Record one RGB still of the left camera edge to
-explain the persistent v3 box. A fast mask-only age remains a diagnostic
+launcher stays strict and separate. The operator currently has one person
+available. The next live scene can check loss and reacquisition with that
+person; a two-person live scene remains pending until it can be staged.
+Existing reviewed offline two-person evidence is recorded in
+`PROJECT_CONTEXT.md` and does not substitute for this live test. Record one
+RGB still of the left camera edge to explain the persistent v3 box. A fast
+mask-only age remains a diagnostic
 result, not a certified exposure-to-command age.
 
 **First isolated mask-only Pi run, 2026-11-12:** The bridge journal

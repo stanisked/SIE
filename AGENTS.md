@@ -134,6 +134,18 @@ Implementation convenience is not sufficient reason to bypass this lifecycle or 
 ## Working rules
 
 - Inspect the working tree and relevant files before editing.
+- Before proposing a Raspberry Pi or cart test, check the operator's stated
+  available people, equipment and setup. Do not request a scene the operator
+  cannot stage. Use recorded offline evidence for unavailable scenarios and
+  label the live case as untested.
+- Before giving a Pi command for changed code, trace its launcher permissions
+  and invocation, then exercise the changed input path through the worker
+  output, adapter and decision using the closest available fixture. Run the
+  smallest relevant shell and contract checks. If the actual hardware path
+  cannot be exercised locally, say so and keep the first Pi run motor-off.
+- When a field run refuses, identify which guard failed from its evidence and
+  test that cause locally before requesting another run. Preserve the prior
+  successful timing, calibration and motion results instead of repeating them.
 - Treat existing user changes as authoritative. Do not overwrite unrelated modifications.
 - Check SHA-256 before replacing any frozen artifact, calibration, activation record, review, policy, guard, or runtime file.
 - Preserve raw datasets. Never edit, rename, reorder, rescale, rectify, recompress, or overwrite frozen source images.
