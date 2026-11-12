@@ -202,3 +202,33 @@ confirmed target continuity and robot-front clearance. Next, adapt that
 established fast capture/depth path to the Shadow observation contract and
 measure age through the runner decision; resolve the target-owned depth
 refusals separately before physical following.
+
+### Fast Shadow input, local candidate, 2026-11-11
+
+`run_shadow_fast_preview.sh` now starts the existing native latest-frame,
+half-resolution, target-crop and individual-mask path from this checkout.
+It also runs the SHA-pinned v3 upper-body detector on the same decoded RGB
+frame. A v3 box must uniquely overlap one COCO instance box; the worker's
+RGB pixel hash must equal the image sent to v3. That selected instance's
+actual mask, stereo fusion payload, source cycle, model hashes and front
+geometry provenance must all agree. The v3 box is **never** used as a mask.
+Two eligible people, an ambiguous overlap, a missing mask/depth, or a lost
+cycle refuses the observation. A refused cycle clears the Shadow track so
+reacquisition cannot silently inherit its pre-loss identity.
+
+`shadow_fast_adapter.py` converts only this exact-cycle evidence to an
+experimental `ShadowObservation`. It uses the lower fifth percentile of
+owned visible front-distance terms and the separately supplied optical
+datum, and checks both driver timestamps at the **bridge decision** against
+the operator-selected 0.5 s experimental limit. The monotonic driver stamps,
+age-to-decision, v3 count, mask status, provenance hashes and PAUSE/FOLLOW
+decision are written to a new JSONL journal. The new launcher has no
+`--execute` route; `shadow_live_bridge.py --source fast_mask --execute` also
+refuses. This work does not establish physical range error, stopping distance,
+or that adding v3 inference retains the previous sub-0.5 s Pi result.
+
+Local pure-code tests exercise valid binding, loss, reacquisition with a new
+identity, two-person ambiguity, stale stamps and mismatched RGB/mask/front
+provenance. The established UART runner already sends steering updates under
+one active command ID and checks build/READY/zero PWM before START. No Pi
+camera, firmware, UART or motor execution occurred for this candidate.

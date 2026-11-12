@@ -36,10 +36,15 @@ and the Shadow RGB v3 detector also have different provenance.
 
 ## Next implementation boundary
 
-Reuse the existing optimized capture, matching and mask-depth path for the
-Shadow stream. Bind the current RGB instance, mask, stereo samples, track,
-robot-front distance and driver timestamp to one cycle; measure age at the
-runner decision. Preserve a PAUSE/STOP on missing or stale evidence. Check
-the moving/lost/reacquired target and person surface on Pi before calling
-this a working follow loop. No new speed benchmark of the old full-resolution
-audit is needed to decide this architecture.
+The local candidate now uses the optimized capture, matching and mask-depth
+path for the Shadow stream. It binds a same-pixel v3 detection to one COCO
+instance without treating a box as a mask; the mask, stereo, track, front
+profile and both driver stamps must match the same cycle. The bridge checks
+age at its decision and journals the original driver stamps. The separate
+`run_shadow_fast_preview.sh` launcher cannot execute motors. See the
+[candidate detail](../diagnostics/shadow_uart_candidate_20261029.md#fast-shadow-input-local-candidate-2026-11-11).
+
+This code has only local contract tests. On a future Pi camera-only run,
+check the combined v3 + mask latency, loss, reacquisition and two-person
+refusals before changing the motor boundary. An old full-resolution audit
+speed benchmark and another straight-wheel proof are unnecessary.

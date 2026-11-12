@@ -98,14 +98,22 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                    if engine=="onnxruntime" else {}))
         self.declare_parameter("preview_rgb_backend", "two_model_reference")
         self._rgb_backend = str(self.get_parameter("preview_rgb_backend").value)
+        self.declare_parameter("preview_shadow_v3_mask_match", False)
+        self._shadow_v3_mask_match = bool(self.get_parameter("preview_shadow_v3_mask_match").value)
         if self._rgb_backend not in ("two_model_reference", "single_segmentation"):
             raise ValueError("invalid preview RGB backend")
+        if self._shadow_v3_mask_match and (self._rgb_backend != "single_segmentation" or
+                                          self.model_version != "v3"):
+            raise ValueError("v3-to-mask binding requires pinned v3 and single segmentation")
+        self._v3_worker = (ThreadPoolExecutor(max_workers=1, thread_name_prefix="sie-shadow-v3")
+                           if self._shadow_v3_mask_match else None)
         if self._rgb_backend == "single_segmentation":
             if self._stereo_scale != .5 or self._mask_client is None:
                 raise ValueError("single segmentation requires half resolution and mask worker")
             # Parent startup still verifies its historical detector artifact;
             # release the unused ONNX session and never run it in this backend.
-            self.observer = None
+            if not self._shadow_v3_mask_match:
+                self.observer = None
         if self._target_crop and self._rgb_backend!="single_segmentation":
             raise ValueError("target crop requires current single segmentation target")
         if engine=="onnxruntime" and self._rgb_backend!="single_segmentation":
@@ -187,6 +195,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             raise ValueError("decode overlap requires native current-target single segmentation")
         self.declare_parameter("preview_native_rgb_jpeg", False)
         self._native_rgb_jpeg=bool(self.get_parameter("preview_native_rgb_jpeg").value)
+        if self._shadow_v3_mask_match and self._native_rgb_jpeg:
+            raise ValueError("v3-to-mask match requires decoded RGB shared with v3 observer")
         if self._native_rgb_jpeg and (self._capture_backend!="latest_v4l2" or self._rgb_backend!="single_segmentation" or not self._target_crop or not self._overlap_stereo_decode):
             raise ValueError("original JPEG requires native single segmentation, target crop and decode overlap")
         self.declare_parameter("preview_fresh_stereo_during_rgb", False)
@@ -222,7 +232,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if getattr(self,"_native_rgb_jpeg",False):
                 if not isinstance(ar,bytes):raise ValueError("original RGB JPEG bytes required")
                 return self._mask_client.infer_jpeg(cycle_id,ar)
-            return self._mask_client.infer(cycle_id,ar)
+            return self._mask_client.infer(cycle_id, ar,
+                diagnostic_mask_hashes=getattr(self, "_shadow_v3_mask_match", False))
         finally:times['end']=time.monotonic()
 
     def _read(self,capture):
@@ -323,7 +334,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._stage_timings = None
         stamp = datetime.now(timezone.utc)
         cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
-        rgb_future=None;rgb_async_times={}
+        rgb_future=None;rgb_async_times={};v3_future=None
         if isinstance(self.ar_capture,LatestV4L2Capture):
             stage=time.monotonic()
             try:
@@ -338,6 +349,11 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         stage=time.monotonic()
         ar, ar_mono = self._read(self.ar_capture)
         foreground['capture_ar_s']=time.monotonic()-stage
+        if getattr(self, "_shadow_v3_mask_match", False) and ar is not None:
+            if isinstance(ar, bytes):
+                raise ValueError("v3-to-mask binding requires decoded current RGB")
+            v3_future = self._v3_worker.submit(self.observer.observe, ar,
+                captured_at_utc=stamp, cycle_id=cycle_id)
         if getattr(self,"_overlap_stereo_decode",False) and ar is not None:
             stage=time.monotonic()
             rgb_future=self._perception_worker.submit(self._infer_current_segmentation,cycle_id,ar,rgb_async_times)
@@ -466,6 +482,13 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 audit.update(status="TARGET_UNAVAILABLE", reason=dynamic["reason"])
                 return
             candidate = dynamic["candidate"]
+            if getattr(self, "_shadow_v3_mask_match", False):
+                import hashlib
+                from vision_core.tools.shadow_fast_adapter import match_v3_to_mask_instance
+                v3_observation = v3_future.result() if v3_future is not None else {}
+                audit["shadow_v3_mask_match"] = match_v3_to_mask_instance(
+                    v3_observation, segmentation, candidate,
+                    rgb_payload_sha256=hashlib.sha256(ar.tobytes()).hexdigest())
             geometry = self._dynamic_target_geometry(candidate, 1920 if jpeg_rgb else ar.shape[1])
             if (self._dynamic_shadow_diagnostic and single and
                     allow_near_edge_geometry(segmentation, candidate, geometry,
@@ -572,11 +595,26 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 shape = audit["shape_diagnostic"]
                 audit.update(status=shape["status"], reason="HALF_RESOLUTION_SHAPE_DIAGNOSTIC",
                              association=None)
-            if not any(key in audit for key in (
+            if (not getattr(self, "_shadow_v3_mask_match", False) or
+                    (audit.get("shadow_v3_mask_match") or {}).get("status") == "BOUND_TO_CURRENT_MASK_INSTANCE") and not any(key in audit for key in (
                     "dynamic_shadow_edge_override", "dynamic_shadow_geometry_override")) and (
                     association is not None or (single and audit["shape_diagnostic"].get("mask_depth",{}).get("status")
                                                 == "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY")):
-                self._confirm_current_target_track(candidate, observation)
+                if getattr(self, "_shadow_v3_mask_match", False):
+                    centre = self.np.asarray([[[candidate["center_x_px"],
+                                                 (candidate["bbox_xyxy_px"][1] +
+                                                  candidate["bbox_xyxy_px"][3]) / 2]]],
+                                             dtype=self.np.float64)
+                    ray = self.cv2.undistortPoints(centre, self.k_ar, self.d_ar)[0, 0]
+                    bearing = float(self.np.degrees(self.np.arctan(ray[0])))
+                    if not self.np.isfinite(bearing):
+                        raise ValueError("invalid current target bearing")
+                    audit["shadow_target_bearing_deg"] = bearing
+                confirmation = self._confirm_current_target_track(candidate, observation)
+                # Publish the identity committed for this exact RGB/mask/stereo
+                # cycle. Depth is not persisted as a track attribute.
+                if getattr(self, "_shadow_v3_mask_match", False):
+                    audit["shadow_track_confirmation"] = confirmation
         except Exception as error:
             audit.update(status="PROCESSING_REFUSED", reason=type(error).__name__, error_detail=str(error)[:400], association=None)
         except KeyboardInterrupt:
@@ -585,6 +623,12 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         finally:
             if not rclpy.ok():
                 audit.update(status="CANCELLED_SHUTDOWN", reason="ROS_SHUTDOWN", association=None)
+            # A gap or refused mask/stereo cycle breaks Shadow identity. Never
+            # reuse a pre-loss track ID when a single person reappears.
+            if (getattr(self, "_shadow_v3_mask_match", False) and
+                    ("shadow_track_confirmation" not in audit or
+                     audit.get("status") in ("PROCESSING_REFUSED", "CANCELLED_SHUTDOWN"))):
+                self._confirmed_target_track = None
             # Drain a started stereo job even when detection failed. No stale
             # frame/map can leak to a later callback or a reused matcher.
             if future is not None:
@@ -605,6 +649,11 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     "rgb_rpc_wall_s":rgb_async_times.get('end',0)-rgb_async_times.get('start',0),
                     "foreground_stereo_decode_s":foreground.get('capture_stereo_s'),
                     "definition":"RGB RPC overlaps foreground decode of frozen stereo packet; exclusive foreground timers do not sum worker wall duration"}
+            if v3_future is not None:
+                try:
+                    v3_future.result()
+                except Exception as error:
+                    audit["shadow_v3_error"] = type(error).__name__
             if self._existing_static_gate is not None and (
                     "existing_profile_static_gate" not in audit
                     or audit["status"] in ("CANCELLED_SHUTDOWN", "PROCESSING_REFUSED")):
@@ -723,6 +772,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             print(message, flush=True)
 
     def destroy_node(self):
+        v3_worker = getattr(self, "_v3_worker", None)
+        if v3_worker is not None:
+            v3_worker.shutdown(wait=True, cancel_futures=True)
         worker = getattr(self, "_perception_worker", None)
         if worker is not None:
             worker.shutdown(wait=True, cancel_futures=True)

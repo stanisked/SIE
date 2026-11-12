@@ -18,9 +18,11 @@ from vision_core.tools.shadow_range_gate import (
     select_target_range,
 )
 from vision_core.tools.uart_http_transport import UartHttp
+from vision_core.tools.shadow_fast_adapter import front_profile_sha256, from_control_preview
 
 
 AUDIT_TOPIC = "/sie/diagnostics/ar0234_ov9281/dynamic_association"
+FAST_TOPIC = "/sie/diagnostics/ar0234_ov9281/control_preview"
 AR_INTRINSIC_SHA256 = "e9454ed3d93ab36a6b159aa8c8e2356353cca8a6b0480e73c371199937ae7096"
 
 
@@ -82,7 +84,7 @@ def observation_from_audit(audit: dict, *, rim_forward_of_optical_center_m: floa
     return ShadowObservation(target, (rng,))
 
 
-def live_audits(node, *, duration_s: float):
+def live_audits(node, *, duration_s: float, topic: str = AUDIT_TOPIC):
     """Yield latest audit or a no-target tick; never replay a consumed cycle."""
     import rclpy
     from std_msgs.msg import String
@@ -91,7 +93,7 @@ def live_audits(node, *, duration_s: float):
     def on_audit(message):
         nonlocal pending
         pending = (message.data, time.monotonic(), datetime.now(timezone.utc))
-    subscription = node.create_subscription(String, AUDIT_TOPIC, on_audit, 1)
+    subscription = node.create_subscription(String, topic, on_audit, 1)
     deadline = time.monotonic() + duration_s
     try:
         while rclpy.ok() and time.monotonic() < deadline:
@@ -112,6 +114,9 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
     audit = audit or {}
     geometry = audit.get("stereo_geometry") or {}
     pre_range = geometry.get("pre_range_depth_diagnostic") or {}
+    shape = audit.get("shape_diagnostic") or {}
+    masked = shape.get("mask_depth") or {}
+    front = shape.get("front_geometry") or {}
     timestamp = audit.get("timestamp")
     age_s = None
     if received_utc is not None and isinstance(timestamp, str):
@@ -135,6 +140,14 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
                                              (geometry.get("depth_clusters") or [{}])[0].get("mad_m")),
         "associated_optical_range_m": (audit.get("association") or {}).get("range_m"),
         "associated_confidence": (audit.get("association") or {}).get("confidence"),
+        "mask_status": masked.get("status"),
+        "mask_candidate_samples": masked.get("candidate_sample_count"),
+        "mask_sha256": shape.get("mask_sha256"),
+        "segmentation_model_sha256": shape.get("model_sha256"),
+        "track_id": (audit.get("shadow_track_confirmation") or {}).get("track_id"),
+        "v3_mask_match": (audit.get("shadow_v3_mask_match") or {}).get("status"),
+        "v3_detection_count": (audit.get("shadow_v3_mask_match") or {}).get("v3_detection_count"),
+        "front_known_p05_m": (front.get("known_term_m") or {}).get("p05"),
         "depth_percentiles_m": pre_range.get("depth_percentiles_m"),
         "capture_to_receive_s": age_s,
         "host_processing_s": (audit.get("processing_timing") or {}).get("host_capture_start_to_result_ready_s"),
@@ -153,9 +166,18 @@ def main() -> None:
     parser.add_argument("--max-segments", type=int, default=None)
     parser.add_argument("--journal", type=Path, required=True)
     parser.add_argument("--serial-port", default="/dev/ttyAMA0")
+    parser.add_argument("--source", choices=("dynamic_audit", "fast_mask"),
+                        default="dynamic_audit")
+    parser.add_argument("--segmentation-model-sha256", default="")
     parser.add_argument("--execute", action="store_true",
                         help="Enable physical motion; without this flag only decisions are printed")
     args = parser.parse_args()
+    if args.source == "fast_mask" and args.execute:
+        parser.error("fast-mask motor execution requires a reviewed Pi end-to-end run")
+    if (args.source == "fast_mask" and
+            (len(args.segmentation_model_sha256) != 64 or
+             any(c not in "0123456789abcdef" for c in args.segmentation_model_sha256))):
+        parser.error("fast-mask requires the exact reviewed segmentation model SHA-256")
     if not math.isfinite(args.duration_s) or args.duration_s <= 0:
         parser.error("duration must be positive")
     if not .02 <= args.segment_m <= .30:
@@ -170,40 +192,69 @@ def main() -> None:
     from rclpy.node import Node
     rclpy.init()
     node = Node("sie_shadow_live_bridge")
+    profile_sha = front_profile_sha256() if args.source == "fast_mask" else None
     try:
         def observations():
-            for entry in live_audits(node, duration_s=args.duration_s):
+            for entry in live_audits(node, duration_s=args.duration_s,
+                                     topic=FAST_TOPIC if args.source == "fast_mask" else AUDIT_TOPIC):
                 if entry is None:
+                    if not args.execute:
+                        row = {"source": args.source, "cycle_id": None,
+                               "decision_monotonic_s": time.monotonic(),
+                               "decision": "PAUSE", "decision_reason": "NO_NEW_CAMERA_CYCLE"}
+                        journal.write(json.dumps(row) + "\n")
+                        journal.flush()
                     yield None
                     continue
                 data, mono, utc = entry
                 audit = None
+                refusal = None
                 try:
                     audit = json.loads(data)
                     if not isinstance(audit, dict):
                         raise ValueError("audit is not an object")
-                    observation = observation_from_audit(
-                        audit, rim_forward_of_optical_center_m=args.front_rim_forward_of_optical_m,
-                        received_mono_s=mono, received_utc=utc)
+                    if args.source == "fast_mask":
+                        observation, refusal = from_control_preview(
+                            audit, now_s=time.monotonic(),
+                            rim_forward_of_optical_center_m=args.front_rim_forward_of_optical_m,
+                            expected_front_profile_sha256=profile_sha,
+                            expected_segmentation_model_sha256=args.segmentation_model_sha256)
+                    else:
+                        observation = observation_from_audit(
+                            audit, rim_forward_of_optical_center_m=args.front_rim_forward_of_optical_m,
+                            received_mono_s=mono, received_utc=utc)
                 except (ValueError, TypeError, KeyError, AttributeError):
                     observation = ShadowObservation(None, ())
+                    refusal = "INVALID_AUDIT_PAYLOAD"
                 if not args.execute:
-                    row = preview_record(audit, observation, now_s=time.monotonic(),
-                                         received_utc=utc,
-                                         minimum_confidence=args.minimum_confidence)
+                    now = time.monotonic()
+                    row = preview_record(audit, observation, now_s=now,
+                        received_utc=utc, minimum_confidence=args.minimum_confidence)
+                    row.update(source=args.source, adapter_reason=refusal,
+                        decision_monotonic_s=now,
+                        driver_timestamp_s={k: v.get("driver_timestamp_s") for k, v in
+                            ((audit or {}).get("frame_freshness") or {}).get("frames", {}).items()
+                            if isinstance(v, dict)},
+                        driver_to_decision_s={k: round(now - v["driver_timestamp_s"], 6)
+                            for k, v in ((audit or {}).get("frame_freshness") or {}).get("frames", {}).items()
+                            if isinstance(v, dict) and type(v.get("driver_timestamp_s")) in (int, float)
+                            and math.isfinite(v["driver_timestamp_s"])})
                     print(json.dumps(row, allow_nan=False), flush=True)
+                    journal.write(json.dumps(row, allow_nan=False) + "\n")
+                    journal.flush()
                 yield observation
-        stream = observations()
         if args.execute:
             with UartHttp(args.serial_port) as request:
-                report = run_session(request=request, observations=stream,
+                report = run_session(request=request, observations=observations(),
                     journal_path=args.journal, rgb_calibration_id=AR_INTRINSIC_SHA256,
                     segment_m=args.segment_m, max_segments=args.max_segments,
                     minimum_confidence=args.minimum_confidence)
                 print(json.dumps(report, allow_nan=False), flush=True)
         else:
-            for _ in stream:
-                pass
+            args.journal.parent.mkdir(parents=True, exist_ok=True)
+            with args.journal.open("x") as journal:
+                for _ in observations():
+                    pass
     finally:
         node.destroy_node()
         rclpy.shutdown()
