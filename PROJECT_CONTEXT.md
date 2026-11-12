@@ -1,8 +1,8 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-11-12 (storage rule clarified; technical state through 2026-11-10)
+**Snapshot date:** 2026-11-12 (technical state through the 19:34:49 fast Shadow Pi run)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** Shadow is an engineering candidate. PAUSE/RESUME was observed on lifted wheels. RGB v3 has passed a reviewed, sampled, independent two-person detection check, and older stereo evidence distinguishes two torso regions offline. Neither test validates target ownership, continuous tracking, safe distance, or autonomous floor following. The camera-driven Shadow motor runner remains disabled.
+**Status:** Shadow is an engineering candidate. The fast mask-only camera path has demonstrated driver-declared age below 0.5 s at the Bridge decision in a one-person Pi run, while all decisions remained PAUSE. PAUSE/RESUME was observed on lifted wheels; supervised floor steering and a separate short UART Shadow step are recorded in the working baseline. RGB v3 has passed a reviewed, sampled, independent two-person detection check, and older stereo evidence distinguishes two torso regions offline. These results do not validate physical target ownership, continuous tracking, safe distance or autonomous floor following. The fast camera-driven Shadow motor runner remains disabled.
 
 ## Update rule
 
@@ -25,6 +25,58 @@ copies. A Library copy may be read for convenience, but its contents are
 historical unless checked against the current repository or Drive file.
 The earlier Library synchronization rule is superseded. This changes no
 camera calibration, measurement admission or motor state.
+
+## 2026-11-12: fast Shadow source evidence and decision age
+
+The active OV9281 Pi v7 stereo calibration (SHA-256
+`39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`),
+AR0234 v5 intrinsic and AR-to-left extrinsic remain unchanged. The optimized
+native-capture, half-resolution stereo, exact COCO instance-mask path is
+separate from the combined v3-box-to-mask diagnostic; a v3 box is never
+treated as an instance mask. Earlier fast-path results below 0.5 s remain
+valid within their measured endpoints, while the slower full-resolution
+dynamic audit and the combined v3-plus-mask run do not replace them. The
+camera-only launcher cannot execute motors.
+
+On the Pi, the 75 s mask-only run at
+`/home/elwis/.local/state/sie/evidence/shadow_fast_20261112_193449`
+produced 296 camera cycles after a 13.382 s startup interval. The archive
+`shadow_fast_20261112_193449_review.tar.gz` has SHA-256
+`2072ba9230f9ed79a0863ba203eba89519a8d719e03b807eeadf612c2d65d43c`.
+All nine requested original-RGB/stereo, individual-mask, disparity/LR and
+calibration bundles passed cycle, hash, track, instance, model and driver
+timestamp checks; offline replay reproduced their mask-depth and front p05.
+No source images were added to Git. The Bridge journal has 296 camera rows
+and 1,269 polling rows with no new camera cycle. Driver-timestamp-to-decision
+median/max were 0.176763/0.359337 s for AR0234 and 0.175512/0.355097 s
+for OV9281; all 296 camera rows were below the experimental 0.5 s limit.
+For the 48 one-person segmentation rows, medians were 0.284523/0.282028 s.
+These are driver-declared ages at the Bridge decision, not independently
+verified exposure-to-motor-command ages.
+
+The segmentation found one person on cycles 1–48 and none on 49–296. It did
+not record reappearance after the person left, and no simultaneous two-person
+scene was staged. Forty-three cycles evaluated mask depth: 13 were coherent,
+30 failed the unchanged 0.05 m MAD gate. Five different track IDs occurred
+while the same person was visibly present; depth refusals broke confirmation.
+The snapshot reason `FIRST_COHERENT_AFTER_TRACK_LOSS` describes those breaks,
+not post-exit reacquisition. In this scene the all-mask front p05 and numerical
+candidate-layer p05 differed by no more than 0.029194 m across 43 evaluated
+cycles, so the earlier archived large two-layer mismatch did not recur. The
+13 coherent cycles still failed `FRONT_LAYER_BINDING_UNVERIFIED`; all 1,565
+Bridge decisions remained PAUSE. Projected near-p05 points were generally
+inside the selected mask, but physical person ownership, front clearance,
+depth error and the optical-to-rim datum remain unproven. The diagnostic
+0.5–4.5 m range is not the activated 0.5–2.0 m Measurement range.
+
+Next: use the saved RGB/stereo/mask bundles and an independently measured
+datum to establish whether the selected depth surface belongs to the person
+and has a bounded physical error before choosing a front-range statistic.
+Keep the current MAD threshold, point-set refusal and motor boundary. The
+live post-exit reacquisition and two-person cases remain untested; do not
+repeat the fast timing proof or a straight-wheel motion probe. Detailed
+evidence: [source snapshot report](docs/diagnostics/shadow_fast_source_snapshot_run_20261112.md)
+and [working baseline](docs/handoffs/WORKING_BASELINE.md).
 
 ## 2026-11-11: equivalent context-update commands
 
@@ -1162,6 +1214,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-12 | Recorded the 19:34:49 Pi fast mask-only source run: 9/9 verified bundles, 296 camera cycles below 500 ms driver age to Bridge decision, 13 coherent versus 30 MAD-refused mask depths, five track IDs broken within one person's presence, no post-exit reappearance or two-person test, and all decisions PAUSE. The prior all-mask/candidate front mismatch did not recur in this scene; active calibration, Measurement and motor boundaries unchanged. |
 | 2026-11-12 | Removed mandatory ChatGPT Library synchronization at the operator's request. The repository and private Drive file are the two current copies; any Library copy is optional reading material and may be stale. Technical state and motor boundaries unchanged. |
 | 2026-11-10 | Recorded the operator-reviewed fresh 120-frame two-person blind RGB check: v2/v3 presence 88/88 with 0/32 empty-frame detections, and at least two detections in 56/62 versus 60/62 two-person frames. Separated it from older 29-frame stereo material: 19 frames have two distinct box-depth medians, but ten lack disparity and none passes the 50 mm MAD gate for both boxes. Kept active v7, Measurement and Shadow motor boundaries unchanged; specified a fresh mask-owned depth and occlusion check. |
 | 2026-10-31 | Recorded 14-cycle and 26-cycle Shadow depth limits, three reviewed 120-frame RGB subsets, the 230-image training pool and 120-image development validation, the 71/89 and 0/31 frozen ONNX baseline, preserved Colab v1 `best.pt`, and the prepared but unrun Colab v2 handoff. No calibration, Measurement, or motor activation changed. |
