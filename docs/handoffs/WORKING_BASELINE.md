@@ -350,3 +350,15 @@ were not surveyed. The front geometry still has unsurveyed mount assumptions
 and an unknown optical-to-rim datum. No metric error bound, correction factor
 or motion admission follows from this approximate single reference. Do not
 tune a local threshold to this run's labels.
+
+**MVP working conclusion, confirmed by operator 2026-11-13:** In this
+stationary-person scene, OV9281 supplies a stable depth surface on the
+person's central chest. The source-bound cycle-20 axial-depth median of
+2.653 m agrees at the scale of the operator's approximate 2.650 m
+lens-to-chest observation. Treat person depth as available and practically
+useful for the current MVP perception work. The apparent 3 mm difference is
+not a calibrated accuracy claim; the tape length and axial depth are not
+identical measurements. The outstanding implementation issue is selecting
+the current-frame person surface and deriving a reliable robot-front range
+without making whole-mask depth MAD the sole veto. The separate front-frame
+geometry and motion admission are not established by this optical comparison.
