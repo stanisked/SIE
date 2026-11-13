@@ -195,7 +195,8 @@ within the 0.5–4.5 m Shadow diagnostic interval. The existing conditional
 file still named by the Fast Shadow launcher. Neither profile authorizes
 motion from this run.
 
-**RGB continuity candidate, 2026-11-13 (local code):** In the mask-only Fast
+**RGB continuity implementation, 2026-11-13 (GitHub commit
+`76ce60a68caf803c9413534c7c7f196ede9ca141`):** In the mask-only Fast
 Shadow path, a confirmed ID may continue across a MAD-only PAUSE when the
 next unique current RGB box matches the prior box within 0.5 s using the
 existing 0.20 IoU and 0.75 relative-centre criteria. The previous depth is
@@ -206,3 +207,26 @@ recorded boxes, with their driver timestamp intervals, kept one RGB ID
 through all 85 MAD refusals and assigned all 35 eligible cycles to it. This
 is a logic replay, not a new Pi measurement or proof of personal identity.
 The MAD gate, range source, calibration and motor-off launcher are unchanged.
+
+**RGB continuity Pi result, 2026-11-13 11:58:49:** The motor-off Bridge
+journal `shadow_fast_20261113_115849/bridge.jsonl` (uploaded SHA-256
+`e34b62a172669cec8715d4833a5f93edec82a5cbfb274b7f327359a53098ff09`)
+contains 97 camera cycles over 25.334 s and 656 polls without a new cycle.
+Every camera cycle reported exactly one eligible RGB mask. The first two
+cycles had MAD refusals before a track was confirmed. Cycles 3–97 used one
+RGB continuity ID: 46 had fresh coherent masked depth and diagnostic
+`FOLLOW_ELIGIBLE`; 49 had `DEPTH_MAD_EXCEEDED`, retained that RGB ID only,
+and stayed PAUSE with no confirmed `track_id` or published `distance_m`.
+The longest MAD-only PAUSE interval was cycles 49–80 (8.233 s from first to
+last decision); cycle 81 resumed with the same ID and fresh depth. All 51
+MAD refusals stayed PAUSE. The accepted diagnostic front distances were
+2.514–3.096 m. Driver-declared camera-to-Bridge-decision ages had median/max
+0.263350/0.294845 s for AR0234 and 0.267712/0.355332 s for OV9281, all
+below 0.5 s. The journal has no source snapshot bundles, no observed RGB
+disappearance/reappearance and no two-person scene; it demonstrates continuity
+through depth refusals in this one-person scene, not identity across loss,
+physical range accuracy or target ownership. Driver SOE is declared, not
+independently verified exposure timing. Motor execution was disabled and
+`FOLLOW_ELIGIBLE` did not authorize motion. Next MVP depth issue is the 51/97
+MAD refusals, especially the 32-cycle pause; investigate source geometry and
+a measured physical datum before revising the depth policy or enabling motion.
