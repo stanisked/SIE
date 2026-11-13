@@ -2,6 +2,7 @@
 import copy
 import unittest
 
+from vision_core.person_localization.fast_local_depth_consistency import STABLE_LOCAL_PATCH_POLICY
 from vision_core.tools.shadow_fast_adapter import (
     AR_INTRINSIC_SHA256, SHADOW_V3_SHA256, front_profile_sha256,
     from_control_preview, match_v3_to_mask_instance,
@@ -75,15 +76,61 @@ def convert(row, now=10.):
         expected_segmentation_model_sha256="seg-model")
 
 
-def convert_mask_only(row, now=10.):
+def convert_mask_only(row, now=10., local_preview=False):
     return from_control_preview(row, now_s=now,
         rim_forward_of_optical_center_m=.0125,
         expected_front_profile_sha256=front_profile_sha256(),
         expected_segmentation_model_sha256="seg-model",
-        semantic_source="segmentation_mask")
+        semantic_source="segmentation_mask",local_preview=local_preview)
 
 
 class FastAdapterTests(unittest.TestCase):
+    def test_mad_refusal_uses_only_bound_stable_patches_in_motor_off_preview(self):
+        row=source()
+        row.pop('shadow_v3_mask_match')
+        row['shadow_semantic_source']='COCO_CURRENT_INSTANCE_MASK'
+        row['shape_diagnostic']['mask_depth']['status']='DEPTH_MAD_EXCEEDED'
+        for name in ('front_geometry','candidate_layer_front_geometry'):
+            row['shape_diagnostic'][name]['source_depth_status']='DEPTH_MAD_EXCEEDED'
+        row.pop('shadow_track_confirmation')
+        row['shadow_rgb_continuity']={'status':'MATCHED_CURRENT_RGB_DIAGNOSTIC_ONLY',
+                                      'track_id':'person-1'}
+        row['shape_diagnostic']['stable_candidate_front_geometry']={
+            'status':'STABLE_CANDIDATE_FRONT_DIAGNOSTIC_ONLY',
+            'point_set':'STABLE_LOCAL_PATCHES_NUMERIC_CANDIDATE_LAYER_DIAGNOSTIC_ONLY',
+            'candidate_sample_count':200,'point_count':150,
+            'source_depth_status':'DEPTH_MAD_EXCEEDED',
+            'profile_sha256':front_profile_sha256(),
+            'provenance':dict(row['shape_diagnostic']['front_geometry']['provenance']),
+            'known_term_m':{'p05':1.6},'semantic_ownership_verified':False,
+            'distance_from_front_m':None,'actuator_access':False,
+            'stable_local_patches':{'status':'STABLE_LOCAL_PATCHES_DIAGNOSTIC_ONLY',
+                'policy':dict(STABLE_LOCAL_PATCH_POLICY),'selected_point_count':150,
+                'selected_patch_count':3,'selected_held_out_residual':{'sample_count':150}}}
+        self.assertIsNone(convert_mask_only(row)[0].target)
+        observation,reason=convert_mask_only(row,local_preview=True)
+        self.assertEqual(reason,'CURRENT_STABLE_LOCAL_PREVIEW')
+        self.assertEqual(observation.target.track_id,'person-1')
+        self.assertAlmostEqual(observation.ranges[0].distance_m,1.5875)
+        self.assertTrue(observation.ranges[0].association_evidence_id.startswith('fast-local-preview:'))
+        from vision_core.tools.shadow_live_bridge import preview_record
+        record=preview_record(row,observation,now_s=10.,minimum_confidence=.4)
+        self.assertEqual(record['track_id'],'person-1')
+        self.assertEqual(record['decision'],'FOLLOW_ELIGIBLE')
+        self.assertEqual(record['stable_front_point_count'],150)
+        for mutate in (
+            lambda x:x['shadow_rgb_continuity'].update(track_id=''),
+            lambda x:x['shadow_rgb_continuity'].update(status='UNMATCHED'),
+            lambda x:x['shape_diagnostic']['stable_candidate_front_geometry']['provenance'].update(mask_sha256='other'),
+            lambda x:x['shape_diagnostic']['stable_candidate_front_geometry']['stable_local_patches']['policy'].update(maximum_residual_mad_m=.5),
+            lambda x:x['shape_diagnostic']['stable_candidate_front_geometry'].update(point_count=99),
+            lambda x:x['ar0234_dynamic_target'].update(current_eligible_count=2),
+            lambda x:x['shape_diagnostic']['mask_depth'].update(plausible_layer_count=2),
+        ):
+            with self.subTest(mutate=mutate):
+                changed=copy.deepcopy(row);mutate(changed)
+                self.assertIsNone(convert_mask_only(changed,local_preview=True)[0].target)
+
     def test_candidate_layer_requires_exact_count_and_provenance(self):
         row = source()
         row["shape_diagnostic"].pop("candidate_layer_front_geometry")

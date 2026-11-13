@@ -48,6 +48,7 @@ class PreviewMaskSurfaceTests(unittest.TestCase):
             [0,0,1920,1200],defer_local=True,prepare_local=False,
             fast_local=True,front_geometry=args)
         depth=result['mask_depth'];local=result['local_candidate_front_geometry']
+        stable=result['stable_candidate_front_geometry']
         self.assertEqual(depth['candidate_sample_count'],far)
         self.assertEqual(local['status'],'LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY')
         self.assertEqual(local['point_count'],far)
@@ -58,6 +59,10 @@ class PreviewMaskSurfaceTests(unittest.TestCase):
         self.assertLess(result['front_geometry']['known_term_m']['p05'],
                         local['known_term_m']['p05']-.5)
         self.assertFalse(local['actuator_access'])
+        self.assertEqual(stable['status'],'STABLE_CANDIDATE_FRONT_DIAGNOSTIC_ONLY')
+        self.assertEqual(stable['point_count'],far)
+        self.assertAlmostEqual(stable['known_term_m']['p05'],local['known_term_m']['p05'])
+        self.assertFalse(stable['actuator_access'])
 
     def test_candidate_front_stays_separate_from_nearer_mask_owned_layer(self):
         # 120 near points are a supported layer but fail the 25% support rule
@@ -90,6 +95,9 @@ class PreviewMaskSurfaceTests(unittest.TestCase):
         self.assertEqual(sparse['local_candidate_front_geometry']['status'],
                          'INSUFFICIENT_LOCAL_FITTED_CANDIDATE_POINTS')
         self.assertIsNone(sparse['local_candidate_front_geometry']['known_term_m'])
+        self.assertEqual(sparse['stable_candidate_front_geometry']['status'],
+                         'INSUFFICIENT_STABLE_LOCAL_PATCH_POINTS')
+        self.assertIsNone(sparse['stable_candidate_front_geometry']['known_term_m'])
         without,_=evaluate_prepared(points,mask,[0,0,1920,1200],defer_local=True,
                                     prepare_local=False)
         self.assertEqual(without['mask_depth'],depth)

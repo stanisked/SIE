@@ -11,6 +11,7 @@ import json
 import math
 from pathlib import Path
 
+from vision_core.person_localization.fast_local_depth_consistency import STABLE_LOCAL_PATCH_POLICY
 from vision_core.tools.run_shadow_uart import ShadowObservation
 from vision_core.tools.shadow_range_gate import (
     ACTIVE_STEREO_SHA256, FRONT_FRAME, RgbTarget, TargetRange,
@@ -81,11 +82,14 @@ def from_control_preview(audit: dict, *, now_s: float,
                          expected_front_profile_sha256: str,
                          expected_segmentation_model_sha256: str,
                          semantic_source: str = "v3_mask_binding",
+                         local_preview: bool = False,
                          max_age_s: float = .5) -> tuple[ShadowObservation, str]:
     """Return current evidence or a precise PAUSE reason; no cached fallback."""
     empty = ShadowObservation(None, ())
     if semantic_source not in ("v3_mask_binding", "segmentation_mask"):
         raise ValueError("unsupported Shadow semantic source")
+    if type(local_preview) is not bool:
+        raise ValueError("local_preview must be boolean")
     if not isinstance(audit, dict):
         return empty, "AUDIT_UNAVAILABLE"
     if (type(rim_forward_of_optical_center_m) not in (int, float) or
@@ -111,8 +115,18 @@ def from_control_preview(audit: dict, *, now_s: float,
     depth = shape.get("mask_depth") or {}
     all_front = shape.get("front_geometry") or {}
     front = shape.get("candidate_layer_front_geometry") or {}
+    stable_front = shape.get("stable_candidate_front_geometry") or {}
     confirmation = audit.get("shadow_track_confirmation") or {}
+    continuity = audit.get("shadow_rgb_continuity") or {}
     v3 = audit.get("shadow_v3_mask_match") or {}
+    confirmed=(confirmation.get("state") == "CONFIRMED_BY_CURRENT_RGB_STEREO_ASSOCIATION"
+        and confirmation.get("confirmed_observation_id") ==
+            f"segmentation-preview:{cid}:{person.get('instance_index')}"
+        and bool(confirmation.get("track_id")))
+    local_path=(local_preview and semantic_source == "segmentation_mask"
+        and depth.get("status") == "DEPTH_MAD_EXCEEDED" and not confirmation
+        and continuity.get("status") == "MATCHED_CURRENT_RGB_DIAGNOSTIC_ONLY"
+        and isinstance(continuity.get("track_id"),str) and bool(continuity["track_id"]))
     if (target.get("disposition") != "OBSERVED" or
             target.get("current_eligible_count") != 1 or
             not (audit.get("target_geometry") or {}).get("accepted") or
@@ -150,16 +164,15 @@ def from_control_preview(audit: dict, *, now_s: float,
             (semantic_source == "segmentation_mask" and (
                 audit.get("shadow_semantic_source") != "COCO_CURRENT_INSTANCE_MASK" or
                 audit.get("shadow_v3_mask_match") is not None)) or
-            confirmation.get("state") != "CONFIRMED_BY_CURRENT_RGB_STEREO_ASSOCIATION" or
-            confirmation.get("confirmed_observation_id") != f"segmentation-preview:{cid}:{person['instance_index']}" or
-            not confirmation.get("track_id")):
+            not (confirmed or local_path)):
         return empty, "CURRENT_RGB_MASK_TRACK_BINDING_INVALID"
     expected = {"source_cycle_id": cid, "mask_sha256": shape["mask_sha256"],
                 "instance_index": person["instance_index"],
                 "model_sha256": shape["model_sha256"],
                 "rgb_arrays_sha256": seg["arrays_sha256"],
                 "fusion_arrays_sha256": shape.get("arrays_sha256")}
-    if (depth.get("status") != "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY" or
+    if (depth.get("status") != ("DEPTH_MAD_EXCEEDED" if local_path else
+                                  "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY") or
             depth.get("plausible_layer_count") != 1 or
             type(depth.get("candidate_sample_count")) is not int or
             depth["candidate_sample_count"] < 100 or
@@ -182,6 +195,30 @@ def from_control_preview(audit: dict, *, now_s: float,
             type(front.get("point_count")) is not int or
             front["point_count"] != depth["candidate_sample_count"]):
         return empty, "FRONT_LAYER_BINDING_UNVERIFIED"
+    selected_front=front
+    if local_path:
+        patches=stable_front.get("stable_local_patches") or {}
+        residual=patches.get("selected_held_out_residual") or {}
+        count=stable_front.get("point_count")
+        if (stable_front.get("provenance") != expected or
+                stable_front.get("profile_sha256") != expected_front_profile_sha256 or
+                stable_front.get("source_depth_status") != depth["status"] or
+                stable_front.get("status") != "STABLE_CANDIDATE_FRONT_DIAGNOSTIC_ONLY" or
+                stable_front.get("point_set") != "STABLE_LOCAL_PATCHES_NUMERIC_CANDIDATE_LAYER_DIAGNOSTIC_ONLY" or
+                stable_front.get("semantic_ownership_verified") is not False or
+                stable_front.get("actuator_access") is not False or
+                stable_front.get("distance_from_front_m") is not None or
+                stable_front.get("candidate_sample_count") != front["point_count"] or
+                type(count) is not int or
+                not STABLE_LOCAL_PATCH_POLICY["minimum_selected_points"] <= count <= front["point_count"] or
+                patches.get("status") != "STABLE_LOCAL_PATCHES_DIAGNOSTIC_ONLY" or
+                patches.get("policy") != STABLE_LOCAL_PATCH_POLICY or
+                patches.get("selected_point_count") != count or
+                type(patches.get("selected_patch_count")) is not int or
+                patches["selected_patch_count"] < 1 or
+                residual.get("sample_count") != count):
+            return empty, "STABLE_LOCAL_FRONT_UNAVAILABLE"
+        selected_front=stable_front
     frame = audit.get("frame_freshness") or {}
     stamps = frame.get("frames") or {}
     ages = frame.get("driver_declared_soe_to_result_s") or {}
@@ -191,7 +228,7 @@ def from_control_preview(audit: dict, *, now_s: float,
                     for k in ("ar0234", "ov9281")]
         flags = [stamps[k]["flags"] for k in ("ar0234", "ov9281")]
         measured = [float(ages[k]) for k in ("ar0234", "ov9281")]
-        distance = float(front["known_term_m"]["p05"]) - rim_forward_of_optical_center_m
+        distance = float(selected_front["known_term_m"]["p05"]) - rim_forward_of_optical_center_m
         confidence = float(person["confidence"])
         bearing = float(audit["shadow_target_bearing_deg"])
         age = [now_s - t for t in pair]
@@ -210,9 +247,10 @@ def from_control_preview(audit: dict, *, now_s: float,
             distance <= 0 or not 0 <= confidence <= 1):
         return empty, "DRIVER_AGE_OR_GEOMETRY_INVALID"
     observed = min(pair)
-    track_id = confirmation["track_id"]
+    track_id = continuity["track_id"] if local_path else confirmation["track_id"]
     rgb = RgbTarget(track_id, observed, bearing, confidence, AR_INTRINSIC_SHA256)
     rng = TargetRange("OV9281", track_id, observed, distance, confidence,
                       FRONT_FRAME, ACTIVE_STEREO_SHA256,
-                      f"fast-mask:{cid}:{shape['mask_sha256']}")
-    return ShadowObservation(rgb, (rng,)), "CURRENT_FAST_MASK_OBSERVATION"
+                      f"{'fast-local-preview' if local_path else 'fast-mask'}:{cid}:{shape['mask_sha256']}")
+    return ShadowObservation(rgb, (rng,)), (
+        "CURRENT_STABLE_LOCAL_PREVIEW" if local_path else "CURRENT_FAST_MASK_OBSERVATION")

@@ -65,6 +65,21 @@ def summarize(rows: list[dict]) -> dict:
             r.get("mask_status") == "DEPTH_MAD_EXCEEDED"
             and r.get("local_candidate_front_status") == "LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY"
             for r in cycles),
+        "stable_front_statuses": dict(Counter(
+            r.get("stable_front_status") for r in cycles)),
+        "mad_refusals_with_stable_front": sum(
+            r.get("mask_status") == "DEPTH_MAD_EXCEEDED"
+            and r.get("stable_front_status") == "STABLE_CANDIDATE_FRONT_DIAGNOSTIC_ONLY"
+            for r in cycles),
+        "local_preview_eligible_cycles": sum(
+            r.get("adapter_reason") == "CURRENT_STABLE_LOCAL_PREVIEW"
+            and r.get("decision") == "FOLLOW_ELIGIBLE" for r in cycles),
+        "stable_front_points": {
+            "count": len(stable_points), "min": min(stable_points),
+            "median": statistics.median(stable_points)
+        } if (stable_points := [r["stable_front_point_count"] for r in cycles
+                              if type(r.get("stable_front_point_count")) is int])
+          else {"count": 0},
         "local_candidate_front_points": {
             "count": len(points), "min": min(points), "median": statistics.median(points)
         } if (points := [r["local_candidate_front_point_count"] for r in cycles

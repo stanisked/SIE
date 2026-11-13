@@ -851,12 +851,14 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                              audit.get('segmentation_observation') or {}).get('rgb_payload_sha256'),
                          'fusion_arrays_sha256':shape.get('arrays_sha256'),
                          'segmentation_model_sha256':shape.get('model_sha256'),
-                         'track_id':(audit.get('shadow_track_confirmation') or {}).get('track_id'),
+                         'track_id':((audit.get('shadow_track_confirmation') or
+                                      audit.get('shadow_rgb_continuity') or {}).get('track_id')),
                          'selected_instance_index':((audit.get('ar0234_dynamic_target') or {}).get('candidate') or {}).get('instance_index'),
                          'mask_depth':shape.get('mask_depth'),
                          'front_geometry':shape.get('front_geometry'),
                          'candidate_layer_front_geometry':shape.get('candidate_layer_front_geometry'),
-                         'local_candidate_front_geometry':shape.get('local_candidate_front_geometry')})
+                         'local_candidate_front_geometry':shape.get('local_candidate_front_geometry'),
+                         'stable_candidate_front_geometry':shape.get('stable_candidate_front_geometry')})
                 except Exception as error:
                     self._source_snapshot_failures += 1
                     self._log_preview(f'SOURCE_SNAPSHOT_REFUSED {cycle_id} {type(error).__name__}')

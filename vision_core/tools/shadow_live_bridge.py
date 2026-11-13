@@ -122,6 +122,7 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
     front = shape.get("front_geometry") or {}
     candidate_front = shape.get("candidate_layer_front_geometry") or {}
     local_candidate_front = shape.get("local_candidate_front_geometry") or {}
+    stable_front = shape.get("stable_candidate_front_geometry") or {}
     selected_instance = (audit.get("ar0234_dynamic_target") or {}).get("candidate") or {}
     v3_diagnostic = audit.get("shadow_v3_observation_diagnostic") or {}
     timestamp = audit.get("timestamp")
@@ -165,7 +166,8 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "local_surface_fitted_fraction": local.get("fitted_sample_fraction"),
         "mask_sha256": shape.get("mask_sha256"),
         "segmentation_model_sha256": shape.get("model_sha256"),
-        "track_id": (audit.get("shadow_track_confirmation") or {}).get("track_id"),
+        "track_id": (observation.target.track_id if observation.target is not None else
+                     (audit.get("shadow_track_confirmation") or {}).get("track_id")),
         "rgb_continuity_track_id": (audit.get("shadow_rgb_continuity") or {}).get("track_id"),
         "rgb_continuity_status": (audit.get("shadow_rgb_continuity") or {}).get("status"),
         "v3_mask_match": (audit.get("shadow_v3_mask_match") or {}).get("status"),
@@ -191,6 +193,12 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "local_candidate_front_known_p05_m": (local_candidate_front.get("known_term_m") or {}).get("p05"),
         "local_candidate_front_residual_p90_m": (local_candidate_front.get("local_fit_residual") or {}).get("absolute_p90_m"),
         "local_candidate_front_fitted_fraction": local_candidate_front.get("local_fit_fitted_fraction"),
+        "stable_front_status": stable_front.get("status"),
+        "stable_front_point_count": stable_front.get("point_count"),
+        "stable_front_patch_count": (stable_front.get("stable_local_patches") or {}).get("selected_patch_count"),
+        "stable_front_known_p05_m": (stable_front.get("known_term_m") or {}).get("p05"),
+        "stable_front_policy": (stable_front.get("stable_local_patches") or {}).get("policy"),
+        "stable_front_provenance": stable_front.get("provenance"),
         "source_snapshot_evidence": audit.get("source_snapshot_evidence"),
         "depth_percentiles_m": pre_range.get("depth_percentiles_m"),
         "capture_to_receive_s": age_s,
@@ -265,7 +273,8 @@ def main() -> None:
                             rim_forward_of_optical_center_m=args.front_rim_forward_of_optical_m,
                             expected_front_profile_sha256=profile_sha,
                             expected_segmentation_model_sha256=args.segmentation_model_sha256,
-                            semantic_source=args.semantic_source)
+                            semantic_source=args.semantic_source,
+                            local_preview=not args.execute)
                     else:
                         observation = observation_from_audit(
                             audit, rim_forward_of_optical_center_m=args.front_rim_forward_of_optical_m,

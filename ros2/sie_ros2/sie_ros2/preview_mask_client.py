@@ -277,6 +277,33 @@ class PreviewMaskClient:
                          and (local_front['point_count']>=100 or
                               local_front.get('known_term_m') is not None))):
                     raise ValueError('local candidate front current-frame/profile binding mismatch')
+                from vision_core.person_localization.fast_local_depth_consistency import STABLE_LOCAL_PATCH_POLICY
+                stable=result.get('stable_candidate_front_geometry') or {}
+                patches=stable.get('stable_local_patches') or {}
+                stable_count=stable.get('point_count')
+                if (stable.get('provenance')!=expected or
+                        stable.get('profile_sha256')!=front['profile_sha256'] or
+                        stable.get('point_set')!='STABLE_LOCAL_PATCHES_NUMERIC_CANDIDATE_LAYER_DIAGNOSTIC_ONLY' or
+                        stable.get('candidate_sample_count')!=layer['point_count'] or
+                        stable.get('source_depth_status')!=(result.get('mask_depth') or {}).get('status') or
+                        stable.get('semantic_ownership_verified') is not False or
+                        stable.get('distance_from_front_m') is not None or
+                        stable.get('actuator_access') is not False or
+                        patches.get('policy')!=STABLE_LOCAL_PATCH_POLICY or
+                        type(stable_count) is not int or
+                        not 0<=stable_count<=layer['point_count'] or
+                        patches.get('selected_point_count')!=stable_count or
+                        (patches.get('selected_held_out_residual') or {}).get('sample_count')!=stable_count or
+                        stable.get('status') not in ('STABLE_CANDIDATE_FRONT_DIAGNOSTIC_ONLY',
+                            'INSUFFICIENT_STABLE_LOCAL_PATCH_POINTS') or
+                        (stable['status']=='STABLE_CANDIDATE_FRONT_DIAGNOSTIC_ONLY' and
+                         (stable_count<STABLE_LOCAL_PATCH_POLICY['minimum_selected_points'] or
+                          type((stable.get('known_term_m') or {}).get('p05')) not in (float,int) or
+                          not math.isfinite(stable['known_term_m']['p05']))) or
+                        (stable['status']=='INSUFFICIENT_STABLE_LOCAL_PATCH_POINTS' and
+                         (stable_count>=STABLE_LOCAL_PATCH_POLICY['minimum_selected_points'] or
+                          stable.get('known_term_m') is not None))):
+                    raise ValueError('stable candidate front current-frame/profile binding mismatch')
         result['mask_s']=segmentation.get('mask_s')
         result['inference_round_trip_s']=segmentation.get('round_trip_s')
         result['round_trip_scope']='FUSION_ONLY_AFTER_SEGMENTATION'

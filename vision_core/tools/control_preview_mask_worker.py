@@ -207,7 +207,8 @@ def main():
                             result['_shadow_source_mask_snapshot']={**pack_mask(mask),
                                 'reason':reason,'cycle_id':request['cycle_id']}
                 for feature in ('fast_local_consistency','front_geometry',
-                                'candidate_layer_front_geometry','local_candidate_front_geometry'):
+                                'candidate_layer_front_geometry','local_candidate_front_geometry',
+                                'stable_candidate_front_geometry'):
                     if feature in result:
                         result[feature]['provenance']={
                             'source_cycle_id':request['cycle_id'],'mask_sha256':result['mask_sha256'],

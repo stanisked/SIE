@@ -4,10 +4,25 @@ from pathlib import Path
 import tempfile
 from vision_core.tools.benchmark_fast_local_depth import sources_unchanged
 import numpy as np
-from vision_core.person_localization.fast_local_depth_consistency import analyze_fast_local_depth
+from vision_core.person_localization.fast_local_depth_consistency import (
+    analyze_fast_local_depth, select_stable_local_patches)
 
 
 class FastLocalTests(unittest.TestCase):
+    def test_selects_consistent_patches_without_global_flatness(self):
+        u,v=self.grid();d=20+.05*u+.08*v
+        _,data=analyze_fast_local_depth(u,v,d,75.)
+        report,selected=select_stable_local_patches(data)
+        self.assertEqual(report['status'],'STABLE_LOCAL_PATCHES_DIAGNOSTIC_ONLY')
+        self.assertEqual(report['selected_point_count'],len(u))
+        self.assertTrue(selected.all())
+        altered={k:x.copy() for k,x in data.items()}
+        altered['axial_residual_m'][altered['patch_id']==0]=np.tile([-.2,.2],32)
+        report,selected=select_stable_local_patches(altered)
+        self.assertEqual(report['selected_patch_count'],3)
+        self.assertFalse(selected[altered['patch_id']==0].any())
+        self.assertGreaterEqual(report['selected_point_count'],100)
+
     def test_final_manifest_accepts_string_paths_and_detects_mutation(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'evidence.bin';path.write_bytes(b'original')

@@ -362,3 +362,26 @@ identical measurements. The outstanding implementation issue is selecting
 the current-frame person surface and deriving a reliable robot-front range
 without making whole-mask depth MAD the sole veto. The separate front-frame
 geometry and motion admission are not established by this optical comparison.
+
+**Current-frame stable local patch preview, 2026-11-13 (code candidate):**
+The fast mask worker now screens each fitted patch of the one numerical
+candidate layer using held-out axial residual MAD at most 0.05 m and absolute
+p90 at most 0.10 m, with at least 24 points per patch and 100 selected points
+in total. These are provisional diagnostic consistency limits, not a bound
+on physical depth error. A separate `stable_candidate_front_geometry` uses
+the original measured depths at only the selected patch points; the existing
+all-mask, candidate-layer and all-fitted fronts remain in the audit. Provenance
+binds the new field to the exact RGB instance, mask, model, fusion arrays,
+cycle and front profile. The fast Bridge can use this field only in its
+motor-off local preview when whole-mask MAD refuses, and only for a fresh
+single RGB mask whose already confirmed ID continues unambiguously. It
+cannot bootstrap an ID from an unconfirmed depth-refused cycle. Missing,
+ambiguous, stale, mismatched or insufficient local evidence still yields
+PAUSE. The existing coherent-depth path is unchanged; `--execute` remains
+forbidden for fast-mask input. In a source-bound NumPy replay of the eight
+newly saved bundles, all eight retained at least 2,032 stable points. The
+MAD-refused moving-person bundle (cycle 10) retained 2,515 points in 48
+patches; its selected-front p05 was 2.787 m. This replays the patch screen
+and geometry on saved arrays, not a Pi timing or end-to-end adapter run.
+Next: one motor-off Pi preview to observe the exact-cycle Bridge decision
+and driver age with this branch before discussing a physical follow step.

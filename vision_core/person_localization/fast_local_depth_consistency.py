@@ -3,6 +3,13 @@ from __future__ import annotations
 import numpy as np
 
 
+# Motor-off Shadow candidate screen. These residual limits describe local
+# consistency, not physical distance error or an admitted Measurement.
+STABLE_LOCAL_PATCH_POLICY = {'minimum_points_per_patch':24,
+    'maximum_residual_mad_m':.05,'maximum_absolute_p90_m':.10,
+    'minimum_selected_points':100}
+
+
 def stats(values):
     values=np.asarray(values,dtype=np.float64)
     if not values.size:return {'sample_count':0}
@@ -11,6 +18,40 @@ def stats(values):
         'mad_m':float(np.median(np.abs(values-median))),
         'absolute_p90_m':float(np.percentile(np.abs(values),90)),
         'absolute_max_m':float(np.max(np.abs(values)))}
+
+
+def select_stable_local_patches(data):
+    """Select held-out-consistent tiles from one numerical candidate layer."""
+    residual=np.asarray(data['axial_residual_m'],dtype=np.float64)
+    patch=np.asarray(data['patch_id'])
+    evaluated=np.asarray(data['evaluated'])
+    if (residual.ndim!=1 or patch.shape!=residual.shape or
+            evaluated.shape!=residual.shape or evaluated.dtype!=np.bool_ or
+            not np.issubdtype(patch.dtype,np.integer) or (patch<0).any() or
+            not np.isfinite(residual[evaluated]).all()):
+        raise ValueError('invalid current candidate local-fit arrays')
+    selected=np.zeros(len(residual),bool)
+    accepted=0
+    for pid in np.unique(patch[evaluated]):
+        indices=np.flatnonzero(evaluated & (patch==pid))
+        if len(indices)<STABLE_LOCAL_PATCH_POLICY['minimum_points_per_patch']:
+            continue
+        values=residual[indices]
+        median=np.median(values)
+        if (np.median(np.abs(values-median))<=STABLE_LOCAL_PATCH_POLICY['maximum_residual_mad_m']
+                and np.percentile(np.abs(values),90)<=STABLE_LOCAL_PATCH_POLICY['maximum_absolute_p90_m']):
+            selected[indices]=True
+            accepted+=1
+    count=int(selected.sum())
+    return {'status':('STABLE_LOCAL_PATCHES_DIAGNOSTIC_ONLY' if
+            count>=STABLE_LOCAL_PATCH_POLICY['minimum_selected_points'] else
+            'INSUFFICIENT_STABLE_LOCAL_PATCH_POINTS'),
+            'policy':dict(STABLE_LOCAL_PATCH_POLICY),
+            'selected_point_count':count,'selected_patch_count':accepted,
+            'evaluated_patch_count':int(np.unique(patch[evaluated]).size),
+            'selected_held_out_residual':stats(residual[selected]),
+            'physical_depth_error_bound_m':None,'measurement_authorized':False,
+            'actuator_access':False},selected
 
 
 def analyze_fast_local_depth(u,v,disparity,fb,*,stride=4,tile_px=32,minimum_points=24):

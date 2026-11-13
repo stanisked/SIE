@@ -80,7 +80,7 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
             stride=stride,tile_px=int(32*scale))
         fast['fit_s']=time.monotonic()-started
         fast['rgb_coverage_status']='NOT_COMPUTED_IN_FAST_CURRENT_FRAME_PATH'
-    front=layer_front=local_candidate_front=None
+    front=layer_front=local_candidate_front=stable_candidate_front=None
     if front_geometry is not None:
         import time
         from vision_core.person_localization.robot_front_geometry import describe_front
@@ -159,11 +159,42 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
                         'Local fit availability does not validate physical target ownership or depth error.')
                     local_candidate_front['limitations'].append(
                         'Filtering points can move p05 nearer or farther; it is not a conservative clearance bound.')
+                from vision_core.person_localization.fast_local_depth_consistency import select_stable_local_patches
+                stable_report,stable=select_stable_local_patches(candidate_data)
+                stable_candidate_front={
+                    'status':'INSUFFICIENT_STABLE_LOCAL_PATCH_POINTS',
+                    'point_set':'STABLE_LOCAL_PATCHES_NUMERIC_CANDIDATE_LAYER_DIAGNOSTIC_ONLY',
+                    'candidate_sample_count':len(candidate_indices),
+                    'point_count':stable_report['selected_point_count'],
+                    'stable_local_patches':stable_report,
+                    'source_depth_status':depth.get('status'),
+                    'reference_frame':'robot_longitudinal_axis_from_front_plane',
+                    'unit':'m','confidence':None,'confidence_status':'NOT_VALIDATED',
+                    'profile_sha256':front['profile_sha256'],
+                    'known_term_m':None,'semantic_ownership_verified':False,
+                    'distance_from_front_m':None,'measurement_authorized':False,
+                    'navigation_eligible':False,'actuator_access':False}
+                if stable_report['status']=='STABLE_LOCAL_PATCHES_DIAGNOSTIC_ONLY':
+                    stable_candidate_front.update(describe_front(
+                        owned_u[candidate_indices][stable],
+                        owned_v[candidate_indices][stable],
+                        owned_z[candidate_indices][stable],
+                        front_geometry['P1'],front_geometry['R1'],
+                        front_geometry['profile'],scale=scale,
+                        source_depth_status=depth.get('status')))
+                    stable_candidate_front['status']='STABLE_CANDIDATE_FRONT_DIAGNOSTIC_ONLY'
+                    stable_candidate_front['point_set']='STABLE_LOCAL_PATCHES_NUMERIC_CANDIDATE_LAYER_DIAGNOSTIC_ONLY'
+                    stable_candidate_front['candidate_sample_count']=len(candidate_indices)
+                    stable_candidate_front['stable_local_patches']=stable_report
+                    stable_candidate_front['semantic_ownership_verified']=False
+                    stable_candidate_front['limitations'].append(
+                        'Provisional held-out residual limits do not establish physical distance accuracy or clearance.')
     def attach(result):
         if fast is not None:result['fast_local_consistency']=fast
         if front is not None:result['front_geometry']=front
         if layer_front is not None:result['candidate_layer_front_geometry']=layer_front
         if local_candidate_front is not None:result['local_candidate_front_geometry']=local_candidate_front
+        if stable_candidate_front is not None:result['stable_candidate_front_geometry']=stable_candidate_front
         return result
     if defer_local and not prepare_local:
         return attach(diagnostic_result(depth,scale,lower,upper,
