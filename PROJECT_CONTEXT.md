@@ -1,8 +1,8 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-11-12 (technical state through the 19:34:49 fast Shadow Pi run)
+**Snapshot date:** 2026-11-13 (technical state through the 18:17:18 fast Shadow Pi run and the subsequent launcher corrections)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** Shadow is an engineering candidate. The fast mask-only camera path has demonstrated driver-declared age below 0.5 s at the Bridge decision in a one-person Pi run, while all decisions remained PAUSE. PAUSE/RESUME was observed on lifted wheels; supervised floor steering and a separate short UART Shadow step are recorded in the working baseline. RGB v3 has passed a reviewed, sampled, independent two-person detection check, and older stereo evidence distinguishes two torso regions offline. These results do not validate physical target ownership, continuous tracking, safe distance or autonomous floor following. The fast camera-driven Shadow motor runner remains disabled.
+**Status:** Shadow is an engineering candidate. In the latest one-person, motor-off Pi run the fast segmentation-mask path produced 64/64 `FOLLOW_ELIGIBLE` decisions: 31 from coherent whole-mask depth and 33 from a stable local current-frame surface when whole-mask MAD refused. One track ID persisted through the run and driver-declared age remained below 0.5 s at the Bridge decision. The launcher now pins the conditional 0.5 to 4.5 m v2 profile and the mask-only path no longer requires an unused YOLO v3 file; neither correction has yet been exercised in a new Pi run. The evidence does not validate physical target ownership after loss, a two-person scene, independently measured exposure latency, physical distance accuracy, canonical Measurement admission or autonomous floor following. The fast camera-driven Shadow motor runner remains disabled.
 
 ## Update rule
 
@@ -16,6 +16,57 @@ This file is the change-controlled snapshot of the active project state.
 - Do not silently update it after code edits, tests, experiments, or conversation summaries.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
+
+## 2026-11-13: current-frame local surface and corrected Fast Shadow launcher
+
+The active OV9281 Pi v7 stereo calibration, AR0234 v5 intrinsic and
+AR-to-left extrinsic remain unchanged. The OV9281 activation SHA-256 is
+`39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52`.
+The extended RGB and stereo decision profile is
+`runtime_artifacts/ar0234_ov9281_decision_chain_0p5_to_4p5m_v2/ar0234_ov9281_decision_chain_activation.json`,
+range 0.5 to 4.5 m, SHA-256
+`c835a304cc2758843747400c30f09a567b5ac74ebfd7908ea8ee14a013f519d9`
+and status `ACTIVE_CONDITIONAL_SUPERVISED_DECISION_RECOMMENDATION_ONLY`.
+This status does not authorize canonical Measurement or movement.
+
+The motor-off Pi evidence at
+`/home/elwis/.local/state/sie/evidence/shadow_fast_20261113_181718` was
+reviewed from `shadow_fast_20261113_181718_review.tar.gz`, including the
+Bridge journal and 64 exact audit JSON files. All 64 camera cycles produced
+`FOLLOW_ELIGIBLE`: 31 used `CURRENT_FAST_MASK_OBSERVATION` with coherent
+whole-mask depth and 33 used `CURRENT_STABLE_LOCAL_PREVIEW` after
+`DEPTH_MAD_EXCEEDED`. In all 33 fallback cycles the exact audit retained a
+current `shadow_target_bearing_deg` and an unambiguous matched RGB track.
+The same track ID was present in all 64 cycles. There was no target loss,
+re-entry or two-person interval in this run, so ownership and reacquisition
+remain unproved.
+
+Maximum driver-timestamp-to-Bridge-decision age was 337.188 ms for AR0234
+and 333.264 ms for OV9281. These are driver-declared ages, not independently
+measured exposure-to-command latency. The stable local front surface used
+2,619 to 4,008 points and the Bridge reported 2.174 to 2.613 m. These values
+show that the current-frame local surface can keep the motor-off decision
+path available when whole-mask MAD is high; they are not a physical distance
+error bound or proof of robot-front clearance.
+
+The reviewed run still loaded the old v1 activation profile with a 0.5 to
+2.0 m authorized range while the preview range was configured to 0.5 to
+4.5 m. Commit `a1b02b960639c25b218b67bf70b987b717b484a2` corrects the Fast
+Shadow launcher to require the exact conditional v2 profile and SHA above.
+Commit `fcb1959fc637e6cfdbec3659edb1d1d6a650c0b2` also makes the diagnostic
+segmentation-mask launcher explicitly disable the unused AR v3 detector, so
+this path no longer depends on a YOLO v3 file. The separate
+`v3_mask_binding` path remains strict and SHA-pinned. Syntax, compilation and
+the new launcher contract checks passed; full pytest was unavailable in the
+working environment. No new Pi run has yet verified these two corrections.
+
+The next single MVP check is a motor-off mask-only run with the exact v2
+profile at approximately 2.5 to 2.65 m, including controlled person motion.
+It must verify the loaded activation SHA and range, local depth, track
+continuity, driver-declared age and the stable-front estimate against the
+measured robot-front clearance or another explicit physical datum. Do not
+return to whole-mask MAD tuning or download YOLO v3 for this mask-only check.
+Motors remain disabled.
 
 ## 2026-11-12: repository and Drive are the current copies
 
@@ -1214,6 +1265,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-13 | Recorded the reviewed 64-cycle motor-off Fast Shadow run: 64/64 `FOLLOW_ELIGIBLE`, including 33 current-frame local-surface decisions after whole-mask MAD refusal, one uninterrupted track ID and sub-0.5 s driver-declared age. Recorded the exact conditional v2 launcher correction and removal of the unused YOLO v3 dependency from the mask-only path. Kept calibration, canonical Measurement and motor authorization unchanged; the corrected launcher still requires a new Pi verification and physical robot-front comparison. |
 | 2026-11-12 | Recorded the 19:34:49 Pi fast mask-only source run: 9/9 verified bundles, 296 camera cycles below 500 ms driver age to Bridge decision, 13 coherent versus 30 MAD-refused mask depths, five track IDs broken within one person's presence, no post-exit reappearance or two-person test, and all decisions PAUSE. The prior all-mask/candidate front mismatch did not recur in this scene; active calibration, Measurement and motor boundaries unchanged. |
 | 2026-11-12 | Removed mandatory ChatGPT Library synchronization at the operator's request. The repository and private Drive file are the two current copies; any Library copy is optional reading material and may be stale. Technical state and motor boundaries unchanged. |
 | 2026-11-10 | Recorded the operator-reviewed fresh 120-frame two-person blind RGB check: v2/v3 presence 88/88 with 0/32 empty-frame detections, and at least two detections in 56/62 versus 60/62 two-person frames. Separated it from older 29-frame stereo material: 19 frames have two distinct box-depth medians, but ten lack disparity and none passes the 50 mm MAD gate for both boxes. Kept active v7, Measurement and Shadow motor boundaries unchanged; specified a fresh mask-owned depth and occlusion check. |
