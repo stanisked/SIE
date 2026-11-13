@@ -59,6 +59,17 @@ def summarize(rows: list[dict]) -> dict:
             for r in cycles),
         "local_surface_residual_mad": distance_stats("local_surface_residual_mad_m"),
         "local_surface_residual_p90": distance_stats("local_surface_residual_p90_m"),
+        "local_candidate_front_statuses": dict(Counter(
+            r.get("local_candidate_front_status") for r in cycles)),
+        "mad_refusals_with_local_candidate_front": sum(
+            r.get("mask_status") == "DEPTH_MAD_EXCEEDED"
+            and r.get("local_candidate_front_status") == "LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY"
+            for r in cycles),
+        "local_candidate_front_points": {
+            "count": len(points), "min": min(points), "median": statistics.median(points)
+        } if (points := [r["local_candidate_front_point_count"] for r in cycles
+                       if type(r.get("local_candidate_front_point_count")) is int])
+          else {"count": 0},
         "v3_mask_matches": dict(Counter(r.get("v3_mask_match") for r in cycles)),
         "v3_detection_counts": dict(Counter(r.get("v3_detection_count") for r in cycles)),
         "v3_raw_detection_counts": dict(Counter(r.get("v3_raw_detection_count")

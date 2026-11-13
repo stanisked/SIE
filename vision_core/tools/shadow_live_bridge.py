@@ -121,6 +121,7 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
     local_residual = local.get("held_out_residual") or {}
     front = shape.get("front_geometry") or {}
     candidate_front = shape.get("candidate_layer_front_geometry") or {}
+    local_candidate_front = shape.get("local_candidate_front_geometry") or {}
     selected_instance = (audit.get("ar0234_dynamic_target") or {}).get("candidate") or {}
     v3_diagnostic = audit.get("shadow_v3_observation_diagnostic") or {}
     timestamp = audit.get("timestamp")
@@ -183,6 +184,13 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "candidate_front_known_median_m": (candidate_front.get("known_term_m") or {}).get("median"),
         "candidate_front_point_count": candidate_front.get("point_count"),
         "candidate_front_point_set": candidate_front.get("point_set"),
+        "local_candidate_front_status": local_candidate_front.get("status"),
+        "local_candidate_front_point_count": local_candidate_front.get("point_count"),
+        "local_candidate_front_point_set": local_candidate_front.get("point_set"),
+        "local_candidate_front_provenance": local_candidate_front.get("provenance"),
+        "local_candidate_front_known_p05_m": (local_candidate_front.get("known_term_m") or {}).get("p05"),
+        "local_candidate_front_residual_p90_m": (local_candidate_front.get("local_fit_residual") or {}).get("absolute_p90_m"),
+        "local_candidate_front_fitted_fraction": local_candidate_front.get("local_fit_fitted_fraction"),
         "source_snapshot_evidence": audit.get("source_snapshot_evidence"),
         "depth_percentiles_m": pre_range.get("depth_percentiles_m"),
         "capture_to_receive_s": age_s,

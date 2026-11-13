@@ -85,7 +85,12 @@ def test_preview_keeps_all_points_and_numeric_candidate_separate():
                           'known_term_m':{'p05':.95,'median':2.1}},
         'candidate_layer_front_geometry':{
             'point_set':'NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY',
-            'point_count':600,'known_term_m':{'p05':2.1,'median':2.11}}}
+            'point_count':600,'known_term_m':{'p05':2.1,'median':2.11}},
+        'local_candidate_front_geometry':{
+            'status':'LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY',
+            'point_set':'LOCAL_FITTED_NUMERIC_CANDIDATE_LAYER_DIAGNOSTIC_ONLY',
+            'point_count':560,'known_term_m':{'p05':2.13},
+            'provenance':{'source_cycle_id':'cycle-1'}}}
     row['source_snapshot_evidence']={'status':'REQUESTED_AFTER_PRIMARY_PUBLISH',
         'file':'cycle-1.npz','mask_sha256':'mask-hash'}
     result=preview_record(row,convert(row),now_s=20.)
@@ -98,4 +103,6 @@ def test_preview_keeps_all_points_and_numeric_candidate_separate():
     assert result['local_surface_residual_samples']==180
     assert result['local_surface_residual_p90_m']==.073
     assert result['mask_depth_layers']==row['shape_diagnostic']['mask_depth']['depth_layers']
+    assert result['local_candidate_front_known_p05_m']==2.13
+    assert result['local_candidate_front_provenance']['source_cycle_id']=='cycle-1'
     assert result['source_snapshot_evidence']==row['source_snapshot_evidence']

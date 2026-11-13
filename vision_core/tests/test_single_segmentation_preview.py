@@ -13,6 +13,7 @@ sys.path.insert(0,str(ROOT/'ros2/sie_ros2/sie_ros2'))
 from preview_mask_client import PreviewMaskClient
 from preview_mask_surface import CurrentInstanceMasks, local_surface_stats
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
+from vision_core.person_localization.robot_front_geometry import load_profile
 
 
 class Tensor:
@@ -136,7 +137,9 @@ class YOLO:
                     fast_seg=client.infer('fast',np.zeros((1200,1920,3),np.uint8))
                     fast=client.evaluate_selected('fast',np.full((48,64),16,np.float32),cal,
                         fast_seg['instances'][0],[4,4,120,88],[.5,4.5],fast_seg,scale=.5,
-                        defer_local=True,prepare_local=False,fast_local=True)
+                        defer_local=True,prepare_local=False,fast_local=True,
+                        front_profile=load_profile(
+                            ROOT/'vision_core/config/diagnostics/robot_front_mount_operator_v1.json'))
                     self.assertEqual(fast['mask_depth'],result['mask_depth'])
                     self.assertNotIn('_surface_job',fast)
                     local=fast['fast_local_consistency']
@@ -147,6 +150,12 @@ class YOLO:
                     self.assertGreater(local['pooled_held_out_axial_residual']['sample_count'],0)
                     self.assertLess(local['pooled_held_out_axial_residual']['absolute_max_m'],1e-10)
                     self.assertFalse(local['suitable_for_control'])
+                    local_front=fast['local_candidate_front_geometry']
+                    self.assertEqual(local_front['status'],
+                                     'LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY')
+                    self.assertEqual(local_front['provenance']['source_cycle_id'],'fast')
+                    self.assertEqual(local_front['provenance']['mask_sha256'],fast['mask_sha256'])
+                    self.assertFalse(local_front['actuator_access'])
                     from preview_mask_surface import prepare_stereo_points
                     prepared_seg=client.infer('prepared',np.zeros((1200,1920,3),np.uint8))
                     points=prepare_stereo_points(np.full((48,64),16,np.float32),cal,scale=.5,cycle_id='prepared')

@@ -277,3 +277,25 @@ person or that its range is physically accurate. Local residual limits cannot
 be chosen from these pass/refusal labels as if they were ground truth. Keep
 the motor-off boundary while building an explicitly local, source-bound
 front-surface candidate and checking it against a physical datum.
+
+**Locally fitted candidate front, 2026-11-13 (code candidate):** The existing
+Fast Shadow current-cycle worker now reports a separate
+`local_candidate_front_geometry` when the one numerical depth candidate has
+at least 100 points in locally fitted patches. The geometry uses original
+measured stereo depths of only those candidate-layer points, not fitted or
+corrected depths. A secondary depth group is excluded from the candidate's
+local fit; the existing all-mask local diagnostic, all-mask front and
+candidate-layer front remain available separately. The worker and client
+bind the new report to the exact cycle, individual mask, segmentation model,
+fusion arrays and front profile. Bridge journals its status, point count,
+point-set label, provenance and p05. No local residual threshold, approved
+Measurement or motor decision is added; selecting fitted patches can shift
+the front p05 in either direction, so it is not a conservative clearance
+bound. Replay of the nine previously verified 2026-11-12 source bundles
+reproduced all nine original mask-depth statuses and candidate sample counts;
+the locally fitted front existed in all nine, including the two global-MAD
+refusals. The p05 difference relative to all candidate-layer points ranged
+from -44.3 to +33.9 mm in those nine bundles. This is a source replay, not
+new Pi timing or a measured person-surface error bound. Next: compare the
+separately reported current-frame candidate with a measured physical datum
+before using it in a shape-aware follow decision.

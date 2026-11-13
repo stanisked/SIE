@@ -855,7 +855,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                          'selected_instance_index':((audit.get('ar0234_dynamic_target') or {}).get('candidate') or {}).get('instance_index'),
                          'mask_depth':shape.get('mask_depth'),
                          'front_geometry':shape.get('front_geometry'),
-                         'candidate_layer_front_geometry':shape.get('candidate_layer_front_geometry')})
+                         'candidate_layer_front_geometry':shape.get('candidate_layer_front_geometry'),
+                         'local_candidate_front_geometry':shape.get('local_candidate_front_geometry')})
                 except Exception as error:
                     self._source_snapshot_failures += 1
                     self._log_preview(f'SOURCE_SNAPSHOT_REFUSED {cycle_id} {type(error).__name__}')

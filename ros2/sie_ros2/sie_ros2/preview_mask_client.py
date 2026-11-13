@@ -1,6 +1,7 @@
 """Single-owner companion process with bounded, cycle-bound temporary input."""
 import hashlib
 import json
+import math
 from pathlib import Path
 import select
 import subprocess
@@ -249,6 +250,33 @@ class PreviewMaskClient:
                     layer.get('distance_from_front_m') is not None or
                     layer.get('actuator_access') is not False):
                 raise ValueError('candidate layer current-frame/profile binding mismatch')
+            if fast_local and layer is not None:
+                local_front=result.get('local_candidate_front_geometry') or {}
+                residual=local_front.get('local_fit_residual') or {}
+                if (local_front.get('provenance')!=expected or
+                        local_front.get('profile_sha256')!=front['profile_sha256'] or
+                        local_front.get('point_set')!='LOCAL_FITTED_NUMERIC_CANDIDATE_LAYER_DIAGNOSTIC_ONLY' or
+                        local_front.get('candidate_sample_count')!=layer['point_count'] or
+                        type(local_front.get('point_count')) is not int or
+                        not 0<=local_front['point_count']<=layer['point_count'] or
+                        residual.get('sample_count')!=local_front['point_count'] or
+                        local_front.get('source_depth_status')!=(result.get('mask_depth') or {}).get('status') or
+                        local_front.get('semantic_ownership_verified') is not False or
+                        local_front.get('distance_from_front_m') is not None or
+                        local_front.get('actuator_access') is not False or
+                        local_front.get('status') not in (
+                            'LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY',
+                            'INSUFFICIENT_LOCAL_FITTED_CANDIDATE_POINTS') or
+                        (local_front['status']=='LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY'
+                         and (local_front['point_count']<100 or
+                              type((local_front.get('known_term_m') or {}).get('p05')) not in (float,int) or
+                              not math.isfinite(local_front['known_term_m']['p05']) or
+                              type(residual.get('absolute_p90_m')) not in (float,int) or
+                              not math.isfinite(residual['absolute_p90_m']))) or
+                        (local_front['status']=='INSUFFICIENT_LOCAL_FITTED_CANDIDATE_POINTS'
+                         and (local_front['point_count']>=100 or
+                              local_front.get('known_term_m') is not None))):
+                    raise ValueError('local candidate front current-frame/profile binding mismatch')
         result['mask_s']=segmentation.get('mask_s')
         result['inference_round_trip_s']=segmentation.get('round_trip_s')
         result['round_trip_scope']='FUSION_ONLY_AFTER_SEGMENTATION'

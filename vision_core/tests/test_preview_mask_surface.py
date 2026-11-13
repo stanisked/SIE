@@ -33,6 +33,32 @@ def calibration(w=128,h=96):
 
 
 class PreviewMaskSurfaceTests(unittest.TestCase):
+    def test_local_front_uses_fitted_points_from_one_candidate_layer(self):
+        v,u=np.mgrid[0:64:4,0:64:4]
+        u=u.ravel();v=v.ravel();far=len(u);near=64
+        points={'u':np.r_[u,u[:near]],'v':np.r_[v,v[:near]],
+                'd':np.r_[np.full(far,25.),np.full(near,50.)],
+                'z':np.r_[np.full(far,2.4),np.full(near,1.2)],
+                'xy':np.tile([100.,100.],(far+near,1)),
+                'fb':np.asarray(60.),'stride':np.asarray(4),'scale':np.asarray(1.),
+                'lower':np.asarray(.5),'upper':np.asarray(4.5)}
+        mount=load_profile(ROOT/'vision_core/config/diagnostics/robot_front_mount_operator_v1.json')
+        args={'profile':mount,'P1':calibration()['P1'],'R1':np.eye(3)}
+        result,_=evaluate_prepared(points,np.ones((1200,1920),bool),
+            [0,0,1920,1200],defer_local=True,prepare_local=False,
+            fast_local=True,front_geometry=args)
+        depth=result['mask_depth'];local=result['local_candidate_front_geometry']
+        self.assertEqual(depth['candidate_sample_count'],far)
+        self.assertEqual(local['status'],'LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY')
+        self.assertEqual(local['point_count'],far)
+        self.assertEqual(local['candidate_sample_count'],far)
+        self.assertLess(local['local_fit_residual']['absolute_p90_m'],1e-10)
+        self.assertAlmostEqual(local['known_term_m']['p05'],
+                               result['candidate_layer_front_geometry']['known_term_m']['p05'])
+        self.assertLess(result['front_geometry']['known_term_m']['p05'],
+                        local['known_term_m']['p05']-.5)
+        self.assertFalse(local['actuator_access'])
+
     def test_candidate_front_stays_separate_from_nearer_mask_owned_layer(self):
         # 120 near points are a supported layer but fail the 25% support rule
         # against 600 far points. The all-point p05 must not become a range.
@@ -59,6 +85,11 @@ class PreviewMaskSurfaceTests(unittest.TestCase):
         self.assertEqual(candidate['point_set'],'NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY')
         self.assertFalse(candidate['semantic_ownership_verified'])
         self.assertFalse(candidate['actuator_access'])
+        sparse,_=evaluate_prepared(points,mask,[0,0,1920,1200],defer_local=True,
+                                   prepare_local=False,fast_local=True,front_geometry=args)
+        self.assertEqual(sparse['local_candidate_front_geometry']['status'],
+                         'INSUFFICIENT_LOCAL_FITTED_CANDIDATE_POINTS')
+        self.assertIsNone(sparse['local_candidate_front_geometry']['known_term_m'])
         without,_=evaluate_prepared(points,mask,[0,0,1920,1200],defer_local=True,
                                     prepare_local=False)
         self.assertEqual(without['mask_depth'],depth)

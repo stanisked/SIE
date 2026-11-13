@@ -68,7 +68,7 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
         selected = owned(xy, interior, roi)
         depth, candidate_indices = depth_from_owned_samples_with_candidate_indices(
             z[selected], int(np.count_nonzero(mask)), int(np.count_nonzero(interior)))
-    fast=None
+    fast=fast_data=None
     if fast_local:
         import time
         from vision_core.person_localization.fast_local_depth_consistency import analyze_fast_local_depth
@@ -76,11 +76,11 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
             interior=cv2.erode(mask.astype(np.uint8),np.ones((5,5),np.uint8),borderType=cv2.BORDER_CONSTANT,borderValue=0)
             selected=owned(xy,interior,roi)
         started=time.monotonic()
-        fast,_=analyze_fast_local_depth(u[selected],v[selected],d[selected],fb,
+        fast,fast_data=analyze_fast_local_depth(u[selected],v[selected],d[selected],fb,
             stride=stride,tile_px=int(32*scale))
         fast['fit_s']=time.monotonic()-started
         fast['rgb_coverage_status']='NOT_COMPUTED_IN_FAST_CURRENT_FRAME_PATH'
-    front=layer_front=None
+    front=layer_front=local_candidate_front=None
     if front_geometry is not None:
         import time
         from vision_core.person_localization.robot_front_geometry import describe_front
@@ -107,10 +107,63 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
             layer_front['point_set']='NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY'
             layer_front['semantic_ownership_verified']=False
             layer_front['processing_s']=time.monotonic()-layer_started
+            if fast is not None:
+                # A secondary depth layer must not participate in the local
+                # fit of the numerical candidate. Reuse the existing fit when
+                # every owned point belongs to that candidate.
+                if len(candidate_indices)==len(owned_u):
+                    candidate_fast,candidate_data=fast,fast_data
+                    candidate_fit_s=0.
+                else:
+                    from vision_core.person_localization.fast_local_depth_consistency import analyze_fast_local_depth
+                    fit_started=time.monotonic()
+                    candidate_fast,candidate_data=analyze_fast_local_depth(
+                        owned_u[candidate_indices],owned_v[candidate_indices],
+                        d[selected][candidate_indices],fb,
+                        stride=stride,tile_px=int(32*scale))
+                    candidate_fit_s=time.monotonic()-fit_started
+                fitted=candidate_data['evaluated']
+                fitted_count=int(np.count_nonzero(fitted))
+                local_candidate_front={
+                    'status':'INSUFFICIENT_LOCAL_FITTED_CANDIDATE_POINTS',
+                    'point_set':'LOCAL_FITTED_NUMERIC_CANDIDATE_LAYER_DIAGNOSTIC_ONLY',
+                    'candidate_sample_count':len(candidate_indices),
+                    'point_count':fitted_count,
+                    'local_fit_residual':candidate_fast['pooled_held_out_axial_residual'],
+                    'local_fit_fitted_fraction':candidate_fast['fitted_sample_fraction'],
+                    'candidate_refit_s':candidate_fit_s,
+                    'source_depth_status':depth.get('status'),
+                    'reference_frame':'robot_longitudinal_axis_from_front_plane',
+                    'unit':'m','confidence':None,'confidence_status':'NOT_VALIDATED',
+                    'profile_sha256':front['profile_sha256'],
+                    'known_term_m':None,'semantic_ownership_verified':False,
+                    'distance_from_front_m':None,
+                    'measurement_authorized':False,'navigation_eligible':False,
+                    'actuator_access':False}
+                if fitted_count>=100:
+                    local_candidate_front.update(describe_front(
+                        owned_u[candidate_indices][fitted],
+                        owned_v[candidate_indices][fitted],
+                        owned_z[candidate_indices][fitted],
+                        front_geometry['P1'],front_geometry['R1'],
+                        front_geometry['profile'],scale=scale,
+                        source_depth_status=depth.get('status')))
+                    local_candidate_front['status']='LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY'
+                    local_candidate_front['point_set']='LOCAL_FITTED_NUMERIC_CANDIDATE_LAYER_DIAGNOSTIC_ONLY'
+                    local_candidate_front['candidate_sample_count']=len(candidate_indices)
+                    local_candidate_front['local_fit_residual']=candidate_fast['pooled_held_out_axial_residual']
+                    local_candidate_front['local_fit_fitted_fraction']=candidate_fast['fitted_sample_fraction']
+                    local_candidate_front['candidate_refit_s']=candidate_fit_s
+                    local_candidate_front['semantic_ownership_verified']=False
+                    local_candidate_front['limitations'].append(
+                        'Local fit availability does not validate physical target ownership or depth error.')
+                    local_candidate_front['limitations'].append(
+                        'Filtering points can move p05 nearer or farther; it is not a conservative clearance bound.')
     def attach(result):
         if fast is not None:result['fast_local_consistency']=fast
         if front is not None:result['front_geometry']=front
         if layer_front is not None:result['candidate_layer_front_geometry']=layer_front
+        if local_candidate_front is not None:result['local_candidate_front_geometry']=local_candidate_front
         return result
     if defer_local and not prepare_local:
         return attach(diagnostic_result(depth,scale,lower,upper,
