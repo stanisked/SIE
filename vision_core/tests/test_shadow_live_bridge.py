@@ -68,6 +68,8 @@ def test_preview_preserves_stereo_refusal_and_capture_latency():
 
 def test_preview_keeps_all_points_and_numeric_candidate_separate():
     row=sample()
+    row['shadow_rgb_continuity']={'status':'MATCHED_CURRENT_RGB_DIAGNOSTIC_ONLY',
+                                  'track_id':'person-1'}
     row['shape_diagnostic']={
         'mask_depth':{'depth_layers':[{'sample_count':120,'median_depth_m':1.2},
                                       {'sample_count':600,'median_depth_m':2.4}],
@@ -83,5 +85,6 @@ def test_preview_keeps_all_points_and_numeric_candidate_separate():
     assert result['front_known_p05_m']==.95
     assert result['candidate_front_known_p05_m']==2.1
     assert result['candidate_front_point_count']==600
+    assert result['rgb_continuity_track_id']=='person-1'
     assert result['mask_depth_layers']==row['shape_diagnostic']['mask_depth']['depth_layers']
     assert result['source_snapshot_evidence']==row['source_snapshot_evidence']

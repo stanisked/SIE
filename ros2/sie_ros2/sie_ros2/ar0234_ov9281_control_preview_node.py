@@ -25,6 +25,7 @@ from .latest_v4l2_capture import LatestV4L2Capture, freshness_report, select_lat
 from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity, restore_crop
 from vision_core.person_localization.diagnostic_instance_selection import select_instance
+from vision_core.person_localization.shadow_rgb_continuity import continued_track, remember_track
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from vision_core.person_localization.control_input_shadow import evaluate_control_input_shadow
 from vision_core.person_localization.dynamic_shadow_diagnostic import (
@@ -103,6 +104,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self.declare_parameter("preview_shadow_segmentation_input", False)
         self._shadow_segmentation_input = bool(self.get_parameter("preview_shadow_segmentation_input").value)
         self._shadow_fast_input = self._shadow_v3_mask_match or self._shadow_segmentation_input
+        self._shadow_rgb_last_seen = None
         if self._shadow_v3_mask_match and self._shadow_segmentation_input:
             raise ValueError("choose one Shadow semantic source")
         if self._rgb_backend not in ("two_model_reference", "single_segmentation"):
@@ -430,6 +432,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                      shape_diagnostic={"status":"NOT_EVALUATED_NO_CURRENT_TARGET"})
         future = None
         surface_job = None
+        rgb_continuity_observed = False
         local_scheduled=getattr(self,"_local_enabled",True) and (self.sequence-1)%getattr(self,"_local_every_n",1)==0
         try:
             if ar is None or combined is None:
@@ -530,6 +533,25 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if not geometry["accepted"]:
                 audit.update(status="TARGET_UNAVAILABLE", reason=geometry["reason"])
                 return
+            if (getattr(self, "_shadow_segmentation_input", False) and
+                    len(segmentation["instances"]) == 1 and
+                    dynamic.get("current_eligible_count") == 1 and
+                    not audit.get("dynamic_shadow_edge_override") and
+                    not audit.get("dynamic_shadow_geometry_override")):
+                matched = continued_track(self._shadow_rgb_last_seen, candidate,
+                    stamp.isoformat(), minimum_iou=self.temporal_target_minimum_iou,
+                    maximum_center_displacement_relative=
+                    self.temporal_target_maximum_center_displacement_relative)
+                if (matched is not None and self._confirmed_target_track is not None and
+                        matched["track_id"] == self._confirmed_target_track["track_id"]):
+                    self._shadow_rgb_last_seen = matched
+                    rgb_continuity_observed = True
+                    audit["shadow_rgb_continuity"] = {
+                        "status": "MATCHED_CURRENT_RGB_DIAGNOSTIC_ONLY",
+                        "track_id": matched["track_id"]}
+                else:
+                    self._shadow_rgb_last_seen = None
+                    self._confirmed_target_track = None
             observation = ({**candidate, "captured_at_utc":stamp.isoformat(),
                 "observation_id":f"segmentation-preview:{cycle_id}:{candidate['instance_index']}"}
                 if single else self._selected_observation(raw, candidate, dynamic))
@@ -652,6 +674,12 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 # cycle. Depth is not persisted as a track attribute.
                 if getattr(self, "_shadow_fast_input", False):
                     audit["shadow_track_confirmation"] = confirmation
+                if getattr(self, "_shadow_segmentation_input", False):
+                    self._shadow_rgb_last_seen = remember_track(
+                        confirmation["track_id"], candidate, stamp.isoformat())
+                    audit["shadow_rgb_continuity"] = {
+                        "status": "CONFIRMED_CURRENT_RGB_STEREO",
+                        "track_id": confirmation["track_id"]}
         except Exception as error:
             audit.update(status="PROCESSING_REFUSED", reason=type(error).__name__, error_detail=str(error)[:400], association=None)
         except KeyboardInterrupt:
@@ -660,12 +688,20 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         finally:
             if not rclpy.ok():
                 audit.update(status="CANCELLED_SHUTDOWN", reason="ROS_SHUTDOWN", association=None)
-            # A gap or refused mask/stereo cycle breaks Shadow identity. Never
-            # reuse a pre-loss track ID when a single person reappears.
+            # A current, unique RGB match can carry identity across a MAD-only
+            # depth refusal. No confirmation or range is published on that cycle.
+            # A lost/ambiguous RGB target, other refusal or stale match resets it.
             if (getattr(self, "_shadow_fast_input", False) and
                     ("shadow_track_confirmation" not in audit or
                      audit.get("status") in ("PROCESSING_REFUSED", "CANCELLED_SHUTDOWN"))):
-                self._confirmed_target_track = None
+                retain_rgb = (getattr(self, "_shadow_segmentation_input", False) and
+                    rgb_continuity_observed and
+                    audit.get("status") == "MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY" and
+                    (audit.get("shape_diagnostic") or {}).get("mask_depth", {}).get("status")
+                    == "DEPTH_MAD_EXCEEDED")
+                if not retain_rgb:
+                    self._confirmed_target_track = None
+                    self._shadow_rgb_last_seen = None
             # Drain a started stereo job even when detection failed. No stale
             # frame/map can leak to a later callback or a reused matcher.
             if future is not None:

@@ -178,3 +178,31 @@ check. The producer code is unchanged; its focused test could not run here
 because SciPy is missing from the local test environment. Next: one motor-off
 Pi preview with one person, checking eligible/PAUSE decisions, layer range,
 track continuity and driver age. Eligible rows do not admit motor motion.
+
+**Fast Shadow Pi run, 2026-11-13 10:46:34:** The motor-off Bridge journal
+`shadow_fast_20261113_104634/bridge.jsonl` (uploaded SHA-256
+`76c19f3abdbd7bdbc677adbcdbd502a2c4689523142c175d8d4782ba314d702e`)
+has 120 camera cycles in 31.83 s. One RGB instance was eligible in every
+cycle. Thirty-five cycles produced diagnostic `FOLLOW_ELIGIBLE`; 85 stayed
+PAUSE because mask depth exceeded the unchanged 0.05 m MAD gate. The 35
+eligible cycles were split over 14 track IDs, longest consecutive run nine.
+Adjacent RGB boxes had IoU at least 0.677, while the code discarded its
+confirmed track after each MAD refusal. Candidate-layer and all-mask front
+p05 differed by at most 0.000088 m; both camera driver-declared ages to
+decision stayed below 0.5 s. Selected front ranges were 2.605–3.420 m,
+within the 0.5–4.5 m Shadow diagnostic interval. The existing conditional
+0.5–4.5 m static v2 profile must not be confused with the v1 activation
+file still named by the Fast Shadow launcher. Neither profile authorizes
+motion from this run.
+
+**RGB continuity candidate, 2026-11-13 (local code):** In the mask-only Fast
+Shadow path, a confirmed ID may continue across a MAD-only PAUSE when the
+next unique current RGB box matches the prior box within 0.5 s using the
+existing 0.20 IoU and 0.75 relative-centre criteria. The previous depth is
+never reused. Target loss, ambiguity, geometry refusal or a processing error
+clears the carried ID. The audit and compact Bridge journal distinguish the
+RGB continuity ID from a stereo-confirmed ID. Offline traversal of the 120
+recorded boxes, with their driver timestamp intervals, kept one RGB ID
+through all 85 MAD refusals and assigned all 35 eligible cycles to it. This
+is a logic replay, not a new Pi measurement or proof of personal identity.
+The MAD gate, range source, calibration and motor-off launcher are unchanged.
