@@ -230,3 +230,25 @@ independently verified exposure timing. Motor execution was disabled and
 `FOLLOW_ELIGIBLE` did not authorize motion. Next MVP depth issue is the 51/97
 MAD refusals, especially the 32-cycle pause; investigate source geometry and
 a measured physical datum before revising the depth policy or enabling motion.
+
+**Fast local depth in the motor-off Shadow preview, 2026-11-13 (code
+candidate):** The mask-only launcher now requests the existing two-fold
+same-cycle local disparity-plane diagnostic on every frame. The compact
+Bridge journal records its exact source-frame/mask binding, fitted fraction,
+held-out axial residual MAD/p90 and the separate `control_depth_quality_shadow`
+status alongside legacy whole-person MAD. No local quality or physical-error
+limit has been invented; the old `FOLLOW_ELIGIBLE`/PAUSE and motor-disabled
+boundary are unchanged. A local replay of the nine archived source bundles
+from `shadow_fast_20261112_193449_review.tar.gz` used the saved original mask,
+LR-gated disparity, calibration and bbox-derived inner ROI. It reproduced all
+nine recorded mask-depth statuses and candidate sample counts. In the two
+MAD-refused snapshots, cycles 10 and 30, local held-out residual MAD was
+0.035/0.027 m, while absolute residual p90 was 0.143/0.109 m. Thus a low
+local MAD alone would conceal substantial tails in these frames. The local
+fit took 0.020 s median, 0.080 s maximum on this workstation replay (nine
+bundles); this is not Pi timing. Twelve focused existing tests, one Bridge
+record check, Python compilation and launcher syntax passed. Next: one
+motor-off Pi run of this exact path to observe per-cycle local coverage,
+residual tails and driver age; compare against the global-MAD pauses before
+designing a versioned shape-aware decision rule. Physical error and person
+surface ownership remain unverified.

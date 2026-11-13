@@ -70,6 +70,13 @@ def test_preview_keeps_all_points_and_numeric_candidate_separate():
     row=sample()
     row['shadow_rgb_continuity']={'status':'MATCHED_CURRENT_RGB_DIAGNOSTIC_ONLY',
                                   'track_id':'person-1'}
+    row['control_depth_quality_shadow']={
+        'status':'SHADOW_UNDETERMINED','refusal_reasons':[],
+        'local_consistency':{'status':'OBSERVED_NOT_ADMITTED',
+            'fast_binding':'EXACT_SOURCE_FRAME_AND_MASK',
+            'fitted_sample_fraction':.91,
+            'held_out_residual':{'sample_count':180,'mad_m':.021,
+                                 'absolute_p90_m':.073}}}
     row['shape_diagnostic']={
         'mask_depth':{'depth_layers':[{'sample_count':120,'median_depth_m':1.2},
                                       {'sample_count':600,'median_depth_m':2.4}],
@@ -86,5 +93,9 @@ def test_preview_keeps_all_points_and_numeric_candidate_separate():
     assert result['candidate_front_known_p05_m']==2.1
     assert result['candidate_front_point_count']==600
     assert result['rgb_continuity_track_id']=='person-1'
+    assert result['shape_aware_quality_status']=='SHADOW_UNDETERMINED'
+    assert result['local_surface_binding']=='EXACT_SOURCE_FRAME_AND_MASK'
+    assert result['local_surface_residual_samples']==180
+    assert result['local_surface_residual_p90_m']==.073
     assert result['mask_depth_layers']==row['shape_diagnostic']['mask_depth']['depth_layers']
     assert result['source_snapshot_evidence']==row['source_snapshot_evidence']

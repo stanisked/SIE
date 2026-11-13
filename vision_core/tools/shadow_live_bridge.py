@@ -116,6 +116,9 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
     pre_range = geometry.get("pre_range_depth_diagnostic") or {}
     shape = audit.get("shape_diagnostic") or {}
     masked = shape.get("mask_depth") or {}
+    quality = audit.get("control_depth_quality_shadow") or {}
+    local = quality.get("local_consistency") or {}
+    local_residual = local.get("held_out_residual") or {}
     front = shape.get("front_geometry") or {}
     candidate_front = shape.get("candidate_layer_front_geometry") or {}
     selected_instance = (audit.get("ar0234_dynamic_target") or {}).get("candidate") or {}
@@ -149,6 +152,16 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "mask_candidate_samples": masked.get("candidate_sample_count"),
         "mask_depth_layers": masked.get("depth_layers"),
         "mask_candidate_mad_m": masked.get("candidate_mad_m"),
+        # Same-cycle local fit is independent of whole-body depth MAD. Its
+        # residual describes consistency, not physical accuracy or motion admission.
+        "shape_aware_quality_status": quality.get("status"),
+        "shape_aware_quality_refusals": quality.get("refusal_reasons"),
+        "local_surface_status": local.get("status"),
+        "local_surface_binding": local.get("fast_binding"),
+        "local_surface_residual_samples": local_residual.get("sample_count"),
+        "local_surface_residual_mad_m": local_residual.get("mad_m"),
+        "local_surface_residual_p90_m": local_residual.get("absolute_p90_m"),
+        "local_surface_fitted_fraction": local.get("fitted_sample_fraction"),
         "mask_sha256": shape.get("mask_sha256"),
         "segmentation_model_sha256": shape.get("model_sha256"),
         "track_id": (audit.get("shadow_track_confirmation") or {}).get("track_id"),

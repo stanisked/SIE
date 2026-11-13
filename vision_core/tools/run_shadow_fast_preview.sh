@@ -50,7 +50,8 @@ esac
   -p preview_segmentation_engine:=onnxruntime -p preview_onnx_comparison_report:="$report" \
   -p preview_onnx_threads:=2 -p preview_rgb_backend:=single_segmentation \
   -p preview_rgb_transport:=mmap -p preview_local_surfaces_enabled:=false \
-  -p preview_defer_local_surfaces:=true -p preview_capture_backend:=latest_v4l2 \
+  -p preview_defer_local_surfaces:=true -p preview_fast_local_consistency:=true \
+  -p preview_capture_backend:=latest_v4l2 \
   -p preview_overlap_stereo_decode:=true \
   -p preview_native_capture_executable:="$native_dir/capture" \
   -p preview_native_rgb_trigger:=true -p preview_target_crop:=true \

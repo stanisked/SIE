@@ -40,6 +40,19 @@ def summarize(rows: list[dict]) -> dict:
         "adapter_reasons": dict(Counter(r.get("adapter_reason") for r in cycles)),
         "audit_statuses": dict(Counter(r.get("audit_status") for r in cycles)),
         "mask_statuses": dict(Counter(r.get("mask_status") for r in cycles)),
+        "shape_aware_quality_statuses": dict(Counter(
+            r.get("shape_aware_quality_status") for r in cycles)),
+        "exact_local_surface_cycles": sum(
+            r.get("local_surface_binding") == "EXACT_SOURCE_FRAME_AND_MASK"
+            and r.get("local_surface_status") == "OBSERVED_NOT_ADMITTED"
+            for r in cycles),
+        "mad_refusals_with_exact_local_surface": sum(
+            r.get("mask_status") == "DEPTH_MAD_EXCEEDED"
+            and r.get("local_surface_binding") == "EXACT_SOURCE_FRAME_AND_MASK"
+            and r.get("local_surface_status") == "OBSERVED_NOT_ADMITTED"
+            for r in cycles),
+        "local_surface_residual_mad": time_stats("local_surface_residual_mad_m"),
+        "local_surface_residual_p90": time_stats("local_surface_residual_p90_m"),
         "v3_mask_matches": dict(Counter(r.get("v3_mask_match") for r in cycles)),
         "v3_detection_counts": dict(Counter(r.get("v3_detection_count") for r in cycles)),
         "v3_raw_detection_counts": dict(Counter(r.get("v3_raw_detection_count")
