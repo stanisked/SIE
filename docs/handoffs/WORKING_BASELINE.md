@@ -252,3 +252,28 @@ motor-off Pi run of this exact path to observe per-cycle local coverage,
 residual tails and driver age; compare against the global-MAD pauses before
 designing a versioned shape-aware decision rule. Physical error and person
 surface ownership remain unverified.
+
+**Fast local Pi result, 2026-11-13 13:29:08:** The motor-off Bridge journal
+`shadow_fast_20261113_132908/bridge.jsonl` (uploaded SHA-256
+`b44daf3543514d22fc0f958dd081abcea9a6967757c775eb2e1df39502cc58a5`)
+has 96 camera cycles over 25.221 s and 658 no-new-frame polls. Each camera
+cycle had one eligible instance, one supported depth layer, an exact
+current-cycle/mask-bound local surface assessment, and driver-declared ages
+below 0.5 s (AR median/max 0.26167/0.30525 s; OV 0.26737/0.30101 s).
+Forty-two cycles were diagnostic `FOLLOW_ELIGIBLE`; 54 remained PAUSE from
+whole-mask `DEPTH_MAD_EXCEEDED`, all retaining the same RGB continuity ID.
+Local held-out axial residual MAD median/max was 17.14/30.09 mm and absolute
+residual p90 median/max 57.80/90.34 mm over all 96. The local MAD medians for
+global-MAD pass/refusal were 17.0/17.6 mm, and p90 medians 58.3/57.2 mm;
+they do not separate the two groups here. Cycles 79–96 were an uninterrupted
+global-MAD PAUSE for 4.500 s from first to last decision; local MAD remained
+11.0–12.9 mm on sampled cycles 79–81 and 95–96, and p90 40.1–47.9 mm.
+The candidate-layer front p05 was still computed, but no distance was
+published during PAUSE. No source snapshot or independently measured person
+surface distance was retained in this run. These figures show the existing
+whole-mask 50 mm veto is a poor sole *shape-quality* discriminator in this
+one-person scene; they do not establish that the low-residual surface is the
+person or that its range is physically accurate. Local residual limits cannot
+be chosen from these pass/refusal labels as if they were ground truth. Keep
+the motor-off boundary while building an explicitly local, source-bound
+front-surface candidate and checking it against a physical datum.
