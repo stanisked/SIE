@@ -37,6 +37,10 @@ from vision_core.person_localization.existing_static_profile_preview import (
 
 class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
     def __init__(self):
+        # The segmentation-only diagnostic path owns current RGB semantics and
+        # must not require an unused historical detection model.  The parent
+        # keeps its detector enabled by default for every other caller.
+        self._allow_disabled_ar_person_detector = True
         super().__init__()
         if self.evidence_capture_enabled or self.shadow_instance_mask_enabled or self.shadow_local_surfaces_enabled:
             raise ValueError("control preview excludes blocking evidence/mask/surface stages; use the audit node for those")
@@ -109,17 +113,26 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             raise ValueError("choose one Shadow semantic source")
         if self._rgb_backend not in ("two_model_reference", "single_segmentation"):
             raise ValueError("invalid preview RGB backend")
-        if self._shadow_fast_input and (self._rgb_backend != "single_segmentation" or
-                                        self.model_version != "v3"):
-            raise ValueError("Shadow input requires pinned startup model and single segmentation")
+        if self._shadow_fast_input and self._rgb_backend != "single_segmentation":
+            raise ValueError("Shadow input requires single segmentation")
+        if self._shadow_v3_mask_match and (
+            not self.ar_person_detector_enabled or self.model_version != "v3"
+        ):
+            raise ValueError("v3-to-mask input requires the pinned v3 detector")
+        if self._shadow_segmentation_input and self.ar_person_detector_enabled:
+            raise ValueError(
+                "segmentation-only Shadow input must not load an unused AR detector"
+            )
+        if self._rgb_backend == "two_model_reference" and not self.ar_person_detector_enabled:
+            raise ValueError("two-model RGB backend requires the AR person detector")
         self._v3_worker = (ThreadPoolExecutor(max_workers=1, thread_name_prefix="sie-shadow-v3")
                            if self._shadow_v3_mask_match else None)
         if self._rgb_backend == "single_segmentation":
             if self._stereo_scale != .5 or self._mask_client is None:
                 raise ValueError("single segmentation requires half resolution and mask worker")
-            # Parent startup still verifies its historical detector artifact;
-            # release the unused ONNX session and never run it in this backend.
-            if not self._shadow_v3_mask_match:
+            # A non-Shadow single-segmentation preview may still arrive through
+            # an older caller with the detector enabled.  Never run it here.
+            if not self._shadow_v3_mask_match and self.observer is not None:
                 self.observer = None
         if self._target_crop and self._rgb_backend!="single_segmentation":
             raise ValueError("target crop requires current single segmentation target")

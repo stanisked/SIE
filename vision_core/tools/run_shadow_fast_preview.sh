@@ -13,24 +13,42 @@ activation_profile_sha256=c835a304cc2758843747400c30f09a567b5ac74ebfd7908ea8ee14
 v3="${SHADOW_RGB_MODEL_PATH:-}"
 semantic_source="${SHADOW_FAST_SEMANTIC_SOURCE:-v3_mask_binding}"
 case "$semantic_source" in
-  v3_mask_binding) shadow_parameter='preview_shadow_v3_mask_match:=true' ;;
-  segmentation_mask) shadow_parameter='preview_shadow_segmentation_input:=true' ;;
+  v3_mask_binding)
+    shadow_parameter='preview_shadow_v3_mask_match:=true'
+    ar_detector_enabled=true
+    startup_model_path="$v3"
+    startup_model_version=v3
+    ;;
+  segmentation_mask)
+    shadow_parameter='preview_shadow_segmentation_input:=true'
+    ar_detector_enabled=false
+    startup_model_path=''
+    startup_model_version=disabled
+    ;;
   *) echo "Unsupported Shadow semantic source: $semantic_source" >&2; exit 2 ;;
 esac
-[[ -n "$v3" ]] || { echo 'Set SHADOW_RGB_MODEL_PATH to reviewed v3 ONNX' >&2; exit 2; }
+if [[ "$semantic_source" = v3_mask_binding ]]; then
+  [[ -n "$v3" ]] || { echo 'Set SHADOW_RGB_MODEL_PATH to reviewed v3 ONNX' >&2; exit 2; }
+fi
 for arg in "$@"; do
   case "$arg" in
     --execute|--source|--source=*|--journal|--journal=*|--semantic-source|--semantic-source=*|--segmentation-model-sha256|--segmentation-model-sha256=*)
       echo "Unsupported preview argument: $arg" >&2; exit 2 ;;
   esac
 done
-for required in "$runtime" "$segmenter_python" "$model" "$report" "$activation_profile" "$v3"; do
+required_inputs=("$runtime" "$segmenter_python" "$model" "$report" "$activation_profile")
+if [[ "$semantic_source" = v3_mask_binding ]]; then
+  required_inputs+=("$v3")
+fi
+for required in "${required_inputs[@]}"; do
   [[ -f "$required" ]] || { echo "Missing reviewed input: $required" >&2; exit 2; }
 done
-v3_sha=$(sha256sum "$v3" | cut -d ' ' -f 1)
-[[ "$v3_sha" = fccd45fbcf490134eb786ab3b38cf115dd03466edd85801ad44c8353f38549f5 ]] || {
-  echo "Shadow v3 ONNX SHA-256 mismatch: $v3_sha" >&2; exit 2;
-}
+if [[ "$semantic_source" = v3_mask_binding ]]; then
+  v3_sha=$(sha256sum "$v3" | cut -d ' ' -f 1)
+  [[ "$v3_sha" = fccd45fbcf490134eb786ab3b38cf115dd03466edd85801ad44c8353f38549f5 ]] || {
+    echo "Shadow v3 ONNX SHA-256 mismatch: $v3_sha" >&2; exit 2;
+  }
+fi
 actual_activation_profile_sha256=$(sha256sum "$activation_profile" | cut -d ' ' -f 1)
 [[ "$actual_activation_profile_sha256" = "$activation_profile_sha256" ]] || {
   echo "Activation profile SHA-256 mismatch: $actual_activation_profile_sha256" >&2; exit 2;
@@ -47,7 +65,9 @@ case "${SHADOW_CAPTURE_SNAPSHOTS:-0}" in
   *) echo 'SHADOW_CAPTURE_SNAPSHOTS must be 0 or 1' >&2; exit 2 ;;
 esac
 "$runtime" -c 'from sie_ros2.ar0234_ov9281_control_preview_node import main; main()' \
-  --ros-args -p project_root:="$PWD" -p model_path:="$v3" -p model_version:=v3 \
+  --ros-args -p project_root:="$PWD" -p model_path:="$startup_model_path" \
+  -p model_version:="$startup_model_version" \
+  -p ar_person_detector_enabled:="$ar_detector_enabled" \
   -p confidence_threshold:=0.40 -p "$shadow_parameter" \
   -p ar_intrinsic:=/home/elwis/dev_ws/runtime_artifacts/ar0234_intrinsic_v5_final_20260910/calibration_fullres.json \
   -p stereo_calibration:=/home/elwis/dev_ws/runtime_artifacts/ov9281_pi_stereo_v7/ov9281_pi_stereo_v7.npz \

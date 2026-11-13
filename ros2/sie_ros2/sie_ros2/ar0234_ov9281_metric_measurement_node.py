@@ -110,6 +110,7 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.declare_parameter("project_root", "")
         self.declare_parameter("model_path", "")
         self.declare_parameter("model_version", "v1")
+        self.declare_parameter("ar_person_detector_enabled", True)
         self.declare_parameter(
             "activation_profile",
             "/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_v1/"
@@ -154,7 +155,19 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         )
 
         self.project_root = absolute_parameter(self, "project_root")
-        self.model_path = absolute_parameter(self, "model_path")
+        self.ar_person_detector_enabled = bool(
+            self.get_parameter("ar_person_detector_enabled").value
+        )
+        if (
+            not self.ar_person_detector_enabled
+            and not getattr(self, "_allow_disabled_ar_person_detector", False)
+        ):
+            raise ValueError(
+                "AR person detector may be disabled only by an explicit diagnostic subclass"
+            )
+        self.model_path: Path | None = None
+        if self.ar_person_detector_enabled:
+            self.model_path = absolute_parameter(self, "model_path")
         self.model_version = str(self.get_parameter("model_version").value)
         self._stereo_person_detector_required = not getattr(
             self, "_disable_stereo_person_detector", False
@@ -241,10 +254,14 @@ class Ar0234Ov9281MetricMeasurementNode(Node):
         self.cv2 = cv2
         self.np = np
         self._load_profile()
-        self.observer = OnnxRuntimeYolo11PersonUpperBodyObserver(
-            self.model_path, confidence_threshold=self.confidence_threshold,
-            model_version=self.model_version
-        )
+        self.observer = None
+        if self.ar_person_detector_enabled:
+            if self.model_path is None:
+                raise RuntimeError("enabled AR person detector has no model path")
+            self.observer = OnnxRuntimeYolo11PersonUpperBodyObserver(
+                self.model_path, confidence_threshold=self.confidence_threshold,
+                model_version=self.model_version
+            )
         self.stereo_person_detector = None
         self.stereo_person_model_sha256: str | None = None
         self.stereo_person_reference_sha256: str | None = None
