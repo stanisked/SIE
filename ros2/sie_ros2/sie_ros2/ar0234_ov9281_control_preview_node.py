@@ -415,6 +415,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
         skew_ms = abs(stereo_mono - ar_mono) / 1e6
         audit = self._audit_base(cycle_id, stamp, skew_ms)
+        # The parent builds this field from mutable range_min/max, which this
+        # preview widens for diagnostics. Report the saved activated profile.
+        audit["activated_measurement_range_m"] = list(self._activated_range)
         if self._existing_static_gate is not None:
             audit["existing_static_profile_preview"] = {
                 "required": True, "profile_sha256": REVIEWED_SHA,
