@@ -336,12 +336,17 @@ motor-off Bridge label. Whole-candidate MAD stays below 0.05 m (median
 0.0352 m); local held-out residual MAD median is 0.0136 m. The locally fitted
 candidate front has 3,783–3,903 points; its known-term p05 median is 2.256 m
 and spans 2.234–2.272 m. Bridge's existing all-candidate range median is
-2.239 m. Operator supplied an *approximate* 2,650 mm reference distance,
-without a recorded uncertainty or independently checked chest point. If it
-means horizontal robot-front-plane to front-of-chest distance, it differs
-from the local p05 median by about 394 mm. The p05 selects nearer points
-across a torso-like mask ROI, and the mount geometry includes unsurveyed
-assumptions and an unknown optical-to-rim datum. This single approximate
-reference does not establish metric accuracy, a correction factor or motion
-admission. Confirm the physical measurement endpoints before interpreting
-the discrepancy; do not tune a local threshold to this run's labels.
+2.239 m. The operator later clarified that the *approximate* 2,650 mm
+reference was measured from the camera lens to the chest, not from the robot
+front to the chest. Our earlier 394 mm comparison with the front-frame p05
+was invalid because the origins, axis projection and selected surfaces differ.
+The saved stereo optical-axis candidate median across the torso-like ROI is
+2.689 m over the 37 cycles. A source-bound reconstruction of cycle 20
+reproduced its 3,915 selected points and front p05, then found 807 points
+projected into the central RGB chest patch x=770..1070, y=560..700 with
+median optical-axis depth 2.653 m. This is a nearby axial-depth diagnostic,
+not the same physical lens-to-chest tape length; the patch and lens surface
+were not surveyed. The front geometry still has unsurveyed mount assumptions
+and an unknown optical-to-rim datum. No metric error bound, correction factor
+or motion admission follows from this approximate single reference. Do not
+tune a local threshold to this run's labels.
