@@ -32,6 +32,12 @@ def summarize(rows: list[dict]) -> dict:
         return ({"count": len(values), "median_ms": round(1000 * statistics.median(values), 2),
                  "max_ms": round(1000 * max(values), 2)} if values
                 else {"count": 0})
+    def distance_stats(key: str) -> dict:
+        values = [r[key] for r in cycles if type(r.get(key)) in (int, float)
+                  and math.isfinite(r[key])]
+        return ({"count": len(values), "median_mm": round(1000 * statistics.median(values), 2),
+                 "max_mm": round(1000 * max(values), 2)} if values
+                else {"count": 0})
     return {
         "scope": "MOTOR_OFF_DIAGNOSTIC; no Pi or physical validation inferred from this summary",
         "camera_cycles": len(cycles),
@@ -51,8 +57,8 @@ def summarize(rows: list[dict]) -> dict:
             and r.get("local_surface_binding") == "EXACT_SOURCE_FRAME_AND_MASK"
             and r.get("local_surface_status") == "OBSERVED_NOT_ADMITTED"
             for r in cycles),
-        "local_surface_residual_mad": time_stats("local_surface_residual_mad_m"),
-        "local_surface_residual_p90": time_stats("local_surface_residual_p90_m"),
+        "local_surface_residual_mad": distance_stats("local_surface_residual_mad_m"),
+        "local_surface_residual_p90": distance_stats("local_surface_residual_p90_m"),
         "v3_mask_matches": dict(Counter(r.get("v3_mask_match") for r in cycles)),
         "v3_detection_counts": dict(Counter(r.get("v3_detection_count") for r in cycles)),
         "v3_raw_detection_counts": dict(Counter(r.get("v3_raw_detection_count")
