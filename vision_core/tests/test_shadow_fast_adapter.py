@@ -118,6 +118,10 @@ class FastAdapterTests(unittest.TestCase):
         self.assertEqual(record['track_id'],'person-1')
         self.assertEqual(record['decision'],'FOLLOW_ELIGIBLE')
         self.assertEqual(record['stable_front_point_count'],150)
+        missing_bearing=copy.deepcopy(row)
+        missing_bearing.pop('shadow_target_bearing_deg')
+        self.assertEqual(convert_mask_only(missing_bearing,local_preview=True)[1],
+                         'FAST_EVIDENCE_FIELD_MISSING')
         for mutate in (
             lambda x:x['shadow_rgb_continuity'].update(track_id=''),
             lambda x:x['shadow_rgb_continuity'].update(status='UNMATCHED'),

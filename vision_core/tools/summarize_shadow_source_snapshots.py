@@ -31,7 +31,11 @@ def summarize(journal, directory):
             row=requested[cid]
             if manifest_path.stem!=cid or manifest['instance_mask_sha256']!=row['source_snapshot_evidence']['mask_sha256']:
                 raise ValueError('cycle/mask mismatch')
-            if (manifest['track_id']!=row['track_id'] or
+            track_id=row['track_id']
+            if (track_id is None and row.get('mask_status')=='DEPTH_MAD_EXCEEDED' and
+                    row.get('rgb_continuity_status')=='MATCHED_CURRENT_RGB_DIAGNOSTIC_ONLY'):
+                track_id=row.get('rgb_continuity_track_id')
+            if (manifest['track_id']!=track_id or
                     manifest['selected_instance_index']!=row['selected_mask_instance_index'] or
                     manifest['segmentation_model_sha256']!=row['segmentation_model_sha256']):
                 raise ValueError('track/instance/model mismatch')

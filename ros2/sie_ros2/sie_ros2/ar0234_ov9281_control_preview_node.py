@@ -652,6 +652,21 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 shape = audit["shape_diagnostic"]
                 audit.update(status=shape["status"], reason="HALF_RESOLUTION_SHAPE_DIAGNOSTIC",
                              association=None)
+            # The motor-off local preview can use a current RGB match on a
+            # whole-mask MAD refusal. Its bearing still belongs to this frame.
+            if (getattr(self, "_shadow_fast_input", False) and single and
+                    (association is not None or rgb_continuity_observed or
+                     audit["shape_diagnostic"].get("mask_depth", {}).get("status")
+                     == "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY")):
+                centre = self.np.asarray([[[candidate["center_x_px"],
+                                             (candidate["bbox_xyxy_px"][1] +
+                                              candidate["bbox_xyxy_px"][3]) / 2]]],
+                                         dtype=self.np.float64)
+                ray = self.cv2.undistortPoints(centre, self.k_ar, self.d_ar)[0, 0]
+                bearing = float(self.np.degrees(self.np.arctan(ray[0])))
+                if not self.np.isfinite(bearing):
+                    raise ValueError("invalid current target bearing")
+                audit["shadow_target_bearing_deg"] = bearing
             if (not getattr(self, "_shadow_v3_mask_match", False) or
                     (audit.get("shadow_v3_mask_match") or {}).get("status") == "BOUND_TO_CURRENT_MASK_INSTANCE") and not any(key in audit for key in (
                     "dynamic_shadow_edge_override", "dynamic_shadow_geometry_override")) and (
@@ -659,16 +674,6 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     len((segmentation or {}).get("instances") or []) == 1) and (
                     association is not None or (single and audit["shape_diagnostic"].get("mask_depth",{}).get("status")
                                                 == "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY")):
-                if getattr(self, "_shadow_fast_input", False):
-                    centre = self.np.asarray([[[candidate["center_x_px"],
-                                                 (candidate["bbox_xyxy_px"][1] +
-                                                  candidate["bbox_xyxy_px"][3]) / 2]]],
-                                             dtype=self.np.float64)
-                    ray = self.cv2.undistortPoints(centre, self.k_ar, self.d_ar)[0, 0]
-                    bearing = float(self.np.degrees(self.np.arctan(ray[0])))
-                    if not self.np.isfinite(bearing):
-                        raise ValueError("invalid current target bearing")
-                    audit["shadow_target_bearing_deg"] = bearing
                 confirmation = self._confirm_current_target_track(candidate, observation)
                 # Publish the identity committed for this exact RGB/mask/stereo
                 # cycle. Depth is not persisted as a track attribute.

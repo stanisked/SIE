@@ -80,6 +80,20 @@ def test_source_bundle_preserves_original_jpegs_mask_and_stereo():
         result=summarize(journal,Path(directory)/'snapshots')
         assert (result['requested_after_publish'],result['validated_bundles'])==(1,1)
         assert not result['errors'] and not result['missing_requested_cycles']
+        # A MAD refusal carries the current RGB identity separately from a
+        # confirmed target in the Bridge journal, while the bundle keeps it.
+        mad_row={'cycle_id':'cycle-00000001',
+            'source_snapshot_evidence':{'mask_sha256':payload['mask_sha256']},
+            'track_id':None,'mask_status':'DEPTH_MAD_EXCEEDED',
+            'rgb_continuity_status':'MATCHED_CURRENT_RGB_DIAGNOSTIC_ONLY',
+            'rgb_continuity_track_id':'track-1',
+            'selected_mask_instance_index':0,'segmentation_model_sha256':'model-sha',
+            'driver_timestamp_s':{'ar0234':9.75,'ov9281':9.76}}
+        journal.write_text(json.dumps(mad_row)+'\n')
+        assert summarize(journal,Path(directory)/'snapshots')['validated_bundles']==1
+        mad_row['rgb_continuity_status']='UNMATCHED'
+        journal.write_text(json.dumps(mad_row)+'\n')
+        assert summarize(journal,Path(directory)/'snapshots')['errors'][0]['detail']=='track/instance/model mismatch'
         journal.write_text(json.dumps({'cycle_id':'cycle-00000001',
             'source_snapshot_evidence':{'mask_sha256':payload['mask_sha256']},
             'track_id':'track-1','selected_mask_instance_index':0,
