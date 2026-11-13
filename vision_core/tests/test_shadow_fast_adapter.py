@@ -46,9 +46,16 @@ def source():
                            "candidate_sample_count": 200, "plausible_layer_count": 1},
             "front_geometry": {"status": "PARTIAL_FRONT_GEOMETRY_DIAGNOSTIC_ONLY",
                 "known_term_m": {"p05": 1.5}, "point_count": 200,
-                "point_set": "SELECTED_PLAUSIBLE_DEPTH_LAYER",
+                "point_set": "ALL_CURRENT_MASK_OWNED_STEREO_POINTS",
                 "source_depth_status": "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY",
-                "profile_sha256": front_profile_sha256(), "provenance": provenance}},
+                "profile_sha256": front_profile_sha256(), "provenance": dict(provenance)},
+            "candidate_layer_front_geometry": {
+                "status": "PARTIAL_FRONT_GEOMETRY_DIAGNOSTIC_ONLY",
+                "known_term_m": {"p05": 1.7}, "point_count": 200,
+                "point_set": "NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY",
+                "semantic_ownership_verified": False,
+                "source_depth_status": "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY",
+                "profile_sha256": front_profile_sha256(), "provenance": dict(provenance)}},
         "frame_freshness": {"capture_backend": "latest_v4l2",
             "endpoint": "RESULT_READY_BEFORE_PUBLICATION; not a motor command",
             "frames": {"ar0234": {"driver_timestamp_s": 9.75,
@@ -77,16 +84,17 @@ def convert_mask_only(row, now=10.):
 
 
 class FastAdapterTests(unittest.TestCase):
-    def test_all_mask_points_cannot_qualify_as_selected_depth_layer(self):
+    def test_candidate_layer_requires_exact_count_and_provenance(self):
         row = source()
-        row["shape_diagnostic"]["front_geometry"]["point_set"] = (
-            "ALL_CURRENT_MASK_OWNED_STEREO_POINTS")
+        row["shape_diagnostic"].pop("candidate_layer_front_geometry")
         observation, reason = convert(row)
         self.assertIsNone(observation.target)
         self.assertEqual(reason, "FRONT_LAYER_BINDING_UNVERIFIED")
-        row["shape_diagnostic"]["front_geometry"]["point_set"] = (
-            "SELECTED_PLAUSIBLE_DEPTH_LAYER")
-        row["shape_diagnostic"]["front_geometry"]["point_count"] = 250
+        row = source()
+        row["shape_diagnostic"]["candidate_layer_front_geometry"]["point_count"] = 250
+        self.assertEqual(convert(row)[1], "FRONT_LAYER_BINDING_UNVERIFIED")
+        row = source()
+        row["shape_diagnostic"]["candidate_layer_front_geometry"]["provenance"]["mask_sha256"] = "old"
         self.assertEqual(convert(row)[1], "FRONT_LAYER_BINDING_UNVERIFIED")
 
     def test_separate_segmentation_semantics_has_explicit_provenance(self):
@@ -116,7 +124,7 @@ class FastAdapterTests(unittest.TestCase):
         observation, reason = convert(source())
         self.assertEqual(reason, "CURRENT_FAST_MASK_OBSERVATION")
         self.assertEqual(observation.target.track_id, observation.ranges[0].target_track_id)
-        self.assertAlmostEqual(observation.ranges[0].distance_m, 1.4875)
+        self.assertAlmostEqual(observation.ranges[0].distance_m, 1.6875)
         self.assertEqual(select_target_range(observation.target, list(observation.ranges), 10.,
             expected_rgb_calibration_id=AR_INTRINSIC_SHA256,
             minimum_confidence=.4).action, "FOLLOW_ELIGIBLE")

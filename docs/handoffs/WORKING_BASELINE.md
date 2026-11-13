@@ -161,3 +161,20 @@ differed by at most 29.2 mm in this scene, so the older two-layer mismatch
 was not reproduced here. The archived source arrays exactly replay the Pi
 depth/front calculations, but physical person ownership and optical datum
 remain unverified. [Full run report](../diagnostics/shadow_fast_source_snapshot_run_20261112.md).
+
+**Candidate-front adapter, 2026-11-13 (local candidate):** The Fast Shadow
+adapter now reads `candidate_layer_front_geometry` instead of the all-mask
+front p05. It requires matching current-cycle provenance, profile, selected
+sample count, mask/track confirmation, unchanged MAD and driver-age checks.
+The all-mask geometry remains in the audit and bridge journal for comparison.
+This restores a *diagnostic* range path; numerical layer membership does not
+establish physical person ownership or distance accuracy. Motor execution,
+calibration and Measurement policy are unchanged. Eight focused adapter and
+bridge tests passed. A contract smoke assembled from the saved cycle 44
+candidate-front manifest and the adapter fixture produced 1.454037 m from
+the candidate p05 of 1.466537 m and the existing 0.0125 m operator offset.
+This is not a full replay of the original Pi audit or a physical ground truth
+check. The producer code is unchanged; its focused test could not run here
+because SciPy is missing from the local test environment. Next: one motor-off
+Pi preview with one person, checking eligible/PAUSE decisions, layer range,
+track continuity and driver age. Eligible rows do not admit motor motion.

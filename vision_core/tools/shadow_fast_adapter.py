@@ -109,7 +109,8 @@ def from_control_preview(audit: dict, *, now_s: float,
     shape = audit.get("shape_diagnostic") or {}
     mask = shape.get("mask") or {}
     depth = shape.get("mask_depth") or {}
-    front = shape.get("front_geometry") or {}
+    all_front = shape.get("front_geometry") or {}
+    front = shape.get("candidate_layer_front_geometry") or {}
     confirmation = audit.get("shadow_track_confirmation") or {}
     v3 = audit.get("shadow_v3_mask_match") or {}
     if (target.get("disposition") != "OBSERVED" or
@@ -162,17 +163,23 @@ def from_control_preview(audit: dict, *, now_s: float,
             depth.get("plausible_layer_count") != 1 or
             type(depth.get("candidate_sample_count")) is not int or
             depth["candidate_sample_count"] < 100 or
-            front.get("provenance") != expected or
+            all_front.get("provenance") != expected or
+            all_front.get("profile_sha256") != expected_front_profile_sha256 or
+            all_front.get("source_depth_status") != depth["status"] or
+            all_front.get("status") != "PARTIAL_FRONT_GEOMETRY_DIAGNOSTIC_ONLY" or
+            all_front.get("point_set") != "ALL_CURRENT_MASK_OWNED_STEREO_POINTS" or
+            type(all_front.get("point_count")) is not int or
+            all_front["point_count"] < depth["candidate_sample_count"]):
+        return empty, "CURRENT_STEREO_FRONT_BINDING_INVALID"
+    # This is the exact numerical group checked by the unchanged depth MAD.
+    # It is still a diagnostic estimate, not verified physical ownership.
+    if (front.get("provenance") != expected or
             front.get("profile_sha256") != expected_front_profile_sha256 or
             front.get("source_depth_status") != depth["status"] or
             front.get("status") != "PARTIAL_FRONT_GEOMETRY_DIAGNOSTIC_ONLY" or
+            front.get("point_set") != "NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY" or
+            front.get("semantic_ownership_verified") is not False or
             type(front.get("point_count")) is not int or
-            front["point_count"] < depth["candidate_sample_count"]):
-        return empty, "CURRENT_STEREO_FRONT_BINDING_INVALID"
-    # The current producer's front p05 uses every mask-owned stereo point,
-    # while depth MAD checks only one plausible layer. A profile/cycle hash
-    # cannot establish that these are the same point set.
-    if (front.get("point_set") != "SELECTED_PLAUSIBLE_DEPTH_LAYER" or
             front["point_count"] != depth["candidate_sample_count"]):
         return empty, "FRONT_LAYER_BINDING_UNVERIFIED"
     frame = audit.get("frame_freshness") or {}
