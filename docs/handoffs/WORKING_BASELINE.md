@@ -323,3 +323,25 @@ front-rim-to-person measurement accompanied the archive. The local p05 is
 therefore still unvalidated as a physical range or clearance bound. Obtain
 the operator's before/after torso distance measurements if available; this
 moving sequence cannot be treated as a stationary reference scene.
+
+**Approximate stationary person datum, 2026-11-13:** The next operator archive
+`source-review.tar(1).gz`, SHA-256
+`cc559ca0fcca2f98916a61ccbfa624d1476b594fe23b01debe5863f57ba8d2a7`,
+has 37 camera cycles over 9.96 s and four original-source bundles. All four
+match the Bridge journal's bundle/JPEG/mask hashes, decoded RGB, selected
+instance/model and driver timestamps; they retain disparity, LR mask and
+calibration. Saved RGB frames show one mostly stationary person. All 37 cycles
+have the same RGB/stereo-confirmed track and `FOLLOW_ELIGIBLE`; this is a
+motor-off Bridge label. Whole-candidate MAD stays below 0.05 m (median
+0.0352 m); local held-out residual MAD median is 0.0136 m. The locally fitted
+candidate front has 3,783–3,903 points; its known-term p05 median is 2.256 m
+and spans 2.234–2.272 m. Bridge's existing all-candidate range median is
+2.239 m. Operator supplied an *approximate* 2,650 mm reference distance,
+without a recorded uncertainty or independently checked chest point. If it
+means horizontal robot-front-plane to front-of-chest distance, it differs
+from the local p05 median by about 394 mm. The p05 selects nearer points
+across a torso-like mask ROI, and the mount geometry includes unsurveyed
+assumptions and an unknown optical-to-rim datum. This single approximate
+reference does not establish metric accuracy, a correction factor or motion
+admission. Confirm the physical measurement endpoints before interpreting
+the discrepancy; do not tune a local threshold to this run's labels.
