@@ -299,3 +299,27 @@ from -44.3 to +33.9 mm in those nine bundles. This is a source replay, not
 new Pi timing or a measured person-surface error bound. Next: compare the
 separately reported current-frame candidate with a measured physical datum
 before using it in a shape-aware follow decision.
+
+**Local candidate source capture, 2026-11-13:** Operator archive
+`source-review.tar.gz` has SHA-256
+`d40e70797541b8fc0bd98e8ea4a38b6a19783957e05cf5d8b4876004a4b08880`.
+Its 416 Bridge rows contain 37 camera cycles and 379 no-new-cycle polls.
+Four source bundles (cycles 6, 10, 20, 30) match their journal records by
+bundle/JPEG/mask hashes, selected instance, model, driver timestamps and
+decoded RGB payload; all four include the current stereo disparity, LR mask
+and calibration arrays. The 37 cycles show one segmented person; the saved
+RGB frames show that person approaching and changing posture, not a static
+distance datum. All 37 have a locally fitted candidate front with 2,249–3,069
+points and 0.859–0.995 fitted fraction. Whole-candidate depth MAD exceeds
+0.05 m in 26/37 cycles, producing PAUSE; local held-out residual MAD in those
+26 has median 0.0220 m. The other 11 are `FOLLOW_ELIGIBLE` under the existing
+policy. This is a Bridge decision label, not motor admission. RGB continuity
+retains one diagnostic ID in 32/37 cycles, including 21 PAUSE cycles.
+Candidate-front known-term p05 changes from 2.915 to 2.275 m over the
+9.84-second camera span, consistent with the saved images showing approach.
+All 37 driver-declared ages to Bridge decision remain below 0.5 s (maximum
+AR/OV 0.320/0.316 s); actual exposure timing remains unverified. No physical
+front-rim-to-person measurement accompanied the archive. The local p05 is
+therefore still unvalidated as a physical range or clearance bound. Obtain
+the operator's before/after torso distance measurements if available; this
+moving sequence cannot be treated as a stationary reference scene.
