@@ -34,6 +34,34 @@ when the source checkout is available and a new extraction is actually run;
 do not claim automatic regeneration. The project snapshot remains subordinate
 to the normative precedence below.
 
+## Read-only engineering-memory restoration command
+
+The exact operator command `восстанови память SIEE` means **restore engineering
+context by reading current sources**, including in a fresh ChatGPT/Codex chat.
+It is NOT equivalent to the write commands `обнови документ` /
+`обновить документ` and does not authorize edits, new extraction, camera or
+motor operations.
+
+On this command: read the latest accessible `AI_CONTEXT.md`,
+`PROJECT_CONTEXT.md`, applicable approved ES/Data Contracts, `AGENTS.md`,
+`docs/handoffs/WORKING_BASELINE.md`,
+`docs/handoffs/SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md`, relevant current
+diagnostic handoffs (including `docs/diagnostics/shadow_uart_candidate_20261029.md`)
+and the cited primary evidence, code and tests. Start with the currently
+identified engineering branch `codex/shadow-turtlesim-follow-20261111` and
+check newer branches/commits or operator evidence before declaring it current.
+Where accessible, compare both source documents with their existing private
+Drive copies. Do not assume a historical Graphify AST snapshot reflects
+latest Pi runtime. Explicitly state which source/branch/runtime could not be
+checked.
+
+Respond in Russian with: project/MVP goal, implemented and verified progress,
+accepted decisions, hypotheses/unverified facts, dates/commit provenance,
+conflicts and exactly one next testable step. Do not replay experiments, run
+hardware, refresh Graphify or modify documents just to answer this command.
+If sources cannot be reached, request the current files and report the gap
+instead of claiming a complete recovery.
+
 ## Project name and technical compatibility
 
 The human-facing project name is **Spatial Intelligence Evidence Engine (SIEE)**.
