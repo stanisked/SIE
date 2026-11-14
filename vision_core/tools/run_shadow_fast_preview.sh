@@ -12,18 +12,16 @@ activation_profile=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_c
 activation_profile_sha256=c835a304cc2758843747400c30f09a567b5ac74ebfd7908ea8ee14a013f519d9
 v3="${SHADOW_RGB_MODEL_PATH:-}"
 semantic_source="${SHADOW_FAST_SEMANTIC_SOURCE:-v3_mask_binding}"
+detector_ros_args=()
 case "$semantic_source" in
   v3_mask_binding)
     shadow_parameter='preview_shadow_v3_mask_match:=true'
     ar_detector_enabled=true
-    startup_model_path="$v3"
-    startup_model_version=v3
+    detector_ros_args=(-p "model_path:=$v3" -p 'model_version:=v3')
     ;;
   segmentation_mask)
     shadow_parameter='preview_shadow_segmentation_input:=true'
     ar_detector_enabled=false
-    startup_model_path=''
-    startup_model_version=disabled
     ;;
   *) echo "Unsupported Shadow semantic source: $semantic_source" >&2; exit 2 ;;
 esac
@@ -65,8 +63,7 @@ case "${SHADOW_CAPTURE_SNAPSHOTS:-0}" in
   *) echo 'SHADOW_CAPTURE_SNAPSHOTS must be 0 or 1' >&2; exit 2 ;;
 esac
 "$runtime" -c 'from sie_ros2.ar0234_ov9281_control_preview_node import main; main()' \
-  --ros-args -p project_root:="$PWD" -p model_path:="$startup_model_path" \
-  -p model_version:="$startup_model_version" \
+  --ros-args -p project_root:="$PWD" "${detector_ros_args[@]}" \
   -p ar_person_detector_enabled:="$ar_detector_enabled" \
   -p confidence_threshold:=0.40 -p "$shadow_parameter" \
   -p ar_intrinsic:=/home/elwis/dev_ws/runtime_artifacts/ar0234_intrinsic_v5_final_20260910/calibration_fullres.json \
