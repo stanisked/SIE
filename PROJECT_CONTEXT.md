@@ -20,6 +20,32 @@ This file is the change-controlled snapshot of the active project state.
 - When updating, preserve accepted evidence, distinguish fact from hypothesis, and state the revision date and what changed.
 - This file describes current implementation and safe continuation. It never overrides approved Engineering Specifications, canonical Data Contracts, or calibration artifacts.
 
+## Read-only engineering-memory recovery command (2026-11-14)
+
+The exact operator command **`восстанови память SIEE`** requests **read-only**
+reconstruction of the active engineering context, including in a new chat.
+It is distinct from `обнови документ` / `обновить документ` and does **not**
+authorize any documentation write, Graphify extraction, code change, Pi command,
+camera or motor activation.
+
+On this command, read the freshest accessible `AI_CONTEXT.md`, this
+`PROJECT_CONTEXT.md`, applicable approved ES / Data Contracts, `AGENTS.md`,
+`docs/handoffs/WORKING_BASELINE.md`, and the current
+`docs/handoffs/SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md`; for Fast Shadow read
+`docs/diagnostics/shadow_uart_candidate_20261029.md`, linked primary evidence,
+relevant code and tests. Prefer the current working branch
+`codex/shadow-turtlesim-follow-20261111` until newer operator-confirmed
+information supersedes it. Compare the GitHub and existing private Drive copies
+of this context and the Graphify handoff where available. Check exact
+branch/commit and distinguish historical graph snapshots from current code.
+
+Reply in Russian with: current goal; implemented and confirmed results;
+accepted decisions; hypotheses and missing evidence; source dates/commits and
+any conflicts; one next verifiable MVP step. Explicitly mark inaccessible
+sources and unverified Pi runtime. Never turn this command into a new experiment
+or claim physical tests were executed. When source access is unavailable, ask
+for the current documents instead of claiming recovery succeeded.
+
 ## 2026-11-13: current-frame local surface and corrected Fast Shadow launcher
 
 The active OV9281 Pi v7 stereo calibration, AR0234 v5 intrinsic and
@@ -1268,6 +1294,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-14 | Registered the read-only command `восстанови память SIEE` for cross-chat engineering-context recovery. The command reads current primary sources and gives a cited continuation summary; it does not update documents, regenerate Graphify, or run Pi/hardware. This change is documentation-only. |
 | 2026-11-14 | Extended both equivalent operator commands (`обнови документ`, `обновить документ`) to update `PROJECT_CONTEXT.md` and `SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md` as one coordinated maintenance action. Both documents must match their respective original private Drive files; Graphify extraction remains manual. No new hardware, calibration, Measurement, or motion results claimed. |
 | 2026-11-13 | Recorded the reviewed 64-cycle motor-off Fast Shadow run: 64/64 `FOLLOW_ELIGIBLE`, including 33 current-frame local-surface decisions after whole-mask MAD refusal, one uninterrupted track ID and sub-0.5 s driver-declared age. Recorded the exact conditional v2 launcher correction and removal of the unused YOLO v3 dependency from the mask-only path. Kept calibration, canonical Measurement and motor authorization unchanged; the corrected launcher still requires a new Pi verification and physical robot-front comparison. |
 | 2026-11-12 | Recorded the 19:34:49 Pi fast mask-only source run: 9/9 verified bundles, 296 camera cycles below 500 ms driver age to Bridge decision, 13 coherent versus 30 MAD-refused mask depths, five track IDs broken within one person's presence, no post-exit reappearance or two-person test, and all decisions PAUSE. The prior all-mask/candidate front mismatch did not recur in this scene; active calibration, Measurement and motor boundaries unchanged. |
