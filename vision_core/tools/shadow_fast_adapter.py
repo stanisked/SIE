@@ -12,6 +12,8 @@ import math
 from pathlib import Path
 
 from vision_core.person_localization.fast_local_depth_consistency import STABLE_LOCAL_PATCH_POLICY
+from vision_core.person_localization.diagnostic_instance_selection import (
+    has_unique_eligible_instance_binding)
 from vision_core.person_localization.torso_core_geometry import TORSO_CORE_POLICY
 from vision_core.tools.run_shadow_uart import ShadowObservation
 from vision_core.tools.shadow_range_gate import (
@@ -139,7 +141,10 @@ def from_control_preview(audit: dict, *, now_s: float,
             not expected_segmentation_model_sha256 or
             seg.get("model_sha256") != expected_segmentation_model_sha256 or
             not isinstance(instances, list) or
-            len(instances) != 1 or
+            not instances or
+            (semantic_source == "v3_mask_binding" and len(instances) != 1) or
+            (semantic_source == "segmentation_mask" and
+             not has_unique_eligible_instance_binding(instances, target)) or
             not isinstance(mask_hashes, list) or
             type(person.get("instance_index")) is not int or
             not 0 <= person["instance_index"] < len(instances) or

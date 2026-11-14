@@ -3,6 +3,21 @@ from datetime import datetime
 import math
 
 
+def has_unique_eligible_instance_binding(instances, dynamic):
+    """Confirm one selected eligible target without rejecting raw low-confidence masks."""
+    if (not isinstance(instances, list) or not instances or
+            not isinstance(dynamic, dict) or
+            dynamic.get('disposition') != 'OBSERVED' or
+            dynamic.get('current_eligible_count') != 1):
+        return False
+    candidate = dynamic.get('candidate')
+    if not isinstance(candidate, dict):
+        return False
+    index = candidate.get('instance_index')
+    return (type(index) is int and 0 <= index < len(instances) and
+            instances[index] == candidate)
+
+
 def select_instance(instances, *, prior_track, captured_at_utc, max_age_s,
                     minimum_iou, maximum_center_displacement_relative, minimum_match_margin, minimum_confidence=.70):
     candidates=[]

@@ -185,16 +185,19 @@ class FastAdapterTests(unittest.TestCase):
         row.pop("shadow_semantic_source")
         self.assertIsNone(convert_mask_only(row)[0].target)
 
-    def test_segmentation_semantics_pauses_for_two_instances_or_age(self):
+    def test_segmentation_semantics_ignores_ineligible_raw_instance_but_pauses_on_ambiguity(self):
         row = source()
         row.pop("shadow_v3_mask_match")
         row["shadow_semantic_source"] = "COCO_CURRENT_INSTANCE_MASK"
         row["segmentation_observation"]["instances"].append(
-            {"instance_index": 1, "confidence": .8})
+            {"instance_index": 1, "confidence": .27})
         row["segmentation_observation"]["instance_mask_sha256"].append("second")
-        self.assertIsNone(convert_mask_only(row)[0].target)
-        row["segmentation_observation"]["instances"].pop()
-        row["segmentation_observation"]["instance_mask_sha256"].pop()
+        observation,reason=convert_mask_only(row,local_preview=True)
+        self.assertEqual(reason,"CURRENT_STABLE_TORSO_CORE_PREVIEW")
+        self.assertEqual(observation.target.track_id,"person-1")
+        row["ar0234_dynamic_target"]["current_eligible_count"]=2
+        self.assertIsNone(convert_mask_only(row,local_preview=True)[0].target)
+        row["ar0234_dynamic_target"]["current_eligible_count"]=1
         self.assertIsNone(convert_mask_only(row, now=10.51)[0].target)
 
     def test_exact_cycle_yields_one_target_and_front_range(self):

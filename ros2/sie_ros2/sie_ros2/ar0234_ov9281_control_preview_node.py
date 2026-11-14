@@ -24,7 +24,8 @@ from .stereo_pair_executor import StereoPairExecutor
 from .latest_v4l2_capture import LatestV4L2Capture, freshness_report, select_latest_pair, select_new_rgb, select_stereo_during_rgb
 from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity, restore_crop
-from vision_core.person_localization.diagnostic_instance_selection import select_instance
+from vision_core.person_localization.diagnostic_instance_selection import (
+    has_unique_eligible_instance_binding, select_instance)
 from vision_core.person_localization.shadow_rgb_continuity import continued_track, remember_track
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from vision_core.person_localization.control_input_shadow import evaluate_control_input_shadow
@@ -549,9 +550,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if not geometry["accepted"]:
                 audit.update(status="TARGET_UNAVAILABLE", reason=geometry["reason"])
                 return
+            unique_segmentation_binding = (single and
+                has_unique_eligible_instance_binding(segmentation["instances"], dynamic))
             if (getattr(self, "_shadow_segmentation_input", False) and
-                    len(segmentation["instances"]) == 1 and
-                    dynamic.get("current_eligible_count") == 1 and
+                    unique_segmentation_binding and
                     not audit.get("dynamic_shadow_edge_override") and
                     not audit.get("dynamic_shadow_geometry_override")):
                 matched = continued_track(self._shadow_rgb_last_seen, candidate,
@@ -687,7 +689,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     (audit.get("shadow_v3_mask_match") or {}).get("status") == "BOUND_TO_CURRENT_MASK_INSTANCE") and not any(key in audit for key in (
                     "dynamic_shadow_edge_override", "dynamic_shadow_geometry_override")) and (
                     not getattr(self, "_shadow_fast_input", False) or
-                    len((segmentation or {}).get("instances") or []) == 1) and (
+                    (unique_segmentation_binding if
+                     getattr(self, "_shadow_segmentation_input", False) else
+                     len((segmentation or {}).get("instances") or []) == 1)) and (
                     association is not None or (single and audit["shape_diagnostic"].get("mask_depth",{}).get("status")
                                                 == "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY")):
                 confirmation = self._confirm_current_target_track(candidate, observation)

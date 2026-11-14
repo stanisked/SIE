@@ -12,7 +12,8 @@ sys.path.insert(0,str(ROOT/'vision_core/tools'))
 sys.path.insert(0,str(ROOT/'ros2/sie_ros2/sie_ros2'))
 from preview_mask_client import PreviewMaskClient
 from preview_mask_surface import CurrentInstanceMasks, local_surface_stats
-from vision_core.person_localization.diagnostic_instance_selection import select_instance
+from vision_core.person_localization.diagnostic_instance_selection import (
+    has_unique_eligible_instance_binding, select_instance)
 from vision_core.person_localization.robot_front_geometry import load_profile
 
 
@@ -202,6 +203,25 @@ class YOLO:
         self.assertEqual(select_instance([first,second],**{**kwargs,'prior_track':{**prior,'confirmed_at_utc':'2026-10-14T19:00:00+00:00'}})['reason'],'TEMPORAL_TRACK_STALE')
         edge={**first,'bbox_xyxy_px':[0,200,300,1000]}
         self.assertEqual(select_instance([edge],**kwargs)['disposition'],'UNAVAILABLE')
+
+    def test_low_confidence_raw_mask_does_not_make_eligible_target_ambiguous(self):
+        primary={'instance_index':0,'bbox_xyxy_px':[400,100,900,1100],
+                 'confidence':.91}
+        false_positive={'instance_index':1,'bbox_xyxy_px':[100,700,180,900],
+                        'confidence':.27}
+        kwargs={'prior_track':None,'captured_at_utc':'2026-11-14T11:14:00+00:00',
+                'max_age_s':.5,'minimum_iou':.2,
+                'maximum_center_displacement_relative':.75,
+                'minimum_match_margin':.1,'minimum_confidence':.4}
+        dynamic=select_instance([primary,false_positive],**kwargs)
+        self.assertEqual(dynamic['current_eligible_count'],1)
+        self.assertTrue(has_unique_eligible_instance_binding(
+            [primary,false_positive],dynamic))
+        second={**false_positive,'confidence':.8}
+        ambiguous=select_instance([primary,second],**kwargs)
+        self.assertEqual(ambiguous['current_eligible_count'],2)
+        self.assertFalse(has_unique_eligible_instance_binding(
+            [primary,second],ambiguous))
 
 
 if __name__=='__main__':unittest.main()

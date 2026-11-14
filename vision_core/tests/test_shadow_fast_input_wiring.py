@@ -30,6 +30,16 @@ class ShadowFastInputWiringTests(unittest.TestCase):
                 self.assertEqual(len(calls), 1)
                 self.assertIs(calls[0][1]["diagnostic_mask_hashes"], active)
 
+    def test_segmentation_shadow_uses_unique_eligible_binding_not_raw_mask_count(self):
+        path = Path(__file__).resolve().parents[2] / (
+            "ros2/sie_ros2/sie_ros2/ar0234_ov9281_control_preview_node.py")
+        tree = ast.parse(path.read_text())
+        calls = [item for item in ast.walk(tree)
+                 if isinstance(item, ast.Call) and
+                 isinstance(item.func, ast.Name) and
+                 item.func.id == "has_unique_eligible_instance_binding"]
+        self.assertGreaterEqual(len(calls), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
