@@ -11,12 +11,15 @@ from vision_core.person_localization.instance_mask_stereo_fusion import (
     masked_depth_hypothesis,
     depth_from_owned_samples_with_candidate_indices)
 from vision_core.person_localization.local_surface_diagnostic import analyze_local_surfaces
+from vision_core.person_localization.torso_core_geometry import (
+    TORSO_CORE_POLICY, projected_in_torso_core)
 
 
-def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True, ownership_backend="opencv",fast_local=False,front_geometry=None):
+def evaluate(disparity, mask, cal, roi, lower=.5, upper=4.5, *, scale=1., defer_local=False, prepare_local=True, ownership_backend="opencv",fast_local=False,front_geometry=None,instance_bbox=None):
     points=prepare_stereo_points(disparity,cal,lower,upper,scale=scale)
     return evaluate_prepared(points,mask,roi,defer_local=defer_local,
-        prepare_local=prepare_local,ownership_backend=ownership_backend,fast_local=fast_local,front_geometry=front_geometry)
+        prepare_local=prepare_local,ownership_backend=ownership_backend,fast_local=fast_local,
+        front_geometry=front_geometry,instance_bbox=instance_bbox)
 
 
 def prepare_stereo_points(disparity,cal,lower=.5,upper=4.5,*,scale=1.,cycle_id=""):
@@ -46,7 +49,7 @@ def prepare_stereo_points(disparity,cal,lower=.5,upper=4.5,*,scale=1.,cycle_id="
 GEOMETRY_KEYS=('u','v','d','z','xy','fb','stride','scale','lower','upper','source_cycle_id')
 
 
-def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,ownership_backend="opencv",fast_local=False,front_geometry=None):
+def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,ownership_backend="opencv",fast_local=False,front_geometry=None,instance_bbox=None):
     if ownership_backend not in ('opencv','reference_numpy'):raise ValueError('unknown mask ownership backend')
     if mask.shape!=(1200,1920) or mask.dtype!=np.bool_:raise ValueError('expected current AR boolean mask')
     scale=float(points['scale']);lower=float(points['lower']);upper=float(points['upper'])
@@ -80,7 +83,7 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
             stride=stride,tile_px=int(32*scale))
         fast['fit_s']=time.monotonic()-started
         fast['rgb_coverage_status']='NOT_COMPUTED_IN_FAST_CURRENT_FRAME_PATH'
-    front=layer_front=local_candidate_front=stable_candidate_front=None
+    front=layer_front=local_candidate_front=stable_candidate_front=stable_torso_core_front=None
     if front_geometry is not None:
         import time
         from vision_core.person_localization.robot_front_geometry import describe_front
@@ -189,12 +192,62 @@ def evaluate_prepared(points,mask,roi,*,defer_local=False,prepare_local=True,own
                     stable_candidate_front['semantic_ownership_verified']=False
                     stable_candidate_front['limitations'].append(
                         'Provisional held-out residual limits do not establish physical distance accuracy or clearance.')
+                if instance_bbox is not None:
+                    candidate_xy=xy[selected][candidate_indices]
+                    in_core,core_roi=projected_in_torso_core(candidate_xy,instance_bbox)
+                    stable_core=stable & in_core
+                    core_count=int(np.count_nonzero(stable_core))
+                    stable_torso_core_front={
+                        'status':'INSUFFICIENT_STABLE_TORSO_CORE_POINTS',
+                        'point_set':'STABLE_LOCAL_PATCHES_WITHIN_CURRENT_RGB_TORSO_CORE_DIAGNOSTIC_ONLY',
+                        'candidate_sample_count':len(candidate_indices),
+                        'torso_core_candidate_point_count':int(np.count_nonzero(in_core)),
+                        'point_count':core_count,
+                        'torso_core_rgb_roi_xyxy_px':core_roi,
+                        'torso_core_policy':dict(TORSO_CORE_POLICY),
+                        'stable_local_patch_policy':dict(stable_report['policy']),
+                        'source_depth_status':depth.get('status'),
+                        'reference_frame':'robot_longitudinal_axis_from_front_plane',
+                        'unit':'m','confidence':None,'confidence_status':'NOT_VALIDATED',
+                        'profile_sha256':front['profile_sha256'],
+                        'known_term_m':None,'selected_known_term_m':None,
+                        'semantic_ownership_verified':False,
+                        'physical_body_part_verified':False,
+                        'distance_from_front_m':None,'measurement_authorized':False,
+                        'navigation_eligible':False,'actuator_access':False,
+                        'limitations':[
+                            'The fixed RGB box fractions are a torso-core heuristic, not body-part recognition.',
+                            'Stable local disparity does not establish physical distance accuracy or target clearance.',
+                            'The median is a following-range diagnostic and not a nearest-obstacle statistic.']}
+                    if core_count>=TORSO_CORE_POLICY['minimum_stable_points']:
+                        stable_torso_core_front.update(describe_front(
+                            owned_u[candidate_indices][stable_core],
+                            owned_v[candidate_indices][stable_core],
+                            owned_z[candidate_indices][stable_core],
+                            front_geometry['P1'],front_geometry['R1'],
+                            front_geometry['profile'],scale=scale,
+                            source_depth_status=depth.get('status')))
+                        stable_torso_core_front['status']='STABLE_TORSO_CORE_FRONT_DIAGNOSTIC_ONLY'
+                        stable_torso_core_front['point_set']='STABLE_LOCAL_PATCHES_WITHIN_CURRENT_RGB_TORSO_CORE_DIAGNOSTIC_ONLY'
+                        stable_torso_core_front['candidate_sample_count']=len(candidate_indices)
+                        stable_torso_core_front['torso_core_candidate_point_count']=int(np.count_nonzero(in_core))
+                        stable_torso_core_front['point_count']=core_count
+                        stable_torso_core_front['torso_core_rgb_roi_xyxy_px']=core_roi
+                        stable_torso_core_front['torso_core_policy']=dict(TORSO_CORE_POLICY)
+                        stable_torso_core_front['stable_local_patch_policy']=dict(stable_report['policy'])
+                        stable_torso_core_front['selected_known_term_m']=stable_torso_core_front['known_term_m']['median']
+                        stable_torso_core_front['semantic_ownership_verified']=False
+                        stable_torso_core_front['physical_body_part_verified']=False
+                        stable_torso_core_front['limitations'].extend([
+                            'The fixed RGB box fractions are a torso-core heuristic, not body-part recognition.',
+                            'The median is a following-range diagnostic and not a nearest-obstacle statistic.'])
     def attach(result):
         if fast is not None:result['fast_local_consistency']=fast
         if front is not None:result['front_geometry']=front
         if layer_front is not None:result['candidate_layer_front_geometry']=layer_front
         if local_candidate_front is not None:result['local_candidate_front_geometry']=local_candidate_front
         if stable_candidate_front is not None:result['stable_candidate_front_geometry']=stable_candidate_front
+        if stable_torso_core_front is not None:result['stable_torso_core_front_geometry']=stable_torso_core_front
         return result
     if defer_local and not prepare_local:
         return attach(diagnostic_result(depth,scale,lower,upper,

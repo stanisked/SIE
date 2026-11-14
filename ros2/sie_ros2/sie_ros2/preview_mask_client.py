@@ -278,6 +278,8 @@ class PreviewMaskClient:
                               local_front.get('known_term_m') is not None))):
                     raise ValueError('local candidate front current-frame/profile binding mismatch')
                 from vision_core.person_localization.fast_local_depth_consistency import STABLE_LOCAL_PATCH_POLICY
+                from vision_core.person_localization.torso_core_geometry import (
+                    TORSO_CORE_POLICY, torso_core_roi)
                 stable=result.get('stable_candidate_front_geometry') or {}
                 patches=stable.get('stable_local_patches') or {}
                 stable_count=stable.get('point_count')
@@ -304,6 +306,36 @@ class PreviewMaskClient:
                          (stable_count>=STABLE_LOCAL_PATCH_POLICY['minimum_selected_points'] or
                           stable.get('known_term_m') is not None))):
                     raise ValueError('stable candidate front current-frame/profile binding mismatch')
+                torso=result.get('stable_torso_core_front_geometry') or {}
+                torso_count=torso.get('point_count')
+                torso_candidates=torso.get('torso_core_candidate_point_count')
+                expected_torso_roi=torso_core_roi(candidate['bbox_xyxy_px'])
+                if (torso.get('provenance')!=expected or
+                        torso.get('profile_sha256')!=front['profile_sha256'] or
+                        torso.get('point_set')!='STABLE_LOCAL_PATCHES_WITHIN_CURRENT_RGB_TORSO_CORE_DIAGNOSTIC_ONLY' or
+                        torso.get('candidate_sample_count')!=layer['point_count'] or
+                        torso.get('source_depth_status')!=(result.get('mask_depth') or {}).get('status') or
+                        torso.get('semantic_ownership_verified') is not False or
+                        torso.get('physical_body_part_verified') is not False or
+                        torso.get('distance_from_front_m') is not None or
+                        torso.get('actuator_access') is not False or
+                        torso.get('torso_core_policy')!=TORSO_CORE_POLICY or
+                        torso.get('stable_local_patch_policy')!=STABLE_LOCAL_PATCH_POLICY or
+                        torso.get('torso_core_rgb_roi_xyxy_px')!=expected_torso_roi or
+                        type(torso_count) is not int or type(torso_candidates) is not int or
+                        not 0<=torso_count<=torso_candidates<=layer['point_count'] or
+                        torso.get('status') not in ('STABLE_TORSO_CORE_FRONT_DIAGNOSTIC_ONLY',
+                            'INSUFFICIENT_STABLE_TORSO_CORE_POINTS') or
+                        (torso['status']=='STABLE_TORSO_CORE_FRONT_DIAGNOSTIC_ONLY' and
+                         (torso_count<TORSO_CORE_POLICY['minimum_stable_points'] or
+                          type((torso.get('known_term_m') or {}).get('median')) not in (float,int) or
+                          not math.isfinite(torso['known_term_m']['median']) or
+                          torso.get('selected_known_term_m')!=torso['known_term_m']['median'])) or
+                        (torso['status']=='INSUFFICIENT_STABLE_TORSO_CORE_POINTS' and
+                         (torso_count>=TORSO_CORE_POLICY['minimum_stable_points'] or
+                          torso.get('known_term_m') is not None or
+                          torso.get('selected_known_term_m') is not None))):
+                    raise ValueError('stable torso core current-frame/profile binding mismatch')
         result['mask_s']=segmentation.get('mask_s')
         result['inference_round_trip_s']=segmentation.get('round_trip_s')
         result['round_trip_scope']='FUSION_ONLY_AFTER_SEGMENTATION'

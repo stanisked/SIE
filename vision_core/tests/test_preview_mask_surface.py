@@ -16,6 +16,7 @@ sys.path.insert(0,str(ROOT/'vision_core/tools'))
 sys.path.insert(0,str(ROOT/'ros2/sie_ros2/sie_ros2'))
 from preview_mask_surface import evaluate, evaluate_prepared
 from vision_core.person_localization.robot_front_geometry import load_profile
+from vision_core.person_localization.torso_core_geometry import TORSO_CORE_POLICY
 from benchmark_stereo_resolution import scaled_configs, paired_delta
 from benchmark_stereo_sgbm_parallel import runtime_parameters, compute_pair, consistency
 from preview_mask_client import PreviewMaskClient
@@ -39,16 +40,17 @@ class PreviewMaskSurfaceTests(unittest.TestCase):
         points={'u':np.r_[u,u[:near]],'v':np.r_[v,v[:near]],
                 'd':np.r_[np.full(far,25.),np.full(near,50.)],
                 'z':np.r_[np.full(far,2.4),np.full(near,1.2)],
-                'xy':np.tile([100.,100.],(far+near,1)),
+                'xy':np.tile([150.,150.],(far+near,1)),
                 'fb':np.asarray(60.),'stride':np.asarray(4),'scale':np.asarray(1.),
                 'lower':np.asarray(.5),'upper':np.asarray(4.5)}
         mount=load_profile(ROOT/'vision_core/config/diagnostics/robot_front_mount_operator_v1.json')
         args={'profile':mount,'P1':calibration()['P1'],'R1':np.eye(3)}
         result,_=evaluate_prepared(points,np.ones((1200,1920),bool),
             [0,0,1920,1200],defer_local=True,prepare_local=False,
-            fast_local=True,front_geometry=args)
+            fast_local=True,front_geometry=args,instance_bbox=[0,0,400,400])
         depth=result['mask_depth'];local=result['local_candidate_front_geometry']
         stable=result['stable_candidate_front_geometry']
+        torso=result['stable_torso_core_front_geometry']
         self.assertEqual(depth['candidate_sample_count'],far)
         self.assertEqual(local['status'],'LOCAL_FITTED_CANDIDATE_FRONT_DIAGNOSTIC_ONLY')
         self.assertEqual(local['point_count'],far)
@@ -63,6 +65,11 @@ class PreviewMaskSurfaceTests(unittest.TestCase):
         self.assertEqual(stable['point_count'],far)
         self.assertAlmostEqual(stable['known_term_m']['p05'],local['known_term_m']['p05'])
         self.assertFalse(stable['actuator_access'])
+        self.assertEqual(torso['status'],'STABLE_TORSO_CORE_FRONT_DIAGNOSTIC_ONLY')
+        self.assertEqual(torso['point_count'],far)
+        self.assertEqual(torso['torso_core_policy'],TORSO_CORE_POLICY)
+        self.assertEqual(torso['selected_known_term_m'],torso['known_term_m']['median'])
+        self.assertFalse(torso['physical_body_part_verified'])
 
     def test_candidate_front_stays_separate_from_nearer_mask_owned_layer(self):
         # 120 near points are a supported layer but fail the 25% support rule
@@ -91,13 +98,17 @@ class PreviewMaskSurfaceTests(unittest.TestCase):
         self.assertFalse(candidate['semantic_ownership_verified'])
         self.assertFalse(candidate['actuator_access'])
         sparse,_=evaluate_prepared(points,mask,[0,0,1920,1200],defer_local=True,
-                                   prepare_local=False,fast_local=True,front_geometry=args)
+                                   prepare_local=False,fast_local=True,front_geometry=args,
+                                   instance_bbox=[0,0,400,400])
         self.assertEqual(sparse['local_candidate_front_geometry']['status'],
                          'INSUFFICIENT_LOCAL_FITTED_CANDIDATE_POINTS')
         self.assertIsNone(sparse['local_candidate_front_geometry']['known_term_m'])
         self.assertEqual(sparse['stable_candidate_front_geometry']['status'],
                          'INSUFFICIENT_STABLE_LOCAL_PATCH_POINTS')
         self.assertIsNone(sparse['stable_candidate_front_geometry']['known_term_m'])
+        self.assertEqual(sparse['stable_torso_core_front_geometry']['status'],
+                         'INSUFFICIENT_STABLE_TORSO_CORE_POINTS')
+        self.assertIsNone(sparse['stable_torso_core_front_geometry']['known_term_m'])
         without,_=evaluate_prepared(points,mask,[0,0,1920,1200],defer_local=True,
                                     prepare_local=False)
         self.assertEqual(without['mask_depth'],depth)

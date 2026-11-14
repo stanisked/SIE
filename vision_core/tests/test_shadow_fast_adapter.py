@@ -3,6 +3,7 @@ import copy
 import unittest
 
 from vision_core.person_localization.fast_local_depth_consistency import STABLE_LOCAL_PATCH_POLICY
+from vision_core.person_localization.torso_core_geometry import TORSO_CORE_POLICY
 from vision_core.tools.shadow_fast_adapter import (
     AR_INTRINSIC_SHA256, SHADOW_V3_SHA256, front_profile_sha256,
     from_control_preview, match_v3_to_mask_instance,
@@ -56,7 +57,19 @@ def source():
                 "point_set": "NUMERIC_CANDIDATE_DEPTH_LAYER_DIAGNOSTIC_ONLY",
                 "semantic_ownership_verified": False,
                 "source_depth_status": "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY",
-                "profile_sha256": front_profile_sha256(), "provenance": dict(provenance)}},
+                "profile_sha256": front_profile_sha256(), "provenance": dict(provenance)},
+            "stable_torso_core_front_geometry": {
+                "status": "STABLE_TORSO_CORE_FRONT_DIAGNOSTIC_ONLY",
+                "point_set": "STABLE_LOCAL_PATCHES_WITHIN_CURRENT_RGB_TORSO_CORE_DIAGNOSTIC_ONLY",
+                "candidate_sample_count": 200, "torso_core_candidate_point_count": 150,
+                "point_count": 120, "source_depth_status": "COHERENT_MASKED_DEPTH_DIAGNOSTIC_ONLY",
+                "known_term_m": {"p05": 1.65, "median": 1.8},
+                "selected_known_term_m": 1.8,
+                "torso_core_policy": dict(TORSO_CORE_POLICY),
+                "stable_local_patch_policy": dict(STABLE_LOCAL_PATCH_POLICY),
+                "profile_sha256": front_profile_sha256(), "provenance": dict(provenance),
+                "semantic_ownership_verified": False, "physical_body_part_verified": False,
+                "distance_from_front_m": None, "actuator_access": False}},
         "frame_freshness": {"capture_backend": "latest_v4l2",
             "endpoint": "RESULT_READY_BEFORE_PUBLICATION; not a motor command",
             "frames": {"ar0234": {"driver_timestamp_s": 9.75,
@@ -90,7 +103,8 @@ class FastAdapterTests(unittest.TestCase):
         row.pop('shadow_v3_mask_match')
         row['shadow_semantic_source']='COCO_CURRENT_INSTANCE_MASK'
         row['shape_diagnostic']['mask_depth']['status']='DEPTH_MAD_EXCEEDED'
-        for name in ('front_geometry','candidate_layer_front_geometry'):
+        for name in ('front_geometry','candidate_layer_front_geometry',
+                     'stable_torso_core_front_geometry'):
             row['shape_diagnostic'][name]['source_depth_status']='DEPTH_MAD_EXCEEDED'
         row.pop('shadow_track_confirmation')
         row['shadow_rgb_continuity']={'status':'MATCHED_CURRENT_RGB_DIAGNOSTIC_ONLY',
@@ -109,10 +123,10 @@ class FastAdapterTests(unittest.TestCase):
                 'selected_patch_count':3,'selected_held_out_residual':{'sample_count':150}}}
         self.assertIsNone(convert_mask_only(row)[0].target)
         observation,reason=convert_mask_only(row,local_preview=True)
-        self.assertEqual(reason,'CURRENT_STABLE_LOCAL_PREVIEW')
+        self.assertEqual(reason,'CURRENT_STABLE_TORSO_CORE_PREVIEW')
         self.assertEqual(observation.target.track_id,'person-1')
-        self.assertAlmostEqual(observation.ranges[0].distance_m,1.5875)
-        self.assertTrue(observation.ranges[0].association_evidence_id.startswith('fast-local-preview:'))
+        self.assertAlmostEqual(observation.ranges[0].distance_m,1.7875)
+        self.assertTrue(observation.ranges[0].association_evidence_id.startswith('fast-torso-core-preview:'))
         from vision_core.tools.shadow_live_bridge import preview_record
         record=preview_record(row,observation,now_s=10.,minimum_confidence=.4)
         self.assertEqual(record['track_id'],'person-1')
@@ -128,12 +142,24 @@ class FastAdapterTests(unittest.TestCase):
             lambda x:x['shape_diagnostic']['stable_candidate_front_geometry']['provenance'].update(mask_sha256='other'),
             lambda x:x['shape_diagnostic']['stable_candidate_front_geometry']['stable_local_patches']['policy'].update(maximum_residual_mad_m=.5),
             lambda x:x['shape_diagnostic']['stable_candidate_front_geometry'].update(point_count=99),
+            lambda x:x['shape_diagnostic']['stable_torso_core_front_geometry']['provenance'].update(mask_sha256='other'),
+            lambda x:x['shape_diagnostic']['stable_torso_core_front_geometry']['torso_core_policy'].update(minimum_stable_points=10),
+            lambda x:x['shape_diagnostic']['stable_torso_core_front_geometry'].update(point_count=99),
             lambda x:x['ar0234_dynamic_target'].update(current_eligible_count=2),
             lambda x:x['shape_diagnostic']['mask_depth'].update(plausible_layer_count=2),
         ):
             with self.subTest(mutate=mutate):
                 changed=copy.deepcopy(row);mutate(changed)
                 self.assertIsNone(convert_mask_only(changed,local_preview=True)[0].target)
+
+    def test_motor_off_coherent_path_uses_stable_torso_median_not_whole_mask_p05(self):
+        row=source()
+        row.pop('shadow_v3_mask_match')
+        row['shadow_semantic_source']='COCO_CURRENT_INSTANCE_MASK'
+        observation,reason=convert_mask_only(row,local_preview=True)
+        self.assertEqual(reason,'CURRENT_STABLE_TORSO_CORE_PREVIEW')
+        self.assertAlmostEqual(observation.ranges[0].distance_m,1.7875)
+        self.assertNotAlmostEqual(observation.ranges[0].distance_m,1.6875)
 
     def test_candidate_layer_requires_exact_count_and_provenance(self):
         row = source()

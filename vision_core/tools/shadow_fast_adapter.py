@@ -12,6 +12,7 @@ import math
 from pathlib import Path
 
 from vision_core.person_localization.fast_local_depth_consistency import STABLE_LOCAL_PATCH_POLICY
+from vision_core.person_localization.torso_core_geometry import TORSO_CORE_POLICY
 from vision_core.tools.run_shadow_uart import ShadowObservation
 from vision_core.tools.shadow_range_gate import (
     ACTIVE_STEREO_SHA256, FRONT_FRAME, RgbTarget, TargetRange,
@@ -116,6 +117,7 @@ def from_control_preview(audit: dict, *, now_s: float,
     all_front = shape.get("front_geometry") or {}
     front = shape.get("candidate_layer_front_geometry") or {}
     stable_front = shape.get("stable_candidate_front_geometry") or {}
+    torso_front = shape.get("stable_torso_core_front_geometry") or {}
     confirmation = audit.get("shadow_track_confirmation") or {}
     continuity = audit.get("shadow_rgb_continuity") or {}
     v3 = audit.get("shadow_v3_mask_match") or {}
@@ -195,6 +197,7 @@ def from_control_preview(audit: dict, *, now_s: float,
             type(front.get("point_count")) is not int or
             front["point_count"] != depth["candidate_sample_count"]):
         return empty, "FRONT_LAYER_BINDING_UNVERIFIED"
+    preview_torso_path=(local_preview and semantic_source == "segmentation_mask")
     selected_front=front
     if local_path:
         patches=stable_front.get("stable_local_patches") or {}
@@ -219,6 +222,27 @@ def from_control_preview(audit: dict, *, now_s: float,
                 residual.get("sample_count") != count):
             return empty, "STABLE_LOCAL_FRONT_UNAVAILABLE"
         selected_front=stable_front
+    if preview_torso_path:
+        count=torso_front.get("point_count")
+        core_candidates=torso_front.get("torso_core_candidate_point_count")
+        if (torso_front.get("provenance") != expected or
+                torso_front.get("profile_sha256") != expected_front_profile_sha256 or
+                torso_front.get("source_depth_status") != depth["status"] or
+                torso_front.get("status") != "STABLE_TORSO_CORE_FRONT_DIAGNOSTIC_ONLY" or
+                torso_front.get("point_set") != "STABLE_LOCAL_PATCHES_WITHIN_CURRENT_RGB_TORSO_CORE_DIAGNOSTIC_ONLY" or
+                torso_front.get("semantic_ownership_verified") is not False or
+                torso_front.get("physical_body_part_verified") is not False or
+                torso_front.get("actuator_access") is not False or
+                torso_front.get("distance_from_front_m") is not None or
+                torso_front.get("candidate_sample_count") != front["point_count"] or
+                torso_front.get("torso_core_policy") != TORSO_CORE_POLICY or
+                torso_front.get("stable_local_patch_policy") != STABLE_LOCAL_PATCH_POLICY or
+                type(count) is not int or type(core_candidates) is not int or
+                not TORSO_CORE_POLICY["minimum_stable_points"] <= count <= core_candidates <= front["point_count"] or
+                torso_front.get("selected_known_term_m") !=
+                    (torso_front.get("known_term_m") or {}).get("median")):
+            return empty, "STABLE_TORSO_CORE_FRONT_UNAVAILABLE"
+        selected_front=torso_front
     frame = audit.get("frame_freshness") or {}
     stamps = frame.get("frames") or {}
     ages = frame.get("driver_declared_soe_to_result_s") or {}
@@ -228,7 +252,8 @@ def from_control_preview(audit: dict, *, now_s: float,
                     for k in ("ar0234", "ov9281")]
         flags = [stamps[k]["flags"] for k in ("ar0234", "ov9281")]
         measured = [float(ages[k]) for k in ("ar0234", "ov9281")]
-        distance = float(selected_front["known_term_m"]["p05"]) - rim_forward_of_optical_center_m
+        statistic = "median" if preview_torso_path else "p05"
+        distance = float(selected_front["known_term_m"][statistic]) - rim_forward_of_optical_center_m
         confidence = float(person["confidence"])
         bearing = float(audit["shadow_target_bearing_deg"])
         age = [now_s - t for t in pair]
@@ -251,6 +276,7 @@ def from_control_preview(audit: dict, *, now_s: float,
     rgb = RgbTarget(track_id, observed, bearing, confidence, AR_INTRINSIC_SHA256)
     rng = TargetRange("OV9281", track_id, observed, distance, confidence,
                       FRONT_FRAME, ACTIVE_STEREO_SHA256,
-                      f"{'fast-local-preview' if local_path else 'fast-mask'}:{cid}:{shape['mask_sha256']}")
+                      f"{'fast-torso-core-preview' if preview_torso_path else ('fast-local-preview' if local_path else 'fast-mask')}:{cid}:{shape['mask_sha256']}")
     return ShadowObservation(rgb, (rng,)), (
-        "CURRENT_STABLE_LOCAL_PREVIEW" if local_path else "CURRENT_FAST_MASK_OBSERVATION")
+        "CURRENT_STABLE_TORSO_CORE_PREVIEW" if preview_torso_path else
+        ("CURRENT_STABLE_LOCAL_PREVIEW" if local_path else "CURRENT_FAST_MASK_OBSERVATION"))

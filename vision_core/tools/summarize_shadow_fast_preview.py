@@ -38,6 +38,15 @@ def summarize(rows: list[dict]) -> dict:
         return ({"count": len(values), "median_mm": round(1000 * statistics.median(values), 2),
                  "max_mm": round(1000 * max(values), 2)} if values
                 else {"count": 0})
+    def torso_distance_stats() -> dict:
+        values = [r["distance_m"] for r in cycles
+                  if r.get("adapter_reason") == "CURRENT_STABLE_TORSO_CORE_PREVIEW"
+                  and type(r.get("distance_m")) in (int, float)
+                  and math.isfinite(r["distance_m"])]
+        return ({"count": len(values), "min_mm": round(1000 * min(values), 2),
+                 "median_mm": round(1000 * statistics.median(values), 2),
+                 "max_mm": round(1000 * max(values), 2)} if values
+                else {"count": 0})
     return {
         "scope": "MOTOR_OFF_DIAGNOSTIC; no Pi or physical validation inferred from this summary",
         "camera_cycles": len(cycles),
@@ -72,7 +81,11 @@ def summarize(rows: list[dict]) -> dict:
             and r.get("stable_front_status") == "STABLE_CANDIDATE_FRONT_DIAGNOSTIC_ONLY"
             for r in cycles),
         "local_preview_eligible_cycles": sum(
-            r.get("adapter_reason") == "CURRENT_STABLE_LOCAL_PREVIEW"
+            r.get("adapter_reason") in ("CURRENT_STABLE_LOCAL_PREVIEW",
+                                         "CURRENT_STABLE_TORSO_CORE_PREVIEW")
+            and r.get("decision") == "FOLLOW_ELIGIBLE" for r in cycles),
+        "torso_core_preview_eligible_cycles": sum(
+            r.get("adapter_reason") == "CURRENT_STABLE_TORSO_CORE_PREVIEW"
             and r.get("decision") == "FOLLOW_ELIGIBLE" for r in cycles),
         "stable_front_points": {
             "count": len(stable_points), "min": min(stable_points),
@@ -85,6 +98,15 @@ def summarize(rows: list[dict]) -> dict:
         } if (points := [r["local_candidate_front_point_count"] for r in cycles
                        if type(r.get("local_candidate_front_point_count")) is int])
           else {"count": 0},
+        "torso_core_front_statuses": dict(Counter(
+            r.get("torso_core_front_status") for r in cycles)),
+        "torso_core_front_points": {
+            "count": len(points), "min": min(points), "median": statistics.median(points)
+        } if (points := [r["torso_core_front_point_count"] for r in cycles
+                       if type(r.get("torso_core_front_point_count")) is int])
+          else {"count": 0},
+        "torso_core_front_known_median": distance_stats("torso_core_front_known_median_m"),
+        "torso_core_selected_distance": torso_distance_stats(),
         "v3_mask_matches": dict(Counter(r.get("v3_mask_match") for r in cycles)),
         "v3_detection_counts": dict(Counter(r.get("v3_detection_count") for r in cycles)),
         "v3_raw_detection_counts": dict(Counter(r.get("v3_raw_detection_count")

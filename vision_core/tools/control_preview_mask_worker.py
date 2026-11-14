@@ -105,7 +105,8 @@ def main():
         Path(__file__).resolve().parents[1]/'person_localization/instance_mask_stereo_fusion.py',
         Path(__file__).resolve().parents[1]/'person_localization/rgb_shared_buffer.py',
         Path(__file__).resolve().parents[1]/'person_localization/jpeg_frame_transport.py',
-        Path(__file__).resolve().parents[1]/'person_localization/fast_local_depth_consistency.py')}
+        Path(__file__).resolve().parents[1]/'person_localization/fast_local_depth_consistency.py',
+        Path(__file__).resolve().parents[1]/'person_localization/torso_core_geometry.py')}
     if args.engine=='onnxruntime':
         code_sha['active_ort_session']=digest(Path(__file__).with_name('active_ort_session.py'))
         code_sha['onnx_backend']=digest(Path(__file__).with_name('onnx_segmentation_backend.py'))
@@ -180,9 +181,9 @@ def main():
                             'P1':bundle['front_P1'],'R1':bundle['front_R1']}}
 
                     if prepared:
-                        evaluated=evaluate_prepared(points,mask,request['roi'],defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)),**front_args)
+                        evaluated=evaluate_prepared(points,mask,request['roi'],defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)),instance_bbox=request.get('bbox_xyxy_px'),**front_args)
                     else:
-                        evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)),**front_args)
+                        evaluated=evaluate(bundle['disparity'],mask,cal,request['roi'],*request['range'],scale=request.get('scale',1.),defer_local=deferred,prepare_local=bool(request.get('prepare_local',True)),fast_local=bool(request.get('fast_local',False)),instance_bbox=request.get('bbox_xyxy_px'),**front_args)
                     if deferred:
                         result,samples=evaluated
                         if samples is not None:
@@ -208,7 +209,7 @@ def main():
                                 'reason':reason,'cycle_id':request['cycle_id']}
                 for feature in ('fast_local_consistency','front_geometry',
                                 'candidate_layer_front_geometry','local_candidate_front_geometry',
-                                'stable_candidate_front_geometry'):
+                                'stable_candidate_front_geometry','stable_torso_core_front_geometry'):
                     if feature in result:
                         result[feature]['provenance']={
                             'source_cycle_id':request['cycle_id'],'mask_sha256':result['mask_sha256'],

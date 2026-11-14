@@ -879,7 +879,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                          'front_geometry':shape.get('front_geometry'),
                          'candidate_layer_front_geometry':shape.get('candidate_layer_front_geometry'),
                          'local_candidate_front_geometry':shape.get('local_candidate_front_geometry'),
-                         'stable_candidate_front_geometry':shape.get('stable_candidate_front_geometry')})
+                         'stable_candidate_front_geometry':shape.get('stable_candidate_front_geometry'),
+                         'stable_torso_core_front_geometry':shape.get('stable_torso_core_front_geometry')})
                 except Exception as error:
                     self._source_snapshot_failures += 1
                     self._log_preview(f'SOURCE_SNAPSHOT_REFUSED {cycle_id} {type(error).__name__}')

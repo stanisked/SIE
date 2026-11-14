@@ -123,6 +123,7 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
     candidate_front = shape.get("candidate_layer_front_geometry") or {}
     local_candidate_front = shape.get("local_candidate_front_geometry") or {}
     stable_front = shape.get("stable_candidate_front_geometry") or {}
+    torso_front = shape.get("stable_torso_core_front_geometry") or {}
     selected_instance = (audit.get("ar0234_dynamic_target") or {}).get("candidate") or {}
     v3_diagnostic = audit.get("shadow_v3_observation_diagnostic") or {}
     timestamp = audit.get("timestamp")
@@ -199,6 +200,14 @@ def preview_record(audit: dict | None, observation: ShadowObservation,
         "stable_front_known_p05_m": (stable_front.get("known_term_m") or {}).get("p05"),
         "stable_front_policy": (stable_front.get("stable_local_patches") or {}).get("policy"),
         "stable_front_provenance": stable_front.get("provenance"),
+        "torso_core_front_status": torso_front.get("status"),
+        "torso_core_front_point_count": torso_front.get("point_count"),
+        "torso_core_candidate_point_count": torso_front.get("torso_core_candidate_point_count"),
+        "torso_core_rgb_roi_xyxy_px": torso_front.get("torso_core_rgb_roi_xyxy_px"),
+        "torso_core_front_known_median_m": (torso_front.get("known_term_m") or {}).get("median"),
+        "torso_core_front_known_p05_m": (torso_front.get("known_term_m") or {}).get("p05"),
+        "torso_core_policy": torso_front.get("torso_core_policy"),
+        "torso_core_front_provenance": torso_front.get("provenance"),
         "source_snapshot_evidence": audit.get("source_snapshot_evidence"),
         "depth_percentiles_m": pre_range.get("depth_percentiles_m"),
         "capture_to_receive_s": age_s,
