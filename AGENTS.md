@@ -30,6 +30,21 @@ For every engineering task:
 
 Reading order does not change normative precedence. If documents disagree, use the precedence defined below.
 
+## Operator command: read-only SIEE memory restoration
+
+The exact command `восстанови память SIEE` requests a read-only recovery
+of engineering context in the current or a new chat. Read the latest
+`AI_CONTEXT.md`, `PROJECT_CONTEXT.md`, approved applicable ES/Data Contracts,
+this `AGENTS.md`, `docs/handoffs/WORKING_BASELINE.md`,
+`docs/handoffs/SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md`, latest Shadow/diagnostic
+handoffs, code and linked primary results. Check relevant GitHub/Drive copies
+and available branch/commit evidence; do not assume Pi access or Graphify
+extraction happened. Return a short Russian summary of verified state,
+decisions, uncertainty, source versions and **one next MVP step**. When access
+is incomplete, say so. This command does not change files, regenerate graphs,
+or run code, ROS, cameras or motors. Only the separate `обнови документ` /
+`обновить документ` commands authorize coordinated context writes.
+
 ## SIEE project identity and purpose
 
 The project name is **Spatial Intelligence Evidence Engine (SIEE)**. Its purpose
