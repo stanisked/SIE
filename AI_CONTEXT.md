@@ -21,11 +21,18 @@ Its purpose is to establish a shared engineering context before generating archi
 Every AI assistant shall read this document before performing any engineering task.
 
 After reading this file, read `PROJECT_CONTEXT.md` for the current cross-project snapshot, then the applicable approved and frozen Engineering Specifications and canonical Data Contracts, `AGENTS.md`, the relevant version-specific handoff, and the implementation under inspection.
+For current Fast Shadow / Graphify tasks, include `docs/handoffs/SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md` in the version-specific handoff review.
 
-`PROJECT_CONTEXT.md` is updated only after the user gives `обновить документ`
-or `обнови документ`; the operator confirmed these are equivalent. It records
-current state and safe continuation but remains
-subordinate to the normative precedence below.
+The operator commands `обновить документ` and `обнови документ` are equivalent.
+Either command authorizes a coordinated update of BOTH `PROJECT_CONTEXT.md`
+(the project snapshot) and `docs/handoffs/SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md`
+(the code-dependency map and experiment/LLM continuation journal). Update each
+repository file and its existing private Google Drive copy; verify both pairs
+match before reporting completion. Preserve later evidence and keep technical
+changes distinct from documentation updates. Graphify graphs are refreshed only
+when the source checkout is available and a new extraction is actually run;
+do not claim automatic regeneration. The project snapshot remains subordinate
+to the normative precedence below.
 
 ## Project name and technical compatibility
 
