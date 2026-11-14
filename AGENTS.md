@@ -25,7 +25,8 @@ For every engineering task:
 7. For Shadow/cart work, read `docs/handoffs/WORKING_BASELINE.md` for already
    demonstrated Pi results and the exact boundary of each result. Consult its
    linked primary reports before contradicting or repeating a completed step.
-8. Inspect the implementation, tests, reports, and current working tree.
+8. For Fast Shadow or Graphify work, read `docs/handoffs/SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md` and follow its primary evidence links; do not treat its historical snapshots as live runtime verification.
+9. Inspect the implementation, tests, reports, and current working tree.
 
 Reading order does not change normative precedence. If documents disagree, use the precedence defined below.
 
@@ -110,9 +111,15 @@ Keep durable knowledge separate from session state:
 - never rewrite an unverified claim as an established fact;
 - update the handoff in the same change that materially alters a validated implementation, activation state, operating envelope, or next-step sequence.
 
-`PROJECT_CONTEXT.md` is the change-controlled project snapshot. Do not update it
-automatically: edit it only after the user gives `обновить документ` or
-`обнови документ`. The operator confirmed these two commands are equivalent.
+`PROJECT_CONTEXT.md` is the change-controlled project snapshot. The operator
+commands `обновить документ` and `обнови документ` are equivalent and require
+updating BOTH `PROJECT_CONTEXT.md` and
+`docs/handoffs/SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md` together. For each,
+synchronize the current repository content with its existing private Google
+Drive copy, append a dated change record, and verify both copies match.
+Do not update either automatically after ordinary conversation. The Graphify
+handoff is an engineering index and history, not a normative specification;
+refresh Graphify graphs only after explicitly running extraction.
 
 Changes to frozen SIE contracts follow this lifecycle:
 
