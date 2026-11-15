@@ -1,8 +1,8 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-11-14 (documentation-update workflow clarified; technical state remains through the 2026-11-13 18:17:18 fast Shadow Pi run and subsequent launcher corrections)
+**Snapshot date:** 2026-11-15 (moving-person Fast Shadow motor-off result; older sections retain their historical dates)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** Shadow is an engineering candidate. In the latest one-person, motor-off Pi run the fast segmentation-mask path produced 64/64 `FOLLOW_ELIGIBLE` decisions: 31 from coherent whole-mask depth and 33 from a stable local current-frame surface when whole-mask MAD refused. One track ID persisted through the run and driver-declared age remained below 0.5 s at the Bridge decision. The launcher now pins the conditional 0.5 to 4.5 m v2 profile and the mask-only path no longer requires an unused YOLO v3 file; neither correction has yet been exercised in a new Pi run. The evidence does not validate physical target ownership after loss, a two-person scene, independently measured exposure latency, physical distance accuracy, canonical Measurement admission or autonomous floor following. The fast camera-driven Shadow motor runner remains disabled.
+**Status:** The moving-person Fast Shadow mask-only preview kept RGB target identity through top-of-image truncation and produced current OV9281 torso-depth diagnostics. The latest reviewed Pi archive has 143/215 `FOLLOW_ELIGIBLE` cycles and two IDs separated by a 70-cycle target absence. Two current-mask/torso bootstrap cycles remained `PAUSE`; the new ID then persisted for 102 eligible cycles. This is not physical distance accuracy, a canonical `Measurement`, or motor-on validation. See `docs/diagnostics/shadow_fast_moving_person_track_20261115.md`.
 
 ## Update rule
 
@@ -45,6 +45,39 @@ any conflicts; one next verifiable MVP step. Explicitly mark inaccessible
 sources and unverified Pi runtime. Never turn this command into a new experiment
 or claim physical tests were executed. When source access is unavailable, ask
 for the current documents instead of claiming recovery succeeded.
+
+## 2026-11-15: moving-person RGB track and stereo torso depth
+
+The operator's motor-off Pi archive `shadow_fast_20261115_134056_review.tar.gz`
+(SHA-256 `4d85b02bf2efe3f9e26545aee62c2a8b58e7fa10afd6839ea223419e876db5f1`)
+contains 215 camera cycles, 15 validated current-source bundles, zero journal
+drops/errors, and 143 `FOLLOW_ELIGIBLE` decisions. In cycles 1–41 track `:1`
+persisted; cycles 42–111 had no selected target (61 with no segmentation
+instance, nine with raw instances at the right boundary); cycles 112–113
+were deliberate no-range bootstrap `PAUSE` cycles; cycles 114–215 carried
+track `:2` continuously. In 32 eligible cycles the RGB person box touched
+the upper image edge while the torso remained visible. Of 24 cycles with
+whole-mask `DEPTH_MAD_EXCEEDED`, 22 supplied a current locally fitted
+torso-front diagnostic with the RGB track, and two were the bootstrap pauses.
+There were no two eligible people. AR0234 and OV9281 driver-declared ages
+at Bridge decision stayed below 329 ms; this is not measured physical exposure
+latency. The selected front diagnostic spanned 1.633–2.352 m but has no
+independent physical distance error bound. No motors were enabled.
+
+**Accepted finding:** RGB current-frame segmentation maintains the moving
+person's diagnostic ID through top cropping while current OV9281 stereo points
+continue to support a torso-depth estimate. After a long exit, two fresh
+matched masks with torso support seed a new diagnostic ID; the following
+cycle can use current depth even when whole-mask MAD is high. This closes
+the tracked-person/re-entry question for the motor-off preview, not canonical
+Measurement admission or physical following. The exact chronology, evidence
+and limitations are in
+`docs/diagnostics/shadow_fast_moving_person_track_20261115.md`. Code commit
+`d00d4e0949c291ae86b45f80c5c7c0a49ce1b472` on
+`codex/shadow-turtlesim-follow-20261111` was used for this Pi run. Next
+independent MVP step: relate the torso-front estimate to an explicit measured
+physical datum and the planned supervised base-control path; do not repeat
+static-person detection to rediscover the already verified moving track.
 
 ## 2026-11-13: current-frame local surface and corrected Fast Shadow launcher
 
