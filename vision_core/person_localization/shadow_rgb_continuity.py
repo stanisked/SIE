@@ -5,7 +5,21 @@ from datetime import datetime
 import math
 
 
-MAX_RGB_FRAME_GAP_S = .5
+MAX_RGB_FRAME_GAP_S = .75
+
+
+def retain_short_gap(status: str, reason: str, prior: dict | None) -> bool:
+    """Hold identity during a missed frame, without publishing a target.
+
+    The next detected frame must still pass continued_track's age and box
+    match before the held ID can be used again.
+    """
+    return (isinstance(prior, dict) and bool(prior.get("track_id")) and
+            status == "TARGET_UNAVAILABLE" and
+            reason in ("NO_CURRENT_NON_EDGE_TARGET",
+                       "BBOX_TOO_NARROW_FOR_UPPER_BODY",
+                       "BBOX_NEAR_RIGHT_IMAGE_EDGE",
+                       "BBOX_NEAR_LEFT_IMAGE_EDGE"))
 
 
 def continued_track(prior: dict | None, candidate: dict, captured_at_utc: str,

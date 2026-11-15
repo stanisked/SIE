@@ -26,7 +26,7 @@ from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity, restore_crop
 from vision_core.person_localization.diagnostic_instance_selection import (
     has_unique_eligible_instance_binding, select_instance)
-from vision_core.person_localization.shadow_rgb_continuity import continued_track, remember_track
+from vision_core.person_localization.shadow_rgb_continuity import continued_track, remember_track, retain_short_gap
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from vision_core.person_localization.control_input_shadow import evaluate_control_input_shadow
 from vision_core.person_localization.dynamic_shadow_diagnostic import (
@@ -497,7 +497,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     captured_at_utc=stamp.isoformat(), max_age_s=self.temporal_target_track_max_age_s,
                     minimum_iou=self.temporal_target_minimum_iou,
                     maximum_center_displacement_relative=self.temporal_target_maximum_center_displacement_relative,
-                    minimum_match_margin=self.temporal_target_minimum_match_margin, minimum_confidence=self.confidence_threshold)
+                    minimum_match_margin=self.temporal_target_minimum_match_margin, minimum_confidence=self.confidence_threshold,
+                    allow_top_truncation=bool(getattr(self, "_shadow_fast_input", False) and
+                                              getattr(self, "_shadow_segmentation_input", False)))
                 if self._dynamic_shadow_diagnostic:
                     selected, edge_override = select_edge_candidate(
                         segmentation, dynamic, min_confidence=self.confidence_threshold)
@@ -715,7 +717,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 audit.update(status="CANCELLED_SHUTDOWN", reason="ROS_SHUTDOWN", association=None)
             # A current, unique RGB match can carry identity across a MAD-only
             # depth refusal. No confirmation or range is published on that cycle.
-            # A lost/ambiguous RGB target, other refusal or stale match resets it.
+            # A short target/geometry gap may retain only the RGB identity.
+            # Its next use still needs a fresh unique mask and geometric match;
+            # the gap cycle itself publishes neither range nor confirmation.
             if (getattr(self, "_shadow_fast_input", False) and
                     ("shadow_track_confirmation" not in audit or
                      audit.get("status") in ("PROCESSING_REFUSED", "CANCELLED_SHUTDOWN"))):
@@ -724,7 +728,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     audit.get("status") == "MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY" and
                     (audit.get("shape_diagnostic") or {}).get("mask_depth", {}).get("status")
                     == "DEPTH_MAD_EXCEEDED")
-                if not retain_rgb:
+                retain_gap = (getattr(self, "_shadow_segmentation_input", False) and
+                    retain_short_gap(audit.get("status"), audit.get("reason"),
+                                     self._shadow_rgb_last_seen))
+                if not (retain_rgb or retain_gap):
                     self._confirmed_target_track = None
                     self._shadow_rgb_last_seen = None
             # Drain a started stereo job even when detection failed. No stale

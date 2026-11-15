@@ -2,7 +2,7 @@
 import unittest
 
 from vision_core.person_localization.shadow_rgb_continuity import (
-    continued_track, remember_track,
+    continued_track, remember_track, retain_short_gap,
 )
 from vision_core.tests.test_shadow_fast_adapter import source, convert
 from vision_core.tools.shadow_fast_adapter import AR_INTRINSIC_SHA256
@@ -30,6 +30,23 @@ class ShadowRgbContinuityTests(unittest.TestCase):
         self.assertIsNone(match([420, 200, 820, 900], "2026-11-13T10:00:01+00:00"))
         self.assertIsNone(match([1200, 200, 1600, 900], "2026-11-13T10:00:00.27+00:00"))
         self.assertIsNone(match([420, 200, 820, 900], "invalid"))
+
+    def test_short_unavailable_gap_holds_only_identity_until_fresh_match(self):
+        prior = remember_track("person-1", {"bbox_xyxy_px": [400, 200, 800, 900]},
+                               "2026-11-15T09:33:56+00:00")
+        self.assertTrue(retain_short_gap("TARGET_UNAVAILABLE",
+                         "BBOX_TOO_NARROW_FOR_UPPER_BODY", prior))
+        self.assertFalse(retain_short_gap("PROCESSING_REFUSED",
+                          "BBOX_TOO_NARROW_FOR_UPPER_BODY", prior))
+        self.assertFalse(retain_short_gap("TARGET_UNAVAILABLE",
+                          "MULTIPLE_TARGETS_NO_CONFIRMED_TRACK", prior))
+        def match(box, delay):
+            return continued_track(prior, {"bbox_xyxy_px": box},
+                f"2026-11-15T09:33:56.{delay:03d}+00:00",
+                minimum_iou=.2, maximum_center_displacement_relative=.75)
+        self.assertEqual(match([420, 200, 820, 900], 600)["track_id"], "person-1")
+        self.assertIsNone(match([1200, 200, 1600, 900], 600))
+        self.assertIsNone(match([420, 200, 820, 900], 800))
 
     def test_mad_pauses_then_same_rgb_track_can_resume(self):
         supervisor = ShadowSupervisor("boot-1", "shadow-1")

@@ -204,6 +204,23 @@ class YOLO:
         edge={**first,'bbox_xyxy_px':[0,200,300,1000]}
         self.assertEqual(select_instance([edge],**kwargs)['disposition'],'UNAVAILABLE')
 
+    def test_fast_shadow_top_truncation_keeps_only_current_unique_mask(self):
+        kwargs=dict(prior_track=None,captured_at_utc='2026-11-15T09:34:18+00:00',
+                    max_age_s=.5,minimum_iou=.2,
+                    maximum_center_displacement_relative=.75,
+                    minimum_match_margin=.1,minimum_confidence=.4)
+        top={'instance_index':0,'bbox_xyxy_px':[500,0,980,1190],'confidence':.93}
+        self.assertEqual(select_instance([top],**kwargs)['reason'],
+                         'NO_CURRENT_NON_EDGE_TARGET')
+        selected=select_instance([top],**kwargs,allow_top_truncation=True)
+        self.assertTrue(has_unique_eligible_instance_binding([top],selected))
+        self.assertEqual(selected['candidate'],top)
+        right={**top,'bbox_xyxy_px':[1600,0,1919,1190]}
+        self.assertEqual(select_instance([right],**kwargs,allow_top_truncation=True)
+                         ['disposition'],'UNAVAILABLE')
+        self.assertEqual(select_instance([top,{**top,'instance_index':1}],**kwargs,
+                         allow_top_truncation=True)['disposition'],'UNAVAILABLE')
+
     def test_low_confidence_raw_mask_does_not_make_eligible_target_ambiguous(self):
         primary={'instance_index':0,'bbox_xyxy_px':[400,100,900,1100],
                  'confidence':.91}

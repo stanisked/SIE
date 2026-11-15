@@ -19,7 +19,8 @@ def has_unique_eligible_instance_binding(instances, dynamic):
 
 
 def select_instance(instances, *, prior_track, captured_at_utc, max_age_s,
-                    minimum_iou, maximum_center_displacement_relative, minimum_match_margin, minimum_confidence=.70):
+                    minimum_iou, maximum_center_displacement_relative, minimum_match_margin,
+                    minimum_confidence=.70, allow_top_truncation=False):
     candidates=[]
     for item in instances:
         box=item.get('bbox_xyxy_px',[])
@@ -28,9 +29,9 @@ def select_instance(instances, *, prior_track, captured_at_utc, max_age_s,
         x1,y1,x2,y2=box
         if not 0<=x1<x2<=1920 or not 0<=y1<y2<=1200 or not minimum_confidence<=item.get('confidence',-1)<=1:
             continue
-        # Preserve the existing current-frame top/left/right truncation rule.
-        # Bottom truncation is recorded but may proceed to geometry checks.
-        if x1<=3 or x2>=1917 or y1<=3:
+        # Fast Shadow may use a top-truncated person when the visible torso
+        # still passes its separate geometry and current-mask checks.
+        if x1<=3 or x2>=1917 or (y1<=3 and not allow_top_truncation):
             continue
         candidates.append(item)
     base={'disposition':'UNAVAILABLE','candidate':None,'current_eligible_count':len(candidates),
