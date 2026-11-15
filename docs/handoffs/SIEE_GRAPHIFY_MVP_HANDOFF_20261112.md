@@ -1,7 +1,7 @@
 # SIEE / Fast Shadow / Graphify: технический контекст и журнал продолжения
 
 **Версия документа:** 1.0  
-**Срез знаний:** 2026-11-15 (добавлены датированные результаты; §0 сохраняет исторический срез)
+**Срез знаний:** 2026-11-15 (добавлены физические моторные результаты и асинхронный steering; §0 сохраняет исторический срез)
 **Проект:** Spatial Intelligence Evidence Engine (SIEE; технические идентификаторы `sie` сохраняются)  
 **Основная инженерная ветка для этого handoff:** `codex/shadow-turtlesim-follow-20261111`  
 **Назначение:** передача накопленного инженерного контекста между ChatGPT, Codex и другими LLM; сохранение истории проверенных решений и экспериментов; использование Graphify для ускорения разработки мобильного MVP.  
@@ -528,6 +528,21 @@ LLM должна предлагать запись после завершени
 - **Изменение:** диагностический mask-only launcher явно отключает базовый AR v3 detector и больше не требует `SHADOW_RGB_MODEL_PATH`. Строгий `v3_mask_binding` путь по-прежнему требует модель v3 и проверяет точный SHA-256. Базовый MeasurementNode и DynamicAudit сохраняют detector включённым по умолчанию; отключение разрешено только явно обозначенному diagnostic subclass.
 - **Проверка:** `py_compile` двух изменённых ROS-модулей, `bash -n` обоих Fast Shadow launcher, две новые launcher contract-проверки и `git diff --check` прошли. Полный pytest в рабочей среде не запускался: модуль `pytest` отсутствует.
 - **Влияние:** калибровка, v2 activation profile, mask/stereo алгоритм, решения `FOLLOW_ELIGIBLE`/`PAUSE`, Measurement и motor boundary не изменены. Следующий Pi-прогон остаётся motor-off и проверяет профиль v2 на уже работающем segmentation-mask пути без фиктивной зависимости от v3.
+
+---
+
+### 2026-11-15: Fast Shadow physical motion, asynchronous UART/vision and applied steering (confirmed)
+
+**FACT — physical motion:** Raspberry Pi 5 → ESP32 over UART `/dev/ttyAMA0` issued finite `START`/`RESUME` segments from Fast Shadow, with operator-observed motion on the floor. `shadow_fast_20261115_200627/bridge.jsonl` completed 6 segments and ended at `READY`, PWM 0/0, STOPPED. A subsequent run `shadow_fast_20261115_204105` completed 4 segments under the first Track ID and 6 under the next command session; the previous command was stopped before the new command ID was started. The off-centre floor test initially drifted right even though the operator stood left; there was *no applied steering* in those runs, so the sign was not established.
+
+**FACT — identified bottleneck and local implementation:** While `run_shadow_uart.py` synchronously awaited ESP32 statuses, consuming the `shadow_live_bridge.py` observation generator stopped. Real UART logs showed STARTING at ~128–297 ms, DRIVING at ~455–592 ms, BRAKING at ~736–770 ms after command acceptance. Short segments left fresh target bearing unavailable for steering; one attempted ordinary STEER returned `NO_MATCHING_ACTIVE_STEERED_FORWARD` and completed safe STOP. Locally applied asynchronous producer/latest-observation buffer decoupled ROS camera updates from sequential UART motion; steering during STARTING selects a fresh observation of the same Track ID. The operator reported local tests `PASS async producer continues during slow consumer, latest-wins`, `simulation SESSION_ENDED ['START', 'STEER'] [20, 20, 20] None`, and `PASS fresh steering dispatched during STARTING and STOP confirmed`. The runtime patch is **working-tree evidence only**, not a verified GitHub code commit.
+
+**FACT — ESP32 steering actually applied:** Lifted-wheel live experiment, 9 finite segments; `last_steer_update_seq=5`, `last_steer_biased_drive_cycles=3`, `last_steer_first_applied_bias_pwm=-20`, `last_steer_last_applied_bias_pwm=-20`, right/left steering PWM sums `666/405`; final `READY`, STOPPED, PWM 0/0, no faults. Person was **left of cameras**. This is direct telemetry of applied steering, not only an accepted UART call. No physical ground-track left-turn confirmation yet.
+
+**OPEN:** Test real chassis turning toward the left-side target on an unobstructed floor; verify stopping after target loss and final no-fault zero PWM. Maintain diagnostic-only torso depth semantics; these motor tests do not certify physical-free-space clearance, arbitrary autonomous navigation, a new calibrated measurement, or proven reliable Follow Person. Do not count per-segment odometry as cumulative traveled distance.
+
+**Evidence:** `/home/elwis/.local/state/sie/evidence/shadow_fast_20261115_200627/bridge.jsonl`, `.../shadow_fast_20261115_201443/bridge.jsonl`, `.../shadow_fast_20261115_204105/bridge.jsonl` and `bridge.session-002.jsonl`, plus final lifted-wheel operator terminal log dated 2026-11-15. The current repo branch `codex/shadow-turtlesim-follow-20261111` contains historical code; the asynchronous runtime changes are reported locally applied and should not be attributed to this documentation commit.
+
 
 ---
 
