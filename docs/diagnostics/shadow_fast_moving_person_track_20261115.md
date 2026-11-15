@@ -61,6 +61,29 @@ motor-on follow session. Local fit residuals quantify internal consistency,
 not physical depth accuracy. Do not relabel `FOLLOW_ELIGIBLE` as permission to
 move or the diagnostic torso value as an admitted `Measurement`.
 
+## Operator MVP direction, 2026-11-15
+
+The active OV9281 calibration and earlier board/relative-translation tests
+remain the project's depth baseline. This moving-person archive does not
+invalidate them; it tests a different torso-front statistic. The operator
+accepts centimetre-scale distance error for the mobile MVP and plans to add
+LiDAR as another distance/obstacle source. A new physical accuracy study of
+the moving person's torso is not a prerequisite for the next bounded
+supervised cart experiment. This is an MVP implementation choice, not a new
+claim that every point from 0.5 to 4.5 m has a measured physical error bound.
+
+The four observable MVP outcomes are: (1) RGB finds and retains the moving
+person; (2) OV9281 supplies a current target-bound distance; (3) motors start
+and move the cart; (4) the cart steers toward that target. This archive
+supports outcomes 1 and 2 in the motor-off diagnostic. Earlier independent
+cart trials demonstrate motor motion and steering with other input paths;
+they do not yet demonstrate outcomes 3 and 4 driven by this exact Fast Shadow
+stream. The next engineering step is to connect the reviewed Fast Shadow
+source to the existing bounded UART Shadow motor/steering path, retain the
+existing STOP/PAUSE behavior on target loss, and examine an actual supervised
+camera-driven steering segment. Do not repeat static-person or straight-wheel
+trials as a substitute for that integration.
+
 ## Earlier comparison, with scene caveat
 
 The previous motor-off archive `shadow_fast_20261115_131118_review.tar.gz`

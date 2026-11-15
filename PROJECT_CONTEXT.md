@@ -2,7 +2,7 @@
 
 **Snapshot date:** 2026-11-15 (moving-person Fast Shadow motor-off result; older sections retain their historical dates)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** The moving-person Fast Shadow mask-only preview kept RGB target identity through top-of-image truncation and produced current OV9281 torso-depth diagnostics. The latest reviewed Pi archive has 143/215 `FOLLOW_ELIGIBLE` cycles and two IDs separated by a 70-cycle target absence. Two current-mask/torso bootstrap cycles remained `PAUSE`; the new ID then persisted for 102 eligible cycles. This is not physical distance accuracy, a canonical `Measurement`, or motor-on validation. See `docs/diagnostics/shadow_fast_moving_person_track_20261115.md`.
+**Status:** The moving-person Fast Shadow mask-only preview kept RGB target identity through top-of-image truncation and produced current OV9281 torso-depth diagnostics. The latest reviewed Pi archive has 143/215 `FOLLOW_ELIGIBLE` cycles and two IDs separated by a 70-cycle target absence. Two current-mask/torso bootstrap cycles remained `PAUSE`; the new ID then persisted for 102 eligible cycles. Existing OV9281 calibration/board/relative-translation evidence remains the depth baseline; this run did not independently measure the moving torso-front statistic. The operator accepts centimetre-scale error for the mobile MVP and plans LiDAR support. The next goal is camera-driven motor motion and steering using the existing bounded UART path. See `docs/diagnostics/shadow_fast_moving_person_track_20261115.md`.
 
 ## Update rule
 
@@ -74,10 +74,14 @@ Measurement admission or physical following. The exact chronology, evidence
 and limitations are in
 `docs/diagnostics/shadow_fast_moving_person_track_20261115.md`. Code commit
 `d00d4e0949c291ae86b45f80c5c7c0a49ce1b472` on
-`codex/shadow-turtlesim-follow-20261111` was used for this Pi run. Next
-independent MVP step: relate the torso-front estimate to an explicit measured
-physical datum and the planned supervised base-control path; do not repeat
-static-person detection to rediscover the already verified moving track.
+`codex/shadow-turtlesim-follow-20261111` was used for this Pi run. Next MVP
+step: connect the current Fast Shadow target/range to the existing bounded
+UART motor/steering path and verify a supervised camera-driven movement and
+steering segment. The operator accepts centimetre-scale distance error for
+this MVP and plans LiDAR as an additional source. Use the existing stereo
+calibration and board/translation evidence instead of repeating calibration
+or static-person tests. This implementation choice does not certify the
+moving torso-front statistic as an admitted Measurement.
 
 ## 2026-11-13: current-frame local surface and corrected Fast Shadow launcher
 
