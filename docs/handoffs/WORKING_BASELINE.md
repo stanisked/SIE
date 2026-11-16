@@ -7,6 +7,29 @@ probe, steering-from-scratch task, or calibration change. The detailed reports
 and raw journals remain the evidence; this page does not promote diagnostics
 into an approved Measurement.
 
+## 2026-11-16: ESP32 UART v2 initial-bias and physical bilateral steering (FACT / OPEN)
+
+**FACT — firmware and transport:** On Raspberry Pi 5 `piecake`, the operator copied `traction_control_v4_2_uart_shadow_v1` to `firmware/esp32/traction_control_v4_2_uart_shadow_v2_initial_bias/`, set `FIRMWARE_BUILD_ID=v4_2_uart_shadow_v2_initial_bias`, expanded UART SHADOW_START/SHADOW_RESUME to accept `bias_pwm` as the eighth core field, and extended `CommandRecord` with `shadowLastBiasPwm`. Initial bias is integer-validated within ±20 and saved for START/RESUME and duplicate detection. START records bias after queue setup and before the loop invokes `startMotion()`; RESUME records it after `configureBoundedCommand()`. `updateDriving()` applies the bias only in DRIVING, not STARTING. The operator compiled this ESP32 sketch in Arduino IDE 2.3.10 (504463 bytes program; 71880 bytes globals), flashed it (verified hash), and obtained HTTP 200 /status with matching build ID, `READY`, PWM 0/0 and no latched faults. The operator's changed Pi Python `uart_http_transport.py` and `run_shadow_uart.py` include initial bias in START/RESUME, gate on firmware BUILD v2, and remove an unnecessary immediate post-DRIVING STEER; a five-operation UART field test and static checks passed. **These Pi runtime/source modifications are operator-confirmed local changes; this documentation update does not claim they were committed to GitHub.**
+
+**FACT — raised-wheel trial:** `shadow_fast_20261116_194409`: 9 × requested 0.100 m segments, START + 8 RESUME, all HTTP 202 with `bias_pwm=-20`; terminal `SESSION_ENDED`, READY, PWM 0/0, no faults. Last command reported 9 nonzero-biased drive cycles, first/last applied bias -20, right/left PWM sums 2016/1215. Distances and heading in final status describe **the last segment**, not cumulative travel.
+
+**FACT — floor left trial:** `shadow_fast_20261116_195100`: one 0.100 m requested segment, operator saw a slight leftward chassis turn; final right/left wheel distances 0.1198/0.1094 m; encoder heading +0.0359 rad (~+2.06°), one biased drive cycle, applied bias -20, READY/PWM 0/0/no faults. Heading is encoder-derived, not independently measured chassis yaw.
+
+**FACT — floor right trials:** `shadow_fast_20261116_195358`: one segment, applied bias +20, one biased cycle, wheel distances 0.1000/0.0994 m, heading +0.0019 rad (near zero); this run alone does **not** demonstrate a rightward chassis turn. `shadow_fast_20261116_195714`: operator visibly observed rightward steering across three START/RESUME segments, all accepted with bias +20. Last-segment distances 0.0950/0.0964 m, heading -0.0049 rad (~-0.28°), 3 biased cycles, READY/PWM 0/0/no faults. No independently measured cumulative yaw.
+
+**FACT — moving-person raised-wheel sign reversals:** In `shadow_fast_20261116_200624` the first Shadow session completed 14 accepted START/RESUME segments then STOPped on `NEW_TRACK_REQUIRES_NEW_SESSION`. Initial bias sequence (HTTP 202 each): `+20,+20,+20,+20,+20,+11,-15,-18,-20,-20,-20,-20,-13,+2`; two sign changes within the same session (segments 7 and 14). Launcher created a **new** Shadow session. Second session reported 19 segments, `SESSION_ENDED`, final READY/PWM 0/0, 17 biased cycles **in the last command record**, first applied +20 and last -20; its individual per-segment bias sequence has not been independently enumerated here. `last_steer_update_seq=0` at final status; sign changes are consistent with the initial START/RESUME-bias path, not proof of accepted separate mid-segment STEER.
+
+**BOUNDARY / OPEN:** These are supervised experiments, not autonomous collision-safe person following. The primary camera preview still shows frequent `DEPTH_MAD_EXCEEDED` and diagnostic-only range; its `motors=DISABLED` refers to the camera diagnostic node while the separate authorized experimental Shadow runner executes motors. Do not promote torso-front diagnostics to canonical admitted SIE Measurement or claim a physically validated moving-person distance error. Track ID changed after 14 segments; robust target continuity/loss/re-entry, STOP on loss under loaded dynamic conditions, independent total cart yaw/trajectory, obstacle clearance, and continuous following at controlled target distance remain open. Preserve original calibrations and safety boundaries.
+
+**Evidence (operator Pi; paths are not GitHub artifacts):**
+- `/home/elwis/.local/state/sie/evidence/shadow_fast_20261116_194409/bridge.jsonl`
+- `.../shadow_fast_20261116_195100/bridge.jsonl`
+- `.../shadow_fast_20261116_195358/bridge.jsonl`
+- `.../shadow_fast_20261116_195714/bridge.jsonl`
+- `.../shadow_fast_20261116_200624/{bridge.jsonl,bridge.session-002.jsonl}` (second session file naming to verify on Pi).
+
+**NEXT:** supervised, bounded floor trial with a moving person and explicit logged `track_id`, `bearing`, per-segment bias, accepted range provenance, per-segment odometry, independent body heading/trajectory, and terminal motor-off; verify target loss and clearance before claiming end-to-end autonomous follow. See `docs/diagnostics/siee_uart_v2_initial_bias_steering_20261116.md`.
+
 ## Already demonstrated on the Raspberry Pi 5
 
 | Result | Actual evidence | Boundary |
