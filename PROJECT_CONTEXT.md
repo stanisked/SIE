@@ -1,8 +1,45 @@
 # SIEE Project Context
 
-**Snapshot date:** 2026-11-14 (documentation-update workflow clarified; technical state remains through the 2026-11-13 18:17:18 fast Shadow Pi run and subsequent launcher corrections)
+**Snapshot date:** 2026-11-16 (UART v2 bilateral steering experiments; prior sections preserve historical dates)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
-**Status:** Shadow is an engineering candidate. In the latest one-person, motor-off Pi run the fast segmentation-mask path produced 64/64 `FOLLOW_ELIGIBLE` decisions: 31 from coherent whole-mask depth and 33 from a stable local current-frame surface when whole-mask MAD refused. One track ID persisted through the run and driver-declared age remained below 0.5 s at the Bridge decision. The launcher now pins the conditional 0.5 to 4.5 m v2 profile and the mask-only path no longer requires an unused YOLO v3 file; neither correction has yet been exercised in a new Pi run. The evidence does not validate physical target ownership after loss, a two-person scene, independently measured exposure latency, physical distance accuracy, canonical Measurement admission or autonomous floor following. The fast camera-driven Shadow motor runner remains disabled.
+**Status:** ESP32 UART v2 initial-bias actuation and physical bilateral floor steering verified in bounded supervised trials. Moving-person raised-wheel control changed steering sign twice within one Shadow session; floor-follow trajectory, canonical Measurement admission and reliable track re-entry remain OPEN. See 2026-11-16 update.
+
+
+## 2026-11-16: ESP32 UART v2 Initial Bias and bilateral physical steering (FACT / OPEN)
+
+**FACT — implemented local runtime:** The operator built and flashed ESP32 `v4_2_uart_shadow_v2_initial_bias` using Arduino IDE 2.3.10 on the Ubuntu laptop. Successful compilation: 504463 program bytes (38%) and 71880 global bytes (21%). Flash write hash verified; Raspberry Pi 5 `/dev/ttyAMA0` preflight reported HTTP 200, `firmware_build_id=v4_2_uart_shadow_v2_initial_bias`, `shadow_api_version=v1_paused_segment`, READY, PWM=0/0, no faults. The v1 firmware directory was preserved. The current working Pi source changes for firmware, `vision_core/tools/uart_http_transport.py` and `vision_core/tools/run_shadow_uart.py` have **not** been independently verified as committed to GitHub; the documentation update is not an executable-code deployment.
+
+**FACT — control mechanism:** UART SHADOW_START/SHADOW_RESUME accepts a fifth command argument `bias_pwm` (eight core UART fields before CRC), validated as integral in [-20,+20] and saved into the ESP32 `CommandRecord` before `startMotion()`; `shadowLastBiasPwm` preserves initial values for duplicate checks. `pollUart()` runs before the loop's `startRequested` handler; STARTING uses `updateStarting()` and only DRIVING's `updateDriving()` applies nonzero steering bias to PWM. Python START/RESUME now sends bias in the same UART command, eliminating dependence on a late separate STEER packet. UART five-operation field test and Python static checks passed. Standalone mid-segment STEER remains implemented but was not proven applied in these runs (`last_steer_update_seq=0`).
+
+**FACT — raised wheels 2026-11-16:** `shadow_fast_20261116_194409`: 9 accepted requested 0.100-m START/RESUME segments, each `bias_pwm=-20` and HTTP 202, terminal SESSION_ENDED, READY, STOPPED, PWM=0/0 and no faults; last command shows 9 biased drive cycles, first/last applied bias -20, right/left PWM sums 2016/1215. Last-command encoder distance is not total session travel.
+
+**FACT — floor steering:** `shadow_fast_20261116_195100`: operator visually observed a slight left turn in one segment; right/left encoder distances 0.1198/0.1094 m, `heading_rad=+0.0359` (~+2.06°), applied bias -20; READY, PWM 0/0. `shadow_fast_20261116_195358`: person right, bias +20 applied, but right/left distances 0.1000/0.0994 m and `heading_rad=+0.0019` do **not** prove a rightward turn alone. `shadow_fast_20261116_195714`: operator visually observed rightward steering over three accepted 0.100-m START/RESUME segments, all bias +20; last-segment distances 0.0950/0.0964 m, `heading_rad=-0.0049` (~-0.28°), 3 biased cycles, READY/PWM=0/0. Encoder heading is not an independent measurement of chassis yaw.
+
+**FACT — dynamic moving-person, raised wheels:** `shadow_fast_20261116_200624`: first Shadow session transmitted 14 accepted START/RESUME commands at biases `+20,+20,+20,+20,+20,+11,-15,-18,-20,-20,-20,-20,-13,+2`; two sign changes within the same command session (segments 7 and 14). On a new RGB Track ID the runner recorded `NEW_TRACK_REQUIRES_NEW_SESSION` and STOP, then started a second Shadow session. Second session reported 19 segments, terminal SESSION_ENDED and READY/PWM=0/0; final record has 17 biased drive cycles and first/last applied bias +20/-20. Do not mistake the first session's 14-segment sequence for the second session's 19-segment sequence. The complete per-segment bias history of the second session and exact track continuity require further primary-journal inspection.
+
+**OPEN / boundaries:** The camera node continues reporting frequent `DEPTH_MAD_EXCEEDED`; its diagnostic-only `motors=DISABLED` is not a statement about the independent supervised Shadow UART actuator path. The experimental torso/front range is **not** an admitted canonical SIE Measurement or independently verified moving-person physical distance. No approved LiDAR fusion, independent total yaw/trajectory measurement, robust identity through full crossing, verified dynamic target-loss STOP on the floor, obstacle clearance, or reliable autonomous moving-person following has been demonstrated. Do not change active calibration or Engineering Specifications based on these trials.
+
+**Primary evidence on Pi:** `/home/elwis/.local/state/sie/evidence/shadow_fast_20261116_194409/bridge.jsonl`, `shadow_fast_20261116_195100/bridge.jsonl`, `shadow_fast_20261116_195358/bridge.jsonl`, `shadow_fast_20261116_195714/bridge.jsonl`, `shadow_fast_20261116_200624/bridge.jsonl` (new session 2 also reported by launcher). See `docs/diagnostics/siee_uart_v2_initial_bias_steering_20261116.md` for detailed evidence and runtime boundaries.
+
+**NEXT verifiable MVP step:** supervised and bounded floor-follow experiment with moving person and synchronized RGB `track_id`, bearing, OV9281 range provenance, accepted per-segment bias, wheel odometry, independently measured chassis heading and verified terminal motor-off. Test target loss/reacquisition and maintain physical motor cutoff; no new firmware tuning until behavior is measured.
+
+## 2026-11-15: physical Fast Shadow Follow Person and asynchronous steering (FACT / OPEN)
+
+**FACT (real Raspberry Pi 5 and ESP32, operator-observed):** The established `run_shadow_fast_preview.sh` with `SHADOW_FAST_SEMANTIC_SOURCE=segmentation_mask`, `--execute --supervised-experimental`, AR0234 RGB, OV9281 depth and GPIO UART `/dev/ttyAMA0` drove the physical cart. Earlier physical runs completed six 0.10 m segments (`shadow_fast_20261115_200627`), and subsequent runs completed multiple segments, handled `PAUSE` and confirmed final `READY`, PWM=0/0, `STOPPED`, no latched faults. Encoded segment distances are command bounds; the last per-segment odometry report is **not** a verified cumulative travel distance.
+
+**FACT (failure analysis):** With the original synchronous observation generator, UART `issue()` blocked incoming RGB/stereo frames while waiting for `STARTING → DRIVING → BRAKING → PAUSED`. In the 2026-11-15 `shadow_fast_20261115_204105` evidence, two command sessions ran 4 and 6 segments, respectively, after confirmed STOP and new Track ID; no `/steer-update` was transmitted and `last_steer_biased_drive_cycles=0`. Another run reached `STEER` but returned `NO_MATCHING_ACTIVE_STEERED_FORWARD` when the short forward segment had ceased to be eligible, with final STOP confirmed. UART timing showed `STARTING` around 128–297 ms, `DRIVING` around 455–592 ms, and `BRAKING` by ~736–770 ms after START/RESUME. No assumption of a sign error was justified from these motor-off-steering runs.
+
+**FACT (architecture implementation):** A local, as-yet-uncommitted asynchronous source patch separated the ROS observation producer from the serial motion consumer using a latest-wins observation buffer. During STARTING steering now reads a fresh observation of the **same** RGB Track ID, not the target frozen at segment start; firmware protocol, sequential UART owner, STOP, staleness checks and session identity remain in place. Operator-reported local verification:
+`PASS async producer continues during slow consumer, latest-wins`;
+`simulation SESSION_ENDED ['START', 'STEER'] [20, 20, 20] None`;
+`PASS fresh steering dispatched during STARTING and STOP confirmed`.
+These are local tests, **not** evidence that the local patch has been pushed to GitHub.
+
+**FACT (real hardware after patch):** With drive wheels safely lifted, the cart's wheels rotated through 9 short segments. ESP32 reported `last_steer_update_seq=5`, `last_steer_biased_drive_cycles=3`, `last_steer_first_applied_bias_pwm=-20`, `last_steer_last_applied_bias_pwm=-20`, `last_steer_right_pwm_sum=666`, `last_steer_left_pwm_sum=405`. Final status was `READY`, `STOPPED`, PWM=0/0, no faults. The operator stood **to the left of the cameras**. This confirms actual nonzero steering PWM applied by ESP32, not just a command or simulation. A greater right-wheel PWM sum is consistent with a commanded left turn in a conventional forward differential drive, but the true sign of body yaw **has not** been verified on the floor.
+
+**OPEN / next physical check:** Confirm a leftward **actual chassis turn** toward the person on an unobstructed surface with physical emergency power-off available, and confirm STOP on target loss. Existing tests demonstrated real cart movement and real applied steering separately; they did **not** yet certify reliable moving-person following, unobstructed path detection, or physical steering direction. Preserve exact Track ID, freshness, STOP and provenance semantics. The actuator-facing torso-core range remains diagnostic in `--supervised-experimental`, not an admitted SIE Measurement. Do not rewrite the calibration evidence as a measurement of the moving person's torso-front datum.
+
+**Primary run evidence on Pi:** `~/.local/state/sie/evidence/shadow_fast_20261115_200627/bridge.jsonl`, `shadow_fast_20261115_201443/bridge.jsonl`, and `shadow_fast_20261115_204105/{bridge.jsonl,bridge.session-002.jsonl}`; last lifted-wheel run is recorded in the operator-provided 2026-11-15 terminal log (its full evidence directory was truncated in that excerpt). **Local uncommitted code paths:** `vision_core/tools/shadow_live_bridge.py`, `vision_core/tools/run_shadow_uart.py`, `vision_core/tools/shadow_supervisor.py`, and `vision_core/tools/run_shadow_fast_preview.sh`. The document change does not claim these executable changes were committed.
 
 ## Update rule
 
@@ -45,6 +82,43 @@ any conflicts; one next verifiable MVP step. Explicitly mark inaccessible
 sources and unverified Pi runtime. Never turn this command into a new experiment
 or claim physical tests were executed. When source access is unavailable, ask
 for the current documents instead of claiming recovery succeeded.
+
+## 2026-11-15: moving-person RGB track and stereo torso depth
+
+The operator's motor-off Pi archive `shadow_fast_20261115_134056_review.tar.gz`
+(SHA-256 `4d85b02bf2efe3f9e26545aee62c2a8b58e7fa10afd6839ea223419e876db5f1`)
+contains 215 camera cycles, 15 validated current-source bundles, zero journal
+drops/errors, and 143 `FOLLOW_ELIGIBLE` decisions. In cycles 1–41 track `:1`
+persisted; cycles 42–111 had no selected target (61 with no segmentation
+instance, nine with raw instances at the right boundary); cycles 112–113
+were deliberate no-range bootstrap `PAUSE` cycles; cycles 114–215 carried
+track `:2` continuously. In 32 eligible cycles the RGB person box touched
+the upper image edge while the torso remained visible. Of 24 cycles with
+whole-mask `DEPTH_MAD_EXCEEDED`, 22 supplied a current locally fitted
+torso-front diagnostic with the RGB track, and two were the bootstrap pauses.
+There were no two eligible people. AR0234 and OV9281 driver-declared ages
+at Bridge decision stayed below 329 ms; this is not measured physical exposure
+latency. The selected front diagnostic spanned 1.633–2.352 m but has no
+independent physical distance error bound. No motors were enabled.
+
+**Accepted finding:** RGB current-frame segmentation maintains the moving
+person's diagnostic ID through top cropping while current OV9281 stereo points
+continue to support a torso-depth estimate. After a long exit, two fresh
+matched masks with torso support seed a new diagnostic ID; the following
+cycle can use current depth even when whole-mask MAD is high. This closes
+the tracked-person/re-entry question for the motor-off preview, not canonical
+Measurement admission or physical following. The exact chronology, evidence
+and limitations are in
+`docs/diagnostics/shadow_fast_moving_person_track_20261115.md`. Code commit
+`d00d4e0949c291ae86b45f80c5c7c0a49ce1b472` on
+`codex/shadow-turtlesim-follow-20261111` was used for this Pi run. Next MVP
+step: connect the current Fast Shadow target/range to the existing bounded
+UART motor/steering path and verify a supervised camera-driven movement and
+steering segment. The operator accepts centimetre-scale distance error for
+this MVP and plans LiDAR as an additional source. Use the existing stereo
+calibration and board/translation evidence instead of repeating calibration
+or static-person tests. This implementation choice does not certify the
+moving torso-front statistic as an admitted Measurement.
 
 ## 2026-11-13: current-frame local surface and corrected Fast Shadow launcher
 
