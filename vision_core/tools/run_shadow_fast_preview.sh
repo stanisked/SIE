@@ -30,10 +30,15 @@ if [[ "$semantic_source" = v3_mask_binding ]]; then
 fi
 for arg in "$@"; do
   case "$arg" in
-    --execute|--source|--source=*|--journal|--journal=*|--semantic-source|--semantic-source=*|--segmentation-model-sha256|--segmentation-model-sha256=*)
+    --source|--source=*|--journal|--journal=*|--semantic-source|--semantic-source=*|--segmentation-model-sha256|--segmentation-model-sha256=*)
       echo "Unsupported preview argument: $arg" >&2; exit 2 ;;
   esac
 done
+if [[ " $* " == *" --execute "* ]] &&
+   [[ " $* " != *" --supervised-experimental "* ]]; then
+  echo "Follow Person requires --supervised-experimental with --execute" >&2
+  exit 2
+fi
 required_inputs=("$runtime" "$segmenter_python" "$model" "$report" "$activation_profile")
 if [[ "$semantic_source" = v3_mask_binding ]]; then
   required_inputs+=("$v3")
@@ -90,7 +95,11 @@ trap 'kill -INT "$camera_pid" 2>/dev/null || true; wait "$camera_pid" 2>/dev/nul
   --journal "$evidence/bridge.jsonl" "$@"
 kill -INT "$camera_pid" 2>/dev/null || true
 wait "$camera_pid" 2>/dev/null || true
-"$runtime" vision_core/tools/summarize_shadow_fast_preview.py "$evidence/bridge.jsonl"
+if [[ " $* " == *" --execute "* ]]; then
+  echo "Follow Person execution journal: $evidence/bridge.jsonl"
+else
+  "$runtime" vision_core/tools/summarize_shadow_fast_preview.py "$evidence/bridge.jsonl"
+fi
 echo "Evidence: $evidence"
 if [[ "${SHADOW_CAPTURE_SNAPSHOTS:-0}" = 1 ]]; then
   "$runtime" vision_core/tools/summarize_shadow_source_snapshots.py \

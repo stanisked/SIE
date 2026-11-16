@@ -87,13 +87,15 @@ class ShadowSupervisor:
         self.pending = intent
         return intent
 
-    def starting_heartbeat(self) -> ShadowIntent:
-        """Zero-bias heartbeat while awaiting STARTING -> DRIVING."""
+    def starting_heartbeat(self, bias_pwm: int = 0) -> ShadowIntent:
+        """Steering heartbeat while awaiting STARTING -> DRIVING."""
         if self.pending is None or self.pending.operation not in ("START", "RESUME"):
             raise ValueError("SHADOW_HEARTBEAT_NOT_STARTING")
+        if type(bias_pwm) is not int or not -20 <= bias_pwm <= 20:
+            raise ValueError("INVALID_BIAS_PWM")
         self.steer_seq += 1
         return ShadowIntent("STEER", self.boot_session_id, self.command_id,
-                            self.steer_seq, 0)
+                            self.steer_seq, bias_pwm)
 
     def acknowledge(self, intent: ShadowIntent, *, boot_session_id: str,
                     active_command_id: str | None, controller_state: str,

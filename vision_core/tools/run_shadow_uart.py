@@ -21,7 +21,7 @@ from vision_core.tools.shadow_range_gate import (
 from vision_core.tools.shadow_supervisor import ShadowSupervisor
 
 
-BUILD = "v4_2_uart_shadow_v1_candidate"
+BUILD = "v4_2_uart_shadow_v2_initial_bias"
 SEGMENT_M = .30
 
 
@@ -35,7 +35,8 @@ class ShadowObservation:
 def run_session(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
                 segment_m=SEGMENT_M, max_observations=None, max_segments=None,
-                minimum_confidence=.8, lock_path=None):
+                minimum_confidence=.8, lock_path=None,
+                latest_observation=None):
     """Use the same operator lock as the current bounded steering runner."""
     lockpath = Path(lock_path) if lock_path is not None else (
         Path.home() / ".local/state/sie/v7_operator_one_step.lock")
@@ -46,13 +47,14 @@ def run_session(*, request, observations, journal_path, rgb_calibration_id,
             journal_path=journal_path, rgb_calibration_id=rgb_calibration_id,
             lidar_calibration_id=lidar_calibration_id, clock=clock,
             segment_m=segment_m, max_observations=max_observations,
-            max_segments=max_segments, minimum_confidence=minimum_confidence)
+            max_segments=max_segments, minimum_confidence=minimum_confidence,
+            latest_observation=latest_observation)
 
 
 def _run_session_unlocked(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
                 segment_m=SEGMENT_M, max_observations=None, max_segments=None,
-                minimum_confidence=.8):
+                minimum_confidence=.8, latest_observation=None):
     """Run until source ends or operator interrupts; always request terminal STOP.
 
     `observations` must yield an observation or None frequently even if the
@@ -103,7 +105,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 journal.flush()
 
         def status():
-            code, body = call("GET", "/status", timeout=.6)
+            code, body = call("GET", "/status", timeout=2.0)
             if code != 200 or body.get("firmware_build_id") != BUILD or \
                     body.get("shadow_api_version") != "v1_paused_segment":
                 raise RuntimeError("SHADOW_CONTROLLER_STATUS_INVALID")
@@ -121,6 +123,22 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 fault_latched=body.get("bounded_fault_latched") or
                               body.get("steered_safety_latched"))
 
+        def fresh_steering_bias(expected_track_id):
+            """Return bearing only from a current, matching RGB/stereo sample."""
+            candidate = latest_observation() if latest_observation is not None else None
+            if candidate is None or candidate.camera_encoder_disagreement:
+                return None
+            target = candidate.target
+            if target is None or target.track_id != expected_track_id:
+                return None
+            decision = select_target_range(target, list(candidate.ranges), clock(),
+                expected_rgb_calibration_id=rgb_calibration_id,
+                expected_lidar_calibration_id=lidar_calibration_id,
+                minimum_confidence=minimum_confidence)
+            if decision.action != "FOLLOW_ELIGIBLE":
+                return None
+            return max(-20, min(20, round(target.bearing_deg * 4)))
+
         def issue(intent, original_target=None, selected_range=None):
             nonlocal last_steer_at
             endpoint = {"START": "/shadow-start", "PAUSE": "/shadow-pause",
@@ -136,6 +154,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 if available < .02:
                     raise RuntimeError("SHADOW_STEP_CLEARANCE_TOO_SMALL")
                 params["distance_m"] = format(min(segment_m, available), ".3f")
+                params["bias_pwm"] = str(intent.bias_pwm)
             if intent.operation == "STEER":
                 params["bias_pwm"] = intent.bias_pwm
             try:
@@ -147,8 +166,39 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
             if code is not None and code not in (200, 202):
                 observed = status()
                 reconcile(observed)
-                if ((intent.operation == "STEER" and supervisor.state == "PAUSED") or
-                        (intent.operation == "STOP" and supervisor.state == "TERMINAL")):
+
+                if intent.operation == "STEER" and code == 409 and (
+                    body or {}
+                ).get("reason") == "NO_MATCHING_ACTIVE_STEERED_FORWARD":
+                    # The short forward segment may already be braking.
+                    # Never retry a rejected STEER or acknowledge it as applied.
+                    settle_deadline = clock() + 1.6
+                    while True:
+                        if (
+                            observed.get("boot_session_id") != intent.boot_session_id
+                            or observed.get("active_command_id") != intent.command_id
+                            or observed.get("bounded_fault_latched")
+                            or observed.get("steered_safety_latched")
+                            or observed.get("remote_stop_pending")
+                        ):
+                            break
+                        if (
+                            observed.get("state") == "PAUSED"
+                            and observed.get("right_pwm") == 0
+                            and observed.get("left_pwm") == 0
+                            and supervisor.state == "PAUSED"
+                        ):
+                            return
+                        if (
+                            observed.get("state") not in ("BRAKING", "COASTING")
+                            or clock() >= settle_deadline
+                        ):
+                            break
+                        time.sleep(.04)
+                        observed = status()
+                        reconcile(observed)
+
+                if intent.operation == "STOP" and supervisor.state == "TERMINAL":
                     return
                 raise RuntimeError("SHADOW_OPERATION_REJECTED:" + str(body))
             deadline = clock() + .55 if intent.operation in ("START", "RESUME") else clock() + 1.6
@@ -159,45 +209,10 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     reconcile(observed)
                     raise RuntimeError("SHADOW_CONTROLLER_FAULT")
                 state = observed.get("state")
-                if (intent.operation in ("START", "RESUME") and state == "STARTING"
-                        and clock() - last_heartbeat >= .18
-                        and original_target is not None
-                        and clock() - original_target.observed_s <= .5):
-                    heartbeat = supervisor.starting_heartbeat()
-                    code, reply = call("POST", "/steer-update", {
-                        "boot_session_id": heartbeat.boot_session_id,
-                        "command_id": heartbeat.command_id,
-                        "seq": heartbeat.transition_seq, "bias_pwm": 0})
-                    if code != 200 or reply.get("accepted") is not True:
-                        # A short segment can begin braking between
-                        # STATUS=STARTING and the heartbeat. Read only STATUS
-                        # until that same segment is stationary and PAUSED.
-                        if (code == 409 and
-                                reply.get("reason") ==
-                                "NO_MATCHING_ACTIVE_STEERED_FORWARD"):
-                            settle_deadline = time.monotonic() + 1.6
-                            while True:
-                                settled = status()
-                                if (settled.get("active_command_id") !=
-                                        intent.command_id or
-                                        settled.get("shadow_transition_seq") !=
-                                        intent.transition_seq or
-                                        settled.get("right_pwm") != 0 or
-                                        settled.get("left_pwm") != 0 or
-                                        settled.get("bounded_fault_latched") or
-                                        settled.get("steered_safety_latched") or
-                                        settled.get("remote_stop_pending")):
-                                    break
-                                if settled.get("state") == "PAUSED":
-                                    reconcile(settled)
-                                    return
-                                if (settled.get("state") not in
-                                        ("BRAKING", "COASTING") or
-                                        time.monotonic() >= settle_deadline):
-                                    break
-                                time.sleep(.04)
-                        raise RuntimeError("SHADOW_START_HEARTBEAT_REFUSED")
-                    last_heartbeat = clock()
+                # ESP32 accepts steering only after DRIVING begins.
+                # Do not issue /steer-update while STARTING.
+                # The normal ACTIVE loop handles fresh steering after
+                # the START/RESUME acknowledgement below.
                 if state == "PAUSED" and observed.get("active_command_id") == intent.command_id:
                     reconcile(observed)
                     return
@@ -212,7 +227,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             left_pwm=observed["left_pwm"],
                             fault_latched=False,
                             transition_seq=observed[seq_key])
-                        last_steer_at = clock()
+                        if intent.operation == "STEER":
+                            last_steer_at = clock()
                         return
                 if state in ("PAUSED", "READY") and intent.operation in ("PAUSE", "STOP"):
                     supervisor.acknowledge(intent,
@@ -271,6 +287,22 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                         and now - last_steer_at < .15):
                     continue
                 bias = 0 if target is None else max(-20, min(20, round(target.bearing_deg * 4)))
+                # A new RGB track cannot inherit the old motor command.
+                # End the paused session with a confirmed STOP.
+                if (supervisor.state == "PAUSED"
+                        and supervisor.track_id is not None
+                        and target is not None
+                        and target.track_id != supervisor.track_id
+                        and decision.action == "FOLLOW_ELIGIBLE"):
+                    intent = supervisor.observe(
+                        target, decision, operator_stop=True)
+                    if intent is None or intent.operation != "STOP":
+                        raise RuntimeError("TRACK_CHANGE_STOP_NOT_ISSUED")
+                    report["operations"].append("STOP")
+                    issue(intent, target, decision.selected)
+                    report["reason"] = "NEW_TRACK_REQUIRES_NEW_SESSION"
+                    break
+
                 intent = supervisor.observe(target, decision, bias_pwm=bias,
                     camera_encoder_disagreement=(latest.camera_encoder_disagreement
                                                   if latest is not None else False))

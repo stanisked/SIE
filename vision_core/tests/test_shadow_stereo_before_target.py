@@ -20,7 +20,8 @@ def cycle_node():
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef))
     cls.bases = []
     cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef)
-                and n.name in ("_cycle", "_prepare_stereo_pair", "_frustum_associate")]
+                and n.name in ("_cycle", "_prepare_stereo_pair", "_frustum_associate",
+                               "_association_range")]
     namespace = {"np": np, "datetime": datetime, "timezone": timezone,
                  "time": __import__("time"),
                  "StageTimings": lambda: SimpleNamespace(),

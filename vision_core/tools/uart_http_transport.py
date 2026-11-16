@@ -66,7 +66,7 @@ class UartHttp:
             keys = ('boot_session_id', 'command_id', 'seq', 'bias_pwm')
             op = 'STEER'
         elif parsed.path in ('/shadow-start', '/shadow-resume') and method == 'POST':
-            keys = ('boot_session_id', 'command_id', 'seq', 'distance_m')
+            keys = ('boot_session_id', 'command_id', 'seq', 'distance_m', 'bias_pwm')
             op = 'SHADOW_START' if parsed.path == '/shadow-start' else 'SHADOW_RESUME'
         elif parsed.path in ('/shadow-pause', '/shadow-stop') and method == 'POST':
             keys = ('boot_session_id', 'command_id', 'seq')

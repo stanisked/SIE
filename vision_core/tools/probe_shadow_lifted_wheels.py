@@ -58,7 +58,9 @@ def check_pause_settled(before, after):
 
 def probe(request, journal, *, clock=time.monotonic, sleep=time.sleep):
     """Run the bench probe. Always call /stop after any accepted START."""
-    def call(endpoint, params=None, timeout=.55):
+    def call(endpoint, params=None, timeout=None):
+        if timeout is None:
+            timeout = 2.0 if endpoint == "/status" else .55
         url = "http://uart.local" + endpoint
         if params is not None:
             url += "?" + urlencode(params)

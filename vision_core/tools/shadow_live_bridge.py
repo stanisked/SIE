@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import json
 import math
 from pathlib import Path
+import threading
 import time
 
 from vision_core.tools.run_shadow_uart import ShadowObservation, run_session
@@ -94,14 +95,102 @@ def live_audits(node, *, duration_s: float, topic: str = AUDIT_TOPIC):
         nonlocal pending
         pending = (message.data, time.monotonic(), datetime.now(timezone.utc))
     subscription = node.create_subscription(String, topic, on_audit, 1)
-    deadline = time.monotonic() + duration_s
+    # Camera startup is not part of the motion-session duration.
+    startup_deadline = time.monotonic() + 20.0
+    deadline = None
     try:
-        while rclpy.ok() and time.monotonic() < deadline:
+        while rclpy.ok():
+            now = time.monotonic()
+            if deadline is None:
+                if now >= startup_deadline:
+                    raise TimeoutError("SHADOW_CAMERA_STARTUP_TIMEOUT")
+            elif now >= deadline:
+                break
             rclpy.spin_once(node, timeout_sec=.05)
             current, pending = pending, None
+            if current is not None and deadline is None:
+                deadline = time.monotonic() + duration_s
             yield current
     finally:
         node.destroy_subscription(subscription)
+
+
+
+class LatestObservationStream:
+    """Spin ROS in one producer thread; expose only the newest observation.
+
+    UART owns this stream's consumer and all motor I/O. No ROS spinning or
+    serial calls happen in the UART thread's observation producer. An empty
+    50-ms tick is returned when there is no new camera cycle, so motor status
+    remains polled even on target loss. A stale last sample is never treated
+    as fresh by the range gate.
+    """
+
+    def __init__(self, source):
+        self._source = source
+        self._condition = threading.Condition()
+        self._latest = None
+        self._serial = 0
+        self._delivered = 0
+        self._done = False
+        self._error = None
+        self._stop = threading.Event()
+        self._worker = threading.Thread(target=self._produce,
+                                         name="sie-shadow-rgb-stream", daemon=True)
+
+    def __enter__(self):
+        self._worker.start()
+        return self
+
+    def __exit__(self, _type, _error, _traceback):
+        self._stop.set()
+        self._worker.join(timeout=2.0)
+        if self._worker.is_alive():
+            raise RuntimeError("SHADOW_CAMERA_WORKER_NOT_STOPPED")
+
+    def _produce(self):
+        try:
+            for observation in self._source:
+                if self._stop.is_set():
+                    break
+                # None is the no-new-frame tick, not a fresh target-loss audit.
+                if observation is None:
+                    continue
+                with self._condition:
+                    self._latest = observation
+                    self._serial += 1
+                    self._condition.notify_all()
+        except BaseException as error:
+            with self._condition:
+                self._error = error
+                self._condition.notify_all()
+        finally:
+            with self._condition:
+                self._done = True
+                self._condition.notify_all()
+
+    def latest(self):
+        """Thread-safe snapshot for in-flight START/RESUME steering."""
+        with self._condition:
+            if self._error is not None:
+                raise RuntimeError("SHADOW_CAMERA_STREAM_FAILED") from self._error
+            return self._latest
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        with self._condition:
+            if self._serial == self._delivered and not self._done and self._error is None:
+                self._condition.wait(timeout=.05)
+            if self._error is not None:
+                raise RuntimeError("SHADOW_CAMERA_STREAM_FAILED") from self._error
+            if self._serial != self._delivered:
+                self._delivered = self._serial
+                return self._latest
+            if self._done:
+                raise StopIteration
+            return None
 
 
 def preview_record(audit: dict | None, observation: ShadowObservation,
@@ -234,9 +323,16 @@ def main() -> None:
                         default="v3_mask_binding")
     parser.add_argument("--execute", action="store_true",
                         help="Enable physical motion; without this flag only decisions are printed")
+    parser.add_argument(
+        "--supervised-experimental",
+        action="store_true",
+        help="Use diagnostic torso-core range only in a supervised experiment"
+    )
     args = parser.parse_args()
-    if args.source == "fast_mask" and args.execute:
-        parser.error("fast-mask motor execution requires a reviewed Pi end-to-end run")
+    if args.supervised_experimental:
+        if not (args.execute and args.source == "fast_mask"
+                and args.semantic_source == "segmentation_mask"):
+            parser.error("supervised experimental mode requires execute + fast_mask + segmentation_mask")
     if (args.source == "fast_mask" and
             (len(args.segmentation_model_sha256) != 64 or
              any(c not in "0123456789abcdef" for c in args.segmentation_model_sha256))):
@@ -283,7 +379,7 @@ def main() -> None:
                             expected_front_profile_sha256=profile_sha,
                             expected_segmentation_model_sha256=args.segmentation_model_sha256,
                             semantic_source=args.semantic_source,
-                            local_preview=not args.execute)
+                            local_preview=(not args.execute or args.supervised_experimental))
                     else:
                         observation = observation_from_audit(
                             audit, rim_forward_of_optical_center_m=args.front_rim_forward_of_optical_m,
@@ -291,6 +387,27 @@ def main() -> None:
                 except (ValueError, TypeError, KeyError, AttributeError):
                     observation = ShadowObservation(None, ())
                     refusal = "INVALID_AUDIT_PAYLOAD"
+                # Experimental data are never promoted to verified Measurement.
+                if args.execute and args.source == "fast_mask":
+                    torso = (((audit or {}).get("shape_diagnostic") or {})
+                             .get("stable_torso_core_front_geometry") or {})
+                    admitted = (
+                        args.supervised_experimental
+                        and refusal == "CURRENT_STABLE_TORSO_CORE_PREVIEW"
+                        and torso.get("status") == "STABLE_TORSO_CORE_FRONT_DIAGNOSTIC_ONLY"
+                        and torso.get("actuator_access") is False
+                        and torso.get("physical_body_part_verified") is False
+                        and torso.get("semantic_ownership_verified") is False
+                        and torso.get("distance_from_front_m") is None
+                        and observation.target is not None
+                        and len(observation.ranges) == 1
+                        and observation.ranges[0].source == "OV9281"
+                        and observation.ranges[0].target_track_id == observation.target.track_id
+                        and 1.0 <= observation.ranges[0].distance_m <= 2.5
+                    )
+                    if not admitted:
+                        observation = ShadowObservation(None, ())
+                        refusal = "FAST_MASK_DEPTH_NOT_ADMITTED"
                 if not args.execute:
                     now = time.monotonic()
                     row = preview_record(audit, observation, now_s=now,
@@ -311,12 +428,65 @@ def main() -> None:
                     journal.flush()
                 yield observation
         if args.execute:
-            with UartHttp(args.serial_port) as request:
-                report = run_session(request=request, observations=observations(),
-                    journal_path=args.journal, rgb_calibration_id=AR_INTRINSIC_SHA256,
-                    segment_m=args.segment_m, max_segments=args.max_segments,
-                    minimum_confidence=args.minimum_confidence)
-                print(json.dumps(report, allow_nan=False), flush=True)
+            # Producer continues spinning ROS while run_session awaits UART.
+            with LatestObservationStream(observations()) as stream, \
+                    UartHttp(args.serial_port) as request:
+                session_number = 0
+                while True:
+                    session_number += 1
+                    session_journal = (
+                        args.journal if session_number == 1 else
+                        args.journal.with_name(
+                            args.journal.stem
+                            + f".session-{session_number:03d}"
+                            + args.journal.suffix)
+                    )
+
+                    report = run_session(
+                        request=request,
+                        observations=stream,
+                        latest_observation=stream.latest,
+                        journal_path=session_journal,
+                        rgb_calibration_id=AR_INTRINSIC_SHA256,
+                        segment_m=args.segment_m,
+                        max_segments=args.max_segments,
+                        minimum_confidence=args.minimum_confidence)
+
+                    print(json.dumps(report, allow_nan=False), flush=True)
+
+                    if not (
+                        report.get("result") == "SESSION_ENDED"
+                        and report.get("reason") ==
+                            "NEW_TRACK_REQUIRES_NEW_SESSION"
+                        and report.get("operations", [])[-1:] == ["STOP"]
+                    ):
+                        break
+
+                    # Confirm the old command is fully released
+                    # before allocating a new command_id.
+                    code, state = request(
+                        "GET", "http://uart.local/status", 2.0)
+
+                    if not (
+                        code == 200
+                        and state.get("state") == "READY"
+                        and state.get("active_command_id") is None
+                        and state.get("last_command_id") ==
+                            report.get("command_id")
+                        and state.get("right_pwm") == 0
+                        and state.get("left_pwm") == 0
+                        and state.get("remote_stop_pending") is False
+                        and not state.get("bounded_fault_latched")
+                        and not state.get("steered_safety_latched")
+                    ):
+                        raise RuntimeError(
+                            "NEW_SESSION_STOP_NOT_CONFIRMED")
+
+                    print(json.dumps({
+                        "event": "NEW_SHADOW_SESSION",
+                        "session_number": session_number + 1,
+                        "previous_command_id": report["command_id"]
+                    }), flush=True)
         else:
             args.journal.parent.mkdir(parents=True, exist_ok=True)
             with args.journal.open("x") as journal:
