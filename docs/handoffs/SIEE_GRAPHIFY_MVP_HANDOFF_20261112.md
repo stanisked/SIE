@@ -1,7 +1,7 @@
 # SIEE / Fast Shadow / Graphify: технический контекст и журнал продолжения
 
 **Версия документа:** 1.1  
-**Срез знаний:** 2026-11-16 (UART v2 / ESP32 physical steering; существующие Graphify-снимки исторические)
+**Срез знаний:** 2026-11-16 (UART v2 / ESP32 physical steering; Graphify rebuilt at db8097e)
 **Проект:** Spatial Intelligence Evidence Engine (SIEE; технические идентификаторы `sie` сохраняются)  
 **Основная инженерная ветка для этого handoff:** `codex/shadow-turtlesim-follow-20261111`  
 **Назначение:** передача накопленного инженерного контекста между ChatGPT, Codex и другими LLM; сохранение истории проверенных решений и экспериментов; использование Graphify для ускорения разработки мобильного MVP.  
@@ -498,6 +498,15 @@ LLM должна предлагать запись после завершени
 ---
 
 ## 11. Журнал развития этого handoff (append-only)
+
+### 2026-11-16 — GitHub MVP source preservation and refreshed Graphify AST
+
+**FACT (2026-11-16, source-code checkpoint):** The operator committed the Fast Shadow Python/UART runtime and ESP32 source `v4_2_uart_shadow_v2_initial_bias` as `a815c262dc71c95a99e4280792e39a89bbf31933`, merged the 16 November documentation, and pushed the result to GitHub branch `codex/shadow-turtlesim-follow-20261111`. The Pi local and remote Git heads matched exactly at `db8097ea4239dcf45ef7598c831a45648d2498fd`. An independent clean detached Git worktree on the laptop was checked at this SHA. This is source preservation, not a rerun of physical following or proof that a flash binary/calibration/evidence is backed up. The non-versioned `.before_*` files, patch and helper remain outside Git; a 57 KB worktree archive was copied from Pi to laptop and both copies had SHA-256 `a5a81a6b462c34ff0e939e9bbf05765037aae32e80ef8aa8299f08df84da61a8`.
+
+**FACT (Graphify AST rebuilt locally):** Graphify CLI `0.9.107`, `extract --code-only` on the exact clean checkout `db8097ea4239dcf45ef7598c831a45648d2498fd` (535 code files, no Graphify Cloud/LLM extraction), followed by `cluster-only --no-label`: **4,599 nodes, 13,658 edges, 300 communities**. Historical GitHub-code graph at `60eeade`: 4,500 nodes, 13,379 edges, 290 communities; deltas are +99/+279/+10, not a direct quality or complexity measure. Graphify reported 9 files with partial syntax extraction (including ESP32 `remote_stop_observer.h` variants), 65 code files without symbols, and 750 inferred edges; this is not evidence of a firmware compilation failure.
+
+**Graph provenance (operator SHA-256, laptop local files only):** `~/graphify_sie_mvp_20261116/graphify-out/graph.json` = `9e068e27a46cfca02382370cb21465c749a3e6ad35fc1d16e948ab96e04c4e93`; `GRAPH_REPORT.md` = `0ef3a084d0089913ddf06dd6a7ddd174b303d3c77b24c16aaf0c03ad85cfdf29`; `graph.html` = `570c285102b1a798d1e933c417214abef21ab883866687c23a5a1267e78ba636`. The graph files were **not yet copied to GitHub or Drive**; these hashes are provenance, not remote-backup verification.
+
 
 ### 2026-11-15 — Движущийся человек: RGB ID и текущая stereo-глубина торса
 
