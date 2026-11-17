@@ -2,7 +2,9 @@ import unittest
 
 from vision_core.tools.shadow_range_gate import (
     ACTIVE_STEREO_SHA256, FRONT_FRAME, RgbTarget, TargetRange,
-    select_target_range,
+    STEREO_SUPERVISED_MIN_M, SHADOW_STOP_DISTANCE_M,
+    SHADOW_RESUME_MARGIN_M, SHADOW_COMMAND_CLEARANCE_M,
+    SHADOW_MIN_SEGMENT_M, select_target_range,
 )
 
 
@@ -55,6 +57,30 @@ class ShadowRangeGateTests(unittest.TestCase):
         self.assertEqual(self.decide([self.stereo,
                          replace(self.lidar, distance_m=.7)]).reason,
                          "RANGE_SOURCES_DISAGREE")
+
+    def test_supervised_hold_overlaps_admitted_stereo_range(self):
+        from dataclasses import replace
+        self.assertLessEqual(STEREO_SUPERVISED_MIN_M, SHADOW_STOP_DISTANCE_M)
+        for distance in (1.0, 1.10, 1.15):
+            with self.subTest(distance=distance):
+                result = self.decide([replace(self.stereo, distance_m=distance)])
+                self.assertEqual(result.action, "HOLD")
+        self.assertEqual(self.decide([replace(self.stereo, distance_m=1.19)]).reason,
+                         "NEXT_SEGMENT_CLEARANCE_TOO_SMALL")
+        self.assertEqual(self.decide([replace(self.stereo, distance_m=1.20)]).action,
+                         "FOLLOW_ELIGIBLE")
+
+    def test_follow_always_has_minimum_bounded_segment_clearance(self):
+        from dataclasses import replace
+        for distance in (1.16, 1.18, 1.19, 1.19001, 1.20, 1.5, 2.5):
+            with self.subTest(distance=distance):
+                result = self.decide([replace(self.stereo, distance_m=distance)])
+                if result.action == "FOLLOW_ELIGIBLE":
+                    clearance = (distance - SHADOW_STOP_DISTANCE_M -
+                                 SHADOW_RESUME_MARGIN_M - SHADOW_COMMAND_CLEARANCE_M)
+                    self.assertGreaterEqual(clearance, SHADOW_MIN_SEGMENT_M)
+                else:
+                    self.assertEqual(result.action, "HOLD")
 
     def test_unconfigured_lidar_cannot_be_admitted(self):
         self.assertEqual(select_target_range(self.target, [self.lidar], 10.1,
