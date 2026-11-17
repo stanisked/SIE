@@ -26,7 +26,10 @@ from .async_local_surface import LocalSurfaceClient, LatestSurfaceDiagnostics
 from vision_core.person_localization.diagnostic_stereo_resolution import half_matchers, half_disparity, restore_crop
 from vision_core.person_localization.diagnostic_instance_selection import (
     has_unique_eligible_instance_binding, select_instance)
-from vision_core.person_localization.shadow_rgb_continuity import continued_track, remember_track, retain_short_gap
+from vision_core.person_localization.shadow_rgb_continuity import (
+    continued_track, remember_track, retain_short_gap,
+    retain_current_rgb_on_depth_refusal,
+)
 from vision_core.person_localization.shadow_rgb_bootstrap import advance_bootstrap
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
 from vision_core.person_localization.control_input_shadow import evaluate_control_input_shadow
@@ -752,8 +755,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         finally:
             if not rclpy.ok():
                 audit.update(status="CANCELLED_SHUTDOWN", reason="ROS_SHUTDOWN", association=None)
-            # A current, unique RGB match can carry identity across a MAD-only
-            # depth refusal. No confirmation or range is published on that cycle.
+            # A current, unique RGB match can carry identity across a
+            # depth-only refusal (MAD or multiple depth layers). Never publish
+            # a range or a new confirmation from the refused stereo cycle.
             # A short target/geometry gap may retain only the RGB identity.
             # Its next use still needs a fresh unique mask and geometric match;
             # the gap cycle itself publishes neither range nor confirmation.
@@ -761,10 +765,11 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     ("shadow_track_confirmation" not in audit or
                      audit.get("status") in ("PROCESSING_REFUSED", "CANCELLED_SHUTDOWN"))):
                 retain_rgb = (getattr(self, "_shadow_segmentation_input", False) and
-                    rgb_continuity_observed and
-                    audit.get("status") == "MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY" and
-                    (audit.get("shape_diagnostic") or {}).get("mask_depth", {}).get("status")
-                    == "DEPTH_MAD_EXCEEDED")
+                    retain_current_rgb_on_depth_refusal(
+                        rgb_matched_current=rgb_continuity_observed,
+                        audit_status=audit.get("status"),
+                        depth_status=(audit.get("shape_diagnostic") or {})
+                                     .get("mask_depth", {}).get("status")))
                 retain_gap = (getattr(self, "_shadow_segmentation_input", False) and
                     retain_short_gap(audit.get("status"), audit.get("reason"),
                                      self._shadow_rgb_last_seen))
