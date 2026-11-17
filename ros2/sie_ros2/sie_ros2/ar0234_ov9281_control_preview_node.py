@@ -28,7 +28,7 @@ from vision_core.person_localization.diagnostic_instance_selection import (
     has_unique_eligible_instance_binding, select_instance)
 from vision_core.person_localization.shadow_rgb_continuity import (
     continued_track, remember_track, retain_short_gap,
-    retain_current_rgb_on_depth_refusal,
+    retain_current_rgb_on_depth_refusal, match_current_edge_track,
 )
 from vision_core.person_localization.shadow_rgb_bootstrap import advance_bootstrap
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
@@ -755,6 +755,47 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         finally:
             if not rclpy.ok():
                 audit.update(status="CANCELLED_SHUTDOWN", reason="ROS_SHUTDOWN", association=None)
+            # A currently visible edge-clipped person may preserve RGB identity
+            # without making an edge/cropped depth observation eligible for
+            # driving. No new target may be adopted by this recovery path.
+            edge_rgb_observed = False
+            if (getattr(self, "_shadow_segmentation_input", False)
+                    and audit.get("status") == "TARGET_UNAVAILABLE"
+                    and self._confirmed_target_track is not None
+                    and (audit.get("segmentation_observation") or {}).get("status")
+                        == "CURRENT_INSTANCES_DIAGNOSTIC_ONLY"):
+                matched_edge = match_current_edge_track(
+                    self._shadow_rgb_last_seen,
+                    (audit.get("segmentation_observation") or {}).get("instances"),
+                    stamp.isoformat(), refusal_reason=audit.get("reason"),
+                    minimum_confidence=self.confidence_threshold,
+                    minimum_iou=self.temporal_target_minimum_iou,
+                    maximum_center_displacement_relative=
+                        self.temporal_target_maximum_center_displacement_relative)
+                if (matched_edge is not None and matched_edge[0]["track_id"]
+                        == self._confirmed_target_track["track_id"]):
+                    matched_rgb, edge_candidate = matched_edge
+                    box = edge_candidate["bbox_xyxy_px"]
+                    centre = self.np.asarray([[[float(box[0] + box[2]) / 2,
+                        float(box[1] + box[3]) / 2]]], dtype=self.np.float64)
+                    ray = self.cv2.undistortPoints(
+                        centre, self.k_ar, self.d_ar)[0, 0]
+                    bearing = float(self.np.degrees(self.np.arctan(ray[0])))
+                    if self.np.isfinite(bearing):
+                        self._shadow_rgb_last_seen = matched_rgb
+                        edge_rgb_observed = True
+                        audit["shadow_rgb_edge_guidance"] = {
+                            "status": "MATCHED_CURRENT_RGB_EDGE_ONLY",
+                            "track_id": matched_rgb["track_id"],
+                            "bearing_deg": bearing,
+                            "confidence": float(edge_candidate["confidence"]),
+                            "captured_at_utc": stamp.isoformat(),
+                            "instance_index": edge_candidate["instance_index"],
+                            "reason": audit.get("reason"),
+                            "range_published": False,
+                            "forward_authorized": False,
+                            "rotation_authorized": False,
+                        }
             # A current, unique RGB match can carry identity across a
             # depth-only refusal (MAD or multiple depth layers). Never publish
             # a range or a new confirmation from the refused stereo cycle.
@@ -775,7 +816,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                                      self._shadow_rgb_last_seen))
                 retain_seed = ((audit.get("shadow_rgb_bootstrap") or {}).get("status")
                                == "DIAGNOSTIC_ID_SEEDED_FOR_NEXT_CYCLE")
-                if not (retain_rgb or retain_gap or retain_seed):
+                if not (retain_rgb or retain_gap or retain_seed or edge_rgb_observed):
                     self._confirmed_target_track = None
                     self._shadow_rgb_last_seen = None
                     if not (audit.get("status") == "MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY" and
