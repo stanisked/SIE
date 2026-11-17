@@ -4240,7 +4240,10 @@ void handleShadowResume(const String &boot, const String &id,
   requestedTurnAngleRad = 0.0f;
   configureBoundedCommand(*command, requestedDirection, distance,
                           requestedTimeoutMs);
+  command->hasDistance = true;
+  command->hasAngle = false;
   command->distanceM = distance;
+  command->angleDeg = 0.0f;
   command->shadowTransitionSeq = seq;
   command->shadowLastOperation = "RESUME";
   command->shadowLastDistanceM = distance;
