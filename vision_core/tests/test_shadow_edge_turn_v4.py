@@ -196,5 +196,54 @@ class ShadowEdgeTurnV4Tests(unittest.TestCase):
         self.assertEqual(report["final_status"]["state"], "READY")
 
 
+    def test_old_firmware_refuses_edge_turn_before_any_motor_command(self):
+        class V3(V4Controller):
+            def __call__(self, method, url, timeout):
+                code, body = super().__call__(method, url, timeout)
+                if method == "GET":
+                    body["firmware_build_id"] = "v4_2_uart_shadow_v3_segment_0p4"
+                    body["shadow_api_version"] = "v1_paused_segment"
+                return code, body
+
+        clock, device = Clock(), V3()
+        with tempfile.TemporaryDirectory() as d:
+            report = run_session(request=device, observations=[normal(clock)],
+                journal_path=Path(d) / "bridge.jsonl", rgb_calibration_id="test-rgb",
+                clock=clock, lock_path=Path(d) / "lock",
+                minimum_confidence=.4, enable_edge_turn=True)
+        self.assertEqual(report["result"], "STOPPED_ON_REFUSAL")
+        self.assertIn("SHADOW_CONTROLLER_STATUS_INVALID", report["error"])
+        self.assertEqual(device.posts, [])
+
+    def test_partial_turn_is_terminal_refusal_no_forward_resume(self):
+        class Partial(V4Controller):
+            def __call__(self, method, url, timeout):
+                code, body = super().__call__(method, url, timeout)
+                if urlsplit(url).path == "/shadow-turn":
+                    self.turn_result = "PARTIAL_PROGRESS"
+                return code, body
+
+        clock, device = Clock(), Partial()
+
+        def samples():
+            yield normal(clock)
+            clock.now += .15
+            yield edge(clock)
+            clock.now += .15
+            yield edge(clock)
+            clock.now += .20
+            yield normal(clock)
+
+        with tempfile.TemporaryDirectory() as d:
+            report = run_session(request=device, observations=samples(),
+                journal_path=Path(d) / "bridge.jsonl", rgb_calibration_id="test-rgb",
+                clock=clock, lock_path=Path(d) / "lock",
+                minimum_confidence=.4, enable_edge_turn=True)
+        self.assertEqual(report["result"], "STOPPED_ON_REFUSAL")
+        self.assertIn("SHADOW_TURN_PARTIAL_REOBSERVE_REQUIRED", report["error"])
+        self.assertFalse(any(p == "/shadow-resume" for p, _ in device.posts))
+        self.assertEqual(device.posts[-1][0], "/stop")
+
+
 if __name__ == "__main__":
     unittest.main()
