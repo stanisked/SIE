@@ -87,10 +87,10 @@ def observation_from_audit(audit: dict, *, rim_forward_of_optical_center_m: floa
 
 def observation_from_edge_guidance(audit: dict, *, now_s: float,
                                    max_age_s: float = .5) -> ShadowObservation:
-    """Carry current same-person RGB bearing only, not a motor-admitted range.
+    """Carry current same-person RGB bearing only, never a motor-admitted range.
 
-    With the unchanged UART v3 protocol there is no in-place paused TURN.
-    This observation forces a PAUSE while preserving a fresh orientation hint.
+    In a paused v4/v5/v6 session, a separate prior-range gate may authorize
+    one bounded pivot; it never authorizes forward movement on this hint.
     """
     empty = ShadowObservation(None, ())
     if not isinstance(audit, dict):
@@ -363,7 +363,7 @@ def main() -> None:
     parser.add_argument("--minimum-confidence", type=float, default=.40)
     parser.add_argument("--max-segments", type=int, default=None)
     parser.add_argument("--edge-turn", action="store_true",
-                        help="Supervised single bounded in-place turn on fresh RGB edge; requires v4 UART firmware")
+                        help="Bounded paused RGB edge recovery, requiring v4/v5/v6 UART TURN support")
     parser.add_argument("--journal", type=Path, required=True)
     parser.add_argument("--serial-port", default="/dev/ttyAMA0")
     parser.add_argument("--source", choices=("dynamic_audit", "fast_mask"),
@@ -381,9 +381,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.edge_turn and not (args.execute and args.supervised_experimental
                                and args.source == "fast_mask"
-                               and args.semantic_source == "segmentation_mask"
-                               and not args.continuous):
-        parser.error("--edge-turn requires supervised fast_mask execution (not --continuous)")
+                               and args.semantic_source == "segmentation_mask"):
+        parser.error("--edge-turn requires supervised fast_mask execution")
     if args.supervised_experimental:
         if not (args.execute and args.source == "fast_mask"
                 and args.semantic_source == "segmentation_mask"):
