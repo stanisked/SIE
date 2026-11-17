@@ -85,6 +85,51 @@ def observation_from_audit(audit: dict, *, rim_forward_of_optical_center_m: floa
     return ShadowObservation(target, (rng,))
 
 
+def observation_from_edge_guidance(audit: dict, *, now_s: float,
+                                   max_age_s: float = .5) -> ShadowObservation:
+    """Carry current same-person RGB bearing only, not a motor-admitted range.
+
+    With the unchanged UART v3 protocol there is no in-place paused TURN.
+    This observation forces a PAUSE while preserving a fresh orientation hint.
+    """
+    empty = ShadowObservation(None, ())
+    if not isinstance(audit, dict):
+        return empty
+    edge = audit.get("shadow_rgb_edge_guidance") or {}
+    rgb = ((audit.get("frame_freshness") or {}).get("frames") or {}).get("ar0234") or {}
+    instances = ((audit.get("segmentation_observation") or {}).get("instances") or [])
+    try:
+        stamp = float(rgb["driver_timestamp_s"])
+        bearing = float(edge["bearing_deg"])
+        confidence = float(edge["confidence"])
+        track_id = edge["track_id"]
+        if (audit.get("status") != "TARGET_UNAVAILABLE"
+                or audit.get("reason") not in (
+                    "NO_CURRENT_NON_EDGE_TARGET",
+                    "BBOX_NEAR_RIGHT_IMAGE_EDGE", "BBOX_NEAR_LEFT_IMAGE_EDGE")
+                or edge.get("status") != "MATCHED_CURRENT_RGB_EDGE_ONLY"
+                or edge.get("reason") != audit.get("reason")
+                or edge.get("range_published") is not False
+                or edge.get("forward_authorized") is not False
+                or edge.get("rotation_authorized") is not False
+                or audit.get("calibration", {}).get("ar0234_intrinsic_sha256")
+                    != AR_INTRINSIC_SHA256
+                or (audit.get("segmentation_observation") or {}).get("status")
+                    != "CURRENT_INSTANCES_DIAGNOSTIC_ONLY"
+                or len(instances) != 1
+                or instances[0].get("instance_index") != edge.get("instance_index")
+                or not isinstance(track_id, str) or not track_id
+                or not all(map(math.isfinite, (stamp, bearing, confidence, now_s)))
+                or not 0 <= now_s - stamp <= max_age_s
+                or not 0 <= confidence <= 1):
+            return empty
+    except (KeyError, TypeError, ValueError, OverflowError, AttributeError):
+        return empty
+    target = RgbTarget(track_id, stamp, bearing, confidence,
+                       AR_INTRINSIC_SHA256)
+    return ShadowObservation(target, (), edge_recovery_bearing_deg=bearing)
+
+
 def live_audits(node, *, duration_s: float | None, topic: str = AUDIT_TOPIC):
     """Yield latest audit or a no-target tick; never replay a consumed cycle."""
     import rclpy
@@ -393,6 +438,15 @@ def main() -> None:
                 except (ValueError, TypeError, KeyError, AttributeError):
                     observation = ShadowObservation(None, ())
                     refusal = "INVALID_AUDIT_PAYLOAD"
+                # RGB edge observations are never supplied with depth and
+                # can only request PAUSE / report orientation recovery.
+                if (args.source == "fast_mask" and observation.target is None
+                        and audit is not None):
+                    edge_observation = observation_from_edge_guidance(
+                        audit, now_s=time.monotonic())
+                    if edge_observation.target is not None:
+                        observation = edge_observation
+                        refusal = "RGB_EDGE_RECOVERY_NO_RANGE"
                 # Experimental data are never promoted to verified Measurement.
                 if args.execute and args.source == "fast_mask":
                     torso = (((audit or {}).get("shape_diagnostic") or {})
@@ -417,7 +471,7 @@ def main() -> None:
                                 expected_rgb_calibration_id=AR_INTRINSIC_SHA256,
                                 minimum_confidence=args.minimum_confidence))
                     )
-                    if not admitted:
+                    if not admitted and observation.edge_recovery_bearing_deg is None:
                         observation = ShadowObservation(None, ())
                         refusal = "FAST_MASK_DEPTH_NOT_ADMITTED"
                 if not args.execute:
