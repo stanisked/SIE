@@ -6,6 +6,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import urlsplit, parse_qs
 
 from vision_core.tests.test_shadow_edge_turn_v4 import Clock, edge, normal
 from vision_core.tests.test_shadow_edge_turn_v5 import V5Controller
@@ -19,9 +20,23 @@ from vision_core.tools.shadow_range_gate import (
 )
 
 
+class ConfirmingStopController(V5Controller):
+    """The existing V5 mock lacks /shadow-stop; model its terminal ACK."""
+    def __call__(self, method, url, timeout):
+        if method == "POST" and urlsplit(url).path == "/shadow-stop":
+            args = {k: v[0] for k, v in parse_qs(urlsplit(url).query).items()}
+            self.posts.append(("/shadow-stop", args))
+            self.last = self.active
+            self.active = None
+            self.seq = int(args["seq"])
+            self.state = "READY"
+            return 202, {"accepted": True}
+        return super().__call__(method, url, timeout)
+
+
 class ShadowRgbEdgeRecoveryTests(unittest.TestCase):
-    def run_recovery(self, observations):
-        clock, controller = Clock(), V5Controller()
+    def run_recovery(self, observations, controller_cls=V5Controller):
+        clock, controller = Clock(), controller_cls()
         with tempfile.TemporaryDirectory() as d:
             journal = Path(d) / "bridge.jsonl"
             report = run_session(
@@ -108,7 +123,8 @@ class ShadowRgbEdgeRecoveryTests(unittest.TestCase):
             rng = TargetRange("OV9281", "person-2", clock(), 1.0, .9,
                               FRONT_FRAME, ACTIVE_STEREO_SHA256, "fresh-other")
             yield ShadowObservation(target, (rng,))
-        report, posts, _ = self.run_recovery(samples)
+        report, posts, _ = self.run_recovery(samples, ConfirmingStopController)
+        self.assertEqual(report["result"], "SESSION_ENDED")
         self.assertEqual(report["reason"], "NEW_TRACK_REQUIRES_NEW_SESSION")
         self.assertEqual(report["operations"], ["START", "PAUSE", "TURN", "STOP"])
         self.assertFalse(any(p == "/shadow-resume" for p, _ in posts))
