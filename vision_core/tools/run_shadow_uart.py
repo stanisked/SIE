@@ -25,6 +25,11 @@ from vision_core.tools.shadow_supervisor import ShadowSupervisor
 
 BUILD = "v4_2_uart_shadow_v3_segment_0p4"
 EDGE_TURN_BUILD = "v4_2_uart_shadow_v4_edge_turn_10deg"
+EDGE_TURN_BUILD_V5 = "v4_2_uart_shadow_v5_edge_turn_guard"
+EDGE_TURN_CONTRACTS = {
+    (EDGE_TURN_BUILD, "v2_paused_edge_turn"),
+    (EDGE_TURN_BUILD_V5, "v2_paused_edge_turn"),
+}
 SEGMENT_M = .40
 EDGE_TURN_MIN_PRIOR_CLEARANCE_M = 1.25
 EDGE_TURN_MAX_PRIOR_AGE_S = 1.5
@@ -148,11 +153,9 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
             code, body = call("GET", "/status", timeout=2.0)
             contract = (body.get("firmware_build_id"),
                         body.get("shadow_api_version"))
-            valid_contracts = {(BUILD, "v1_paused_segment"),
-                               (EDGE_TURN_BUILD, "v2_paused_edge_turn")}
+            valid_contracts = {(BUILD, "v1_paused_segment")} | EDGE_TURN_CONTRACTS
             if (code != 200 or contract not in valid_contracts or
-                    (enable_edge_turn and contract !=
-                        (EDGE_TURN_BUILD, "v2_paused_edge_turn"))):
+                    (enable_edge_turn and contract not in EDGE_TURN_CONTRACTS)):
                 raise RuntimeError("SHADOW_CONTROLLER_STATUS_INVALID")
             if supervisor is not None and body.get("boot_session_id") != supervisor.boot_session_id:
                 raise RuntimeError("BOOT_SESSION_CHANGED")
