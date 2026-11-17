@@ -360,6 +360,20 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     expected_rgb_calibration_id=rgb_calibration_id,
                     expected_lidar_calibration_id=lidar_calibration_id,
                     minimum_confidence=minimum_confidence)
+                if (decision.selected is not None and target is not None
+                        and decision.action in ("FOLLOW_ELIGIBLE", "HOLD")
+                        and post_turn_reobserve_after_s is None):
+                    last_verified_range = (
+                        target.track_id, decision.selected.observed_s,
+                        decision.selected.distance_m)
+                if post_turn_reobserve_after_s is not None:
+                    if (target is None or decision.selected is None
+                            or target.observed_s <= post_turn_reobserve_after_s
+                            or decision.selected.observed_s <= post_turn_reobserve_after_s):
+                        decision = RangeDecision(
+                            "PAUSE", "POST_TURN_FRESH_PAIR_REQUIRED")
+                    else:
+                        post_turn_reobserve_after_s = None
                 # Log reason changes, not every 50-ms status tick.
                 decision_key = (decision.action, decision.reason,
                                 target.track_id if target is not None else None)
@@ -408,6 +422,24 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     if max_segments is not None and report["segments_started"] >= max_segments:
                         report["reason"] = "SEGMENT_LIMIT_REACHED"
                         break
+                    if (enable_edge_turn and report["edge_turns_started"] == 0
+                            and latest is not None and not latest.camera_encoder_disagreement
+                            and latest.edge_recovery_bearing_deg is not None
+                            and decision.action == "PAUSE"
+                            and decision.reason == "NO_FRESH_ASSOCIATED_RANGE"
+                            and target is not None and target.track_id == supervisor.track_id):
+                        recovery = select_edge_turn(
+                            target, latest.edge_recovery_bearing_deg,
+                            last_verified_range, now)
+                        if recovery is not None:
+                            direction, angle = recovery
+                            intent = supervisor.turn(direction, angle)
+                            report["operations"].append("TURN")
+                            report["edge_turns_started"] += 1
+                            issue(intent, target)
+                            post_turn_reobserve_after_s = clock()
+                            last_verified_range = None
+                            continue
                     # A settled segment cannot resume on the observations
                     # that authorized it, even while their age is below .5 s.
                     if (decision.action == "FOLLOW_ELIGIBLE" and
