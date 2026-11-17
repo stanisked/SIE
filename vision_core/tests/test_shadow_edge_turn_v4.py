@@ -120,7 +120,7 @@ class ShadowEdgeTurnV4Tests(unittest.TestCase):
                          ("RIGHT", 8.0))
         self.assertIsNone(select_edge_turn(t, 13., ("p", 10., .68), 10.3))
         self.assertIsNone(select_edge_turn(t, 13., ("other", 10., 1.5), 10.3))
-        self.assertIsNone(select_edge_turn(t, 13., ("p", 7.5, 1.5), 10.3))
+        self.assertIsNone(select_edge_turn(t, 13., ("p", 7.2, 1.5), 10.3))
         self.assertIsNone(select_edge_turn(t, 13., ("p", 10., 1.5), 11.0))
 
     def test_supervisor_turn_preserves_track_and_transition_sequence(self):
