@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 
 from vision_core.tools.run_shadow_uart import (
-    BUILD, ShadowObservation, run_session, select_edge_turn,
+    EDGE_TURN_BUILD, ShadowObservation, run_session, select_edge_turn,
 )
 from vision_core.tools.shadow_range_gate import (
     RgbTarget, TargetRange, FRONT_FRAME, ACTIVE_STEREO_SHA256,
@@ -76,7 +76,7 @@ class V4Controller:
             return 202, {"accepted": True}
         assert method == "GET" and path == "/status"
         return 200, {
-            "firmware_build_id": BUILD,
+            "firmware_build_id": EDGE_TURN_BUILD,
             "shadow_api_version": "v2_paused_edge_turn",
             "boot_session_id": "test-boot",
             "state": self.state,
