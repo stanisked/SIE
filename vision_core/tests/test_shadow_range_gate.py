@@ -93,10 +93,17 @@ class ShadowRangeGateTests(unittest.TestCase):
         self.assertFalse(admit_supervised_stereo_distance(.865,
             RangeDecision("PAUSE", "NO_FRESH_ASSOCIATED_RANGE")))
         self.assertFalse(admit_supervised_stereo_distance(.49, close))
-        self.assertFalse(admit_supervised_stereo_distance(2.51, close))
+        self.assertFalse(admit_supervised_stereo_distance(4.51, close))
         follow = self.decide([replace(self.stereo, distance_m=1.5)])
         self.assertEqual(follow.action, "FOLLOW_ELIGIBLE")
         self.assertTrue(admit_supervised_stereo_distance(1.5, follow))
+        # Don't cherry-pick a near range: admit the entire calibrated
+        # diagnostic interval while leaving the close-range HOLD intact.
+        for distance in (2.51, 3.0, 4.0, 4.5):
+            with self.subTest(distance=distance):
+                candidate = self.decide([replace(self.stereo, distance_m=distance)])
+                self.assertEqual(candidate.action, "FOLLOW_ELIGIBLE")
+                self.assertTrue(admit_supervised_stereo_distance(distance, candidate))
 
     def test_unconfigured_lidar_cannot_be_admitted(self):
         self.assertEqual(select_target_range(self.target, [self.lidar], 10.1,
