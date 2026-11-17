@@ -15,13 +15,13 @@ SOURCES = frozenset({"OV9281", "LIDAR"})
 FRONT_FRAME = "cart_front_to_person_surface"
 
 # Full calibrated stereo diagnostic domain for supervised SHADOW. The
-# diagnostic range is NOT permission to drive near a person: the separate
-# stop-distance and clearance rules below still govern motor admission.
-STEREO_SUPERVISED_MIN_M = 1.0
+# diagnostic range is NOT permission to disregard actuator safeguards: the
+# 0.5 m stop threshold and bounded-segment clearance govern motor admission.
+STEREO_SUPERVISED_MIN_M = 0.5
 STEREO_SUPERVISED_MAX_M = 4.5
-# Close range is allowed to *stop/hold* only, never to permit forward motion.
+# Distances below 0.5 m are outside the calibrated diagnostic domain.
 STEREO_SUPERVISED_CLOSE_HOLD_MIN_M = 0.5
-SHADOW_STOP_DISTANCE_M = 1.0
+SHADOW_STOP_DISTANCE_M = 0.5
 SHADOW_RESUME_MARGIN_M = 0.15
 SHADOW_COMMAND_CLEARANCE_M = 0.02
 SHADOW_MIN_SEGMENT_M = 0.02
@@ -30,7 +30,7 @@ assert STEREO_SUPERVISED_MIN_M <= SHADOW_STOP_DISTANCE_M
 
 def admit_supervised_stereo_distance(distance_m: float,
                                      decision: "RangeDecision") -> bool:
-    """Motion admission at >=1.0 m, close-range stopping only at >=0.5 m.
+    """Motion admission from 0.5-4.5 m, with HOLD at the 0.5 m target.
 
     The range gate must have already checked a current RGB/stereo association.
     An untrusted range never becomes a motor command. HOLD never starts motors.
@@ -41,8 +41,13 @@ def admit_supervised_stereo_distance(distance_m: float,
         return False
     if decision.action == "HOLD":
         return True
+    min_follow_range_m = (SHADOW_STOP_DISTANCE_M + SHADOW_RESUME_MARGIN_M +
+                          SHADOW_COMMAND_CLEARANCE_M + SHADOW_MIN_SEGMENT_M)
     return (decision.action == "FOLLOW_ELIGIBLE"
-            and distance_m >= STEREO_SUPERVISED_MIN_M)
+            and decision.selected is not None
+            and decision.selected.distance_m == distance_m
+            and distance_m >= STEREO_SUPERVISED_MIN_M
+            and distance_m > min_follow_range_m)
 
 
 @dataclass(frozen=True)
