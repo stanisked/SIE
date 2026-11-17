@@ -625,7 +625,7 @@ void setDrivePwm(int requestedRightPwm, int requestedLeftPwm)
 
   rightPwm = requestedRightPwm;
   leftPwm = requestedLeftPwm;
-  if (steeredSafetyLatched.load()) {
+  if (steeredSafetyLatched.load() || shadowTurnGuardBrakeRequested.load()) {
     brakeMotors();
   }
 }
@@ -690,6 +690,11 @@ void applyMicroTurnOutputs(
   rightPwm = rightOutput;
   leftPwm = leftOutput;
   if (guardScope) unlockMotorOutputs();
+  if (shadowTurnGuardBrakeRequested.load()) {
+    // Close the race with the second-core brake task before telemetry update.
+    brakeMotors();
+    return;
+  }
   if (!rightBrake && rightOutput > 0) {
     activeBoundedRightLastAppliedPwm = rightOutput;
   }
