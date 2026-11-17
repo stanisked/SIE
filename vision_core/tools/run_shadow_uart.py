@@ -184,7 +184,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
             nonlocal last_steer_at
             endpoint = {"START": "/shadow-start", "PAUSE": "/shadow-pause",
                         "RESUME": "/shadow-resume", "STOP": "/shadow-stop",
-                        "STEER": "/steer-update"}[intent.operation]
+                        "STEER": "/steer-update",
+                        "TURN": "/shadow-turn"}[intent.operation]
             params = {"boot_session_id": intent.boot_session_id,
                       "command_id": intent.command_id,
                       "seq": intent.transition_seq}
@@ -200,6 +201,9 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 params["bias_pwm"] = str(intent.bias_pwm)
             if intent.operation == "STEER":
                 params["bias_pwm"] = intent.bias_pwm
+            if intent.operation == "TURN":
+                params["direction"] = intent.turn_direction
+                params["angle_deg"] = format(intent.turn_angle_deg, ".2f")
             try:
                 code, body = call("POST", endpoint, params)
             except TimeoutError:
@@ -244,7 +248,9 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 if intent.operation == "STOP" and supervisor.state == "TERMINAL":
                     return
                 raise RuntimeError("SHADOW_OPERATION_REJECTED:" + str(body))
-            deadline = clock() + .55 if intent.operation in ("START", "RESUME") else clock() + 1.6
+            deadline = (clock() + 5.5 if intent.operation == "TURN" else
+                        clock() + .55 if intent.operation in ("START", "RESUME")
+                        else clock() + 1.6)
             last_heartbeat = 0.0
             while clock() < deadline:
                 observed = status()
@@ -256,7 +262,35 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 # Do not issue /steer-update while STARTING.
                 # The normal ACTIVE loop handles fresh steering after
                 # the START/RESUME acknowledgement below.
-                if state == "PAUSED" and observed.get("active_command_id") == intent.command_id:
+                if (intent.operation == "TURN"
+                        and state == "PAUSED"
+                        and observed.get("active_command_id") == intent.command_id
+                        and observed.get("shadow_transition_seq") == intent.transition_seq
+                        and observed.get("shadow_turn_result") in
+                            ("SUCCESS", "PARTIAL_PROGRESS")
+                        and observed.get("right_pwm") == 0
+                        and observed.get("left_pwm") == 0):
+                    supervisor.acknowledge(intent,
+                        boot_session_id=observed["boot_session_id"],
+                        active_command_id=observed.get("active_command_id"),
+                        controller_state="PAUSED",
+                        right_pwm=0, left_pwm=0, fault_latched=False,
+                        transition_seq=observed["shadow_transition_seq"])
+                    journal.write(json.dumps({
+                        "event": "EDGE_TURN_SETTLED",
+                        "at_s": clock(),
+                        "result": observed["shadow_turn_result"],
+                        "heading_rad": observed.get("heading_rad"),
+                        "right_encoder_raw_count":
+                            observed.get("right_encoder_raw_count"),
+                        "left_encoder_raw_count":
+                            observed.get("left_encoder_raw_count"),
+                        "right_pwm": 0, "left_pwm": 0,
+                    }, allow_nan=False) + "\n")
+                    journal.flush()
+                    return
+                if (intent.operation != "TURN" and state == "PAUSED"
+                        and observed.get("active_command_id") == intent.command_id):
                     reconcile(observed)
                     return
                 if state == "DRIVING" and intent.operation in ("START", "RESUME", "STEER"):
