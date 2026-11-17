@@ -3,7 +3,7 @@ import unittest
 
 from vision_core.person_localization.shadow_rgb_continuity import (
     continued_track, remember_track, retain_short_gap,
-    retain_current_rgb_on_depth_refusal,
+    retain_current_rgb_on_depth_refusal, match_current_edge_track,
 )
 from vision_core.tests.test_shadow_fast_adapter import source, convert
 from vision_core.tools.shadow_fast_adapter import AR_INTRINSIC_SHA256
@@ -12,6 +12,47 @@ from vision_core.tools.shadow_supervisor import ShadowSupervisor
 
 
 class ShadowRgbContinuityTests(unittest.TestCase):
+    def test_edge_track_keeps_identity_for_current_single_clipped_person(self):
+        prior = remember_track("person-1",
+            {"bbox_xyxy_px": [990, 0, 1845, 1190]},
+            "2026-11-17T12:00:00+00:00")
+        for step, x2 in enumerate((1918, 1914, 1916, 1911), 1):
+            instance = {"instance_index": 0, "confidence": .90,
+                        "bbox_xyxy_px": [1060, 0, x2, 1184],
+                        "truncated_right": x2 >= 1917}
+            matched = match_current_edge_track(
+                prior, [instance],
+                f"2026-11-17T12:00:0{step}.0+00:00",
+                refusal_reason=("NO_CURRENT_NON_EDGE_TARGET"
+                                if x2 >= 1917 else "BBOX_NEAR_RIGHT_IMAGE_EDGE"),
+                minimum_confidence=.7, minimum_iou=.2,
+                maximum_center_displacement_relative=.75)
+            self.assertIsNotNone(matched)
+            prior = matched[0]
+            self.assertEqual(prior["track_id"], "person-1")
+
+    def test_edge_guidance_rejects_other_person_ambiguity_and_stale_rgb(self):
+        prior = remember_track("person-1",
+            {"bbox_xyxy_px": [990, 0, 1845, 1190]},
+            "2026-11-17T12:00:00+00:00")
+        instance = {"instance_index": 0, "confidence": .9,
+                    "bbox_xyxy_px": [1060, 0, 1918, 1184],
+                    "truncated_right": True}
+        def check(items, when, reason="NO_CURRENT_NON_EDGE_TARGET"):
+            return match_current_edge_track(
+                prior, items, when, refusal_reason=reason,
+                minimum_confidence=.7, minimum_iou=.2,
+                maximum_center_displacement_relative=.75)
+        self.assertIsNone(check([instance, instance],
+            "2026-11-17T12:00:00.30+00:00"))
+        self.assertIsNone(check([instance],
+            "2026-11-17T12:00:01.0+00:00"))
+        self.assertIsNone(check([{**instance,
+            "bbox_xyxy_px": [0, 0, 50, 1100]}],
+            "2026-11-17T12:00:00.3+00:00"))
+        self.assertIsNone(check([instance],
+            "2026-11-17T12:00:00.3+00:00", reason="UNKNOWN"))
+
     def test_depth_only_multilayer_refusal_retains_matched_identity_not_range(self):
         for depth_status in ("DEPTH_MAD_EXCEEDED",
                              "MULTIPLE_OR_NO_PLAUSIBLE_DEPTH_LAYERS"):
