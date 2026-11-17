@@ -21,8 +21,8 @@ from vision_core.tools.shadow_range_gate import (
 from vision_core.tools.shadow_supervisor import ShadowSupervisor
 
 
-BUILD = "v4_2_uart_shadow_v2_initial_bias"
-SEGMENT_M = .30
+BUILD = "v4_2_uart_shadow_v3_segment_0p4"
+SEGMENT_M = .40
 
 
 @dataclass(frozen=True)
@@ -64,7 +64,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     on a physical cart without a validated target/range producer and an
     independent motor cutoff.
     """
-    if not .02 <= segment_m <= .30:
+    if not .02 <= segment_m <= .40:
         raise ValueError("INVALID_SHADOW_SEGMENT")
     if max_segments is not None and (type(max_segments) is not int or
                                      max_segments < 1):
