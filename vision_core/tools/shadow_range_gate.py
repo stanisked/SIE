@@ -14,10 +14,11 @@ ACTIVE_STEREO_SHA256 = "39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e0446861
 SOURCES = frozenset({"OV9281", "LIDAR"})
 FRONT_FRAME = "cart_front_to_person_surface"
 
-# Conservative common policy for supervised SHADOW. Not a validated
-# collision-free stand-off; these ranges remain experimental diagnostics.
+# Full calibrated stereo diagnostic domain for supervised SHADOW. The
+# diagnostic range is NOT permission to drive near a person: the separate
+# stop-distance and clearance rules below still govern motor admission.
 STEREO_SUPERVISED_MIN_M = 1.0
-STEREO_SUPERVISED_MAX_M = 2.5
+STEREO_SUPERVISED_MAX_M = 4.5
 # Close range is allowed to *stop/hold* only, never to permit forward motion.
 STEREO_SUPERVISED_CLOSE_HOLD_MIN_M = 0.5
 SHADOW_STOP_DISTANCE_M = 1.0
