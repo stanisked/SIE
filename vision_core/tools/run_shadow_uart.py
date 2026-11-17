@@ -38,8 +38,10 @@ SEGMENT_M = .40
 EDGE_TURN_MIN_PRIOR_CLEARANCE_M = (
     SHADOW_STOP_DISTANCE_M + SHADOW_RESUME_MARGIN_M +
     SHADOW_COMMAND_CLEARANCE_M + SHADOW_MIN_SEGMENT_M)
-# Real floor PAUSE settled ~2s after the last accepted RGB/Depth pair.
-EDGE_TURN_MAX_PRIOR_AGE_S = 2.5
+# Floor test 2026-11-17: range age was 2.716 s by first turn gate.
+# 3.0 s grants one bounded stationary pivot only. Forward movement still
+# requires a fresh associated RGB/depth observation (< 0.5 s).
+EDGE_TURN_MAX_PRIOR_AGE_S = 3.0
 EDGE_TURN_MAX_ANGLE_DEG = 8.0
 
 
@@ -471,6 +473,12 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                         edge_now = (latest_observation()
                                     if latest_observation is not None
                                     else latest)
+                        # A newer camera tick may be temporarily targetless.
+                        # The prior same-ID RGB edge remains useful for one
+                        # PAUSED-only turn if it is still <0.5 s old. Never
+                        # override a newer different target or valid range.
+                        if edge_now is None or edge_now.target is None:
+                            edge_now = latest
                         recovery = None
                         if (edge_now is not None
                                 and not edge_now.camera_encoder_disagreement
