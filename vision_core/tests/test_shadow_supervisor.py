@@ -61,6 +61,18 @@ class ShadowSupervisorTests(unittest.TestCase):
         self.confirm(stop, "READY")
         self.assertIsNone(self.runner.observe(self.rgb, self.go))
 
+    def test_follow_hold_resume_reuses_same_track_and_command(self):
+        hold = RangeDecision("HOLD", "WITHIN_RESUME_MARGIN")
+        start = self.runner.observe(self.rgb, self.go, bias_pwm=3)
+        self.confirm(start, "DRIVING", 170)
+        pause = self.runner.observe(self.rgb, hold)
+        self.assertEqual(pause.operation, "PAUSE")
+        self.confirm(pause, "PAUSED")
+        self.assertIsNone(self.runner.observe(self.rgb, hold))
+        resume = self.runner.observe(self.rgb, self.go, bias_pwm=-3)
+        self.assertEqual(resume.operation, "RESUME")
+        self.assertEqual(resume.command_id, start.command_id)
+
     def test_no_range_never_starts(self):
         self.assertIsNone(self.runner.observe(self.rgb, self.pause))
 
