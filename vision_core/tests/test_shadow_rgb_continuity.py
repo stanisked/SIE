@@ -3,6 +3,7 @@ import unittest
 
 from vision_core.person_localization.shadow_rgb_continuity import (
     continued_track, remember_track, retain_short_gap,
+    retain_current_rgb_on_depth_refusal,
 )
 from vision_core.tests.test_shadow_fast_adapter import source, convert
 from vision_core.tools.shadow_fast_adapter import AR_INTRINSIC_SHA256
@@ -11,6 +12,69 @@ from vision_core.tools.shadow_supervisor import ShadowSupervisor
 
 
 class ShadowRgbContinuityTests(unittest.TestCase):
+    def test_depth_only_multilayer_refusal_retains_matched_identity_not_range(self):
+        for depth_status in ("DEPTH_MAD_EXCEEDED",
+                             "MULTIPLE_OR_NO_PLAUSIBLE_DEPTH_LAYERS"):
+            with self.subTest(depth_status=depth_status):
+                self.assertTrue(retain_current_rgb_on_depth_refusal(
+                    rgb_matched_current=True,
+                    audit_status="MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY",
+                    depth_status=depth_status))
+                self.assertFalse(retain_current_rgb_on_depth_refusal(
+                    rgb_matched_current=False,
+                    audit_status="MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY",
+                    depth_status=depth_status))
+        self.assertFalse(retain_current_rgb_on_depth_refusal(
+            rgb_matched_current=True,
+            audit_status="PROCESSING_REFUSED",
+            depth_status="MULTIPLE_OR_NO_PLAUSIBLE_DEPTH_LAYERS"))
+        self.assertFalse(retain_current_rgb_on_depth_refusal(
+            rgb_matched_current=True,
+            audit_status="MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY",
+            depth_status="UNKNOWN"))
+
+    def test_multi_layer_gap_pauses_then_matching_rgb_can_resume(self):
+        supervisor = ShadowSupervisor("boot-2", "shadow-2")
+        decide = lambda observation: select_target_range(
+            observation.target, list(observation.ranges), 10.,
+            expected_rgb_calibration_id=AR_INTRINSIC_SHA256,
+            minimum_confidence=.4)
+        first, _ = convert(source())
+        start = supervisor.observe(first.target, decide(first))
+        self.assertEqual(start.operation, "START")
+        supervisor.acknowledge(start, boot_session_id="boot-2",
+            active_command_id="shadow-2", controller_state="DRIVING",
+            right_pwm=50, left_pwm=50, fault_latched=False,
+            transition_seq=start.transition_seq)
+        before = remember_track(first.target.track_id,
+            {"bbox_xyxy_px": [400, 200, 800, 900]},
+            "2026-11-13T10:00:00+00:00")
+        bad = source()
+        bad["shape_diagnostic"]["mask_depth"]["status"] = (
+            "MULTIPLE_OR_NO_PLAUSIBLE_DEPTH_LAYERS")
+        empty, _ = convert(bad)
+        self.assertIsNone(empty.target)
+        pause = supervisor.observe(empty.target, decide(empty))
+        self.assertEqual(pause.operation, "PAUSE")
+        supervisor.acknowledge(pause, boot_session_id="boot-2",
+            active_command_id="shadow-2", controller_state="PAUSED",
+            right_pwm=0, left_pwm=0, fault_latched=False,
+            transition_seq=pause.transition_seq)
+        self.assertTrue(retain_current_rgb_on_depth_refusal(
+            rgb_matched_current=True,
+            audit_status="MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY",
+            depth_status=bad["shape_diagnostic"]["mask_depth"]["status"]))
+        retained = continued_track(before,
+            {"bbox_xyxy_px": [420, 200, 820, 900]},
+            "2026-11-13T10:00:00.27+00:00",
+            minimum_iou=.2, maximum_center_displacement_relative=.75)
+        self.assertEqual(retained["track_id"], first.target.track_id)
+        recovered = source()
+        recovered["shadow_track_confirmation"]["track_id"] = retained["track_id"]
+        observation, _ = convert(recovered)
+        self.assertEqual(supervisor.observe(
+            observation.target, decide(observation)).operation, "RESUME")
+
     def test_current_rgb_continues_across_mad_without_depth(self):
         bbox = {"bbox_xyxy_px": [400, 200, 800, 900]}
         prior = remember_track("person-1", bbox, "2026-11-13T10:00:00+00:00")
