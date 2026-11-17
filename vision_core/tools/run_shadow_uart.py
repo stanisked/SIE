@@ -26,9 +26,11 @@ from vision_core.tools.shadow_supervisor import ShadowSupervisor
 BUILD = "v4_2_uart_shadow_v3_segment_0p4"
 EDGE_TURN_BUILD = "v4_2_uart_shadow_v4_edge_turn_10deg"
 EDGE_TURN_BUILD_V5 = "v4_2_uart_shadow_v5_edge_turn_guard"
+EDGE_TURN_BUILD_V6 = "v4_2_uart_shadow_v6_early_brake"
 EDGE_TURN_CONTRACTS = {
     (EDGE_TURN_BUILD, "v2_paused_edge_turn"),
     (EDGE_TURN_BUILD_V5, "v2_paused_edge_turn"),
+    (EDGE_TURN_BUILD_V6, "v2_paused_edge_turn"),
 }
 SEGMENT_M = .40
 EDGE_TURN_MIN_PRIOR_CLEARANCE_M = 1.25
