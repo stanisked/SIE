@@ -88,6 +88,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     last_steer_at = 0.0
     last_segment_pair = None
     last_decision_key = None
+    last_edge_recovery_track = None
 
     with output.open("x") as journal:
         def call(method, endpoint, params=None, timeout=.3):
@@ -243,7 +244,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             # soon as the controller confirms DRIVING. No
                             # duplicate sample and no edge-only bearing.
                             fresh = fresh_steering_observation(
-                                intent.command_id and supervisor.track_id,
+                                supervisor.track_id,
                                 original_target.observed_s)
                             if fresh is not None:
                                 newest_target, newest_decision = fresh
@@ -311,9 +312,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 if (latest is not None and
                         latest.edge_recovery_bearing_deg is not None
                         and decision.action == "PAUSE"):
-                    recovery_key = ("EDGE_ORIENTATION_RECOVERY_REQUIRED",
-                                    target.track_id if target else None)
-                    if recovery_key != last_decision_key:
+                    recovery_track = target.track_id if target else None
+                    if recovery_track != last_edge_recovery_track:
                         journal.write(json.dumps({
                             "event": "EDGE_ORIENTATION_RECOVERY_REQUIRED",
                             "at_s": now,
@@ -325,6 +325,9 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             "reason": "UART_V3_HAS_NO_PAUSED_TURN",
                         }, allow_nan=False) + "\n")
                         journal.flush()
+                    last_edge_recovery_track = recovery_track
+                else:
+                    last_edge_recovery_track = None
                 # Poll every input tick: a bounded segment can end on its own.
                 observed = status()
                 reconcile(observed)
