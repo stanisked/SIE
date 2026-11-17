@@ -7,6 +7,23 @@ import math
 
 MAX_RGB_FRAME_GAP_S = .75
 
+def retain_current_rgb_on_depth_refusal(*, rgb_matched_current: bool,
+                                        audit_status: str,
+                                        depth_status: str) -> bool:
+    """Keep a *previously confirmed* RGB identity across a depth-only failure.
+
+    The caller must establish a unique, fresh and geometrically matched RGB
+    candidate via continued_track. This does not publish depth, confirm a
+    new track, or authorize motion. A future usable depth must be fresh.
+    """
+    return (rgb_matched_current is True
+            and audit_status == "MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY"
+            and depth_status in (
+                "DEPTH_MAD_EXCEEDED",
+                "MULTIPLE_OR_NO_PLAUSIBLE_DEPTH_LAYERS",
+            ))
+
+
 
 def retain_short_gap(status: str, reason: str, prior: dict | None) -> bool:
     """Hold identity during a missed frame, without publishing a target.
