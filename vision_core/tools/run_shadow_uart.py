@@ -16,15 +16,18 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from vision_core.tools.shadow_range_gate import (
-    RgbTarget, TargetRange, select_target_range,
+    RgbTarget, TargetRange, RangeDecision, select_target_range,
     SHADOW_STOP_DISTANCE_M, SHADOW_RESUME_MARGIN_M,
     SHADOW_COMMAND_CLEARANCE_M, SHADOW_MIN_SEGMENT_M,
 )
 from vision_core.tools.shadow_supervisor import ShadowSupervisor
 
 
-BUILD = "v4_2_uart_shadow_v3_segment_0p4"
+BUILD = "v4_2_uart_shadow_v4_edge_turn_10deg"
 SEGMENT_M = .40
+EDGE_TURN_MIN_PRIOR_CLEARANCE_M = 1.25
+EDGE_TURN_MAX_PRIOR_AGE_S = 1.5
+EDGE_TURN_MAX_ANGLE_DEG = 8.0
 
 
 @dataclass(frozen=True)
@@ -35,11 +38,35 @@ class ShadowObservation:
     edge_recovery_bearing_deg: float | None = None
 
 
+def select_edge_turn(target: RgbTarget | None, edge_bearing_deg: float | None,
+                     last_verified: tuple[str, float, float] | None,
+                     now_s: float) -> tuple[str, float] | None:
+    """Single bounded orientation correction after a fresh same-person edge.
+
+    A recently associated front clearance is required; RGB alone cannot
+    authorize a pivot near people. Caller enforces one turn per session.
+    """
+    if (target is None or last_verified is None or
+            type(edge_bearing_deg) not in (float, int) or
+            not math.isfinite(edge_bearing_deg) or
+            not math.isfinite(now_s) or
+            last_verified[0] != target.track_id or
+            not 0 <= now_s - target.observed_s <= .5 or
+            not 0 <= now_s - last_verified[1] <= EDGE_TURN_MAX_PRIOR_AGE_S or
+            last_verified[2] < EDGE_TURN_MIN_PRIOR_CLEARANCE_M or
+            abs(edge_bearing_deg) < 1.0):
+        return None
+    direction = "RIGHT" if edge_bearing_deg > 0 else "LEFT"
+    angle = min(EDGE_TURN_MAX_ANGLE_DEG, abs(edge_bearing_deg))
+    return direction, round(angle, 2)
+
+
+
 def run_session(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
                 segment_m=SEGMENT_M, max_observations=None, max_segments=None,
                 minimum_confidence=.8, lock_path=None,
-                latest_observation=None):
+                latest_observation=None, enable_edge_turn=False):
     """Use the same operator lock as the current bounded steering runner."""
     lockpath = Path(lock_path) if lock_path is not None else (
         Path.home() / ".local/state/sie/v7_operator_one_step.lock")
@@ -51,13 +78,15 @@ def run_session(*, request, observations, journal_path, rgb_calibration_id,
             lidar_calibration_id=lidar_calibration_id, clock=clock,
             segment_m=segment_m, max_observations=max_observations,
             max_segments=max_segments, minimum_confidence=minimum_confidence,
-            latest_observation=latest_observation)
+            latest_observation=latest_observation,
+            enable_edge_turn=enable_edge_turn)
 
 
 def _run_session_unlocked(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
                 segment_m=SEGMENT_M, max_observations=None, max_segments=None,
-                minimum_confidence=.8, latest_observation=None):
+                minimum_confidence=.8, latest_observation=None,
+                enable_edge_turn=False):
     """Run until source ends or operator interrupts; always request terminal STOP.
 
     `observations` must yield an observation or None frequently even if the
@@ -67,6 +96,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     on a physical cart without a validated target/range producer and an
     independent motor cutoff.
     """
+    if type(enable_edge_turn) is not bool:
+        raise ValueError("INVALID_EDGE_TURN_SWITCH")
     if not SHADOW_MIN_SEGMENT_M <= segment_m <= .40:
         raise ValueError("INVALID_SHADOW_SEGMENT")
     if max_segments is not None and (type(max_segments) is not int or
@@ -81,7 +112,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     report = {"result": "NO_COMMAND", "command_id": None,
               "operations": [], "segments_started": 0,
               "reused_pair_refusals": 0,
-              "measurement_admission_changed": False}
+              "measurement_admission_changed": False,
+              "edge_turns_started": 0}
     supervisor = None
     latest = None
     seen = 0
@@ -89,6 +121,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     last_segment_pair = None
     last_decision_key = None
     last_edge_recovery_track = None
+    last_verified_range = None
+    post_turn_reobserve_after_s = None
 
     with output.open("x") as journal:
         def call(method, endpoint, params=None, timeout=.3):
@@ -112,7 +146,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
         def status():
             code, body = call("GET", "/status", timeout=2.0)
             if code != 200 or body.get("firmware_build_id") != BUILD or \
-                    body.get("shadow_api_version") != "v1_paused_segment":
+                    body.get("shadow_api_version") != "v2_paused_edge_turn":
                 raise RuntimeError("SHADOW_CONTROLLER_STATUS_INVALID")
             if supervisor is not None and body.get("boot_session_id") != supervisor.boot_session_id:
                 raise RuntimeError("BOOT_SESSION_CHANGED")
