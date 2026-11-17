@@ -16,13 +16,15 @@ class ShadowRgbContinuityTests(unittest.TestCase):
         prior = remember_track("person-1",
             {"bbox_xyxy_px": [990, 0, 1845, 1190]},
             "2026-11-17T12:00:00+00:00")
-        for step, x2 in enumerate((1918, 1914, 1916, 1911), 1):
+        for when, x2 in zip(("12:00:00.25", "12:00:00.50",
+                              "12:00:00.75", "12:00:01.00"),
+                            (1918, 1914, 1916, 1911)):
             instance = {"instance_index": 0, "confidence": .90,
                         "bbox_xyxy_px": [1060, 0, x2, 1184],
                         "truncated_right": x2 >= 1917}
             matched = match_current_edge_track(
                 prior, [instance],
-                f"2026-11-17T12:00:0{step}.0+00:00",
+                f"2026-11-17T{when}+00:00",
                 refusal_reason=("NO_CURRENT_NON_EDGE_TARGET"
                                 if x2 >= 1917 else "BBOX_NEAR_RIGHT_IMAGE_EDGE"),
                 minimum_confidence=.7, minimum_iou=.2,
