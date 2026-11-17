@@ -16,8 +16,7 @@ import time
 from vision_core.tools.run_shadow_uart import ShadowObservation, run_session
 from vision_core.tools.shadow_range_gate import (
     ACTIVE_STEREO_SHA256, FRONT_FRAME, RgbTarget, TargetRange,
-    STEREO_SUPERVISED_MIN_M, STEREO_SUPERVISED_MAX_M,
-    select_target_range,
+    admit_supervised_stereo_distance, select_target_range,
 )
 from vision_core.tools.uart_http_transport import UartHttp
 from vision_core.tools.shadow_fast_adapter import front_profile_sha256, from_control_preview
@@ -410,8 +409,13 @@ def main() -> None:
                         and len(observation.ranges) == 1
                         and observation.ranges[0].source == "OV9281"
                         and observation.ranges[0].target_track_id == observation.target.track_id
-                        and STEREO_SUPERVISED_MIN_M <= observation.ranges[0].distance_m
-                                <= STEREO_SUPERVISED_MAX_M
+                        and admit_supervised_stereo_distance(
+                            observation.ranges[0].distance_m,
+                            select_target_range(
+                                observation.target, list(observation.ranges),
+                                time.monotonic(),
+                                expected_rgb_calibration_id=AR_INTRINSIC_SHA256,
+                                minimum_confidence=args.minimum_confidence))
                     )
                     if not admitted:
                         observation = ShadowObservation(None, ())
