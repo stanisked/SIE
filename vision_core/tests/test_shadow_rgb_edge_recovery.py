@@ -35,7 +35,8 @@ class ConfirmingStopController(V5Controller):
 
 
 class ShadowRgbEdgeRecoveryTests(unittest.TestCase):
-    def run_recovery(self, observations, controller_cls=V5Controller):
+    def run_recovery(self, observations, controller_cls=V5Controller,
+                     latest_observation=None):
         clock, controller = Clock(), controller_cls()
         with tempfile.TemporaryDirectory() as d:
             journal = Path(d) / "bridge.jsonl"
@@ -43,14 +44,15 @@ class ShadowRgbEdgeRecoveryTests(unittest.TestCase):
                 request=controller, observations=observations(clock),
                 journal_path=journal, rgb_calibration_id="test-rgb",
                 clock=clock, lock_path=Path(d) / "lock",
-                minimum_confidence=.4, enable_edge_turn=True)
+                minimum_confidence=.4, enable_edge_turn=True,
+                latest_observation=latest_observation)
             events = [json.loads(line) for line in journal.read_text().splitlines()]
         return report, controller.posts, events
 
     def test_floor_distance_and_pause_settling_allow_one_bounded_pivot(self):
         self.assertEqual(SHADOW_STOP_DISTANCE_M, .5)
         self.assertLess(EDGE_TURN_MIN_PRIOR_CLEARANCE_M, 1.145)
-        self.assertGreaterEqual(EDGE_TURN_MAX_PRIOR_AGE_S, 2.0)
+        self.assertEqual(EDGE_TURN_MAX_PRIOR_AGE_S, 3.0)
         t = RgbTarget("person-1", 12.15, -14.7, .93, "test-rgb")
         self.assertEqual(select_edge_turn(t, -14.7,
                          ("person-1", 10.0, 1.145), 12.15), ("LEFT", 8.0))
@@ -58,11 +60,55 @@ class ShadowRgbEdgeRecoveryTests(unittest.TestCase):
                           ("person-other", 10.0, 1.145), 12.15))
         self.assertIsNone(select_edge_turn(t, -14.7,
                           ("person-1", 9.0, 1.145), 12.15))
+        self.assertEqual(select_edge_turn(t, -14.7,
+                         ("person-1", 9.434, 1.061), 12.15), ("LEFT", 8.0))
+        self.assertIsNone(select_edge_turn(t, -14.7,
+                          ("person-1", 9.149, 1.061), 12.15))
         self.assertIsNone(select_edge_turn(t, -14.7,
                           ("person-1", 10.0, .68), 12.15))
         weak = RgbTarget("person-1", 12.15, -14.7, .3, "test-rgb")
         self.assertIsNone(select_edge_turn(weak, -14.7,
                           ("person-1", 10.0, 1.145), 12.15))
+
+    def test_floor_2p716s_range_and_targetless_latest_tick_allow_one_pivot(self):
+        # At the 20:32 floor trial, the first gate saw a 2.716s-old
+        # same-ID range and a fresh RGB edge. The async camera may already
+        # have published a targetless tick during the STATUS round trip.
+        def samples(clock):
+            yield normal(clock, distance=1.061)
+            clock.now += 2.57
+            yield edge(clock)  # PAUSE
+            clock.now += .146
+            yield edge(clock)  # settled PAUSED, age = 2.716
+        report, posts, events = self.run_recovery(
+            samples, latest_observation=lambda: ShadowObservation(None, ()))
+        self.assertEqual(report["result"], "SESSION_ENDED")
+        self.assertEqual(report["operations"], ["START", "PAUSE", "TURN"])
+        self.assertEqual(report["edge_turns_started"], 1)
+        turns = [args for path, args in posts if path == "/shadow-turn"]
+        self.assertEqual(len(turns), 1)
+        self.assertEqual(turns[0]["direction"], "LEFT")
+        self.assertEqual(turns[0]["angle_deg"], "8.00")
+        self.assertTrue(any(e.get("event") == "EDGE_TURN_SETTLED"
+                            for e in events))
+        self.assertFalse(any(path == "/shadow-resume" for path, _ in posts))
+
+    def test_newer_different_rgb_track_refuses_cached_edge_pivot(self):
+        def samples(clock):
+            yield normal(clock, distance=1.061)
+            clock.now += 2.57
+            yield edge(clock)
+            clock.now += .146
+            yield edge(clock)
+        def other_target():
+            return ShadowObservation(RgbTarget("different-person", 12.716,
+                                               1.0, .95, "test-rgb"), ())
+        report, posts, events = self.run_recovery(
+            samples, latest_observation=other_target)
+        self.assertEqual(report["result"], "SESSION_ENDED")
+        self.assertEqual(report["edge_turns_started"], 0)
+        self.assertEqual(report["operations"], ["START", "PAUSE"])
+        self.assertFalse(any(path == "/shadow-turn" for path, _ in posts))
 
     def test_edge_retains_track_but_never_starts_forward_without_depth(self):
         def samples(clock):
