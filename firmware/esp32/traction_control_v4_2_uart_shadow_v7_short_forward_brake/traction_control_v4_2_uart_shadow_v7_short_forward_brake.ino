@@ -413,6 +413,7 @@ std::atomic<int32_t> steeredSafetyCenterLimitSum{0};
 std::atomic<bool> steeredShortGuardActive{false};
 std::atomic<bool> steeredShortBrakeRequested{false};
 std::atomic<int32_t> steeredShortBrakeCenterSum{0};
+std::atomic<uint32_t> steeredShortBrakeStartMs{0};
 std::atomic<int32_t> steeredShortBrakeTriggerSum{0};
 std::atomic<uint32_t> steeredShortBrakeTriggerElapsedMs{0};
 constexpr int STEERED_SAFETY_LOOP_STALL = 1;
@@ -818,7 +819,7 @@ void steeredSafetyTask(void*)
         if (steeredShortBrakeRequested.compare_exchange_strong(expected, true)) {
           steeredShortBrakeTriggerSum.store(centerSum);
           steeredShortBrakeTriggerElapsedMs.store(
-              millis() - shadowTurnGuardStartMs.load());
+              millis() - steeredShortBrakeStartMs.load());
           brakeMotors();
         }
       }
@@ -1655,6 +1656,7 @@ void startMotion(
   steeredShortGuardActive.store(false);
   steeredShortBrakeRequested.store(false);
   steeredShortBrakeCenterSum.store(0);
+  steeredShortBrakeStartMs.store(0);
   steeredShortBrakeTriggerSum.store(0);
   steeredShortBrakeTriggerElapsedMs.store(0);
   if (shadowTurnActive) {
@@ -1683,7 +1685,7 @@ void startMotion(
       steeredShortBrakeCenterSum.store(
           encoderCountsForTravelM(triggerM, RIGHT_M_PER_COUNT) +
           encoderCountsForTravelM(triggerM, LEFT_M_PER_COUNT));
-      shadowTurnGuardStartMs.store(motionStartTime);
+      steeredShortBrakeStartMs.store(motionStartTime);
       steeredShortGuardActive.store(true);
     }
     steeredSafetyActive.store(true);
