@@ -7,6 +7,7 @@ ambiguous: reconcile with controller status, never mint another command ID.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 from vision_core.tools.shadow_range_gate import RangeDecision, RgbTarget
 
@@ -82,7 +83,10 @@ class ShadowSupervisor:
         """
         if self.pending is not None or self.state != "PAUSED" or not self.track_id:
             raise ValueError("SHADOW_TURN_REQUIRES_PAUSED_TRACK")
-        if direction not in ("LEFT", "RIGHT") or not 1.0 <= angle_deg <= 10.0:
+        if (direction not in ("LEFT", "RIGHT") or
+                type(angle_deg) not in (int, float) or
+                not math.isfinite(angle_deg) or
+                not 1.0 <= angle_deg <= 10.0):
             raise ValueError("INVALID_SHADOW_TURN")
         self.seq += 1
         intent = ShadowIntent("TURN", self.boot_session_id,
