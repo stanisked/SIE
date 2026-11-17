@@ -116,9 +116,11 @@ class ShadowEdgeTurnV4Tests(unittest.TestCase):
                          ("RIGHT", 8.0))
         self.assertEqual(select_edge_turn(t, -4., ("p", 10., 1.5), 10.3),
                          ("LEFT", 4.0))
-        self.assertIsNone(select_edge_turn(t, 13., ("p", 10., 1.2), 10.3))
+        self.assertEqual(select_edge_turn(t, 13., ("p", 10., 1.145), 10.3),
+                         ("RIGHT", 8.0))
+        self.assertIsNone(select_edge_turn(t, 13., ("p", 10., .68), 10.3))
         self.assertIsNone(select_edge_turn(t, 13., ("other", 10., 1.5), 10.3))
-        self.assertIsNone(select_edge_turn(t, 13., ("p", 8., 1.5), 10.3))
+        self.assertIsNone(select_edge_turn(t, 13., ("p", 7.5, 1.5), 10.3))
         self.assertIsNone(select_edge_turn(t, 13., ("p", 10., 1.5), 11.0))
 
     def test_supervisor_turn_preserves_track_and_transition_sequence(self):
@@ -177,11 +179,11 @@ class ShadowEdgeTurnV4Tests(unittest.TestCase):
         self.assertEqual(report["final_status"]["state"], "READY")
         self.assertEqual(report["final_status"]["left_pwm"], 0)
 
-    def test_clearance_refuses_turn_but_keeps_pause(self):
+    def test_stale_clearance_refuses_turn_but_keeps_pause(self):
         clock, device = Clock(), V4Controller()
         def samples():
             yield normal(clock, distance=1.22)
-            clock.now += .15
+            clock.now += 2.6  # last verified range is no longer recent
             yield edge(clock)
             clock.now += .15
             yield edge(clock)
