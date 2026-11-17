@@ -17,6 +17,8 @@ from urllib.parse import urlencode
 
 from vision_core.tools.shadow_range_gate import (
     RgbTarget, TargetRange, select_target_range,
+    SHADOW_STOP_DISTANCE_M, SHADOW_RESUME_MARGIN_M,
+    SHADOW_COMMAND_CLEARANCE_M, SHADOW_MIN_SEGMENT_M,
 )
 from vision_core.tools.shadow_supervisor import ShadowSupervisor
 
@@ -64,7 +66,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     on a physical cart without a validated target/range producer and an
     independent motor cutoff.
     """
-    if not .02 <= segment_m <= .40:
+    if not SHADOW_MIN_SEGMENT_M <= segment_m <= .40:
         raise ValueError("INVALID_SHADOW_SEGMENT")
     if max_segments is not None and (type(max_segments) is not int or
                                      max_segments < 1):
@@ -84,6 +86,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     seen = 0
     last_steer_at = 0.0
     last_segment_pair = None
+    last_decision_key = None
 
     with output.open("x") as journal:
         def call(method, endpoint, params=None, timeout=.3):
@@ -150,8 +153,10 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
             if intent.operation in ("START", "RESUME"):
                 # The next finite step must fit before the hold boundary.
                 # Allow 20 mm for rounding and unobserved motion after capture.
-                available = selected_range.distance_m - (.8 + .15 + .02)
-                if available < .02:
+                available = selected_range.distance_m - (
+                    SHADOW_STOP_DISTANCE_M + SHADOW_RESUME_MARGIN_M +
+                    SHADOW_COMMAND_CLEARANCE_M)
+                if available < SHADOW_MIN_SEGMENT_M:
                     raise RuntimeError("SHADOW_STEP_CLEARANCE_TOO_SMALL")
                 params["distance_m"] = format(min(segment_m, available), ".3f")
                 params["bias_pwm"] = str(intent.bias_pwm)
@@ -264,6 +269,20 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     expected_rgb_calibration_id=rgb_calibration_id,
                     expected_lidar_calibration_id=lidar_calibration_id,
                     minimum_confidence=minimum_confidence)
+                # Log reason changes, not every 50-ms status tick.
+                decision_key = (decision.action, decision.reason,
+                                target.track_id if target is not None else None)
+                if decision_key != last_decision_key:
+                    journal.write(json.dumps({
+                        "event": "SHADOW_RANGE_DECISION", "at_s": now,
+                        "action": decision.action, "reason": decision.reason,
+                        "track_id": decision_key[2],
+                        "distance_m": (decision.selected.distance_m
+                                       if decision.selected is not None else None),
+                        "supervisor_state": supervisor.state,
+                    }, allow_nan=False) + "\n")
+                    journal.flush()
+                    last_decision_key = decision_key
                 # Poll every input tick: a bounded segment can end on its own.
                 observed = status()
                 reconcile(observed)
