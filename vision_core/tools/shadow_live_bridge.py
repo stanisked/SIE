@@ -311,7 +311,7 @@ def main() -> None:
     parser.add_argument("--front-rim-forward-of-optical-m", type=float, required=True,
                         help="Measured optical-centre to front-rim forward component, in metres")
     parser.add_argument("--duration-s", type=float, default=30.)
-    parser.add_argument("--segment-m", type=float, default=.10)
+    parser.add_argument("--segment-m", type=float, default=.40)
     parser.add_argument("--minimum-confidence", type=float, default=.40)
     parser.add_argument("--max-segments", type=int, default=None)
     parser.add_argument("--journal", type=Path, required=True)
@@ -339,8 +339,8 @@ def main() -> None:
         parser.error("fast-mask requires the exact reviewed segmentation model SHA-256")
     if not math.isfinite(args.duration_s) or args.duration_s <= 0:
         parser.error("duration must be positive")
-    if not .02 <= args.segment_m <= .30:
-        parser.error("segment must be in 0.02..0.30 m")
+    if not .02 <= args.segment_m <= .40:
+        parser.error("segment must be in 0.02..0.40 m")
     if not math.isfinite(args.minimum_confidence) or not 0 < args.minimum_confidence <= 1:
         parser.error("minimum confidence must be in (0, 1]")
     # Validate the physical datum before opening serial or subscribing.
