@@ -74,12 +74,19 @@ class ShadowRgbEdgeRecoveryTests(unittest.TestCase):
         # At the 20:32 floor trial, the first gate saw a 2.716s-old
         # same-ID range and a fresh RGB edge. The async camera may already
         # have published a targetless tick during the STATUS round trip.
+        def left_edge(clock):
+            # Actual floor edge was at -12.89 degrees, not the +13 degree
+            # RIGHT-edge fixture used by unrelated regression scenarios.
+            return ShadowObservation(
+                RgbTarget("person-1", clock(), -12.89, .95, "test-rgb"),
+                (), edge_recovery_bearing_deg=-12.89)
+
         def samples(clock):
             yield normal(clock, distance=1.061)
             clock.now += 2.57
-            yield edge(clock)  # PAUSE
+            yield left_edge(clock)  # PAUSE
             clock.now += .146
-            yield edge(clock)  # settled PAUSED, age = 2.716
+            yield left_edge(clock)  # settled PAUSED, age = 2.716
         report, posts, events = self.run_recovery(
             samples, latest_observation=lambda: ShadowObservation(None, ()))
         self.assertEqual(report["result"], "SESSION_ENDED")
