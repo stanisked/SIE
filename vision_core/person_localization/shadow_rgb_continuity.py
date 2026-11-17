@@ -82,3 +82,47 @@ def remember_track(track_id: str, candidate: dict, captured_at_utc: str) -> dict
     return {"track_id": track_id,
             "bbox_xyxy_px": [float(v) for v in candidate["bbox_xyxy_px"]],
             "last_rgb_at_utc": captured_at_utc}
+
+
+def match_current_edge_track(prior: dict | None, instances: list,
+                             captured_at_utc: str, *, refusal_reason: str,
+                             minimum_confidence: float,
+                             minimum_iou: float,
+                             maximum_center_displacement_relative: float
+                             ) -> tuple[dict, dict] | None:
+    """Match the same, uniquely visible person at a horizontal image edge.
+
+    A validated RGB-only result cannot publish a stereo range or authorize
+    motion. Never accept another person, an ambiguous frame or a stale box.
+    """
+    if (refusal_reason not in ("NO_CURRENT_NON_EDGE_TARGET",
+                               "BBOX_NEAR_RIGHT_IMAGE_EDGE",
+                               "BBOX_NEAR_LEFT_IMAGE_EDGE")
+            or not isinstance(instances, list) or len(instances) != 1
+            or not isinstance(instances[0], dict)):
+        return None
+    person = instances[0]
+    box = person.get("bbox_xyxy_px")
+    confidence = person.get("confidence")
+    if (not isinstance(box, list) or len(box) != 4
+            or not all(type(x) in (float, int) and math.isfinite(x) for x in box)
+            or not 0 <= box[0] < box[2] <= 1920
+            or not 0 <= box[1] < box[3] <= 1200
+            or not type(confidence) in (int, float)
+            or not math.isfinite(confidence)
+            or confidence < minimum_confidence
+            or type(person.get("instance_index")) is not int
+            or box[2] - box[0] < 30 or box[3] - box[1] < 60):
+        return None
+    if refusal_reason == "BBOX_NEAR_RIGHT_IMAGE_EDGE" and box[2] < 1900:
+        return None
+    if refusal_reason == "BBOX_NEAR_LEFT_IMAGE_EDGE" and box[0] > 20:
+        return None
+    if refusal_reason == "NO_CURRENT_NON_EDGE_TARGET" and not (
+            (person.get("truncated_right") is True and box[2] >= 1900) or
+            (person.get("truncated_left") is True and box[0] <= 20)):
+        return None
+    matched = continued_track(prior, person, captured_at_utc,
+        minimum_iou=minimum_iou,
+        maximum_center_displacement_relative=maximum_center_displacement_relative)
+    return (matched, person) if matched is not None else None
