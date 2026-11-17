@@ -183,7 +183,7 @@ class ShadowEdgeTurnV4Tests(unittest.TestCase):
         clock, device = Clock(), V4Controller()
         def samples():
             yield normal(clock, distance=1.22)
-            clock.now += 2.6  # last verified range is no longer recent
+            clock.now += 3.1  # older than the 3.0 s pivot-only recovery window
             yield edge(clock)
             clock.now += .15
             yield edge(clock)
