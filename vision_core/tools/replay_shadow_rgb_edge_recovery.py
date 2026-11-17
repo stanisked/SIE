@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import json
+import math
 from pathlib import Path
 
 from vision_core.tools.shadow_fast_adapter import from_control_preview, front_profile_sha256
@@ -18,29 +19,61 @@ from vision_core.tools.shadow_range_gate import select_target_range
 from vision_core.tools.shadow_live_bridge import AR_INTRINSIC_SHA256
 
 
+def result_ready_monotonic_s(audit: dict) -> float:
+    """Reconstruct the recorded ready time, not an imaginary 100 ms latency.
+
+    The producer emits a separately measured exposure-to-result-ready age for
+    both cameras. This timestamp is the earliest time the result could be
+    consumed by FOLLOW, not a claim about ROS callback delivery.
+    """
+    frame = audit["frame_freshness"]
+    cams = ("ar0234", "ov9281")
+    timestamps = [float(frame["frames"][camera]["driver_timestamp_s"])
+                  for camera in cams]
+    measured = [float(frame["driver_declared_soe_to_result_s"][camera])
+                for camera in cams]
+    received = [float(frame["frames"][camera]["host_packet_received_monotonic_s"])
+                for camera in cams]
+    if (not all(math.isfinite(v) for v in timestamps + measured + received)
+            or any(age < 0 for age in measured)):
+        raise ValueError("INVALID_RECORDED_RESULT_READY_TIMING")
+    return max(max(t + d for t, d in zip(timestamps, measured)),
+               max(received)) + .001
+
+
+def latest_ready_edge(edges: list[dict], at_s: float) -> dict | None:
+    """Only use an edge frame whose result was ready before this PAUSED poll."""
+    return next((r for r in reversed(edges)
+                 if r["ready_s"] <= at_s
+                 and 0 <= at_s - r["stamp"] <= .5), None)
+
+
 def replay(evidence_dir: Path, *, optical_offset_m: float = .0125) -> dict:
     paths = sorted(evidence_dir.glob("control-preview-*/*.json"))
     if not paths:
         raise ValueError("CONTROL_PREVIEW_EVIDENCE_NOT_FOUND")
     records = []
+    refusal_reasons = Counter()
     profile_sha = front_profile_sha256()
     for path in paths:
         audit = json.loads(path.read_text())
         stamp = float(audit["frame_freshness"]["frames"]["ar0234"]["driver_timestamp_s"])
-        # Structural replay only: use a uniform 0.1 s receipt delay, not
-        # a claim about timing of the original physical session.
+        ready_s = result_ready_monotonic_s(audit)
+        # Replay at the recorded result-ready time. This is still earlier
+        # than any unknown ROS subscriber/transport delivery latency.
         preview, reason = from_control_preview(
-            audit, now_s=stamp + .1,
+            audit, now_s=ready_s,
             rim_forward_of_optical_center_m=optical_offset_m,
             expected_front_profile_sha256=profile_sha,
             expected_segmentation_model_sha256=(
                 audit.get("segmentation_observation") or {}).get("model_sha256", ""),
             semantic_source="segmentation_mask", local_preview=True)
-        edge = observation_from_edge_guidance(audit, now_s=stamp + .1)
+        edge = observation_from_edge_guidance(audit, now_s=ready_s)
+        refusal_reasons[reason] += 1
         rng = None
         if preview.target is not None and preview.ranges:
             decision = select_target_range(
-                preview.target, list(preview.ranges), stamp + .1,
+                preview.target, list(preview.ranges), ready_s,
                 expected_rgb_calibration_id=AR_INTRINSIC_SHA256,
                 minimum_confidence=.4)
             if decision.selected is not None and decision.action in (
@@ -51,6 +84,7 @@ def replay(evidence_dir: Path, *, optical_offset_m: float = .0125) -> dict:
         records.append({
             "cycle": audit.get("cycle_id"),
             "stamp": stamp,
+            "ready_s": ready_s,
             "rgb_track": (preview.target.track_id if preview.target else None),
             "range": rng, "range_refusal": reason,
             "edge_track": (edge.target.track_id if edge.target else None),
@@ -70,35 +104,46 @@ def replay(evidence_dir: Path, *, optical_offset_m: float = .0125) -> dict:
               and (r.get("body") or {}).get("right_pwm") == 0
               and (r.get("body") or {}).get("left_pwm") == 0
               and (r.get("body") or {}).get("active_command_id")]
-    opportunities = []
-    seen_transitions = set()
+    # Inspect all polls of the same PAUSED transition. A first PAUSED status
+    # may predate the current edge frame's processing completion.
+    grouped_pauses = {}
     for state in paused:
-        at_s = float(state["started_s"])
-        seq = (state["body"].get("active_command_id"),
-               state["body"].get("shadow_transition_seq"))
-        if seq in seen_transitions:
-            continue
-        edge = next((r for r in reversed(edges)
-                     if 0 <= at_s - r["stamp"] <= .5), None)
-        if edge is None:
-            continue
-        prior = next((r["range"] for r in reversed(records)
-                      if r["range"] is not None
-                      and r["stamp"] <= edge["stamp"]
-                      and r["range"][0] == edge["edge_track"]), None)
-        turn = select_edge_turn(edge["edge_target"], edge["edge_bearing_deg"],
-                                prior, at_s, minimum_confidence=.4)
-        seen_transitions.add(seq)
-        opportunities.append({
-            "pause_seq": seq[1],
-            "at_s": round(at_s, 3),
-            "edge_track": edge["edge_track"],
-            "bearing_deg": round(edge["edge_bearing_deg"], 2),
-            "prior_range_m": round(prior[2], 3) if prior else None,
-            "prior_age_s": round(at_s - prior[1], 3) if prior else None,
-            "bounded_turn_candidate": (list(turn) if turn else None),
-            "note": "offline_estimate_not_motor_authorization",
-        })
+        body = state["body"]
+        key = (body.get("active_command_id"), body.get("shadow_transition_seq"))
+        grouped_pauses.setdefault(key, []).append(state)
+    opportunities = []
+    for key, states in grouped_pauses.items():
+        accepted = None
+        for state in states:
+            at_s = float(state["started_s"])
+            edge = latest_ready_edge(edges, at_s)
+            if edge is None:
+                continue
+            prior = next((r["range"] for r in reversed(records)
+                          if r["range"] is not None
+                          and r["ready_s"] <= at_s
+                          and r["stamp"] <= edge["stamp"]
+                          and r["range"][0] == edge["edge_track"]), None)
+            turn = select_edge_turn(edge["edge_target"], edge["edge_bearing_deg"],
+                                    prior, at_s, minimum_confidence=.4)
+            candidate = {
+                "pause_seq": key[1],
+                "at_s": round(at_s, 3),
+                "edge_cycle": edge["cycle"],
+                "edge_track": edge["edge_track"],
+                "bearing_deg": round(edge["edge_bearing_deg"], 2),
+                "prior_range_m": round(prior[2], 3) if prior else None,
+                "prior_age_s": round(at_s - prior[1], 3) if prior else None,
+                "bounded_turn_candidate": list(turn) if turn else None,
+                "note": "offline_estimate_not_motor_authorization",
+            }
+            if accepted is None:
+                accepted = candidate
+            if turn is not None:
+                accepted = candidate
+                break
+        if accepted is not None:
+            opportunities.append(accepted)
     edge_ids = Counter(r["edge_track"] for r in edges)
     return {
         "mode": "PASSIVE_OFFLINE_REPLAY_NO_MOTOR_IO",
@@ -106,13 +151,14 @@ def replay(evidence_dir: Path, *, optical_offset_m: float = .0125) -> dict:
         "valid_edge_cycles": len(edges),
         "valid_edge_track_ids": dict(edge_ids),
         "valid_range_cycles": sum(r["range"] is not None for r in records),
+        "range_adapter_reasons": dict(refusal_reasons),
         "first_valid_edge_bearing_deg": (
             round(edges[0]["edge_bearing_deg"], 2) if edges else None),
         "last_valid_edge_bearing_deg": (
             round(edges[-1]["edge_bearing_deg"], 2) if edges else None),
         "paused_opportunities": opportunities,
         "limitations": [
-            "Uses 0.1 s synthetic receipt offset; not actual camera-to-control latency",
+            "Uses recorded exposure-to-result-ready timing; not measured ROS delivery latency",
             "Potential TURN is a software gate result only; no firmware or physical pivot tested",
             "No forward movement without a post-turn same-ID current RGB/Depth pair",
         ],
