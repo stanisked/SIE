@@ -33,8 +33,13 @@ EDGE_TURN_CONTRACTS = {
     (EDGE_TURN_BUILD_V6, "v2_paused_edge_turn"),
 }
 SEGMENT_M = .40
-EDGE_TURN_MIN_PRIOR_CLEARANCE_M = 1.25
-EDGE_TURN_MAX_PRIOR_AGE_S = 1.5
+# Latest same-ID range can gate one bounded in-place recovery correction.
+# Old depth NEVER authorizes forward movement.
+EDGE_TURN_MIN_PRIOR_CLEARANCE_M = (
+    SHADOW_STOP_DISTANCE_M + SHADOW_RESUME_MARGIN_M +
+    SHADOW_COMMAND_CLEARANCE_M + SHADOW_MIN_SEGMENT_M)
+# Real floor PAUSE settled ~2s after the last accepted RGB/Depth pair.
+EDGE_TURN_MAX_PRIOR_AGE_S = 2.5
 EDGE_TURN_MAX_ANGLE_DEG = 8.0
 
 
@@ -48,13 +53,16 @@ class ShadowObservation:
 
 def select_edge_turn(target: RgbTarget | None, edge_bearing_deg: float | None,
                      last_verified: tuple[str, float, float] | None,
-                     now_s: float) -> tuple[str, float] | None:
-    """Single bounded orientation correction after a fresh same-person edge.
+                     now_s: float, *, minimum_confidence: float = .4
+                     ) -> tuple[str, float] | None:
+    """One bounded same-ID RGB edge pivot, never permission to drive forward.
 
-    A recently associated front clearance is required; RGB alone cannot
-    authorize a pivot near people. Caller enforces one turn per session.
+    A second pivot needs a new post-turn RGB/Depth association.
     """
     if (target is None or last_verified is None or
+            not target.track_id or
+            not math.isfinite(target.confidence) or
+            target.confidence < minimum_confidence or
             type(edge_bearing_deg) not in (float, int) or
             not math.isfinite(edge_bearing_deg) or
             not math.isfinite(now_s) or
@@ -373,20 +381,27 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     expected_rgb_calibration_id=rgb_calibration_id,
                     expected_lidar_calibration_id=lidar_calibration_id,
                     minimum_confidence=minimum_confidence)
-                if (decision.selected is not None and target is not None
-                        and decision.action in ("FOLLOW_ELIGIBLE", "HOLD")
-                        and post_turn_reobserve_after_s is None):
-                    last_verified_range = (
-                        target.track_id, decision.selected.observed_s,
-                        decision.selected.distance_m)
                 if post_turn_reobserve_after_s is not None:
                     if (target is None or decision.selected is None
+                            or target.track_id != supervisor.track_id
                             or target.observed_s <= post_turn_reobserve_after_s
                             or decision.selected.observed_s <= post_turn_reobserve_after_s):
                         decision = RangeDecision(
                             "PAUSE", "POST_TURN_FRESH_PAIR_REQUIRED")
                     else:
                         post_turn_reobserve_after_s = None
+                        journal.write(json.dumps({
+                            "event": "EDGE_RECOVERY_RGB_DEPTH_REACQUIRED",
+                            "at_s": now, "track_id": target.track_id,
+                            "distance_m": decision.selected.distance_m,
+                        }, allow_nan=False) + "\n")
+                        journal.flush()
+                if (decision.selected is not None and target is not None
+                        and decision.action in ("FOLLOW_ELIGIBLE", "HOLD")
+                        and post_turn_reobserve_after_s is None):
+                    last_verified_range = (
+                        target.track_id, decision.selected.observed_s,
+                        decision.selected.distance_m)
                 # Log reason changes, not every 50-ms status tick.
                 decision_key = (decision.action, decision.reason,
                                 target.track_id if target is not None else None)
@@ -436,7 +451,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     if max_segments is not None and report["segments_started"] >= max_segments:
                         report["reason"] = "SEGMENT_LIMIT_REACHED"
                         break
-                    if (enable_edge_turn and report["edge_turns_started"] == 0
+                    if (enable_edge_turn and last_verified_range is not None
                             and latest is not None and not latest.camera_encoder_disagreement
                             and latest.edge_recovery_bearing_deg is not None
                             and decision.action == "PAUSE"
@@ -457,7 +472,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                                 and not edge_now.ranges):
                             recovery = select_edge_turn(
                                 edge_now.target, edge_now.edge_recovery_bearing_deg,
-                                last_verified_range, clock())
+                                last_verified_range, clock(),
+                                minimum_confidence=minimum_confidence)
                         if recovery is not None:
                             direction, angle = recovery
                             intent = supervisor.turn(direction, angle)
@@ -467,6 +483,20 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             post_turn_reobserve_after_s = clock()
                             last_verified_range = None
                             continue
+                        if edge_now is not None and edge_now.edge_recovery_bearing_deg is not None:
+                            journal.write(json.dumps({
+                                "event": "EDGE_RECOVERY_TURN_NOT_AUTHORIZED",
+                                "at_s": now,
+                                "track_id": (edge_now.target.track_id
+                                             if edge_now.target else None),
+                                "last_range_age_s": (
+                                    clock() - last_verified_range[1]
+                                    if last_verified_range else None),
+                                "last_range_m": (
+                                    last_verified_range[2]
+                                    if last_verified_range else None),
+                            }, allow_nan=False) + "\n")
+                            journal.flush()
                     # A settled segment cannot resume on the observations
                     # that authorized it, even while their age is below .5 s.
                     if (decision.action == "FOLLOW_ELIGIBLE" and
