@@ -1,7 +1,8 @@
 from datetime import datetime, timezone, timedelta
 
 from vision_core.tools.shadow_live_bridge import (
-    AR_INTRINSIC_SHA256, observation_from_audit, preview_record,
+    AR_INTRINSIC_SHA256, observation_from_audit,
+    observation_from_edge_guidance, preview_record,
 )
 from vision_core.tools.shadow_range_gate import ACTIVE_STEREO_SHA256, select_target_range
 
@@ -116,3 +117,51 @@ def test_preview_keeps_all_points_and_numeric_candidate_separate():
     assert result['torso_core_front_point_count']==420
     assert result['torso_core_front_provenance']['source_cycle_id']=='cycle-1'
     assert result['source_snapshot_evidence']==row['source_snapshot_evidence']
+
+
+def test_rgb_edge_guidance_has_identity_bearing_but_no_range():
+    row = {
+        "status": "TARGET_UNAVAILABLE",
+        "reason": "BBOX_NEAR_RIGHT_IMAGE_EDGE",
+        "calibration": {"ar0234_intrinsic_sha256": AR_INTRINSIC_SHA256},
+        "segmentation_observation": {"status": "CURRENT_INSTANCES_DIAGNOSTIC_ONLY",
+            "instances": [{"instance_index": 0, "confidence": .94}]},
+        "frame_freshness": {"frames": {"ar0234": {"driver_timestamp_s": 10.2}}},
+        "shadow_rgb_edge_guidance": {
+            "status": "MATCHED_CURRENT_RGB_EDGE_ONLY",
+            "track_id": "person-1", "bearing_deg": 13.0,
+            "confidence": .94, "reason": "BBOX_NEAR_RIGHT_IMAGE_EDGE",
+            "instance_index": 0, "range_published": False,
+            "forward_authorized": False, "rotation_authorized": False}
+    }
+    result = observation_from_edge_guidance(row, now_s=10.3)
+    assert result.target.track_id == "person-1"
+    assert result.target.bearing_deg == 13.
+    assert result.edge_recovery_bearing_deg == 13.
+    assert result.ranges == ()
+    decision = select_target_range(result.target, list(result.ranges), 10.3,
+                                   expected_rgb_calibration_id=AR_INTRINSIC_SHA256)
+    assert decision.action == "PAUSE"
+
+
+def test_edge_guidance_rejects_expired_or_unauthorized_observation():
+    row = {
+        "status": "TARGET_UNAVAILABLE",
+        "reason": "NO_CURRENT_NON_EDGE_TARGET",
+        "calibration": {"ar0234_intrinsic_sha256": AR_INTRINSIC_SHA256},
+        "segmentation_observation": {"status": "CURRENT_INSTANCES_DIAGNOSTIC_ONLY",
+            "instances": [{"instance_index": 0, "confidence": .94}]},
+        "frame_freshness": {"frames": {"ar0234": {"driver_timestamp_s": 10.2}}},
+        "shadow_rgb_edge_guidance": {
+            "status": "MATCHED_CURRENT_RGB_EDGE_ONLY",
+            "track_id": "person-1", "bearing_deg": 13.0,
+            "confidence": .94, "reason": "NO_CURRENT_NON_EDGE_TARGET",
+            "instance_index": 0, "range_published": False,
+            "forward_authorized": False, "rotation_authorized": False}
+    }
+    assert observation_from_edge_guidance(row, now_s=11.0).target is None
+    row["shadow_rgb_edge_guidance"]["forward_authorized"] = True
+    assert observation_from_edge_guidance(row, now_s=10.3).target is None
+    row["shadow_rgb_edge_guidance"]["forward_authorized"] = False
+    row["segmentation_observation"]["instances"].append({"instance_index": 1})
+    assert observation_from_edge_guidance(row, now_s=10.3).target is None
