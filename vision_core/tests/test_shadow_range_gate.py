@@ -4,7 +4,8 @@ from vision_core.tools.shadow_range_gate import (
     ACTIVE_STEREO_SHA256, FRONT_FRAME, RgbTarget, TargetRange,
     STEREO_SUPERVISED_MIN_M, SHADOW_STOP_DISTANCE_M,
     SHADOW_RESUME_MARGIN_M, SHADOW_COMMAND_CLEARANCE_M,
-    SHADOW_MIN_SEGMENT_M, select_target_range,
+    SHADOW_MIN_SEGMENT_M, admit_supervised_stereo_distance,
+    RangeDecision, select_target_range,
 )
 
 
@@ -81,6 +82,21 @@ class ShadowRangeGateTests(unittest.TestCase):
                     self.assertGreaterEqual(clearance, SHADOW_MIN_SEGMENT_M)
                 else:
                     self.assertEqual(result.action, "HOLD")
+
+    def test_close_range_is_hold_only_not_forward_admission(self):
+        from dataclasses import replace
+        close = self.decide([replace(self.stereo, distance_m=.865)])
+        self.assertEqual(close.action, "HOLD")
+        self.assertTrue(admit_supervised_stereo_distance(.865, close))
+        self.assertFalse(admit_supervised_stereo_distance(.865,
+            RangeDecision("FOLLOW_ELIGIBLE", "INVALID_OVERRIDE")))
+        self.assertFalse(admit_supervised_stereo_distance(.865,
+            RangeDecision("PAUSE", "NO_FRESH_ASSOCIATED_RANGE")))
+        self.assertFalse(admit_supervised_stereo_distance(.49, close))
+        self.assertFalse(admit_supervised_stereo_distance(2.51, close))
+        follow = self.decide([replace(self.stereo, distance_m=1.5)])
+        self.assertEqual(follow.action, "FOLLOW_ELIGIBLE")
+        self.assertTrue(admit_supervised_stereo_distance(1.5, follow))
 
     def test_unconfigured_lidar_cannot_be_admitted(self):
         self.assertEqual(select_target_range(self.target, [self.lidar], 10.1,
