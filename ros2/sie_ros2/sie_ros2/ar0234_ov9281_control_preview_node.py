@@ -893,7 +893,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 metadata=self._native_capture_metadata
                 audit['frame_freshness']=freshness_report(metadata,ready,self._native_capture_sha256)
                 audit['pairing']['timestamp_basis']='DRIVER_MONOTONIC_START_OF_EXPOSURE_DECLARATION'
-            audit["working_targets"] = {"base_speed_m_s": .15, "stand_off_from_robot_front_m": 1.,
+            audit["working_targets"] = {"base_speed_m_s": .15, "stand_off_from_robot_front_m": .5,
                 "depth_absolute_error_1_to_2m_m": .10, "depth_relative_error_above_2m": .05,
                 "exposure_to_command_age_max_s": .5,
                 "freshness_policy_id": "experimental_freshness_500ms_v1"}
