@@ -389,6 +389,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                         # track-change STOP path can end this session.
                         pass
                     elif (target is None or decision.selected is None
+                            or target.track_id != supervisor.track_id
                             or target.observed_s <= post_turn_reobserve_after_s
                             or decision.selected.observed_s <= post_turn_reobserve_after_s):
                         decision = RangeDecision(
@@ -402,6 +403,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                         }, allow_nan=False) + "\n")
                         journal.flush()
                 if (decision.selected is not None and target is not None
+                        and (supervisor.track_id is None
+                             or target.track_id == supervisor.track_id)
                         and decision.action in ("FOLLOW_ELIGIBLE", "HOLD")
                         and post_turn_reobserve_after_s is None):
                     last_verified_range = (
