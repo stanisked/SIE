@@ -1,9 +1,9 @@
 # SIEE / Fast Shadow / Graphify: технический контекст и журнал продолжения
 
-**Версия документа:** 1.1  
-**Срез знаний:** 2026-11-16 (UART v2 / ESP32 physical steering; Graphify rebuilt at db8097e)
+**Версия документа:** 1.2  
+**Срез знаний:** 2026-11-17 (physical FOLLOW/STEER, RGB edge recovery and ESP32 v7 braking; Graphify snapshot still 2026-11-16/db8097e)
 **Проект:** Spatial Intelligence Evidence Engine (SIEE; технические идентификаторы `sie` сохраняются)  
-**Основная инженерная ветка для этого handoff:** `codex/shadow-turtlesim-follow-20261111`  
+**Основная ветка восстановления:** `codex/shadow-turtlesim-follow-20261111`; **последняя ветка исполняемых изменений:** `codex/shadow-short-segment-brake-v7-20261117` (не слита автоматически в baseline)  
 **Назначение:** передача накопленного инженерного контекста между ChatGPT, Codex и другими LLM; сохранение истории проверенных решений и экспериментов; использование Graphify для ускорения разработки мобильного MVP.  
 **Статус:** рабочий handoff, **не** Engineering Specification, не разрешение на физическое движение и не замена `PROJECT_CONTEXT.md`.  
 **Репозиторий:** `https://github.com/stanisked/SIE`  
@@ -16,6 +16,27 @@
 > **Принцип документа:** писать только то, что подтверждено конкретным исходником, тестом, журналом или сообщением оператора. Разделять **ФАКТ**, **ГИПОТЕЗА**, **РЕШЕНИЕ** и **НЕ ПРОВЕРЕНО**. Указывать источник и состояние кода, к которому относится утверждение. Не переписывать прошлое задним числом: новые результаты добавлять в журнал изменений.
 
 ---
+
+
+## 2026-11-17: экспериментальная ветка и проверенный физический контур (FACT / OPEN)
+
+**Источник точного итогового checkpoint:** `docs/diagnostics/siee_status_20261117.md`, идентичный файл в восстановительной baseline-ветке и ветке v7. При восстановлении сравнивать со свежим `PROJECT_CONTEXT.md`; здесь записаны зависимости, результаты и ограничения для работы с Graphify и кодом. Не подменять этим подтверждённые калибровки и Data Contracts.
+
+**Ветки:** `codex/shadow-turtlesim-follow-20261111` остаётся назначенной исходной точкой восстановления. Код RGB Edge Recovery и timing replay находится в `codex/shadow-rgb-edge-recovery-20261117`. Её descendant `codex/shadow-short-segment-brake-v7-20261117` содержит актуальную v7 firmware и Python UART compatibility, но сама baseline-ветка 20261111 не получила скрытого слияния этих исполняемых изменений. После синхронизации документа обе ветки содержат этот журнал продолжения.
+
+**Физический FOLLOW/STEER:** `bridge(3).jsonl` (157 JSONL сообщений, операторское напольное испытание 17-Nov) содержит 6 моторных сегментов, 4 STEER, один идентификатор AR0234 `ar0234-audit-track:8144989e0438cf10:1`, последовательно измеренную экспериментальную person-depth от ~1.740 м до ~0.732 м. Оператор видел реальную смену ориентации у края RGB кадра уже после остановки движения вперёд. Но ни одного `/shadow-turn` в журнале нет; `shadow_turns_started=0`. Записывать физическое подруливание как успешный independent `RGB Edge Recovery TURN` запрещено без нового измерения.
+
+**ESP32 v5 короткий сегмент:** команда 0.042 м, начало BRAKING при 0.0466 м, финиш по энкодерам 0.0635 м, `STEERED_CENTER_LIMIT` после прежнего hard envelope 0.062 м. Fail-safe остановка PWM 0/0 не означает успешного follow standoff.
+
+**Edge Recovery software:** same-ID RGB edge hint + prior associated depth для одного bounded paused turn <=8°, 3.0 с maximum age **только для TURN**, fresh paired RGB/Depth mandatory before forward; different or reidentified ID refuses cached edge; 13/13 targeted tests PASS. Отдельный физический turn и post-turn continued follow OPEN.
+
+**ESP32 v7:** `firmware/esp32/traction_control_v4_2_uart_shadow_v7_short_forward_brake/` включает independent early brake на 0.100-м-и-короче steered-forward сегментах в STARTING, без увеличения hard wheel/center/heading limits. Четыре targeted tests PASS. Собрана/записана через ноутбук и Arduino IDE 2.3.11, `ESP32 Dev Module`, `/dev/ttyUSB0`: 508199 B flash, 72320 B globals, `Hash of data verified`. После подключения обратно к Pi через `/dev/ttyAMA0`: UART GET /status HTTP 200, `firmware_build_id=v4_2_uart_shadow_v7_short_forward_brake`, READY/fault=None/PWM0/0.
+
+**Сравнимые одиночные v7 тесты 0.042 м:** raised wheels: ранний trigger=26 counts при threshold=26, settled travel=0.0193 м, `PARTIAL_PROGRESS`, no fault. На полу: trigger=27/26, settled travel=0.0228 м, `PARTIAL_PROGRESS`, no fault. Это подтверждает раннее электрическое торможение, **но не завершение требуемого 42-мм движения**. В реально прошитой v7 `STEERED_SHORT_BRAKE_RESERVE_M=0.030f`; значение `0.017f` обсуждалось как **ГИПОТЕЗА для следующей ревизии**, не записано в бинарник и не тестировалось. Не считать прогноз ~35 мм физическим замером.
+
+**Обязательная проверка при продолжении:** следующее действие — отдельная, явно различимая ревизия для настройки short forward brake, Arduino IDE Verify/Upload по уже установленному маршруту (Pi scp → ноутбук → IDE), один поднятый и один напольный bounded test с журналом PWM, fault, final encoder counts и terminal `SUCCESS`/`PARTIAL_PROGRESS`. Только после повторно проверенного короткого сегмента можно возвращаться к отдельному `SHADOW_TURN` / fresh RGB-OV9281 pair / `RESUME`. Диапазон диагностической дальности 0.5–4.5 м, цель остановки 0.5 м от переднего борта, LiDAR D500 fusion ещё OPEN.
+
+**Graphify snapshot boundary:** приватная папка `Graphify_AST_db8097e_20261116` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`) отражает только commit `db8097ea4239dcf45ef7598c831a45648d2498fd`, 4599 nodes / 13658 edges / 300 communities. Инкрементальная индексация исходников 17-Nov **не проводилась**; граф 16-Nov остаётся историческим, даже после сегодняшних правок Markdown. Не переписывать его `GRAPH_REPORT.md` как будто он построен по v7.
 
 ## 2026-11-16: ESP32 UART v2 Initial Bias and bilateral physical steering (FACT / OPEN)
 
