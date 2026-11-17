@@ -396,9 +396,9 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     }, allow_nan=False) + "\n")
                     journal.flush()
                     last_decision_key = decision_key
-                # RGB-only edge guidance records orientation recovery need.
-                # UART v3 has no paused in-place TURN endpoint; do not
-                # improvise an unsafe forward segment to chase the edge.
+                # RGB-only edge guidance cannot authorize forward motion.
+                # v4 may perform one bounded turn from settled PAUSED only,
+                # when a recent same-ID stereo clearance also exists.
                 if (latest is not None and
                         latest.edge_recovery_bearing_deg is not None
                         and decision.action == "PAUSE"
@@ -413,7 +413,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             "turn_direction": ("RIGHT" if
                                 latest.edge_recovery_bearing_deg > 0 else "LEFT"),
                             "motor_operation": None,
-                            "reason": "UART_V3_HAS_NO_PAUSED_TURN",
+                            "reason": ("EDGE_TURN_CANDIDATE" if enable_edge_turn
+                                       else "EDGE_TURN_NOT_ENABLED"),
                         }, allow_nan=False) + "\n")
                         journal.flush()
                     last_edge_recovery_track = recovery_track
@@ -436,15 +437,28 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             and decision.action == "PAUSE"
                             and decision.reason == "NO_FRESH_ASSOCIATED_RANGE"
                             and target is not None and target.track_id == supervisor.track_id):
-                        recovery = select_edge_turn(
-                            target, latest.edge_recovery_bearing_deg,
-                            last_verified_range, now)
+                        # Re-read the async source after UART status polling.
+                        # Never authorize a turn using a frame that became
+                        # stale while waiting for ESP32 acknowledgement.
+                        edge_now = (latest_observation()
+                                    if latest_observation is not None
+                                    else latest)
+                        recovery = None
+                        if (edge_now is not None
+                                and not edge_now.camera_encoder_disagreement
+                                and edge_now.target is not None
+                                and edge_now.target.track_id == supervisor.track_id
+                                and edge_now.edge_recovery_bearing_deg is not None
+                                and not edge_now.ranges):
+                            recovery = select_edge_turn(
+                                edge_now.target, edge_now.edge_recovery_bearing_deg,
+                                last_verified_range, clock())
                         if recovery is not None:
                             direction, angle = recovery
                             intent = supervisor.turn(direction, angle)
                             report["operations"].append("TURN")
                             report["edge_turns_started"] += 1
-                            issue(intent, target)
+                            issue(intent, edge_now.target)
                             post_turn_reobserve_after_s = clock()
                             last_verified_range = None
                             continue
