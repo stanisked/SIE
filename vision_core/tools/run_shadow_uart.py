@@ -382,8 +382,13 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     expected_lidar_calibration_id=lidar_calibration_id,
                     minimum_confidence=minimum_confidence)
                 if post_turn_reobserve_after_s is not None:
-                    if (target is None or decision.selected is None
-                            or target.track_id != supervisor.track_id
+                    if (target is not None
+                            and target.track_id != supervisor.track_id
+                            and decision.action == "FOLLOW_ELIGIBLE"):
+                        # Preserve the new-ID decision so the existing
+                        # track-change STOP path can end this session.
+                        pass
+                    elif (target is None or decision.selected is None
                             or target.observed_s <= post_turn_reobserve_after_s
                             or decision.selected.observed_s <= post_turn_reobserve_after_s):
                         decision = RangeDecision(
