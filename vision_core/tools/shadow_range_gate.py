@@ -18,11 +18,30 @@ FRONT_FRAME = "cart_front_to_person_surface"
 # collision-free stand-off; these ranges remain experimental diagnostics.
 STEREO_SUPERVISED_MIN_M = 1.0
 STEREO_SUPERVISED_MAX_M = 2.5
+# Close range is allowed to *stop/hold* only, never to permit forward motion.
+STEREO_SUPERVISED_CLOSE_HOLD_MIN_M = 0.5
 SHADOW_STOP_DISTANCE_M = 1.0
 SHADOW_RESUME_MARGIN_M = 0.15
 SHADOW_COMMAND_CLEARANCE_M = 0.02
 SHADOW_MIN_SEGMENT_M = 0.02
 assert STEREO_SUPERVISED_MIN_M <= SHADOW_STOP_DISTANCE_M
+
+
+def admit_supervised_stereo_distance(distance_m: float,
+                                     decision: "RangeDecision") -> bool:
+    """Motion admission at >=1.0 m, close-range stopping only at >=0.5 m.
+
+    The range gate must have already checked a current RGB/stereo association.
+    An untrusted range never becomes a motor command. HOLD never starts motors.
+    """
+    if (type(distance_m) not in (float, int)
+            or not math.isfinite(distance_m)
+            or not STEREO_SUPERVISED_CLOSE_HOLD_MIN_M <= distance_m <= STEREO_SUPERVISED_MAX_M):
+        return False
+    if decision.action == "HOLD":
+        return True
+    return (decision.action == "FOLLOW_ELIGIBLE"
+            and distance_m >= STEREO_SUPERVISED_MIN_M)
 
 
 @dataclass(frozen=True)
