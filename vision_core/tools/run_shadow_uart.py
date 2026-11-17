@@ -32,6 +32,7 @@ class ShadowObservation:
     target: RgbTarget | None
     ranges: tuple[TargetRange, ...]
     camera_encoder_disagreement: bool = False
+    edge_recovery_bearing_deg: float | None = None
 
 
 def run_session(*, request, observations, journal_path, rgb_calibration_id,
@@ -126,13 +127,15 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 fault_latched=body.get("bounded_fault_latched") or
                               body.get("steered_safety_latched"))
 
-        def fresh_steering_bias(expected_track_id):
-            """Return bearing only from a current, matching RGB/stereo sample."""
+        def fresh_steering_observation(expected_track_id, after_observed_s):
+            """New current same-person range only, never RGB-edge-only guidance."""
             candidate = latest_observation() if latest_observation is not None else None
-            if candidate is None or candidate.camera_encoder_disagreement:
+            if (candidate is None or candidate.camera_encoder_disagreement
+                    or candidate.edge_recovery_bearing_deg is not None):
                 return None
             target = candidate.target
-            if target is None or target.track_id != expected_track_id:
+            if (target is None or target.track_id != expected_track_id
+                    or target.observed_s <= after_observed_s):
                 return None
             decision = select_target_range(target, list(candidate.ranges), clock(),
                 expected_rgb_calibration_id=rgb_calibration_id,
@@ -140,7 +143,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 minimum_confidence=minimum_confidence)
             if decision.action != "FOLLOW_ELIGIBLE":
                 return None
-            return max(-20, min(20, round(target.bearing_deg * 4)))
+            return target, decision
 
         def issue(intent, original_target=None, selected_range=None):
             nonlocal last_steer_at
@@ -234,6 +237,25 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             transition_seq=observed[seq_key])
                         if intent.operation == "STEER":
                             last_steer_at = clock()
+                        elif intent.operation in ("START", "RESUME"):
+                            # The ROS producer continued while UART STARTING.
+                            # Send one newly observed steering correction as
+                            # soon as the controller confirms DRIVING. No
+                            # duplicate sample and no edge-only bearing.
+                            fresh = fresh_steering_observation(
+                                intent.command_id and supervisor.track_id,
+                                original_target.observed_s)
+                            if fresh is not None:
+                                newest_target, newest_decision = fresh
+                                newest_bias = max(-20, min(20,
+                                    round(newest_target.bearing_deg * 4)))
+                                if newest_bias != intent.bias_pwm:
+                                    steer = supervisor.observe(
+                                        newest_target, newest_decision,
+                                        bias_pwm=newest_bias)
+                                    if steer is not None and steer.operation == "STEER":
+                                        report["operations"].append("STEER")
+                                        issue(steer, newest_target, newest_decision.selected)
                         return
                 if state in ("PAUSED", "READY") and intent.operation in ("PAUSE", "STOP"):
                     supervisor.acknowledge(intent,
@@ -283,6 +305,26 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     }, allow_nan=False) + "\n")
                     journal.flush()
                     last_decision_key = decision_key
+                # RGB-only edge guidance records orientation recovery need.
+                # UART v3 has no paused in-place TURN endpoint; do not
+                # improvise an unsafe forward segment to chase the edge.
+                if (latest is not None and
+                        latest.edge_recovery_bearing_deg is not None
+                        and decision.action == "PAUSE"):
+                    recovery_key = ("EDGE_ORIENTATION_RECOVERY_REQUIRED",
+                                    target.track_id if target else None)
+                    if recovery_key != last_decision_key:
+                        journal.write(json.dumps({
+                            "event": "EDGE_ORIENTATION_RECOVERY_REQUIRED",
+                            "at_s": now,
+                            "track_id": target.track_id if target else None,
+                            "bearing_deg": latest.edge_recovery_bearing_deg,
+                            "turn_direction": ("RIGHT" if
+                                latest.edge_recovery_bearing_deg > 0 else "LEFT"),
+                            "motor_operation": None,
+                            "reason": "UART_V3_HAS_NO_PAUSED_TURN",
+                        }, allow_nan=False) + "\n")
+                        journal.flush()
                 # Poll every input tick: a bounded segment can end on its own.
                 observed = status()
                 reconcile(observed)
