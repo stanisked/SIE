@@ -51,9 +51,9 @@ class ShadowRangeGateTests(unittest.TestCase):
 
     def test_stop_distance_and_sensor_conflict(self):
         from dataclasses import replace
-        self.assertEqual(self.decide([replace(self.lidar, distance_m=.78)]).action,
+        self.assertEqual(self.decide([replace(self.lidar, distance_m=.50)]).action,
                          "HOLD")
-        self.assertEqual(self.decide([replace(self.lidar, distance_m=.91)]).action,
+        self.assertEqual(self.decide([replace(self.lidar, distance_m=.62)]).action,
                          "HOLD")
         self.assertEqual(self.decide([self.stereo,
                          replace(self.lidar, distance_m=.7)]).reason,
@@ -62,18 +62,18 @@ class ShadowRangeGateTests(unittest.TestCase):
     def test_supervised_hold_overlaps_admitted_stereo_range(self):
         from dataclasses import replace
         self.assertLessEqual(STEREO_SUPERVISED_MIN_M, SHADOW_STOP_DISTANCE_M)
-        for distance in (1.0, 1.10, 1.15):
+        for distance in (0.50, 0.60, 0.65):
             with self.subTest(distance=distance):
                 result = self.decide([replace(self.stereo, distance_m=distance)])
                 self.assertEqual(result.action, "HOLD")
-        self.assertEqual(self.decide([replace(self.stereo, distance_m=1.19)]).reason,
+        self.assertEqual(self.decide([replace(self.stereo, distance_m=.69)]).reason,
                          "NEXT_SEGMENT_CLEARANCE_TOO_SMALL")
-        self.assertEqual(self.decide([replace(self.stereo, distance_m=1.20)]).action,
+        self.assertEqual(self.decide([replace(self.stereo, distance_m=.70)]).action,
                          "FOLLOW_ELIGIBLE")
 
     def test_follow_always_has_minimum_bounded_segment_clearance(self):
         from dataclasses import replace
-        for distance in (1.16, 1.18, 1.19, 1.19001, 1.20, 1.5, 2.5):
+        for distance in (.50, .64, .66, .68, .69, .69001, .70, .72, 1.5, 2.5, 4.5):
             with self.subTest(distance=distance):
                 result = self.decide([replace(self.stereo, distance_m=distance)])
                 if result.action == "FOLLOW_ELIGIBLE":
@@ -85,20 +85,22 @@ class ShadowRangeGateTests(unittest.TestCase):
 
     def test_close_range_is_hold_only_not_forward_admission(self):
         from dataclasses import replace
-        close = self.decide([replace(self.stereo, distance_m=.865)])
+        close = self.decide([replace(self.stereo, distance_m=.565)])
         self.assertEqual(close.action, "HOLD")
-        self.assertTrue(admit_supervised_stereo_distance(.865, close))
-        self.assertFalse(admit_supervised_stereo_distance(.865,
+        self.assertTrue(admit_supervised_stereo_distance(.565, close))
+        self.assertFalse(admit_supervised_stereo_distance(.565,
             RangeDecision("FOLLOW_ELIGIBLE", "INVALID_OVERRIDE")))
-        self.assertFalse(admit_supervised_stereo_distance(.865,
+        self.assertFalse(admit_supervised_stereo_distance(.565,
             RangeDecision("PAUSE", "NO_FRESH_ASSOCIATED_RANGE")))
+        self.assertFalse(admit_supervised_stereo_distance(.69,
+            RangeDecision("FOLLOW_ELIGIBLE", "INVALID_OVERRIDE")))
         self.assertFalse(admit_supervised_stereo_distance(.49, close))
         self.assertFalse(admit_supervised_stereo_distance(4.51, close))
         follow = self.decide([replace(self.stereo, distance_m=1.5)])
         self.assertEqual(follow.action, "FOLLOW_ELIGIBLE")
         self.assertTrue(admit_supervised_stereo_distance(1.5, follow))
         # Don't cherry-pick a near range: admit the entire calibrated
-        # diagnostic interval while leaving the close-range HOLD intact.
+        # diagnostic interval while leaving 0.5 m HOLD and clearance intact.
         for distance in (2.51, 3.0, 4.0, 4.5):
             with self.subTest(distance=distance):
                 candidate = self.decide([replace(self.stereo, distance_m=distance)])
