@@ -362,6 +362,8 @@ def main() -> None:
     parser.add_argument("--segment-m", type=float, default=.40)
     parser.add_argument("--minimum-confidence", type=float, default=.40)
     parser.add_argument("--max-segments", type=int, default=None)
+    parser.add_argument("--edge-turn", action="store_true",
+                        help="Supervised single bounded in-place turn on fresh RGB edge; requires v4 UART firmware")
     parser.add_argument("--journal", type=Path, required=True)
     parser.add_argument("--serial-port", default="/dev/ttyAMA0")
     parser.add_argument("--source", choices=("dynamic_audit", "fast_mask"),
@@ -377,6 +379,11 @@ def main() -> None:
         help="Use diagnostic torso-core range only in a supervised experiment"
     )
     args = parser.parse_args()
+    if args.edge_turn and not (args.execute and args.supervised_experimental
+                               and args.source == "fast_mask"
+                               and args.semantic_source == "segmentation_mask"
+                               and not args.continuous):
+        parser.error("--edge-turn requires supervised fast_mask execution (not --continuous)")
     if args.supervised_experimental:
         if not (args.execute and args.source == "fast_mask"
                 and args.semantic_source == "segmentation_mask"):
@@ -516,7 +523,8 @@ def main() -> None:
                         rgb_calibration_id=AR_INTRINSIC_SHA256,
                         segment_m=args.segment_m,
                         max_segments=args.max_segments,
-                        minimum_confidence=args.minimum_confidence)
+                        minimum_confidence=args.minimum_confidence,
+                        enable_edge_turn=args.edge_turn)
 
                     print(json.dumps(report, allow_nan=False), flush=True)
 
