@@ -20,6 +20,8 @@ class ShadowIntent:
     bias_pwm: int = 0
     range_source: str | None = None
     association_evidence_id: str | None = None
+    turn_direction: str | None = None
+    turn_angle_deg: float | None = None
 
 
 class ShadowSupervisor:
@@ -72,6 +74,23 @@ class ShadowSupervisor:
             return self._issue("STEER", bias_pwm, decision)
         return None
 
+    def turn(self, direction: str, angle_deg: float) -> ShadowIntent:
+        """One bounded in-place turn from a confirmed paused motor session.
+
+        Caller must separately check fresh same-person RGB edge evidence,
+        physical separation, turn budget and controller readiness.
+        """
+        if self.pending is not None or self.state != "PAUSED" or not self.track_id:
+            raise ValueError("SHADOW_TURN_REQUIRES_PAUSED_TRACK")
+        if direction not in ("LEFT", "RIGHT") or not 1.0 <= angle_deg <= 10.0:
+            raise ValueError("INVALID_SHADOW_TURN")
+        self.seq += 1
+        intent = ShadowIntent("TURN", self.boot_session_id,
+                              self.command_id, self.seq,
+                              turn_direction=direction, turn_angle_deg=angle_deg)
+        self.pending = intent
+        return intent
+
     def _issue(self, operation, bias_pwm=0, decision=None):
         if operation == "STEER":
             self.steer_seq += 1
@@ -112,7 +131,7 @@ class ShadowSupervisor:
             return
         if intent.operation == "STOP":
             expected_state, expected_id, next_state = "READY", None, "TERMINAL"
-        elif intent.operation == "PAUSE":
+        elif intent.operation in ("PAUSE", "TURN"):
             expected_state, expected_id, next_state = "PAUSED", self.command_id, "PAUSED"
         else:
             expected_state, expected_id, next_state = "DRIVING", self.command_id, "ACTIVE"
@@ -120,7 +139,7 @@ class ShadowSupervisor:
             raise ValueError("SHADOW_STATE_NOT_CONFIRMED")
         if intent.operation == "STOP" and last_command_id != self.command_id:
             raise ValueError("SHADOW_STOP_ID_NOT_CONFIRMED")
-        if intent.operation in ("PAUSE", "STOP") and (right_pwm or left_pwm):
+        if intent.operation in ("PAUSE", "TURN", "STOP") and (right_pwm or left_pwm):
             raise ValueError("SHADOW_BRAKE_NOT_CONFIRMED")
         self.state = next_state
         self.pending = None
