@@ -16,6 +16,7 @@ import time
 from vision_core.tools.run_shadow_uart import ShadowObservation, run_session
 from vision_core.tools.shadow_range_gate import (
     ACTIVE_STEREO_SHA256, FRONT_FRAME, RgbTarget, TargetRange,
+    STEREO_SUPERVISED_MIN_M, STEREO_SUPERVISED_MAX_M,
     select_target_range,
 )
 from vision_core.tools.uart_http_transport import UartHttp
@@ -85,7 +86,7 @@ def observation_from_audit(audit: dict, *, rim_forward_of_optical_center_m: floa
     return ShadowObservation(target, (rng,))
 
 
-def live_audits(node, *, duration_s: float, topic: str = AUDIT_TOPIC):
+def live_audits(node, *, duration_s: float | None, topic: str = AUDIT_TOPIC):
     """Yield latest audit or a no-target tick; never replay a consumed cycle."""
     import rclpy
     from std_msgs.msg import String
@@ -109,7 +110,8 @@ def live_audits(node, *, duration_s: float, topic: str = AUDIT_TOPIC):
             rclpy.spin_once(node, timeout_sec=.05)
             current, pending = pending, None
             if current is not None and deadline is None:
-                deadline = time.monotonic() + duration_s
+                deadline = (float("inf") if duration_s is None else
+                            time.monotonic() + duration_s)
             yield current
     finally:
         node.destroy_subscription(subscription)
@@ -311,6 +313,8 @@ def main() -> None:
     parser.add_argument("--front-rim-forward-of-optical-m", type=float, required=True,
                         help="Measured optical-centre to front-rim forward component, in metres")
     parser.add_argument("--duration-s", type=float, default=30.)
+    parser.add_argument("--continuous", action="store_true",
+                        help="Keep supervised SHADOW active until operator stop or refusal")
     parser.add_argument("--segment-m", type=float, default=.40)
     parser.add_argument("--minimum-confidence", type=float, default=.40)
     parser.add_argument("--max-segments", type=int, default=None)
@@ -339,6 +343,8 @@ def main() -> None:
         parser.error("fast-mask requires the exact reviewed segmentation model SHA-256")
     if not math.isfinite(args.duration_s) or args.duration_s <= 0:
         parser.error("duration must be positive")
+    if args.continuous and (not args.execute or args.max_segments is not None):
+        parser.error("--continuous requires --execute and no --max-segments")
     if not .02 <= args.segment_m <= .40:
         parser.error("segment must be in 0.02..0.40 m")
     if not math.isfinite(args.minimum_confidence) or not 0 < args.minimum_confidence <= 1:
@@ -354,7 +360,8 @@ def main() -> None:
     profile_sha = front_profile_sha256() if args.source == "fast_mask" else None
     try:
         def observations():
-            for entry in live_audits(node, duration_s=args.duration_s,
+            for entry in live_audits(node, duration_s=(None if args.continuous
+                                                 else args.duration_s),
                                      topic=FAST_TOPIC if args.source == "fast_mask" else AUDIT_TOPIC):
                 if entry is None:
                     if not args.execute:
@@ -403,7 +410,8 @@ def main() -> None:
                         and len(observation.ranges) == 1
                         and observation.ranges[0].source == "OV9281"
                         and observation.ranges[0].target_track_id == observation.target.track_id
-                        and 1.0 <= observation.ranges[0].distance_m <= 2.5
+                        and STEREO_SUPERVISED_MIN_M <= observation.ranges[0].distance_m
+                                <= STEREO_SUPERVISED_MAX_M
                     )
                     if not admitted:
                         observation = ShadowObservation(None, ())
@@ -453,6 +461,16 @@ def main() -> None:
                         minimum_confidence=args.minimum_confidence)
 
                     print(json.dumps(report, allow_nan=False), flush=True)
+
+                    # Track change must not silently authorize another person
+                    # during one continuous SHADOW operation.
+                    if (args.continuous and
+                            report.get("reason") == "NEW_TRACK_REQUIRES_NEW_SESSION"):
+                        print(json.dumps({
+                            "event": "OPERATOR_REACQUIRE_REQUIRED",
+                            "reason": "RGB_TRACK_CHANGED"
+                        }), flush=True)
+                        break
 
                     if not (
                         report.get("result") == "SESSION_ENDED"
