@@ -276,6 +276,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             ("SUCCESS", "PARTIAL_PROGRESS")
                         and observed.get("right_pwm") == 0
                         and observed.get("left_pwm") == 0):
+                    if observed["shadow_turn_result"] != "SUCCESS":
+                        raise RuntimeError("SHADOW_TURN_PARTIAL_REOBSERVE_REQUIRED")
                     supervisor.acknowledge(intent,
                         boot_session_id=observed["boot_session_id"],
                         active_command_id=observed.get("active_command_id"),
