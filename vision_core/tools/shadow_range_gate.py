@@ -14,6 +14,16 @@ ACTIVE_STEREO_SHA256 = "39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e0446861
 SOURCES = frozenset({"OV9281", "LIDAR"})
 FRONT_FRAME = "cart_front_to_person_surface"
 
+# Conservative common policy for supervised SHADOW. Not a validated
+# collision-free stand-off; these ranges remain experimental diagnostics.
+STEREO_SUPERVISED_MIN_M = 1.0
+STEREO_SUPERVISED_MAX_M = 2.5
+SHADOW_STOP_DISTANCE_M = 1.0
+SHADOW_RESUME_MARGIN_M = 0.15
+SHADOW_COMMAND_CLEARANCE_M = 0.02
+SHADOW_MIN_SEGMENT_M = 0.02
+assert STEREO_SUPERVISED_MIN_M <= SHADOW_STOP_DISTANCE_M
+
 
 @dataclass(frozen=True)
 class RgbTarget:
@@ -47,8 +57,8 @@ def select_target_range(target: RgbTarget | None, ranges: list[TargetRange],
                         now_s: float, *, max_age_s: float = .5,
                         max_pair_skew_s: float = .2,
                         minimum_confidence: float = .8,
-                        stop_distance_m: float = .8,
-                        resume_margin_m: float = .15,
+                        stop_distance_m: float = SHADOW_STOP_DISTANCE_M,
+                        resume_margin_m: float = SHADOW_RESUME_MARGIN_M,
                         expected_rgb_calibration_id: str,
                         expected_lidar_calibration_id: str | None = None) -> RangeDecision:
     """Admit a fresh range for the same current RGB target, regardless of sensor.
@@ -106,4 +116,10 @@ def select_target_range(target: RgbTarget | None, ranges: list[TargetRange],
         return RangeDecision("HOLD", "TARGET_WITHIN_STOP_DISTANCE", selected)
     if selected.distance_m <= stop_distance_m + resume_margin_m:
         return RangeDecision("HOLD", "WITHIN_RESUME_MARGIN", selected)
+    # No command should be issued when the smallest bounded segment and the
+    # observation reserve will not fit beyond the hold boundary.
+    min_follow_range_m = (stop_distance_m + resume_margin_m +
+                          SHADOW_COMMAND_CLEARANCE_M + SHADOW_MIN_SEGMENT_M)
+    if selected.distance_m <= min_follow_range_m:
+        return RangeDecision("HOLD", "NEXT_SEGMENT_CLEARANCE_TOO_SMALL", selected)
     return RangeDecision("FOLLOW_ELIGIBLE", "FRESH_ASSOCIATED_RANGE", selected)
