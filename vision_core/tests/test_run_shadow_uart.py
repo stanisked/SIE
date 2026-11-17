@@ -70,6 +70,54 @@ class FakeController:
 
 
 class ShadowRunnerTests(unittest.TestCase):
+    def test_new_rgb_during_uart_start_updates_steering_in_driving(self):
+        clock, controller = FakeClock(), FakeController()
+        original = RgbTarget("person-7", 9.90, -5., .95, "rgb-v5")
+        initial_range = TargetRange("OV9281", "person-7", 9.90, 1.5, .9,
+            FRONT_FRAME, "39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52",
+            "association-1")
+        newest = RgbTarget("person-7", 10.0, 3., .95, "rgb-v5")
+        newest_range = TargetRange("OV9281", "person-7", 10.0, 1.5, .9,
+            FRONT_FRAME, initial_range.calibration_id, "association-2")
+        with tempfile.TemporaryDirectory() as directory:
+            report = run_session(request=controller,
+                observations=[ShadowObservation(original, (initial_range,))],
+                latest_observation=lambda: ShadowObservation(newest, (newest_range,)),
+                journal_path=Path(directory) / "shadow.jsonl",
+                clock=clock, rgb_calibration_id="rgb-v5",
+                lock_path=Path(directory) / "operator.lock")
+        self.assertEqual(report["result"], "SESSION_ENDED")
+        self.assertEqual(report["operations"], ["START", "STEER"])
+        self.assertEqual([(path, a.get("bias_pwm")) for path,a in controller.posts
+                          if path in ("/shadow-start", "/steer-update")],
+                         [("/shadow-start", "-20"), ("/steer-update", "12")])
+        self.assertEqual(controller.posts[-1][0], "/stop")
+
+    def test_rgb_edge_guidance_pauses_without_forward_or_turn(self):
+        clock, controller = FakeClock(), FakeController()
+        rgb = RgbTarget("person-7", clock(), 0., .95, "rgb-v5")
+        rng = TargetRange("OV9281", "person-7", clock(), 1.5, .9,
+            FRONT_FRAME, "39e1520efd2c589009426312c6968c79cc9c3896e6c3a2c7e044686106eb7d52",
+            "association-1")
+        edge = RgbTarget("person-7", 10.2, 13., .95, "rgb-v5")
+        def stream():
+            yield ShadowObservation(rgb, (rng,))
+            clock.now += .2
+            yield ShadowObservation(edge, (), edge_recovery_bearing_deg=13.)
+        with tempfile.TemporaryDirectory() as directory:
+            journal = Path(directory) / "shadow.jsonl"
+            report = run_session(request=controller, observations=stream(),
+                journal_path=journal, clock=clock, rgb_calibration_id="rgb-v5",
+                lock_path=Path(directory) / "operator.lock")
+            events = [__import__("json").loads(line) for line in
+                      journal.read_text().splitlines()]
+        self.assertEqual(report["operations"], ["START", "PAUSE"])
+        self.assertEqual([path for path,_ in controller.posts],
+                         ["/shadow-start", "/shadow-pause", "/stop"])
+        self.assertEqual(len([row for row in events if row.get("event")
+                              == "EDGE_ORIENTATION_RECOVERY_REQUIRED"]), 1)
+        self.assertEqual(events[-1]["summary"]["final_status"]["right_pwm"], 0)
+
     def test_experimental_confidence_and_segment_fit(self):
         clock, controller = FakeClock(), FakeController()
         rgb = RgbTarget("person-7", clock(), 0., .5, "rgb-v5")
