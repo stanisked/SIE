@@ -311,7 +311,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 # improvise an unsafe forward segment to chase the edge.
                 if (latest is not None and
                         latest.edge_recovery_bearing_deg is not None
-                        and decision.action == "PAUSE"):
+                        and decision.action == "PAUSE"
+                        and decision.reason == "NO_FRESH_ASSOCIATED_RANGE"):
                     recovery_track = target.track_id if target else None
                     if recovery_track != last_edge_recovery_track:
                         journal.write(json.dumps({
