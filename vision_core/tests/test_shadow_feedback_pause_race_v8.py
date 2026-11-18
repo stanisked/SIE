@@ -62,6 +62,10 @@ class FeedbackBrakeController(FakeController):
             self.remote_pending = True
             return 409, {"accepted": False,
                          "reason": "NO_MATCHING_ACTIVE_STEERED_FORWARD"}
+        if method == "POST" and path == "/stop":
+            # FakeController completes STOP synchronously in READY. The
+            # emulated brake observer must also be settled at that point.
+            self.remote_pending = False
         if method == "GET" and self.state == "BRAKING":
             self.brake_polls += 1
             if self.brake_polls >= 3:
