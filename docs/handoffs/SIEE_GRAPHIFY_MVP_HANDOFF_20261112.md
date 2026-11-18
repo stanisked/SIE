@@ -1,5 +1,18 @@
 # SIEE / Fast Shadow / Graphify: технический контекст и журнал продолжения
 
+## Точка передачи 18.11.2026: SHADOW физический цикл и гонки UART
+
+**ФАКТ.** На физической ESP32 v8 (v4_2_uart_shadow_v8_short_forward_completion) подтверждён цикл FOLLOW -> PAUSE -> ограниченный RIGHT TURN (запрос 8°, PARTIAL_PROGRESS по энкодерной оценке около 3,3°) -> новая RGB/Depth того же Track ID на 1,161 м -> RESUME -> STEER. Источник: bridge(10).jsonl, evidence shadow_fast_20261118_201055. За сессию 8 поступательных сегментов, 7 RESUME, 5 STEER, 1 TURN; итог READY, PWM 0/0, без FAULT. При этом 3 FEEDBACK_TIMEOUT и 7 RGB_TARGET_INVALID_OR_STALE PAUSE остаются фактами этого прогона.
+
+**ФАКТ.** Motor-off shadow_fast_20261118_194958: 222 camera cycles, 66 RGB_EDGE_RECOVERY_NO_RANGE и 6 эпизодов у левого/правого краёв. Во всех шести сохранён прежний RGB Track ID и после возвращения появилась допустимая RGB/Depth-пара. Отдельный HELD_RGB_ID_REACQUIRED не активировался; не объявлять его проверенным в live.
+
+**ФАКТ, локальные Python тесты после физического прогона.** Обработчик PARTIAL_PROGRESS принимает завершённый поворот, но запрещает RESUME по старой глубине; отдельная программная регрессия 6 PASS. Две гонки с блокирующим UART /status исправлены в локальном run_shadow_uart.py: ложный PAUSE предотвращается только новым разрешённым наблюдением, а устаревший после /status STEER отклоняется; 20/20 штатных тестов и 3 совместных сценария задержек UART PASS. Моторы после этих двух патчей ещё НЕ проверены. Не переносить результаты mock-тестов в статус физического MVP.
+
+**Граница архитектуры.** AR0234 RGB -> OV9281 stereo -> ShadowSupervisor -> GPIO UART /dev/ttyAMA0 -> ESP32 остаётся экспериментальным исполнительным контуром. Stereo stable torso-core front diagnostic-only, не канонический SIE Measurement; LiDAR ещё не интегрирован. 500 мс freshness, 700 мс watchdog, same-ID, post-turn fresh pair и запрет STEER во время STARTING сохраняются. 0,5 м STOP -> WAIT -> RESUME на полу НЕ подтверждены.
+
+**Git и следующий чат.** Удалённая база: codex/shadow-short-segment-brake-v7-20261117. Данная ветка docs/siee-shadow-handoff-20261118 обновляет только документы; фактические изменения на Pi в /home/elwis/dev_ws/sie_shadow_follow_tools могут быть незакоммичены. Следующий инженерный шаг: сохранить и опубликовать локальный diff через проверенный runtime branch, затем провести 60-секундный supervised floor FOLLOW с v8, edge-turn и короткими 0.300 м сегментами, сравнив PAUSE/FEEDBACK_TIMEOUT с shadow_fast_20261118_201055. Ничего не перепрошивать и не менять калибровку без отдельного основания.
+
+
 **Версия документа:** 1.2  
 **Срез знаний:** 2026-11-17 (physical FOLLOW/STEER, RGB edge recovery and ESP32 v7 braking; Graphify snapshot still 2026-11-16/db8097e)
 **Проект:** Spatial Intelligence Evidence Engine (SIEE; технические идентификаторы `sie` сохраняются)  
