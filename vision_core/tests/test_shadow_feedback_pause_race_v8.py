@@ -98,7 +98,7 @@ class UartFeedbackRaceTests(unittest.TestCase):
                 seen = {"current": sample(10.0)}
 
                 def stream(clock):
-                    yield sample(10.0)
+                    yield sample(clock.now)
                     clock.now += .080
                     seen["current"] = sample(clock.now)
                     yield seen["current"]
@@ -115,10 +115,10 @@ class UartFeedbackRaceTests(unittest.TestCase):
 
     def test_409_feedback_brake_settles_to_pause_without_abort(self):
         controller = FeedbackBrakeController()
-        current = sample(10.10)
+        current = sample(10.0)
 
         def stream(clock):
-            yield sample(10.0)
+            yield sample(9.9)
 
         report, rows = self.run_case(controller, stream, lambda: current)
         self.assertEqual(report["result"], "SESSION_ENDED")
@@ -133,9 +133,9 @@ class UartFeedbackRaceTests(unittest.TestCase):
         controller = FeedbackBrakeController(reason="HOST_REQUEST")
 
         def stream(clock):
-            yield sample(10.0)
+            yield sample(9.9)
 
-        report, rows = self.run_case(controller, stream, lambda: sample(10.1))
+        report, rows = self.run_case(controller, stream, lambda: sample(10.0))
         self.assertEqual(report["result"], "STOPPED_ON_REFUSAL")
         self.assertIn("SHADOW_OPERATION_REJECTED", report.get("error", ""))
         self.assertEqual(report["feedback_timeout_pauses"], 0)
