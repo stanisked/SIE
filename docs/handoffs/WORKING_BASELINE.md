@@ -1,5 +1,14 @@
 # SIEE cart + Shadow: verified working baseline
 
+## 2026-11-18 handoff (FACT / NOT YET PROVED)
+
+Physical v8 edge-turn recovery is demonstrated in shadow_fast_20261118_201055: 8 forward segments, 7 RESUME, 5 STEER, 1 RIGHT edge-turn requested 8 degrees, controller settled PARTIAL_PROGRESS at ~3.3 degrees magnitude, fresh same-ID RGB/depth 1.161 m followed by RESUME. Final READY, PWM 0/0, no latched fault. Three FEEDBACK_TIMEOUT and seven stale-RGB pauses remain in that PRE-FIX physical journal.
+
+Later local Pi fixes: settled PARTIAL_PROGRESS treated as reobserve-required, then post-/status pair refresh in both PAUSE and FOLLOW directions. 20/20 regression tests passed; isolated 154 ms and 360 ms synthetic UART delay tests and three combined-race simulations PASS. These fixes have not yet been tested on the floor. Another motor-OFF run (shadow_fast_20261118_194958) confirmed same Track ID across 6 edge episodes / 66 edge cycles, with reacquired usable RGB/depth in all six. Not a canonical Measurement or forward authorization.
+
+Pi code worktree and installed v8 firmware are not shown by GitHub branch v7; review and push local changes separately. Documentation branch docs/siee-shadow-handoff-20261118 contains documentation only. Exact details and next checkpoint in PROJECT_CONTEXT.md (18 Nov section). Next: safe supervised full moving-person FOLLOW after race fixes; validate low stale-PAUSE/FEEDBACK_TIMEOUT count, then physical 0.5 m STOP/WAIT/auto-resume. Preserve 500 ms frame freshness and 700 ms ESP32 watchdog.
+
+
 This is a short navigation map for the next engineering session. It records
 demonstrated results and their limits, with links to the detailed evidence.
 Read it before proposing another latency optimization, straight-line motion
