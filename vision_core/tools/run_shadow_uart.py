@@ -136,7 +136,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
               "operations": [], "segments_started": 0,
               "reused_pair_refusals": 0,
               "measurement_admission_changed": False,
-              "edge_turns_started": 0}
+              "edge_turns_started": 0,
+              "feedback_timeout_pauses": 0}
     supervisor = None
     latest = None
     seen = 0
@@ -144,6 +145,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     last_applied_bias = None
     last_applied_pair = None
     last_segment_pair = None
+    first_driving_steer_needed = False
     last_decision_key = None
     last_edge_recovery_track = None
     last_verified_range = None
@@ -210,6 +212,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
 
         def issue(intent, original_target=None, selected_range=None):
             nonlocal last_steer_at, last_applied_bias, last_applied_pair
+            nonlocal first_driving_steer_needed
             endpoint = {"START": "/shadow-start", "PAUSE": "/shadow-pause",
                         "RESUME": "/shadow-resume", "STOP": "/shadow-stop",
                         "STEER": "/steer-update",
@@ -254,7 +257,12 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             or observed.get("active_command_id") != intent.command_id
                             or observed.get("bounded_fault_latched")
                             or observed.get("steered_safety_latched")
-                            or observed.get("remote_stop_pending")
+                            or (observed.get("remote_stop_pending") and not (
+                                observed.get("shadow_pause_reason") == "FEEDBACK_TIMEOUT"
+                                and observed.get("state") in ("BRAKING", "COASTING")
+                                and observed.get("right_pwm") == 0
+                                and observed.get("left_pwm") == 0
+                            ))
                         ):
                             break
                         if (
@@ -262,7 +270,19 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             and observed.get("right_pwm") == 0
                             and observed.get("left_pwm") == 0
                             and supervisor.state == "PAUSED"
+                            and not observed.get("remote_stop_pending")
                         ):
+                            if observed.get("shadow_pause_reason") == "FEEDBACK_TIMEOUT":
+                                first_driving_steer_needed = False
+                                report["feedback_timeout_pauses"] += 1
+                                journal.write(json.dumps({
+                                    "event": "SHADOW_FEEDBACK_TIMEOUT_SETTLED",
+                                    "at_s": clock(),
+                                    "command_id": intent.command_id,
+                                    "rejected_steer_seq": intent.transition_seq,
+                                    "right_pwm": 0, "left_pwm": 0,
+                                }, allow_nan=False) + "\n")
+                                journal.flush()
                             return
                         if (
                             observed.get("state") not in ("BRAKING", "COASTING")
@@ -353,7 +373,11 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             fault_latched=False,
                             transition_seq=observed[seq_key])
                         last_applied_bias = intent.bias_pwm
-                        if intent.operation == "STEER":
+                        if intent.operation in ("START", "RESUME"):
+                            first_driving_steer_needed = True
+                            last_steer_at = 0.0
+                        elif intent.operation == "STEER":
+                            first_driving_steer_needed = False
                             last_steer_at = clock()
                         if original_target is not None and selected_range is not None:
                             last_applied_pair = (
@@ -481,6 +505,32 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     last_edge_recovery_track = recovery_track
                 else:
                     last_edge_recovery_track = None
+                # Do not spend another blocking /status on the first freshly
+                # validated steering update after confirmed DRIVING.
+                if (supervisor.state == "ACTIVE"
+                        and first_driving_steer_needed
+                        and last_segment_pair is not None
+                        and latest_observation is not None):
+                    fresh = fresh_steering_observation(
+                        supervisor.track_id, last_segment_pair[0])
+                    if fresh is not None:
+                        current_target, current_decision = fresh
+                        first_bias = max(-20, min(20,
+                            round(current_target.bearing_deg * 4)))
+                        first_steer = supervisor.observe(
+                            current_target, current_decision,
+                            bias_pwm=first_bias)
+                        if first_steer is not None and first_steer.operation == "STEER":
+                            report["operations"].append("STEER")
+                            journal.write(json.dumps({
+                                "event": "SHADOW_FIRST_STEER_PRIORITY",
+                                "at_s": clock(),
+                                "track_id": current_target.track_id,
+                            }, allow_nan=False) + "\n")
+                            journal.flush()
+                            issue(first_steer, current_target,
+                                  current_decision.selected)
+                            continue
                 # Poll every input tick: a bounded segment can end on its own.
                 observed = status()
                 reconcile(observed)
