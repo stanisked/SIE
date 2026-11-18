@@ -27,7 +27,7 @@ from vision_core.person_localization.diagnostic_stereo_resolution import half_ma
 from vision_core.person_localization.diagnostic_instance_selection import (
     has_unique_eligible_instance_binding, select_instance)
 from vision_core.person_localization.shadow_rgb_continuity import (
-    continued_track, remember_track, retain_short_gap,
+    continued_track, reacquire_held_rgb_track, remember_track, retain_short_gap,
     retain_current_rgb_on_depth_refusal, match_current_edge_track,
 )
 from vision_core.person_localization.shadow_rgb_bootstrap import advance_bootstrap
@@ -567,6 +567,17 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     stamp.isoformat(), minimum_iou=self.temporal_target_minimum_iou,
                     maximum_center_displacement_relative=
                     self.temporal_target_maximum_center_displacement_relative)
+                if (matched is None and self._confirmed_target_track is not None
+                        and len(segmentation["instances"]) == 1):
+                    matched = reacquire_held_rgb_track(
+                        self._shadow_rgb_last_seen, candidate,
+                        stamp.isoformat(),
+                        minimum_confidence=self.confidence_threshold)
+                    if matched is not None:
+                        audit["shadow_rgb_reacquisition"] = {
+                            "status": "HELD_RGB_ID_REACQUIRED",
+                            "identity_only": True,
+                        }
                 if (matched is not None and self._confirmed_target_track is not None and
                         matched["track_id"] == self._confirmed_target_track["track_id"]):
                     self._shadow_rgb_bootstrap = None

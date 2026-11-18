@@ -6,6 +6,7 @@ import math
 
 
 MAX_RGB_FRAME_GAP_S = .75
+MAX_RGB_REACQUIRE_GAP_S = 1.50
 
 def retain_current_rgb_on_depth_refusal(*, rgb_matched_current: bool,
                                         audit_status: str,
@@ -40,7 +41,8 @@ def retain_short_gap(status: str, reason: str, prior: dict | None) -> bool:
 
 
 def continued_track(prior: dict | None, candidate: dict, captured_at_utc: str,
-                    *, minimum_iou: float, maximum_center_displacement_relative: float
+                    *, minimum_iou: float, maximum_center_displacement_relative: float,
+                    maximum_gap_s: float = MAX_RGB_FRAME_GAP_S
                     ) -> dict | None:
     """Carry a confirmed ID only across a fresh, geometrically matching RGB frame.
 
@@ -54,7 +56,7 @@ def continued_track(prior: dict | None, candidate: dict, captured_at_utc: str,
                datetime.fromisoformat(prior["last_rgb_at_utc"])).total_seconds()
         previous = [float(v) for v in prior["bbox_xyxy_px"]]
         current = [float(v) for v in candidate["bbox_xyxy_px"]]
-        if (not 0 <= age <= MAX_RGB_FRAME_GAP_S or len(previous) != 4 or
+        if (not 0 <= age <= maximum_gap_s or len(previous) != 4 or
                 len(current) != 4 or
                 not all(math.isfinite(v) for v in previous + current) or
                 not 0 <= minimum_iou <= 1 or
@@ -76,6 +78,38 @@ def continued_track(prior: dict | None, candidate: dict, captured_at_utc: str,
                 "last_rgb_at_utc": captured_at_utc}
     except (KeyError, TypeError, ValueError, OverflowError):
         return None
+
+
+
+def reacquire_held_rgb_track(prior: dict | None, candidate: dict,
+                             captured_at_utc: str, *,
+                             minimum_confidence: float) -> dict | None:
+    """Identity-only reacquisition after a short missed-detection gap.
+
+    Caller must verify exactly one eligible current RGB instance and valid
+    non-edge geometry. This function never authorizes motion or reuses depth.
+    """
+    if not isinstance(prior, dict) or not isinstance(candidate, dict):
+        return None
+    confidence = candidate.get("confidence")
+    if (type(confidence) not in (int, float)
+            or not math.isfinite(confidence)
+            or not 0 < minimum_confidence <= 1
+            or confidence < minimum_confidence):
+        return None
+    try:
+        age = (datetime.fromisoformat(captured_at_utc) -
+               datetime.fromisoformat(prior["last_rgb_at_utc"])).total_seconds()
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return None
+    if not MAX_RGB_FRAME_GAP_S < age <= MAX_RGB_REACQUIRE_GAP_S:
+        return None
+    return continued_track(
+        prior, candidate, captured_at_utc,
+        minimum_iou=.60,
+        maximum_center_displacement_relative=.20,
+        maximum_gap_s=MAX_RGB_REACQUIRE_GAP_S,
+    )
 
 
 def remember_track(track_id: str, candidate: dict, captured_at_utc: str) -> dict:

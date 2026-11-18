@@ -28,13 +28,16 @@ EDGE_TURN_BUILD = "v4_2_uart_shadow_v4_edge_turn_10deg"
 EDGE_TURN_BUILD_V5 = "v4_2_uart_shadow_v5_edge_turn_guard"
 EDGE_TURN_BUILD_V6 = "v4_2_uart_shadow_v6_early_brake"
 EDGE_TURN_BUILD_V7 = "v4_2_uart_shadow_v7_short_forward_brake"
+EDGE_TURN_BUILD_V8 = "v4_2_uart_shadow_v8_short_forward_completion"
 EDGE_TURN_CONTRACTS = {
     (EDGE_TURN_BUILD, "v2_paused_edge_turn"),
     (EDGE_TURN_BUILD_V5, "v2_paused_edge_turn"),
     (EDGE_TURN_BUILD_V6, "v2_paused_edge_turn"),
     (EDGE_TURN_BUILD_V7, "v2_paused_edge_turn"),
+    (EDGE_TURN_BUILD_V8, "v2_paused_edge_turn"),
 }
 SEGMENT_M = .40
+SHADOW_STEER_HEARTBEAT_INTERVAL_S = 0.25
 # Latest same-ID range can gate one bounded in-place recovery correction.
 # Old depth NEVER authorizes forward movement.
 EDGE_TURN_MIN_PRIOR_CLEARANCE_M = (
@@ -138,6 +141,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     latest = None
     seen = 0
     last_steer_at = 0.0
+    last_applied_bias = None
+    last_applied_pair = None
     last_segment_pair = None
     last_decision_key = None
     last_edge_recovery_track = None
@@ -204,7 +209,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
             return target, decision
 
         def issue(intent, original_target=None, selected_range=None):
-            nonlocal last_steer_at
+            nonlocal last_steer_at, last_applied_bias, last_applied_pair
             endpoint = {"START": "/shadow-start", "PAUSE": "/shadow-pause",
                         "RESUME": "/shadow-resume", "STOP": "/shadow-stop",
                         "STEER": "/steer-update",
@@ -242,7 +247,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 ).get("reason") == "NO_MATCHING_ACTIVE_STEERED_FORWARD":
                     # The short forward segment may already be braking.
                     # Never retry a rejected STEER or acknowledge it as applied.
-                    settle_deadline = clock() + 1.6
+                    settle_deadline = time.monotonic() + 1.6
                     while True:
                         if (
                             observed.get("boot_session_id") != intent.boot_session_id
@@ -261,7 +266,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             return
                         if (
                             observed.get("state") not in ("BRAKING", "COASTING")
-                            or clock() >= settle_deadline
+                            or time.monotonic() >= settle_deadline
                         ):
                             break
                         time.sleep(.04)
@@ -271,16 +276,28 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 if intent.operation == "STOP" and supervisor.state == "TERMINAL":
                     return
                 raise RuntimeError("SHADOW_OPERATION_REJECTED:" + str(body))
-            deadline = (clock() + 5.5 if intent.operation == "TURN" else
-                        clock() + .55 if intent.operation in ("START", "RESUME")
-                        else clock() + 1.6)
+            deadline = (time.monotonic() + 5.5 if intent.operation == "TURN" else
+                        time.monotonic() + .55 if intent.operation in ("START", "RESUME")
+                        else time.monotonic() + 1.6)
             last_heartbeat = 0.0
-            while clock() < deadline:
+            settle_extension_used = False
+            while time.monotonic() < deadline:
                 observed = status()
                 if observed.get("bounded_fault_latched") or observed.get("steered_safety_latched"):
                     reconcile(observed)
                     raise RuntimeError("SHADOW_CONTROLLER_FAULT")
                 state = observed.get("state")
+                # Short segments may brake before STARTING reaches DRIVING.
+                # Extend settling once, only for the acknowledged command.
+                if (intent.operation in ("START", "RESUME")
+                        and not settle_extension_used
+                        and state in ("BRAKING", "COASTING")
+                        and observed.get("active_command_id") == intent.command_id
+                        and observed.get("shadow_transition_seq") == intent.transition_seq
+                        and observed.get("right_pwm") == 0
+                        and observed.get("left_pwm") == 0):
+                    deadline = max(deadline, time.monotonic() + 2.0)
+                    settle_extension_used = True
                 # ESP32 accepts steering only after DRIVING begins.
                 # Do not issue /steer-update while STARTING.
                 # The normal ACTIVE loop handles fresh steering after
@@ -293,8 +310,9 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             ("SUCCESS", "PARTIAL_PROGRESS")
                         and observed.get("right_pwm") == 0
                         and observed.get("left_pwm") == 0):
-                    if observed["shadow_turn_result"] != "SUCCESS":
-                        raise RuntimeError("SHADOW_TURN_PARTIAL_REOBSERVE_REQUIRED")
+                    # SUCCESS and PARTIAL_PROGRESS are both settled turns.
+                    # Neither authorizes forward motion without a new
+                    # post-turn associated RGB/Depth observation.
                     supervisor.acknowledge(intent,
                         boot_session_id=observed["boot_session_id"],
                         active_command_id=observed.get("active_command_id"),
@@ -315,7 +333,12 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     journal.flush()
                     return
                 if (intent.operation != "TURN" and state == "PAUSED"
-                        and observed.get("active_command_id") == intent.command_id):
+                        and observed.get("active_command_id") == intent.command_id
+                        and observed.get("right_pwm") == 0
+                        and observed.get("left_pwm") == 0
+                        and (intent.operation not in ("START", "RESUME")
+                             or observed.get("shadow_transition_seq")
+                                == intent.transition_seq)):
                     reconcile(observed)
                     return
                 if state == "DRIVING" and intent.operation in ("START", "RESUME", "STEER"):
@@ -329,9 +352,14 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             left_pwm=observed["left_pwm"],
                             fault_latched=False,
                             transition_seq=observed[seq_key])
+                        last_applied_bias = intent.bias_pwm
                         if intent.operation == "STEER":
                             last_steer_at = clock()
-                        elif intent.operation in ("START", "RESUME"):
+                        if original_target is not None and selected_range is not None:
+                            last_applied_pair = (
+                                original_target.observed_s,
+                                selected_range.observed_s)
+                        if intent.operation in ("START", "RESUME"):
                             # The ROS producer continued while UART STARTING.
                             # Send one newly observed steering correction as
                             # soon as the controller confirms DRIVING. No
@@ -343,13 +371,14 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                                 newest_target, newest_decision = fresh
                                 newest_bias = max(-20, min(20,
                                     round(newest_target.bearing_deg * 4)))
-                                if newest_bias != intent.bias_pwm:
-                                    steer = supervisor.observe(
-                                        newest_target, newest_decision,
-                                        bias_pwm=newest_bias)
-                                    if steer is not None and steer.operation == "STEER":
-                                        report["operations"].append("STEER")
-                                        issue(steer, newest_target, newest_decision.selected)
+                                # The first fresh steering update is required
+                                # even when the bias is unchanged.
+                                steer = supervisor.observe(
+                                    newest_target, newest_decision,
+                                    bias_pwm=newest_bias)
+                                if steer is not None and steer.operation == "STEER":
+                                    report["operations"].append("STEER")
+                                    issue(steer, newest_target, newest_decision.selected)
                         return
                 if state in ("PAUSED", "READY") and intent.operation in ("PAUSE", "STOP"):
                     supervisor.acknowledge(intent,
@@ -459,6 +488,127 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     break
                 if observed.get("state") in ("BRAKING", "COASTING"):
                     continue
+
+                # A new RGB/Depth pair may arrive while UART /status blocks.
+                # Suppress only a stale-RGB PAUSE, and only with a newly
+                # validated same-track pair. Never reuse old depth.
+                if (supervisor.state == "ACTIVE"
+                        and decision.action == "PAUSE"
+                        and decision.reason == "RGB_TARGET_INVALID_OR_STALE"
+                        and target is not None
+                        and latest_observation is not None):
+                    candidate = latest_observation()
+
+                    if (candidate is not None
+                            and candidate.target is not None
+                            and candidate.target.track_id == supervisor.track_id
+                            and candidate.target.observed_s > target.observed_s
+                            and not candidate.camera_encoder_disagreement
+                            and candidate.edge_recovery_bearing_deg is None):
+
+                        refreshed_at = clock()
+                        refreshed_decision = select_target_range(
+                            candidate.target,
+                            list(candidate.ranges),
+                            refreshed_at,
+                            expected_rgb_calibration_id=rgb_calibration_id,
+                            expected_lidar_calibration_id=lidar_calibration_id,
+                            minimum_confidence=minimum_confidence,
+                        )
+
+                        if refreshed_decision.action == "FOLLOW_ELIGIBLE":
+                            latest = candidate
+                            target = candidate.target
+                            ranges = list(candidate.ranges)
+                            decision = refreshed_decision
+                            now = refreshed_at
+
+                            last_verified_range = (
+                                target.track_id,
+                                decision.selected.observed_s,
+                                decision.selected.distance_m,
+                            )
+
+                            last_decision_key = (
+                                decision.action,
+                                decision.reason,
+                                target.track_id,
+                            )
+
+                            journal.write(json.dumps({
+                                "event": "SHADOW_STALE_PAUSE_SUPPRESSED",
+                                "at_s": now,
+                                "track_id": target.track_id,
+                                "rgb_observed_s": target.observed_s,
+                                "range_observed_s":
+                                    decision.selected.observed_s,
+                                "distance_m":
+                                    decision.selected.distance_m,
+                            }, allow_nan=False) + "\n")
+                            journal.flush()
+
+                # Revalidate an earlier FOLLOW decision after blocking UART
+                # status. A once-fresh RGB/Depth pair may now be stale.
+                if (decision.action == "FOLLOW_ELIGIBLE"
+                        and target is not None
+                        and decision.selected is not None):
+
+                    checked_at = clock()
+                    checked_decision = select_target_range(
+                        target, ranges, checked_at,
+                        expected_rgb_calibration_id=rgb_calibration_id,
+                        expected_lidar_calibration_id=lidar_calibration_id,
+                        minimum_confidence=minimum_confidence)
+
+                    if checked_decision.action != "FOLLOW_ELIGIBLE":
+                        candidate = (latest_observation()
+                                     if latest_observation is not None
+                                     else None)
+
+                        if (candidate is not None
+                                and candidate.target is not None
+                                and candidate.target.track_id ==
+                                    target.track_id
+                                and candidate.target.observed_s >
+                                    target.observed_s
+                                and not candidate.camera_encoder_disagreement
+                                and candidate.edge_recovery_bearing_deg is None):
+
+                            candidate_at = clock()
+                            candidate_decision = select_target_range(
+                                candidate.target,
+                                list(candidate.ranges),
+                                candidate_at,
+                                expected_rgb_calibration_id=rgb_calibration_id,
+                                expected_lidar_calibration_id=lidar_calibration_id,
+                                minimum_confidence=minimum_confidence)
+
+                            if candidate_decision.action == "FOLLOW_ELIGIBLE":
+                                latest = candidate
+                                target = candidate.target
+                                ranges = list(candidate.ranges)
+                                checked_decision = candidate_decision
+                                checked_at = candidate_at
+
+                                journal.write(json.dumps({
+                                    "event": "SHADOW_POST_STATUS_FRESH_PAIR_USED",
+                                    "at_s": checked_at,
+                                    "track_id": target.track_id,
+                                }, allow_nan=False) + "\n")
+                                journal.flush()
+
+                    if checked_decision.action != "FOLLOW_ELIGIBLE":
+                        journal.write(json.dumps({
+                            "event": "SHADOW_POST_STATUS_FRESHNESS_REJECTED",
+                            "at_s": clock(),
+                            "track_id": target.track_id,
+                            "reason": checked_decision.reason,
+                        }, allow_nan=False) + "\n")
+                        journal.flush()
+
+                    decision = checked_decision
+                    now = checked_at
+
                 if supervisor.state == "PAUSED":
                     if max_segments is not None and report["segments_started"] >= max_segments:
                         report["reason"] = "SEGMENT_LIMIT_REACHED"
@@ -543,6 +693,19 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     report["reason"] = "NEW_TRACK_REQUIRES_NEW_SESSION"
                     break
 
+                # Unchanged bias still requires a fresh-pair feedback
+                # heartbeat. Never renew motion from reused camera data.
+                if (supervisor.state == "ACTIVE"
+                        and decision.action == "FOLLOW_ELIGIBLE"
+                        and target is not None
+                        and target.track_id == supervisor.track_id
+                        and bias == last_applied_bias
+                        and (now - last_steer_at < SHADOW_STEER_HEARTBEAT_INTERVAL_S
+                             or (last_applied_pair is not None
+                                 and (target.observed_s <= last_applied_pair[0]
+                                      or decision.selected.observed_s <= last_applied_pair[1])))):
+                    continue
+
                 intent = supervisor.observe(target, decision, bias_pwm=bias,
                     camera_encoder_disagreement=(latest.camera_encoder_disagreement
                                                   if latest is not None else False))
@@ -565,8 +728,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 # acknowledgement was lost. Never resume after ambiguity.
                 try:
                     call("POST", "/stop", timeout=1.0)
-                    deadline = clock() + 3.0
-                    while clock() < deadline:
+                    deadline = time.monotonic() + 3.0
+                    while time.monotonic() < deadline:
                         final = status()
                         report["final_status"] = final
                         if (final.get("state") in ("READY", "FAULT") and
@@ -582,5 +745,24 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 except BaseException as error:
                     report["result"] = "STOP_NOT_CONFIRMED"
                     report["stop_error"] = type(error).__name__ + ": " + str(error)
+            # A completed Python loop is not a successful motor session
+            # when the ESP32 has latched an actuator fault.
+            final = report.get("final_status") or {}
+            controller_fault = (
+                (supervisor is not None and supervisor.state == "FAULT")
+                or final.get("state") == "FAULT"
+                or final.get("bounded_fault_latched") is True
+                or final.get("steered_safety_latched") is True
+            )
+            if controller_fault and report["result"] == "SESSION_ENDED":
+                report["result"] = "STOPPED_ON_REFUSAL"
+                reason = (
+                    final.get("bounded_fault_reason")
+                    or final.get("steered_safety_reason")
+                    or final.get("fault_reason")
+                    or "UNKNOWN"
+                )
+                report["error"] = "SHADOW_CONTROLLER_FAULT:" + str(reason)
+
             journal.write(json.dumps({"summary": report}, allow_nan=False) + "\n")
     return report

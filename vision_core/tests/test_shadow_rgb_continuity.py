@@ -2,7 +2,7 @@
 import unittest
 
 from vision_core.person_localization.shadow_rgb_continuity import (
-    continued_track, remember_track, retain_short_gap,
+    continued_track, reacquire_held_rgb_track, remember_track, retain_short_gap,
     retain_current_rgb_on_depth_refusal, match_current_edge_track,
 )
 from vision_core.tests.test_shadow_fast_adapter import source, convert
@@ -12,6 +12,44 @@ from vision_core.tools.shadow_supervisor import ShadowSupervisor
 
 
 class ShadowRgbContinuityTests(unittest.TestCase):
+    def test_reacquire_identity_after_low_confidence_gap(self):
+        prior = remember_track(
+            "person-4",
+            {"bbox_xyxy_px": [927, 3, 1642, 1173]},
+            "2026-11-18T18:22:19+00:00",
+        )
+        candidate = {
+            "confidence": .451,
+            "bbox_xyxy_px": [779, 0, 1505, 1169],
+        }
+        recovered_at = "2026-11-18T18:22:20.150000+00:00"
+
+        self.assertIsNone(continued_track(
+            prior, candidate, recovered_at,
+            minimum_iou=.2,
+            maximum_center_displacement_relative=.75,
+        ))
+
+        matched = reacquire_held_rgb_track(
+            prior, candidate, recovered_at,
+            minimum_confidence=.40,
+        )
+        self.assertIsNotNone(matched)
+        self.assertEqual(matched["track_id"], "person-4")
+
+        self.assertIsNone(reacquire_held_rgb_track(
+            prior, {**candidate, "confidence": .39}, recovered_at,
+            minimum_confidence=.40,
+        ))
+        self.assertIsNone(reacquire_held_rgb_track(
+            prior, candidate, "2026-11-18T18:22:20.600000+00:00",
+            minimum_confidence=.40,
+        ))
+        self.assertIsNone(reacquire_held_rgb_track(
+            prior, {**candidate, "bbox_xyxy_px": [0, 0, 500, 600]},
+            recovered_at, minimum_confidence=.40,
+        ))
+
     def test_edge_track_keeps_identity_for_current_single_clipped_person(self):
         prior = remember_track("person-1",
             {"bbox_xyxy_px": [990, 0, 1845, 1190]},

@@ -132,7 +132,7 @@ class ShadowRunnerTests(unittest.TestCase):
                 segment_m=.1, lock_path=Path(directory) / "operator.lock")
         self.assertEqual(report["operations"], ["START"])
         start = next(args for path, args in controller.posts if path == "/shadow-start")
-        self.assertEqual(start["distance_m"], "0.050")
+        self.assertEqual(start["distance_m"], "0.100")
 
     def test_pause_resume_same_id_and_lidar_failover(self):
         clock = FakeClock()
@@ -180,7 +180,7 @@ class ShadowRunnerTests(unittest.TestCase):
                              for path, _ in controller.posts))
         self.assertEqual(controller.posts, [])
 
-    def test_start_heartbeat_refusal_after_segment_pause_is_reconciled(self):
+    def test_starting_timeout_without_premature_steer(self):
         class PauseBeforeHeartbeat(FakeController):
             def __call__(self, method, url, timeout):
                 path = urlsplit(url).path
@@ -205,13 +205,20 @@ class ShadowRunnerTests(unittest.TestCase):
                 journal_path=Path(directory) / "shadow.jsonl", clock=clock,
                 rgb_calibration_id="rgb", lidar_calibration_id="lidar",
                 lock_path=Path(directory) / "operator.lock")
-        self.assertEqual(report["result"], "SESSION_ENDED")
+        self.assertEqual(report["result"], "STOPPED_ON_REFUSAL")
+        self.assertIn(
+            "SHADOW_STATE_CONFIRMATION_TIMEOUT", report["error"]
+        )
+        self.assertFalse(
+            any(path == "/steer-update"
+                for path, _ in controller.posts)
+        )
         self.assertEqual(report["operations"], ["START"])
         self.assertEqual(controller.state, "READY")
         self.assertEqual([path for path, _ in controller.posts].count("/shadow-start"), 1)
         self.assertEqual(controller.posts[-1][0], "/stop")
 
-    def test_start_heartbeat_refusal_waits_for_matching_brake_to_pause(self):
+    def test_starting_brakes_then_settles_without_steer(self):
         class BrakingBeforePause(FakeController):
             def __init__(self):
                 super().__init__()
@@ -223,11 +230,9 @@ class ShadowRunnerTests(unittest.TestCase):
                     code, body = super().__call__(method, url, timeout)
                     self.state = "STARTING"
                     return code, body
-                if path == "/steer-update":
-                    self.posts.append((path, {}))
+                if method == "GET" and self.state == "STARTING":
+                    # Controller begins braking without receiving STEER.
                     self.state = "BRAKING"
-                    return 409, {"accepted": False,
-                                 "reason": "NO_MATCHING_ACTIVE_STEERED_FORWARD"}
                 if method == "GET" and self.state == "BRAKING":
                     self.braking_reads += 1
                     if self.braking_reads == 3:
@@ -246,28 +251,23 @@ class ShadowRunnerTests(unittest.TestCase):
                 lock_path=Path(directory) / "operator.lock")
         self.assertEqual(report["result"], "SESSION_ENDED")
         self.assertEqual(controller.braking_reads, 3)
+        self.assertFalse(
+            any(path == "/steer-update"
+                for path, _ in controller.posts)
+        )
+        self.assertEqual(controller.state, "READY")
         self.assertEqual(report["operations"], ["START"])
         self.assertEqual(controller.posts[-1][0], "/stop")
 
-    def test_start_heartbeat_refusal_wrong_command_stops(self):
-        class WrongPausedCommand(FakeController):
+    def test_wrong_active_command_id_during_start_stops(self):
+        class WrongActiveCommand(FakeController):
             def __call__(self, method, url, timeout):
-                path = urlsplit(url).path
-                if path == "/shadow-start":
-                    code, body = super().__call__(method, url, timeout)
-                    self.state = "STARTING"
-                    return code, body
-                if path == "/steer-update":
-                    self.posts.append((path, {}))
-                    self.state = "PAUSED"
-                    return 409, {"accepted": False,
-                                 "reason": "NO_MATCHING_ACTIVE_STEERED_FORWARD"}
                 code, body = super().__call__(method, url, timeout)
-                if method == "GET" and self.state == "PAUSED":
+                if method == "GET" and self.state == "DRIVING":
                     body["active_command_id"] = "other-command"
                 return code, body
 
-        clock, controller = FakeClock(), WrongPausedCommand()
+        clock, controller = FakeClock(), WrongActiveCommand()
         rgb = RgbTarget("p", clock(), 0., .9, "rgb")
         rng = TargetRange("LIDAR", "p", clock(), 1.5, .9,
                           FRONT_FRAME, "lidar", "association-1")
@@ -278,8 +278,13 @@ class ShadowRunnerTests(unittest.TestCase):
                 rgb_calibration_id="rgb", lidar_calibration_id="lidar",
                 lock_path=Path(directory) / "operator.lock")
         self.assertEqual(report["result"], "STOPPED_ON_REFUSAL")
-        self.assertIn("SHADOW_START_HEARTBEAT_REFUSED", report["error"])
+        self.assertIn("SHADOW_STATE_NOT_CONFIRMED", report["error"])
         self.assertEqual(controller.posts[-1][0], "/stop")
+        self.assertEqual(controller.state, "READY")
+        self.assertFalse(
+            any(path == "/steer-update"
+                for path, _ in controller.posts)
+        )
 
     def test_automatic_segment_pause_then_resume(self):
         class AutoPause(FakeController):
@@ -310,7 +315,7 @@ class ShadowRunnerTests(unittest.TestCase):
         self.assertEqual(report["operations"], ["START", "STEER", "RESUME"])
         self.assertEqual(report["result"], "SESSION_ENDED")
 
-    def test_settled_segment_requires_new_rgb_and_range_pair(self):
+    def test_reused_pair_cannot_refresh_heartbeat_and_pauses(self):
         class AutoPause(FakeController):
             def __call__(self, method, url, timeout):
                 code, body = super().__call__(method, url, timeout)
@@ -321,7 +326,7 @@ class ShadowRunnerTests(unittest.TestCase):
         clock, controller = FakeClock(), AutoPause()
 
         def stream():
-            for _ in range(3):
+            for _ in range(4):
                 rgb = RgbTarget("p", 10., 0., .9, "rgb")
                 rng = TargetRange("LIDAR", "p", 10., 1.5, .9,
                                   FRONT_FRAME, "lidar", "old-pair")
@@ -333,9 +338,9 @@ class ShadowRunnerTests(unittest.TestCase):
                 journal_path=Path(directory) / "shadow.jsonl", clock=clock,
                 rgb_calibration_id="rgb", lidar_calibration_id="lidar",
                 lock_path=Path(directory) / "operator.lock")
-        self.assertEqual(report["operations"], ["START", "STEER"])
+        self.assertEqual(report["operations"], ["START", "PAUSE"])
         self.assertEqual(report["segments_started"], 1)
-        self.assertEqual(report["reused_pair_refusals"], 1)
+        self.assertFalse(any(path == "/steer-update" for path, _ in controller.posts))
         self.assertFalse(any(path == "/shadow-resume" for path, _ in controller.posts))
         self.assertEqual(controller.posts[-1][0], "/stop")
 
@@ -369,8 +374,8 @@ class ShadowRunnerTests(unittest.TestCase):
 
     def test_shadow_uart_fields(self):
         fields = UartHttp._fields("POST", "http://uart.local/shadow-resume?"
-            "boot_session_id=boot-1&command_id=one&seq=2&distance_m=0.300")
-        self.assertEqual(fields, ["SHADOW_RESUME", "boot-1", "one", "2", "0.300"])
+            "boot_session_id=boot-1&command_id=one&seq=2&distance_m=0.300&bias_pwm=0")
+        self.assertEqual(fields, ["SHADOW_RESUME", "boot-1", "one", "2", "0.300", "0"])
         self.assertEqual(UartHttp._fields("POST", "http://uart.local/shadow-pause?"
             "boot_session_id=boot-1&command_id=one&seq=3"),
             ["SHADOW_PAUSE", "boot-1", "one", "3"])
@@ -411,6 +416,10 @@ class ShadowRunnerTests(unittest.TestCase):
                     return 202, {"accepted": True}
                 code, body = super().__call__(method, url, timeout)
                 if method == "GET":
+                    # Legacy motor-off probe has a separate v1 contract.
+                    # Do not change the production controller contract.
+                    from vision_core.tools.probe_shadow_motor_off import BUILD as PROBE_BUILD
+                    body["firmware_build_id"] = PROBE_BUILD
                     body["last_command_state"] = "STOPPED" if self.last else None
                     body["right_pwm"] = body["left_pwm"] = 0
                 return code, body
