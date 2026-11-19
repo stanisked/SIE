@@ -357,15 +357,19 @@ class CurrentInstanceMasks:
     def infer(self, cycle_id, rgb_sha, source, model):
         self.current=None  # clear even if the next inference fails
         instances,masks=infer_instances(source,model)
-        self.current=(cycle_id,rgb_sha,instances,masks)
+        # The RGB owner is retained ONLY until take() for this same cycle;
+        # no source JPEG is written and the next infer() clears it.
+        self.current=(cycle_id,rgb_sha,instances,masks,source)
         return instances
 
-    def take(self, cycle_id, rgb_sha, index, bbox):
+    def take(self, cycle_id, rgb_sha, index, bbox, *, include_rgb=False):
         current,self.current=self.current,None
         if current is None or current[0]!=cycle_id or current[1]!=rgb_sha:
             raise ValueError('no matching current RGB segmentation')
-        instances,masks=current[2:]
+        instances,masks=current[2:4]
         if type(index) is not int or not 0<=index<len(instances) or instances[index]['bbox_xyxy_px']!=bbox:
             raise ValueError('selected box and mask index disagree')
+        if include_rgb:
+            return masks[index],current[4]
         return masks[index]
 
