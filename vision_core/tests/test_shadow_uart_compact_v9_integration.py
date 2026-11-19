@@ -132,7 +132,7 @@ class CompactV9MotorOffIntegrationTests(unittest.TestCase):
 
     def test_corrupted_compact_refuses_and_stops(self):
         controller = CompactV9Controller(corrupt=True)
-        report, rows = self.run_case(controller, lambda clock: iter((sample(clock.now),)))
+        report, _ = self.run_case(controller, lambda clock: iter((sample(clock.now),)))
         self.assertEqual(report["result"], "STOPPED_ON_REFUSAL")
         self.assertIn("COMPACT_STATUS_WIRE_KEYS_INVALID", report["error"])
         self.assertEqual(controller.posts[-1][0], "/stop")
@@ -141,14 +141,14 @@ class CompactV9MotorOffIntegrationTests(unittest.TestCase):
 
     def test_boot_session_change_refuses_and_stops(self):
         controller = CompactV9Controller(reboot=True)
-        report, rows = self.run_case(controller, lambda clock: iter((sample(clock.now),)))
+        report, _ = self.run_case(controller, lambda clock: iter((sample(clock.now),)))
         self.assertEqual(report["result"], "STOPPED_ON_REFUSAL")
         self.assertIn("BOOT_SESSION_CHANGED", report["error"])
         self.assertEqual(controller.posts[-1][0], "/stop")
 
     def test_compact_fault_refuses_and_stops(self):
         controller = CompactV9Controller(fault=True)
-        report, rows = self.run_case(controller, lambda clock: iter((sample(clock.now),)))
+        report, _ = self.run_case(controller, lambda clock: iter((sample(clock.now),)))
         self.assertEqual(report["result"], "STOPPED_ON_REFUSAL")
         self.assertEqual(controller.posts[-1][0], "/stop")
 
