@@ -94,9 +94,11 @@ def replay(journal, face_report, body_report, timeline):
                 unique_body_binding=(
                     snapshot["same_cycle_source_provenance_verified"]
                     and jr["decision"]=="FOLLOW_ELIGIBLE"),
+                # A missing field is UNKNOWN, never evidence of
+                # a unique visible person. Real bridge journals provide both.
                 sole_visible_person=(
-                    jr["segmentation_instance_count"]==1
-                    and jr["eligible_count"]==1),
+                    jr.get("segmentation_instance_count")==1
+                    and jr.get("eligible_count")==1),
                 face_result=FACE_UNKNOWN if face_unknown else FACE_NONE,
                 face_profile_id=FACE_PROFILE if face_unknown else None,
                 face_cycle_id=cid if face_unknown else None,
