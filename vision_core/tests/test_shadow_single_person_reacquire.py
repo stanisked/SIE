@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from vision_core.tests.test_run_shadow_uart import FakeClock, FakeController
 from vision_core.tools.run_shadow_uart import ShadowObservation, run_session
@@ -59,10 +60,25 @@ class ReacquireGateTests(unittest.TestCase):
         self.assertEqual(self.check(pair("new", 10.90), 10.90)[0], "WAIT")
 
 
+class StopAwareController(FakeController):
+    def __call__(self, method, url, timeout):
+        parsed = urlsplit(url)
+        if method == "POST" and parsed.path == "/shadow-stop":
+            args = {key: val[0] for key, val in
+                    parse_qs(parsed.query).items()}
+            self.posts.append(("/shadow-stop", args))
+            self.transition_seq = int(args["seq"])
+            self.last = self.active
+            self.active = None
+            self.state = "READY"
+            return 202, {"accepted": True}
+        return super().__call__(method, url, timeout)
+
+
 class ReacquireRunnerTests(unittest.TestCase):
     def run_case(self, observations, *, enabled=True):
         clock = FakeClock()
-        controller = FakeController()
+        controller = StopAwareController()
         with tempfile.TemporaryDirectory() as directory:
             def stream():
                 for at, observation in observations:
