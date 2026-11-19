@@ -63,7 +63,11 @@ def replay(journal, face_report, body_report, timeline):
                 or context.get("decision")!=jr["decision"]
                 or context.get("confirmed_entity_id") is not None
                 or context.get("motor_authorized") is not False
-                or context.get("candidate_entity_id") not in (None,PERSON)):
+                or context.get("candidate_entity_id") != (
+                    PERSON if context.get("identity_status")==
+                    "PERSON_001_FACE_CANDIDATE_ON_CURRENT_TRACK"
+                    else None)
+                or context.get("face_snapshot") != source.get(cid)):
             raise ValueError("TIMELINE_EVENT_BINDING_INVALID")
 
         snapshot=source.get(cid)
