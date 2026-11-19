@@ -6,6 +6,7 @@ process remains the owner of capture, model verification and association.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 import math
@@ -364,6 +365,8 @@ def main() -> None:
     parser.add_argument("--max-segments", type=int, default=None)
     parser.add_argument("--edge-turn", action="store_true",
                         help="Bounded paused RGB edge recovery, requiring v4/v5/v6 UART TURN support")
+    parser.add_argument("--single-person-reacquire", action="store_true",
+                        help="Experimental automatic track handoff in a supervised ONE-PERSON scene; not identity proof")
     parser.add_argument("--journal", type=Path, required=True)
     parser.add_argument("--serial-port", default="/dev/ttyAMA0")
     parser.add_argument("--source", choices=("dynamic_audit", "fast_mask"),
@@ -387,6 +390,13 @@ def main() -> None:
         if not (args.execute and args.source == "fast_mask"
                 and args.semantic_source == "segmentation_mask"):
             parser.error("supervised experimental mode requires execute + fast_mask + segmentation_mask")
+    if args.single_person_reacquire and not (
+            args.supervised_experimental and args.execute
+            and args.source == "fast_mask"
+            and args.semantic_source == "segmentation_mask"
+            and not args.continuous
+            and args.max_segments is not None):
+        parser.error("--single-person-reacquire requires bounded supervised single-person fast_mask execution")
     if (args.source == "fast_mask" and
             (len(args.segmentation_model_sha256) != 64 or
              any(c not in "0123456789abcdef" for c in args.segmentation_model_sha256))):
@@ -477,6 +487,15 @@ def main() -> None:
                                 expected_rgb_calibration_id=AR_INTRINSIC_SHA256,
                                 minimum_confidence=args.minimum_confidence))
                     )
+                    if admitted and args.semantic_source == "segmentation_mask":
+                        # The raw RGB model must report exactly ONE instance,
+                        # not just one above the confidence threshold. No
+                        # stale frame, depth or identity is carried forward.
+                        instances = ((audit or {}).get("segmentation_observation")
+                                     or {}).get("instances")
+                        if isinstance(instances, list) and len(instances) == 1:
+                            observation = replace(
+                                observation, single_person_rgb=True)
                     if not admitted and observation.edge_recovery_bearing_deg is None:
                         observation = ShadowObservation(None, ())
                         refusal = "FAST_MASK_DEPTH_NOT_ADMITTED"
@@ -523,7 +542,8 @@ def main() -> None:
                         segment_m=args.segment_m,
                         max_segments=args.max_segments,
                         minimum_confidence=args.minimum_confidence,
-                        enable_edge_turn=args.edge_turn)
+                        enable_edge_turn=args.edge_turn,
+                        enable_single_person_reacquire=args.single_person_reacquire)
 
                     print(json.dumps(report, allow_nan=False), flush=True)
 
