@@ -1004,6 +1004,28 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if rclpy.ok():
                 self.preview_publisher.publish(message)  # FIRST, before any journal disk write.
             self._writer.submit(audit)
+            # Identity is a separate diagnostic side stream, after the
+            # primary control-preview publish. Never feed its result into
+            # camera target selection or the UART motor execution adapter.
+            identity_worker=getattr(self,'_identity_worker',None)
+            if identity_worker is not None:
+                if identity_source_payload is not None:
+                    try:
+                        track=((audit.get('shadow_track_confirmation') or
+                                audit.get('shadow_rgb_continuity') or {}).get('track_id'))
+                        if isinstance(track,str) and track:
+                            identity_worker.submit(
+                                identity_source_payload,
+                                track_id=track,captured_at_utc=stamp.isoformat(),
+                                sole_visible_person=(
+                                    (audit.get('ar0234_dynamic_target') or {}).get('current_eligible_count')==1
+                                    and len((audit.get('segmentation_observation') or {}).get('instances') or [])==1))
+                    except Exception as error:
+                        self._log_preview('IDENTITY_SOURCE_REFUSED '+type(error).__name__)
+                ready=identity_worker.drain()
+                if ready is not None and rclpy.ok():
+                    identity_message=String();identity_message.data=encode(ready)
+                    self._identity_publisher.publish(identity_message)
             if (source_snapshot_payload is not None and rclpy.ok() and
                     self._source_snapshot_writer is not None):
                 try:
@@ -1064,6 +1086,16 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             print(message, flush=True)
 
     def destroy_node(self):
+        identity_worker=getattr(self,'_identity_worker',None)
+        if identity_worker is not None:
+            closed=identity_worker.close()
+            self._log_preview(
+                f"IDENTITY_PREVIEW accepted={identity_worker.accepted} "
+                f"replaced={identity_worker.replaced} "
+                f"processed={identity_worker.processed} "
+                f"errors={identity_worker.errors} "
+                f"startup_error={identity_worker._failure} closed={closed} "
+                "motor_authorized=false")
         v3_worker = getattr(self, "_v3_worker", None)
         if v3_worker is not None:
             v3_worker.shutdown(wait=True, cancel_futures=True)
