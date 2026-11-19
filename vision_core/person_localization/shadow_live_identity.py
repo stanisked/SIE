@@ -193,9 +193,10 @@ class LatestIdentityPreview:
         try:
             processor=self._factory()
             if self._report_path is not None:
-                os.umask(0o077)
-                stream=self._report_path.open("x",encoding="utf-8")
-                os.chmod(self._report_path,0o600)
+                # os.umask() is process-wide: never mutate the camera
+                # process default from an identity worker thread.
+                fd=os.open(self._report_path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
+                stream=os.fdopen(fd,"w",encoding="utf-8")
             while True:
                 with self._lock:
                     while self._pending is None and not self._stop:
