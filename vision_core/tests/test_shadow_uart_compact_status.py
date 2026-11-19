@@ -62,7 +62,7 @@ class CompactStatusContractTests(unittest.TestCase):
 
     def test_incomplete_and_bad_types_refuse(self):
         wire = compress_status(self.full)
-        for key, value in (("b", None), ("r", "0"), ("f", 0), ("i", ""), ("s", "MOVING")):
+        for key, value in (("b", None), ("r", "0"), ("f", 0), ("i", ""), ("s", "MOVING"), ("s", "UNKNOWN")):
             with self.subTest(key=key):
                 bad = dict(wire, **{key: value})
                 with self.assertRaises(ValueError):
