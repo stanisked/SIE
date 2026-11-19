@@ -75,6 +75,20 @@ class ShadowSupervisor:
             return self._issue("STEER", bias_pwm, decision)
         return None
 
+    def bind_supervised_single_person_reacquire(self, new_track_id: str) -> str:
+        """Change the camera ID only while confirmed PAUSED; no motor command.
+
+        The caller owns all current-frame evidence and its scene assumptions.
+        This method does NOT assert that the two IDs are the same person.
+        """
+        if (self.state != "PAUSED" or self.pending is not None
+                or not self.track_id or not isinstance(new_track_id, str)
+                or not new_track_id or new_track_id == self.track_id):
+            raise ValueError("SHADOW_REACQUIRE_NOT_PAUSED_OR_INVALID_TRACK")
+        previous = self.track_id
+        self.track_id = new_track_id
+        return previous
+
     def turn(self, direction: str, angle_deg: float) -> ShadowIntent:
         """One bounded in-place turn from a confirmed paused motor session.
 
