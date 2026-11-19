@@ -1,6 +1,9 @@
 """Coordinator integration tests on synthetic motor-off evidence only."""
 from copy import deepcopy
 import unittest
+from unittest.mock import patch
+
+import vision_core.tools.replay_shadow_identity_coordinator as replay_module
 
 from vision_core.tools.replay_shadow_identity_coordinator import replay
 from vision_core.tools.audit_shadow_identity_timeline import construct_timeline
@@ -76,6 +79,26 @@ class IdentityCoordinatorReplayTests(unittest.TestCase):
             timeline["per_cycle"][-1]["face_snapshot"])
         with self.assertRaisesRegex(ValueError,"TIMELINE_EVENT_BINDING_INVALID"):
             replay(journal,face,body,timeline)
+
+    def test_missing_counts_never_claim_sole_visible_person(self):
+        journal,face,body,timeline=self.fixture()
+        for row in journal:
+            row.pop("segmentation_instance_count",None)
+            row.pop("eligible_count",None)
+        observed=[]
+        original=replay_module.FaceAnchoredTarget
+
+        class RecordingCoordinator(original):
+            def observe(self,evidence,*,now_s):
+                if evidence is not None:
+                    observed.append(evidence.sole_visible_person)
+                return super().observe(evidence,now_s=now_s)
+
+        with patch.object(replay_module,"FaceAnchoredTarget",RecordingCoordinator):
+            result=replay(journal,face,body,timeline)
+        self.assertEqual(result["snapshot_inputs"],3)
+        self.assertEqual(observed,[False,False,False])
+        self.assertEqual(result["confirmed_identity_count"],0)
 
     def test_replay_leaves_original_identity_coordinator_unmodified(self):
         journal,face,body,timeline=self.fixture()
