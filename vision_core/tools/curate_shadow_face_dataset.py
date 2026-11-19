@@ -24,7 +24,7 @@ import cv2
 import numpy as np
 
 from vision_core.person_localization.shadow_face_verify import (
-    LocalFaceEncoder, model_sha256, normalized_feature,
+    LocalFaceEncoder, normalized_feature,
 )
 
 
@@ -39,12 +39,13 @@ def read_source_rows(dataset_dir: Path):
     manifest = dataset_dir / "manifest.jsonl"
     if not manifest.is_file():
         raise FileNotFoundError("DATASET_MANIFEST_NOT_FOUND")
-    rows = []
+    rows_read = 0
     with manifest.open(encoding="utf-8") as stream:
         for line in stream:
             if not line.strip():
                 continue
-            if len(rows) >= MAX_MANIFEST_LINES:
+            rows_read += 1
+            if rows_read > MAX_MANIFEST_LINES:
                 raise ValueError("MANIFEST_TOO_LARGE")
             entry = json.loads(line)
             filename = entry.get("file")
@@ -63,26 +64,28 @@ def read_source_rows(dataset_dir: Path):
                 raise ValueError("DATASET_DECODED_FRAME_INVALID")
             if not isinstance(entry.get("faces"),list):
                 raise ValueError("DATASET_FACE_METADATA_INVALID")
-            rows.append((entry,image))
-    if not rows:
+            yield entry,image
+    if not rows_read:
         raise ValueError("DATASET_EMPTY")
-    return rows
 
 
 def extract_candidates(source_rows, encoder: LocalFaceEncoder):
-    first = source_rows[0][0]["host_monotonic_s"]
+    first = None
+    source_count = 0
     candidates=[]
     exclusions = {"no_single_face":0, "not_detected_again":0,
                   "low_quality":0, "encoding_error":0}
     for entry, image in source_rows:
+        source_count += 1
+        if first is None:
+            first = float(entry["host_monotonic_s"])
         if len(entry["faces"]) != 1:
             exclusions["no_single_face"] += 1
             continue
         # This is operator's separate single-person enrollment dataset.
         # This bounding box is used only to gate face extraction in an
         # image, not as proof of face-to-body association.
-        _, h_w = None, image.shape
-        height, width = h_w[:2]
+        height, width = image.shape[:2]
         scale=min(1., 960./max(width,height))
         small=(cv2.resize(image,(round(width*scale),round(height*scale)),
                           interpolation=cv2.INTER_AREA)
@@ -139,7 +142,7 @@ def extract_candidates(source_rows, encoder: LocalFaceEncoder):
             "feature":feature,
             "aligned":aligned,
         })
-    return candidates,exclusions
+    return candidates,exclusions,source_count
 
 
 def select_candidates(candidates, *, count=TARGET_COUNT, bins=BINS):
@@ -158,7 +161,8 @@ def select_candidates(candidates, *, count=TARGET_COUNT, bins=BINS):
             raise ValueError(f"NOT_ENOUGH_QUALITY_CANDIDATES_IN_BIN_{bin_index}")
         chosen=[]
         while len(chosen)<quota:
-            eligible=[r for r in pool if r not in chosen
+            chosen_indices={r["sample_index"] for r in chosen}
+            eligible=[r for r in pool if r["sample_index"] not in chosen_indices
                       and all(abs(r["time_s"]-prev["time_s"])>=1.0
                               for prev in chosen)]
             if not eligible:
@@ -247,13 +251,12 @@ def main():
     if (root/"curation_v1").exists():
         parser.error("curation_v1 already exists (refusing overwrite)")
     encoder=LocalFaceEncoder(args.yunet,args.sface)
-    rows=read_source_rows(root)
-    pool,exclusions=extract_candidates(rows,encoder)
+    pool,exclusions,source_count=extract_candidates(read_source_rows(root),encoder)
     picked=select_candidates(pool)
     result=save_private_review(root,picked,exclusions,encoder)
     print(json.dumps({
         "scope":result["scope"],
-        "source_frames":len(rows),
+        "source_frames":source_count,
         "eligible_faces":len(pool),
         "selected":len(picked),
         "selected_indices":[x["sample_index"] for x in result["selected"]],
