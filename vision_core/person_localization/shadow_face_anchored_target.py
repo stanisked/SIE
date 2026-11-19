@@ -97,6 +97,7 @@ class FaceAnchoredTarget:
         self.gallery = []
         self._candidate_id = None
         self._candidate_s = None
+        self._identity_conflict = False
 
     def _decision(self, status, reason, *, face_visible=False, supported=False):
         return TargetIdentityDecision(self.entity_id if self.camera_track_id else None,
@@ -140,6 +141,7 @@ class FaceAnchoredTarget:
                     and evidence.face_mask_sha256 == evidence.mask_sha256
                     and evidence.face_verifier_calibrated)
         if evidence.face_result == FACE_MISMATCH:
+            self._identity_conflict = True
             self._clear_candidate()
             return self._decision("TARGET_CONFLICT",
                                   "DIFFERENT_FACE_ON_OBSERVED_RGB_TRACK",
@@ -150,6 +152,7 @@ class FaceAnchoredTarget:
                                   "FACE_IDENTITY_OR_MASK_BINDING_UNVERIFIED",
                                   face_visible=True)
         if verified:
+            self._identity_conflict = False
             previous = self.camera_track_id
             self.camera_track_id = evidence.camera_track_id
             self.last_supported_s = evidence.captured_s
@@ -161,6 +164,11 @@ class FaceAnchoredTarget:
                 "FACE_CONFIRMED",
                 "SAME_CYCLE_ENROLLED_FACE_AND_BODY_BOUND",
                 face_visible=True, supported=True)
+        if self._identity_conflict:
+            self._clear_candidate()
+            return self._decision("TARGET_CONFLICT",
+                                  "FACE_REVERIFICATION_REQUIRED_AFTER_CONFLICT",
+                                  face_visible=face_visible)
         if self.camera_track_id is None:
             return self._decision("AWAITING_FACE",
                                   "TARGET_MUST_FIRST_BE_FACE_ANCHORED",
@@ -204,11 +212,14 @@ class FaceAnchoredTarget:
             return self._decision("BODY_REID_PENDING",
                                   "FIRST_MATCHING_BODY_OBSERVATION",
                                   face_visible=face_visible)
-        if (evidence.captured_s <= self._candidate_s or
-                evidence.captured_s - self._candidate_s > MAX_CONTINUOUS_RGB_GAP_S):
-            self._clear_candidate()
+        if evidence.captured_s <= self._candidate_s:
             return self._decision("BODY_REID_PENDING",
                                   "SECOND_DISTINCT_FRESH_FRAME_REQUIRED",
+                                  face_visible=face_visible)
+        if evidence.captured_s - self._candidate_s > MAX_CONTINUOUS_RGB_GAP_S:
+            self._candidate_s = evidence.captured_s
+            return self._decision("BODY_REID_PENDING",
+                                  "CANDIDATE_RESTARTED_AFTER_FRAME_GAP",
                                   face_visible=face_visible)
         previous = self.camera_track_id
         self.camera_track_id = evidence.camera_track_id
