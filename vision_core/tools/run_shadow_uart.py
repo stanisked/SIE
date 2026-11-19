@@ -22,6 +22,7 @@ from vision_core.tools.shadow_range_gate import (
 )
 from vision_core.tools.shadow_supervisor import ShadowSupervisor
 from vision_core.tools.shadow_single_person_reacquire import SinglePersonReacquireGate
+from vision_core.tools.shadow_uart_compact_status import expand_status
 
 
 BUILD = "v4_2_uart_shadow_v3_segment_0p4"
@@ -30,12 +31,14 @@ EDGE_TURN_BUILD_V5 = "v4_2_uart_shadow_v5_edge_turn_guard"
 EDGE_TURN_BUILD_V6 = "v4_2_uart_shadow_v6_early_brake"
 EDGE_TURN_BUILD_V7 = "v4_2_uart_shadow_v7_short_forward_brake"
 EDGE_TURN_BUILD_V8 = "v4_2_uart_shadow_v8_short_forward_completion"
+EDGE_TURN_BUILD_V9 = "v4_2_uart_shadow_v9_compact_status"
 EDGE_TURN_CONTRACTS = {
     (EDGE_TURN_BUILD, "v2_paused_edge_turn"),
     (EDGE_TURN_BUILD_V5, "v2_paused_edge_turn"),
     (EDGE_TURN_BUILD_V6, "v2_paused_edge_turn"),
     (EDGE_TURN_BUILD_V7, "v2_paused_edge_turn"),
     (EDGE_TURN_BUILD_V8, "v2_paused_edge_turn"),
+    (EDGE_TURN_BUILD_V9, "v2_paused_edge_turn"),
 }
 SEGMENT_M = .40
 SHADOW_STEER_HEARTBEAT_INTERVAL_S = 0.25
@@ -162,6 +165,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     reacquire_gate = SinglePersonReacquireGate()
     last_reacquire_log_key = None
     post_turn_reobserve_after_s = None
+    compact_status_enabled = False  # negotiated from first full v9 STATUS
 
     with output.open("x") as journal:
         def call(method, endpoint, params=None, timeout=.3):
@@ -182,8 +186,19 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 journal.write(json.dumps(row, allow_nan=False) + "\n")
                 journal.flush()
 
-        def status():
-            code, body = call("GET", "/status", timeout=2.0)
+        def status(*, full=False):
+            nonlocal compact_status_enabled
+            # The first status is always full; v8 and older remain unchanged.
+            # Only a v9 build explicitly advertises the compact wire protocol.
+            requested_compact = compact_status_enabled and not full
+            endpoint = "/status-compact" if requested_compact else "/status"
+            code, body = call("GET", endpoint, timeout=2.0)
+            if requested_compact:
+                if code != 200:
+                    raise RuntimeError("SHADOW_COMPACT_STATUS_REJECTED")
+                # Never fall back silently on a missing/invalid field. An
+                # ambiguous response during movement is a safety refusal.
+                body = expand_status(body)
             contract = (body.get("firmware_build_id"),
                         body.get("shadow_api_version"))
             valid_contracts = {(BUILD, "v1_paused_segment")} | EDGE_TURN_CONTRACTS
@@ -192,6 +207,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 raise RuntimeError("SHADOW_CONTROLLER_STATUS_INVALID")
             if supervisor is not None and body.get("boot_session_id") != supervisor.boot_session_id:
                 raise RuntimeError("BOOT_SESSION_CHANGED")
+            if not requested_compact and contract[0] == EDGE_TURN_BUILD_V9:
+                compact_status_enabled = True
             return body
 
         def reconcile(body):
@@ -871,7 +888,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     call("POST", "/stop", timeout=1.0)
                     deadline = time.monotonic() + 3.0
                     while time.monotonic() < deadline:
-                        final = status()
+                        final = status(full=True)  # retain complete terminal evidence
                         report["final_status"] = final
                         if (final.get("state") in ("READY", "FAULT") and
                                 final.get("active_command_id") is None and

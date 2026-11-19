@@ -1,0 +1,72 @@
+name: Shadow UART compact v9 (motor-off)
+
+on:
+  push:
+    paths:
+      - 'vision_core/tools/shadow_uart_compact_status.py'
+      - 'vision_core/tools/uart_http_transport.py'
+      - 'vision_core/tools/run_shadow_uart.py'
+      - 'vision_core/tests/test_shadow_uart_compact*.py'
+      - 'firmware/esp32/traction_control_v4_2_uart_shadow_v9_compact_status/**'
+      - '.github/workflows/shadow_uart_compact_v9.yml'
+  pull_request:
+    paths:
+      - 'vision_core/tools/shadow_uart_compact_status.py'
+      - 'vision_core/tools/uart_http_transport.py'
+      - 'vision_core/tools/run_shadow_uart.py'
+      - 'vision_core/tests/test_shadow_uart_compact*.py'
+      - 'firmware/esp32/traction_control_v4_2_uart_shadow_v9_compact_status/**'
+      - '.github/workflows/shadow_uart_compact_v9.yml'
+
+jobs:
+  motor-off-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements/dev.txt ruff==0.16.4
+      - name: Syntax check changed Python modules
+        run: |
+          python -m py_compile \
+            vision_core/tools/shadow_uart_compact_status.py \
+            vision_core/tools/uart_http_transport.py \
+            vision_core/tools/run_shadow_uart.py \
+            vision_core/tests/test_shadow_uart_compact_status.py \
+            vision_core/tests/test_shadow_uart_compact_v9_integration.py \
+            vision_core/tests/test_shadow_uart_compact_v9_pty.py
+      - name: Focused static lint on new contract and test files
+        run: |
+          ruff check \
+            vision_core/tools/shadow_uart_compact_status.py \
+            vision_core/tests/test_shadow_uart_compact_status.py \
+            vision_core/tests/test_shadow_uart_compact_v9_integration.py \
+            vision_core/tests/test_shadow_uart_compact_v9_pty.py
+      - name: Motor-off unit and regression tests
+        run: |
+          python -m unittest -v \
+            vision_core.tests.test_shadow_uart_compact_status \
+            vision_core.tests.test_shadow_uart_compact_v9_integration \
+            vision_core.tests.test_shadow_uart_compact_v9_pty \
+            vision_core.tests.test_run_shadow_uart \
+            vision_core.tests.test_shadow_feedback_pause_race_v8
+
+  firmware-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP32 board platform
+        run: |
+          arduino-cli core update-index \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32 \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+      - name: Compile v9 for ESP32 Dev Module (no upload)
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --warnings all \
+            firmware/esp32/traction_control_v4_2_uart_shadow_v9_compact_status
