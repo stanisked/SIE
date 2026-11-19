@@ -31,6 +31,7 @@ class FaceBodyEvidence:
     camera_track_id: str
     mask_sha256: str
     unique_body_binding: bool
+    sole_visible_person: bool = False
     face_result: Literal[
         "NO_FACE", "MATCHED_ENROLLED_FACE", "DIFFERENT_FACE", "UNVERIFIED_FACE"
     ] = FACE_NONE
@@ -77,17 +78,20 @@ class FaceAnchoredTarget:
 
     def __init__(self, *, entity_id: str, face_profile_id: str,
                  body_model_sha256: str | None = None,
-                 calibrated_body_min_cosine: float | None = None):
+                 calibrated_body_min_cosine: float | None = None,
+                 body_calibration_id: str | None = None):
         if not entity_id or not face_profile_id:
             raise ValueError("TARGET_ENTITY_AND_LOCAL_FACE_PROFILE_REQUIRED")
         if calibrated_body_min_cosine is not None and (
                 not body_model_sha256 or
+                not body_calibration_id or
                 not 0 < calibrated_body_min_cosine < 1):
             raise ValueError("CALIBRATED_BODY_MODEL_AND_THRESHOLD_REQUIRED")
         self.entity_id = entity_id
         self.face_profile_id = face_profile_id
         self.body_model_sha256 = body_model_sha256
         self.calibrated_body_min_cosine = calibrated_body_min_cosine
+        self.body_calibration_id = body_calibration_id
         self.camera_track_id = None
         self.last_supported_s = None
         self.gallery = []
@@ -135,10 +139,10 @@ class FaceAnchoredTarget:
                     and evidence.face_cycle_id == evidence.cycle_id
                     and evidence.face_mask_sha256 == evidence.mask_sha256
                     and evidence.face_verifier_calibrated)
-        if evidence.face_result == FACE_MISMATCH and same_id:
+        if evidence.face_result == FACE_MISMATCH:
             self._clear_candidate()
             return self._decision("TARGET_CONFLICT",
-                                  "DIFFERENT_FACE_ON_CURRENT_RGB_TRACK",
+                                  "DIFFERENT_FACE_ON_OBSERVED_RGB_TRACK",
                                   face_visible=True)
         if evidence.face_result == FACE_MATCH and not verified:
             self._clear_candidate()
@@ -173,6 +177,11 @@ class FaceAnchoredTarget:
                                   face_visible=face_visible, supported=True)
         # No single-person shortcut or old depth can establish identity.
         feature = _normalized_body(evidence.body_embedding)
+        if not evidence.sole_visible_person:
+            self._clear_candidate()
+            return self._decision("TARGET_LOST",
+                                  "BODY_REID_AMBIGUOUS_MULTI_PERSON_SCENE",
+                                  face_visible=face_visible)
         if (self.calibrated_body_min_cosine is None or
                 evidence.body_model_sha256 != self.body_model_sha256
                 or feature is None or not self.gallery):
