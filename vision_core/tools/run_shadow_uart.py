@@ -21,6 +21,7 @@ from vision_core.tools.shadow_range_gate import (
     SHADOW_COMMAND_CLEARANCE_M, SHADOW_MIN_SEGMENT_M,
 )
 from vision_core.tools.shadow_supervisor import ShadowSupervisor
+from vision_core.tools.shadow_single_person_reacquire import SinglePersonReacquireGate
 
 
 BUILD = "v4_2_uart_shadow_v3_segment_0p4"
@@ -56,6 +57,7 @@ class ShadowObservation:
     ranges: tuple[TargetRange, ...]
     camera_encoder_disagreement: bool = False
     edge_recovery_bearing_deg: float | None = None
+    single_person_rgb: bool = False  # verified raw one-instance preview, not identity
 
 
 def select_edge_turn(target: RgbTarget | None, edge_bearing_deg: float | None,
@@ -89,7 +91,8 @@ def run_session(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
                 segment_m=SEGMENT_M, max_observations=None, max_segments=None,
                 minimum_confidence=.8, lock_path=None,
-                latest_observation=None, enable_edge_turn=False):
+                latest_observation=None, enable_edge_turn=False,
+                enable_single_person_reacquire=False):
     """Use the same operator lock as the current bounded steering runner."""
     lockpath = Path(lock_path) if lock_path is not None else (
         Path.home() / ".local/state/sie/v7_operator_one_step.lock")
@@ -102,14 +105,16 @@ def run_session(*, request, observations, journal_path, rgb_calibration_id,
             segment_m=segment_m, max_observations=max_observations,
             max_segments=max_segments, minimum_confidence=minimum_confidence,
             latest_observation=latest_observation,
-            enable_edge_turn=enable_edge_turn)
+            enable_edge_turn=enable_edge_turn,
+            enable_single_person_reacquire=enable_single_person_reacquire)
 
 
 def _run_session_unlocked(*, request, observations, journal_path, rgb_calibration_id,
                 lidar_calibration_id=None, clock=time.monotonic,
                 segment_m=SEGMENT_M, max_observations=None, max_segments=None,
                 minimum_confidence=.8, latest_observation=None,
-                enable_edge_turn=False):
+                enable_edge_turn=False,
+                enable_single_person_reacquire=False):
     """Run until source ends or operator interrupts; always request terminal STOP.
 
     `observations` must yield an observation or None frequently even if the
@@ -121,6 +126,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     """
     if type(enable_edge_turn) is not bool:
         raise ValueError("INVALID_EDGE_TURN_SWITCH")
+    if type(enable_single_person_reacquire) is not bool:
+        raise ValueError("INVALID_SINGLE_PERSON_REACQUIRE_SWITCH")
     if not SHADOW_MIN_SEGMENT_M <= segment_m <= .40:
         raise ValueError("INVALID_SHADOW_SEGMENT")
     if max_segments is not None and (type(max_segments) is not int or
@@ -137,7 +144,8 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
               "reused_pair_refusals": 0,
               "measurement_admission_changed": False,
               "edge_turns_started": 0,
-              "feedback_timeout_pauses": 0}
+              "feedback_timeout_pauses": 0,
+              "single_person_reacquires": 0}
     supervisor = None
     latest = None
     seen = 0
@@ -149,6 +157,10 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
     last_decision_key = None
     last_edge_recovery_track = None
     last_verified_range = None
+    last_verified_bearing = None
+    had_target_gap = False
+    reacquire_gate = SinglePersonReacquireGate()
+    last_reacquire_log_key = None
     post_turn_reobserve_after_s = None
 
     with output.open("x") as journal:
@@ -438,6 +450,15 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     expected_rgb_calibration_id=rgb_calibration_id,
                     expected_lidar_calibration_id=lidar_calibration_id,
                     minimum_confidence=minimum_confidence)
+                # A real targetless observation is distinct from a 50-ms
+                # no-new-frame tick (which keeps the previous observation).
+                if supervisor.track_id is not None and target is None:
+                    had_target_gap = True
+                elif (supervisor.track_id is not None and target is not None
+                        and target.track_id == supervisor.track_id
+                        and decision.action in ("FOLLOW_ELIGIBLE", "HOLD")):
+                    had_target_gap = False
+                    reacquire_gate.reset()
                 if post_turn_reobserve_after_s is not None:
                     if (target is not None
                             and target.track_id != supervisor.track_id
@@ -467,6 +488,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                     last_verified_range = (
                         target.track_id, decision.selected.observed_s,
                         decision.selected.distance_m)
+                    last_verified_bearing = target.bearing_deg
                 # Log reason changes, not every 50-ms status tick.
                 decision_key = (decision.action, decision.reason,
                                 target.track_id if target is not None else None)
@@ -578,6 +600,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                                 decision.selected.observed_s,
                                 decision.selected.distance_m,
                             )
+                            last_verified_bearing = target.bearing_deg
 
                             last_decision_key = (
                                 decision.action,
@@ -700,6 +723,7 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                             issue(intent, edge_now.target)
                             post_turn_reobserve_after_s = clock()
                             last_verified_range = None
+                            last_verified_bearing = None
                             continue
                         if edge_now is not None and edge_now.edge_recovery_bearing_deg is not None:
                             journal.write(json.dumps({
@@ -727,13 +751,76 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                         and now - last_steer_at < .15):
                     continue
                 bias = 0 if target is None else max(-20, min(20, round(target.bearing_deg * 4)))
-                # A new RGB track cannot inherit the old motor command.
-                # End the paused session with a confirmed STOP.
+                # Never treat a changed RGB track as an established identity.
+                # Experimental single-person reacquisition is only an audited
+                # hypothesis after a gap and a confirmed, zero-PWM PAUSED state.
                 if (supervisor.state == "PAUSED"
                         and supervisor.track_id is not None
                         and target is not None
                         and target.track_id != supervisor.track_id
                         and decision.action == "FOLLOW_ELIGIBLE"):
+                    if (enable_single_person_reacquire and had_target_gap
+                            and post_turn_reobserve_after_s is None
+                            and latest is not None
+                            and not latest.camera_encoder_disagreement
+                            and latest.edge_recovery_bearing_deg is None
+                            and observed.get("state") == "PAUSED"
+                            and observed.get("active_command_id") ==
+                                supervisor.command_id
+                            and observed.get("right_pwm") == 0
+                            and observed.get("left_pwm") == 0
+                            and observed.get("remote_stop_pending") is False
+                            and not observed.get("bounded_fault_latched")
+                            and not observed.get("steered_safety_latched")):
+                        verdict, why = reacquire_gate.consider(
+                            target=target, selected=decision.selected,
+                            single_person_rgb=latest.single_person_rgb,
+                            old_track_id=supervisor.track_id,
+                            last_verified=last_verified_range,
+                            last_bearing_deg=last_verified_bearing,
+                            now_s=clock())
+                        log_key = (target.track_id, verdict, why)
+                        if log_key != last_reacquire_log_key:
+                            journal.write(json.dumps({
+                                "event": "SHADOW_SINGLE_PERSON_REACQUIRE_GATE",
+                                "at_s": clock(), "old_track_id": supervisor.track_id,
+                                "candidate_track_id": target.track_id,
+                                "verdict": verdict, "reason": why,
+                                "person_identity_verified": False,
+                                "motor_operation": None,
+                            }, allow_nan=False) + "\n")
+                            journal.flush()
+                            last_reacquire_log_key = log_key
+                        if verdict == "WAIT":
+                            continue  # PAUSED: do not authorize movement
+                        if verdict == "MATCH":
+                            old_id = supervisor.bind_supervised_single_person_reacquire(
+                                target.track_id)
+                            report["single_person_reacquires"] += 1
+                            # The confirmation pair itself is NOT a RESUME pair.
+                            # A strictly newer RGB+depth pair is mandatory.
+                            last_segment_pair = (
+                                target.observed_s, decision.selected.observed_s)
+                            last_verified_range = None
+                            last_verified_bearing = None
+                            first_driving_steer_needed = False
+                            last_applied_pair = None
+                            last_applied_bias = None
+                            had_target_gap = False
+                            journal.write(json.dumps({
+                                "event": "SHADOW_SINGLE_PERSON_TRACK_REBOUND",
+                                "at_s": clock(), "old_track_id": old_id,
+                                "new_track_id": supervisor.track_id,
+                                "mode": "SUPERVISED_SINGLE_PERSON_ASSUMPTION",
+                                "person_identity_verified": False,
+                                "range_reused": False,
+                                "resume_authorized": False,
+                            }, allow_nan=False) + "\n")
+                            journal.flush()
+                            continue
+
+                    # By default, or on rejected/unsafe reacquisition, end
+                    # with a verified STOP. Never silently follow another ID.
                     intent = supervisor.observe(
                         target, decision, operator_stop=True)
                     if intent is None or intent.operation != "STOP":
