@@ -547,6 +547,17 @@ def main() -> None:
 
                     print(json.dumps(report, allow_nan=False), flush=True)
 
+                    # A rejected reacquisition must never be followed by
+                    # implicit fresh-session START on the new (possibly
+                    # different) person. End this bounded run instead.
+                    if (args.single_person_reacquire and
+                            report.get("reason") == "NEW_TRACK_REQUIRES_NEW_SESSION"):
+                        print(json.dumps({
+                            "event": "SHADOW_REACQUIRE_REFUSED_SESSION_ENDED",
+                            "reason": "NEW_RGB_ID_NOT_CONFIRMED_AS_SINGLE_PERSON"
+                        }), flush=True)
+                        break
+
                     # Track change must not silently authorize another person
                     # during one continuous SHADOW operation.
                     if (args.continuous and
