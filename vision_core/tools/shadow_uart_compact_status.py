@@ -44,7 +44,7 @@ WIRE_FIELDS = (
 
 _STATES = frozenset((
     "READY", "PAUSED", "STARTING", "DRIVING", "BRAKING", "CORRECTING",
-    "COASTING", "SUCCESS", "FAULT", "UNKNOWN",
+    "COASTING", "SUCCESS", "FAULT",
 ))
 _REQUIRED_STRINGS = frozenset((
     "firmware_build_id", "shadow_api_version", "boot_session_id",
