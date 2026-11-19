@@ -249,6 +249,39 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 self.ar_capture.release()
                 if isinstance(self.stereo_capture,LatestV4L2Capture):self.stereo_capture.release()
                 raise
+        self.declare_parameter("preview_identity_diagnostic_enabled",False)
+        self.declare_parameter("preview_identity_every_n_cycles",5)
+        self._identity_worker=None
+        self._identity_every_n=int(self.get_parameter("preview_identity_every_n_cycles").value)
+        if self._identity_every_n<1:
+            raise ValueError("identity diagnostic interval must be positive")
+        if bool(self.get_parameter("preview_identity_diagnostic_enabled").value):
+            if not (self._shadow_segmentation_input and self._target_crop
+                    and self._mask_client is not None
+                    and self._capture_backend=="latest_v4l2"):
+                raise ValueError("identity preview requires native fast single segmentation")
+            from pathlib import Path
+            from vision_core.person_localization.shadow_live_identity import (
+                LiveIdentityProcessor, LatestIdentityPreview)
+            self.declare_parameter("preview_identity_yunet_model","")
+            self.declare_parameter("preview_identity_sface_model","")
+            self.declare_parameter("preview_identity_face_profile","")
+            self.declare_parameter("preview_identity_osnet_model","")
+            options={
+                "yunet":str(self.get_parameter("preview_identity_yunet_model").value),
+                "sface":str(self.get_parameter("preview_identity_sface_model").value),
+                "face_profile":str(self.get_parameter("preview_identity_face_profile").value),
+                "osnet":str(self.get_parameter("preview_identity_osnet_model").value)}
+            if any(not value or not Path(value).is_file()
+                   for value in options.values()):
+                raise ValueError("identity preview requires existing local face/OSNet models and profile")
+            self._identity_publisher=self.create_publisher(
+                String,"/sie/diagnostics/ar0234_ov9281/identity_preview",1)
+            self._identity_worker=LatestIdentityPreview(
+                lambda:LiveIdentityProcessor(**options),
+                report_path=self.evidence_dir/"identity-preview.jsonl")
+            self.get_logger().info(
+                "live identity diagnostic enabled; latest-wins; no face threshold, no identity action or motor authorization")
         if os.environ.get('SIE_SHADOW_SOURCE_SNAPSHOTS') == '1':
             if not self._shadow_fast_input or self._capture_backend != 'latest_v4l2':
                 raise ValueError('source snapshots require current fast Shadow native capture')
@@ -368,6 +401,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._last_stereo_start=self._last_stereo_end=None
         self._cached_stereo = None
         source_snapshot_payload=source_snapshot_disparity=source_snapshot_lr=source_snapshot_cal=None
+        identity_source_payload=None
         self._last_stereo_worker_timings = None
         # Parent LR code calls _timed_call/decorators. Never share a mutable
         # timing collector across its worker and the foreground.
@@ -663,11 +697,15 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                             **({'source_snapshot':True,'snapshot_periodic':self.sequence%10==0,
                                 'snapshot_reacquire':self._confirmed_target_track is None}
                                if getattr(self,'_source_snapshot_writer',None) is not None else {}),
+                            **({'identity_source':True}
+                               if getattr(self,'_identity_worker',None) is not None
+                               and self.sequence%self._identity_every_n==0 else {}),
                             **({"fast_local":True} if getattr(self,"_fast_local_consistency",False) else {}),
                             **({"front_profile":self._front_profile} if getattr(self,"_front_profile",None) is not None else {}),
                             **({"defer_local":True, **({"prepare_local":False} if not local_scheduled else {})}
                                if getattr(self,"_defer_local",False) else {}))
                         source_snapshot_payload=shape_result.pop('_shadow_source_mask_snapshot',None)
+                        identity_source_payload=shape_result.pop('_shadow_identity_source_crop',None)
                         if source_snapshot_payload is not None:
                             source_snapshot_disparity=disparity
                             source_snapshot_lr=lr
