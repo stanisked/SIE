@@ -30,6 +30,8 @@ def test_rows():
         journal.append({
             "cycle":i,"cycle_id":cycle(i),"camera_track_id":track,
             "decision":decision,"mask_sha256":SHA1,
+            "segmentation_instance_count":1 if decision=="FOLLOW_ELIGIBLE" else 0,
+            "eligible_count":1 if decision=="FOLLOW_ELIGIBLE" else 0,
         })
     face_rows=[]
     body_rows=[]
