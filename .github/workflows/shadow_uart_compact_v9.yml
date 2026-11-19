@@ -51,3 +51,22 @@ jobs:
             vision_core.tests.test_shadow_uart_compact_v9_pty \
             vision_core.tests.test_run_shadow_uart \
             vision_core.tests.test_shadow_feedback_pause_race_v8
+
+  firmware-compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install ESP32 board platform
+        run: |
+          arduino-cli core update-index \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32 \
+            --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+      - name: Compile v9 for ESP32 Dev Module (no upload)
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --warnings all \
+            firmware/esp32/traction_control_v4_2_uart_shadow_v9_compact_status
