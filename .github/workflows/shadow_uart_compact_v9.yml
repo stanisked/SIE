@@ -1,0 +1,50 @@
+name: Shadow UART compact v9 (motor-off)
+
+on:
+  push:
+    paths:
+      - 'vision_core/tools/shadow_uart_compact_status.py'
+      - 'vision_core/tools/uart_http_transport.py'
+      - 'vision_core/tools/run_shadow_uart.py'
+      - 'vision_core/tests/test_shadow_uart_compact*.py'
+      - 'firmware/esp32/traction_control_v4_2_uart_shadow_v9_compact_status/**'
+      - '.github/workflows/shadow_uart_compact_v9.yml'
+  pull_request:
+    paths:
+      - 'vision_core/tools/shadow_uart_compact_status.py'
+      - 'vision_core/tools/uart_http_transport.py'
+      - 'vision_core/tools/run_shadow_uart.py'
+      - 'vision_core/tests/test_shadow_uart_compact*.py'
+      - 'firmware/esp32/traction_control_v4_2_uart_shadow_v9_compact_status/**'
+      - '.github/workflows/shadow_uart_compact_v9.yml'
+
+jobs:
+  motor-off-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r requirements/dev.txt ruff==0.16.4
+      - name: Syntax check changed Python modules
+        run: |
+          python -m py_compile \
+            vision_core/tools/shadow_uart_compact_status.py \
+            vision_core/tools/uart_http_transport.py \
+            vision_core/tools/run_shadow_uart.py \
+            vision_core/tests/test_shadow_uart_compact_status.py \
+            vision_core/tests/test_shadow_uart_compact_v9_integration.py
+      - name: Focused static lint on new contract and test files
+        run: |
+          ruff check \
+            vision_core/tools/shadow_uart_compact_status.py \
+            vision_core/tests/test_shadow_uart_compact_status.py \
+            vision_core/tests/test_shadow_uart_compact_v9_integration.py
+      - name: Motor-off unit and regression tests
+        run: |
+          python -m unittest -v \
+            vision_core.tests.test_shadow_uart_compact_status \
+            vision_core.tests.test_shadow_uart_compact_v9_integration \
+            vision_core.tests.test_run_shadow_uart \
+            vision_core.tests.test_shadow_feedback_pause_race_v8
