@@ -159,8 +159,15 @@ def main():
                     cal={k:bundle[k] for k in ('P1','P2','R1','R','T','K','D','size')}
                 started=time.monotonic()
                 if request.get('operation')=='evaluate_selected_instance':
-                    mask=current_masks.take(request['cycle_id'],request['rgb_arrays_sha256'],
-                                            request['instance_index'],request['bbox_xyxy_px'])
+                    identity_requested=request.get('identity_source') is True
+                    selected=current_masks.take(request['cycle_id'],request['rgb_arrays_sha256'],
+                                            request['instance_index'],request['bbox_xyxy_px'],
+                                            include_rgb=identity_requested)
+                    if identity_requested:
+                        mask,identity_rgb=selected
+                    else:
+                        mask=selected
+                        identity_rgb=None
                     info={'status':'CURRENT_FRAME_MASK_DIAGNOSTIC_ONLY',
                           'instance_index':request['instance_index'],
                           'source_rgb_arrays_sha256':request['rgb_arrays_sha256'],
@@ -196,6 +203,18 @@ def main():
                         result['surface_s']=time.monotonic()-started
                     result.update(mask=info,
                                   mask_sha256=hashlib.sha256(mask.tobytes()).hexdigest())
+                    if request.get('identity_source') is True:
+                        try:
+                            from vision_core.person_localization.shadow_identity_crop import (
+                                pack_selected_identity_source)
+                            result['_shadow_identity_source_crop']=pack_selected_identity_source(
+                                identity_rgb,mask,request['bbox_xyxy_px'],
+                                cycle_id=request['cycle_id'],
+                                instance_index=request['instance_index'],
+                                rgb_arrays_sha256=request['rgb_arrays_sha256'],
+                                segmentation_model_sha256=model_sha)
+                        except Exception as error:
+                            result['identity_source_error']=type(error).__name__
                     if request.get('shadow_source_snapshot') is True:
                         from vision_core.person_localization.shadow_source_snapshot import (
                             capture_reason, pack_mask)
