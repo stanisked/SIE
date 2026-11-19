@@ -454,6 +454,10 @@ def _run_session_unlocked(*, request, observations, journal_path, rgb_calibratio
                 # no-new-frame tick (which keeps the previous observation).
                 if supervisor.track_id is not None and target is None:
                     had_target_gap = True
+                    # Do not count two nonconsecutive sightings as a stable
+                    # reacquisition if an intervening camera cycle lost RGB.
+                    reacquire_gate.reset()
+                    last_reacquire_log_key = None
                 elif (supervisor.track_id is not None and target is not None
                         and target.track_id == supervisor.track_id
                         and decision.action in ("FOLLOW_ELIGIBLE", "HOLD")):
