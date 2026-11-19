@@ -35,16 +35,19 @@ jobs:
             vision_core/tools/run_shadow_uart.py \
             vision_core/tests/test_shadow_uart_compact_status.py \
             vision_core/tests/test_shadow_uart_compact_v9_integration.py
+            vision_core/tests/test_shadow_uart_compact_v9_pty.py
       - name: Focused static lint on new contract and test files
         run: |
           ruff check \
             vision_core/tools/shadow_uart_compact_status.py \
             vision_core/tests/test_shadow_uart_compact_status.py \
             vision_core/tests/test_shadow_uart_compact_v9_integration.py
+            vision_core/tests/test_shadow_uart_compact_v9_pty.py
       - name: Motor-off unit and regression tests
         run: |
           python -m unittest -v \
             vision_core.tests.test_shadow_uart_compact_status \
             vision_core.tests.test_shadow_uart_compact_v9_integration \
+            vision_core.tests.test_shadow_uart_compact_v9_pty \
             vision_core.tests.test_run_shadow_uart \
             vision_core.tests.test_shadow_feedback_pause_race_v8
