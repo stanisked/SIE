@@ -115,6 +115,39 @@ class ReacquireRunnerTests(unittest.TestCase):
         self.assertIs(event["resume_authorized"], False)
         self.assertEqual(ctrl.posts[-1][0], "/stop")
 
+    def test_recorded_20261119_range_bearing_sequence(self):
+        # Approximate replay of cycles 93, 98, 99, 100 from the real
+        # 2026-11-19 diagnostic archive. Does not replay raw camera images.
+        report, rows, ctrl = self.run_case([
+            (1003.53, pair("old", 1003.522574,
+                           bearing=5.882241, distance=1.03757)),
+            (1004.45, ShadowObservation(None, ())),
+            (1004.98, pair("new", 1004.958731,
+                           bearing=6.95957, distance=.98230)),
+            (1005.31, pair("new", 1005.290684,
+                           bearing=8.25200, distance=1.00062)),
+            (1005.64, pair("new", 1005.622703,
+                           bearing=8.50913, distance=1.01494)),
+        ])
+        self.assertEqual(report["result"], "SESSION_ENDED")
+        self.assertEqual(report["single_person_reacquires"], 1)
+        self.assertIn("RESUME", report["operations"])
+        self.assertEqual(len([r for r in rows if
+            r.get("event") == "SHADOW_SINGLE_PERSON_TRACK_REBOUND"]), 1)
+        self.assertEqual(ctrl.posts[-1][0], "/stop")
+
+    def test_missing_camera_target_breaks_candidate_consecutiveness(self):
+        report, _, ctrl = self.run_case([
+            (10.0, pair("old", 10.0)),
+            (10.25, ShadowObservation(None, ())),
+            (10.50, pair("new", 10.50)),
+            (10.60, ShadowObservation(None, ())),
+            (10.75, pair("new", 10.75)),
+        ])
+        self.assertEqual(report["single_person_reacquires"], 0)
+        self.assertNotIn("RESUME", report["operations"])
+        self.assertEqual(ctrl.posts[-1][0], "/stop")
+
     def test_no_resuming_from_confirmation_pair(self):
         report, _, ctrl = self.run_case([
             (10.0, pair("old", 10.0)),
