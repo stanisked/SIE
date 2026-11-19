@@ -95,7 +95,8 @@ class ValidationTests(unittest.TestCase):
 
     def test_reject_enrollment_reused_as_validation(self):
         with self.assertRaisesRegex(ValueError,"ENROLLMENT_DATASET_IS_NOT_VALIDATION"):
-            self.run_evaluation([1],[1],dataset="/tmp/enrollment_synthetic")
+            self.run_evaluation([1],[1],dataset="/tmp/validation_synthetic",
+                                profile=profile_data("/tmp/validation_synthetic"))
 
     def test_reject_wrong_target_profile(self):
         feature,metadata=profile_data()
