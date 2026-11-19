@@ -1,0 +1,40 @@
+# SIEE | Autonomous Person Following MVP: Face/Body Live + Floor FOLLOW/STEER, 2026-11-19
+
+Status: verified operator experiment and inspected primary JSONL. This is a diagnostic engineering record, NOT autonomous navigation authorization, certified measurement, independent identity verification, or safety release.
+
+## Sources and reproducibility
+
+- Repository: `stanisked/SIE`, identity integration branch `codex/siee-live-identity-preview-v1-20261119`, implementation checkpoint `8e079a97c37db9f78e614f9e165b3639180954b0` (before this document update). Repo contains code, NOT private biometrics or Pi runtime evidence.
+- Pi: `piecake`, checkout `/home/elwis/dev_ws/sie_live_identity_20261119`, Python `/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python`, UART `/dev/ttyAMA0`.
+- Live motor-off evidence: `/home/elwis/.local/state/sie/evidence/shadow_fast_20261119_180036/bridge.jsonl`, `identity-preview.jsonl`. Operator uploaded `identity-preview.jsonl`, SHA-256 `6b9f570222c98647eeffeae3daef65dfc7cebeb3b49aa7b10fe788868e7b210e`. Camera cycle summary was supplied by operator.
+- Supervised floor trial: `/home/elwis/.local/state/sie/evidence/shadow_fast_20261119_181125/bridge.jsonl`, operator-uploaded copy `bridge(20261119-151320).jsonl`, SHA-256 `e48fa59526e2f882649156036f89537a425c943dbf1e73fbc3794615c24476e6`, 281 JSONL records. Recorded with `SHADOW_IDENTITY_PREVIEW=0`, source `segmentation_mask`, `--execute --supervised-experimental --single-person-reacquire --max-segments 6 --segment-m .40`. Actual physical user observation provided 2026-11-19.
+- Identity offline preflight: `body_osnet_reacquire_20261119.json`, `face_body_reacquire_20261119.json`, `identity_timeline_20261119.json`, `identity_coordinator_replay_20261119.json`. The replay file SHA-256 is `52ee8ec2186d7d50f58603db14c7dddb7e00ac270a798c51b2a97fbffc753fb1`. Replay passes 143 cycles, 11 retained image inputs, seven unverified face inputs; 132 cycles without retained identity imagery are NOT 132 camera target losses.
+- Synthetic coordinator test result from operator: 23/23 PASS after fixing `KeyError('segmentation_instance_count')`. New live worker's own tests were added in repo but their precise completed count was not provided in this exchange; never claim a fresh complete test PASS absent the Pi output.
+- ESP32 runtime firmware observed in trial: `v4_2_uart_shadow_v8_short_forward_completion`. This is a firmware build ID read through UART, NOT independent verification of a corresponding local sketch SHA/flash artifact.
+
+## FACT: Live Face + Body diagnostic integration (motors disabled)
+
+- New code: `vision_core/person_localization/shadow_identity_crop.py`, `shadow_live_identity.py`, opt-in wiring in `vision_core/tools/control_preview_mask_worker.py`, `preview_mask_surface.py`, `ros2/sie_ros2/sie_ros2/preview_mask_client.py`, `ar0234_ov9281_control_preview_node.py` and `vision_core/tools/run_shadow_fast_preview.sh`. Switch `SHADOW_IDENTITY_PREVIEW=1`; no flag means previous mask-only preview, and the worker's output does not enter the motion controller.
+- Exact selected RGB/mask crop, cycle ID, segmentation model, instance index and SHA provenance pass to latest-wins asynchronous YuNet/SFace + OSNet worker. Diagnostic ROS topic: `/sie/diagnostics/ar0234_ov9281/identity_preview`. Private Pi JSONL: `identity-preview.jsonl`. No embedding vectors are emitted.
+- Real motor-off `identity-preview.jsonl`: 18 processed rows with 0 recorded inference errors; 15 `CURRENT_SELECTED_FACE_EMBEDDED`, three `NO_FACE_VISIBLE`. RGB track IDs: 12 rows `:1`, one `:2`, five `:3`. OSNet cross-track median `:1→:2` = 0.73561 (8 comparisons), `:2→:3` = 0.8717 (one comparison). SFace positive-profile cosine range 0.23733–0.73653, median 0.6192. No negative-person calibration or robust identity match threshold.
+- All 18 were `LATE_DIAGNOSTIC`: submit-to-result latency min 546.61 ms, median 625.605 ms, max 762.86 ms. `FaceAnchoredTarget` returned `TARGET_UNAVAILABLE/STALE_OR_UNBOUND_RGB_MASK` for all. In all 18: `identity_supported=false`, `motor_authorized=false`. These delays are worker submission-to-result, NOT independently measured exposure-to-action.
+- Camera/Bridge summary with worker on: 112 cycles, 67 `FOLLOW_ELIGIBLE`, 45 `PAUSE`; 19/112 driver-to-decision over 500 ms, AR0234 median/max 289.89/695.99 ms, OV9281 median/max 293.82/707.84 ms; host-processing median/max 267.66/696.76 ms. `CURRENT_RGB_MASK_TRACK_BINDING_INVALID` 5; `DRIVER_AGE_OR_GEOMETRY_INVALID` 18. No two-person scene. Older motor-off run 2026-11-19 17:05:24: host max ~394.84 ms. CPU contention is a HYPOTHESIS, not proven causal attribution.
+
+## FACT: Supervised floor motion (Identity Worker disabled)
+
+- Journal summary: `SESSION_ENDED`, `SEGMENT_LIMIT_REACHED`, six commanded forward segments (one START, five RESUME); three PAUSE; 12 STEER attempts of which ten `POST /steer-update` returned HTTP 200 and two returned HTTP 409 (`NO_MATCHING_ACTIVE_STEERED_FORWARD`). No fault reported in terminal status; one `POST /stop` 202; final `state=READY`, `last_command_state=STOPPED`, `active_command_id=null`, left/right PWM 0/0, `fault=null`, `bounded_fault_latched=false`.
+- Actuator evidence: `last_steer_update_seq=12`, `last_steer_biased_drive_cycles=34`, `last_steer_last_applied_bias_pwm=20`, last-segment right/left PWM sums 5982/6356. This shows commanded PWM steering was actually applied. This does NOT independently measure wheel trajectory or exact stop clearance.
+- `SHADOW_POST_STATUS_FRESHNESS_REJECTED` 20, `SHADOW_STALE_PAUSE_SUPPRESSED` 12, `SHADOW_POST_STATUS_FRESH_PAIR_USED` 2. `single_person_reacquires=0`; `edge_turns_started=0`. Only original RGB track was exercised during the session, so no identity-preserving re-entry was validated with motors.
+- **Operator's direct ground observation**: standing opposite the robot, the cart approached the person. When the person stepped to their left (right in the RGB camera's view), the cart visibly corrected its path toward them. **FLOOR FOLLOW and that one-direction physical steering are confirmed**. This is not yet evidence of bidirectional steering, sustained uninterrupted tracking, collision avoidance, 0.5-m front-edge stand-off accuracy, or successful target-loss/reappearance continuation.
+- Encoder-reported per-segment distances are not independent ground-truth distances or cumulative displacement. Diagnostic torso-core stereo range is not approved canonical SIE `Measurement`. No LiDAR D500 sensor fusion was active.
+
+## Decisions and boundaries (2026-11-19)
+
+1. Preserve functioning bounded supervised floor FOLLOW + STEER via `SHADOW_IDENTITY_PREVIEW=0`, the existing ESP32 v8 UART build and its STOP/fault handling. Do not claim general autonomous/person-specific following from this single-direction supervised run.
+2. Keep new face/body worker strictly diagnostic; it does not steer, authorize motion, or prove `person_001` re-identification. Positive-only similarities and RGB Track IDs do not establish identity.
+3. Do not loosen freshness or identity thresholds as a shortcut. Profile hashes, stereo calibration, measurement eligibility and the prior ROS/Data Contracts remain unchanged. Keep physical power cutoff accessible.
+4. Graphify AST snapshot remains historical: extracted 2026-11-16 at `db8097ea4239dcf45ef7598c831a45648d2498fd`, 4,599 nodes / 13,658 edges / 300 communities. No extraction run on today's identity code.
+
+## OPEN / one next testable step
+
+In the next ChatGPT chat: inspect the 2026-11-19 primary reports and exact current Pi checkout, then design a **bounded supervised floor scenario with Identity Worker OFF** to check target loss → confirmed STOP → fresh RGB/depth re-entry and optionally both steering directions. Do not assume `single_person_reacquire` already succeeded. Independently optimize live identity latency in a motor-off run before ever making it a motion dependency, with measured driver-to-decision tail latency. Do not repeat static stereo calibration or lifted-wheel baseline already passed.
