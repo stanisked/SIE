@@ -64,6 +64,19 @@ class IdentityCoordinatorReplayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"BINDING_INVALID"):
             replay(journal,face,body,timeline)
 
+    def test_candidate_requires_corresponding_source_evidence(self):
+        journal,face,body,timeline=self.fixture()
+        timeline["per_cycle"][0]["candidate_entity_id"]="person_001"
+        with self.assertRaisesRegex(ValueError,"TIMELINE_EVENT_BINDING_INVALID"):
+            replay(journal,face,body,timeline)
+
+    def test_face_snapshot_cannot_be_swapped_between_cycles(self):
+        journal,face,body,timeline=self.fixture()
+        timeline["per_cycle"][0]["face_snapshot"]=(
+            timeline["per_cycle"][-1]["face_snapshot"])
+        with self.assertRaisesRegex(ValueError,"TIMELINE_EVENT_BINDING_INVALID"):
+            replay(journal,face,body,timeline)
+
     def test_replay_leaves_original_identity_coordinator_unmodified(self):
         journal,face,body,timeline=self.fixture()
         initial=deepcopy(timeline)
