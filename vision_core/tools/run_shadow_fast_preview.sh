@@ -43,6 +43,35 @@ required_inputs=("$runtime" "$segmenter_python" "$model" "$report" "$activation_
 if [[ "$semantic_source" = v3_mask_binding ]]; then
   required_inputs+=("$v3")
 fi
+# Opt-in Face/Body evidence remains a diagnostic side stream. It cannot
+# authorize a track transfer or movement in the existing Shadow bridge.
+identity_ros_args=()
+case "${SHADOW_IDENTITY_PREVIEW:-0}" in
+  0) ;;
+  1)
+    face_dir=/home/elwis/dev_ws/runtime_artifacts/sie_face_yunet_sface_v1
+    body_dir=/home/elwis/dev_ws/runtime_artifacts/sie_body_osnet_x0_25
+    face_private=/home/elwis/.local/state/sie/private/face_profiles
+    identity_inputs=(
+      "$face_dir/face_detection_yunet_2023mar.onnx"
+      "$face_dir/face_recognition_sface_2021dec.onnx"
+      "$face_private/person_001_face_enrollment_v1.npz"
+      "$body_dir/osnet_x0_25_msmt17.onnx"
+    )
+    for identity_input in "${identity_inputs[@]}"; do
+      [[ -f "$identity_input" ]] || { echo "Missing identity input: $identity_input" >&2; exit 2; }
+    done
+    identity_ros_args=(
+      -p 'preview_identity_diagnostic_enabled:=true'
+      -p 'preview_identity_every_n_cycles:=5'
+      -p "preview_identity_yunet_model:=${identity_inputs[0]}"
+      -p "preview_identity_sface_model:=${identity_inputs[1]}"
+      -p "preview_identity_face_profile:=${identity_inputs[2]}"
+      -p "preview_identity_osnet_model:=${identity_inputs[3]}"
+    )
+    ;;
+  *) echo 'SHADOW_IDENTITY_PREVIEW must be 0 or 1' >&2; exit 2 ;;
+esac
 for required in "${required_inputs[@]}"; do
   [[ -f "$required" ]] || { echo "Missing reviewed input: $required" >&2; exit 2; }
 done
@@ -86,7 +115,7 @@ esac
   -p preview_crop_lookup_backend:=blocked -p preview_stereo_mode:=half_640x400 \
   -p preview_front_mount_profile:="$PWD/vision_core/config/diagnostics/robot_front_mount_operator_v1.json" \
   -p stereo_match_execution:=parallel -p stereo_opencv_threads:=1 \
-  -p frame_rate_hz:=10.0 -p evidence_dir:="$evidence" &
+  -p frame_rate_hz:=10.0 -p evidence_dir:="$evidence" "${identity_ros_args[@]}" &
 camera_pid=$!
 trap 'kill -INT "$camera_pid" 2>/dev/null || true; wait "$camera_pid" 2>/dev/null || true; rm -rf -- "$native_dir"' EXIT
 "$runtime" vision_core/tools/shadow_live_bridge.py --source fast_mask \
@@ -101,6 +130,9 @@ else
   "$runtime" vision_core/tools/summarize_shadow_fast_preview.py "$evidence/bridge.jsonl"
 fi
 echo "Evidence: $evidence"
+if [[ "${SHADOW_IDENTITY_PREVIEW:-0}" = 1 ]]; then
+  echo "Identity diagnostic: $evidence/identity-preview.jsonl (motor authorization unchanged)"
+fi
 if [[ "${SHADOW_CAPTURE_SNAPSHOTS:-0}" = 1 ]]; then
   "$runtime" vision_core/tools/summarize_shadow_source_snapshots.py \
     "$evidence/bridge.jsonl" "$evidence/shadow-source-snapshots"
