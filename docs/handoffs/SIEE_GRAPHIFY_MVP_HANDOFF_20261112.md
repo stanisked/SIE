@@ -1,9 +1,9 @@
 # SIEE / Fast Shadow / Graphify: технический контекст и журнал продолжения
 
-**Версия документа:** 1.1  
-**Срез знаний:** 2026-11-16 (UART v2 / ESP32 physical steering; Graphify rebuilt at db8097e)
+**Версия документа:** 1.3  
+**Срез знаний:** 2026-11-19 (live Identity Worker, bounded floor FOLLOW/STEER and operator-observed rightward physical correction; Graphify AST still 2026-11-16/db8097e)
 **Проект:** Spatial Intelligence Evidence Engine (SIEE; технические идентификаторы `sie` сохраняются)  
-**Основная инженерная ветка для этого handoff:** `codex/shadow-turtlesim-follow-20261111`  
+**Историческая ветка восстановления:** `codex/shadow-turtlesim-follow-20261111`; **актуальная экспериментальная ветка Face/Body и Floor MVP:** `codex/siee-live-identity-preview-v1-20261119` (ветки не слиты автоматически)  
 **Назначение:** передача накопленного инженерного контекста между ChatGPT, Codex и другими LLM; сохранение истории проверенных решений и экспериментов; использование Graphify для ускорения разработки мобильного MVP.  
 **Статус:** рабочий handoff, **не** Engineering Specification, не разрешение на физическое движение и не замена `PROJECT_CONTEXT.md`.  
 **Репозиторий:** `https://github.com/stanisked/SIE`  
@@ -16,6 +16,48 @@
 > **Принцип документа:** писать только то, что подтверждено конкретным исходником, тестом, журналом или сообщением оператора. Разделять **ФАКТ**, **ГИПОТЕЗА**, **РЕШЕНИЕ** и **НЕ ПРОВЕРЕНО**. Указывать источник и состояние кода, к которому относится утверждение. Не переписывать прошлое задним числом: новые результаты добавлять в журнал изменений.
 
 ---
+
+
+
+## 2026-11-19: результат реальных камер и напольного FOLLOW/STEER (ФАКТ / ГИПОТЕЗА / OPEN)
+
+**Primary record:** `docs/diagnostics/siee_floor_follow_face_body_status_20261119.md` + новый переходный документ `docs/handoffs/SIEE_PERSON_FOLLOWING_CHAT_HANDOFF_20261119.md`. Обновление `PROJECT_CONTEXT.md` выполняется в том же Git-срезе, включая ранее отсутствовавшее здесь более свежее 17-Nov Drive-содержание.
+
+**Точки кода:** `codex/siee-live-identity-preview-v1-20261119`, перед документацией HEAD `8e079a97c37db9f78e614f9e165b3639180954b0`. `control_preview_mask_worker.py → preview_mask_surface.py → preview_mask_client.py → ar0234_ov9281_control_preview_node.py` формирует выбранный same-cycle AR0234 crop, а `shadow_live_identity.py` асинхронно рассчитывает YuNet/SFace + OSNet и вызывает существующий `FaceAnchoredTarget` в диагностическом режиме. Переключатель `SHADOW_IDENTITY_PREVIEW=1` включает отдельную очередь latest-wins и тему `/sie/diagnostics/ar0234_ov9281/identity_preview`; двигатели и Data Contracts прежние. Внимание: `FaceAnchoredTarget` не подтверждает `person_001` из некалиброванных cosine.
+
+**Офлайн проверка:** 143-цикловый `shadow_fast_20261119_170524/bridge.jsonl`: после потери ID `:1` у цикла 34 наблюдаем новый `:2` на цикле 73, лицо в сохранённых кадрах с 80. Сохранено 11 исходных кадров, seven `UNVERIFIED_FACE`. Итоговый replay 143/143, 11 snapshot inputs, 132 cycles без retained identity image, coordinator `AWAITING_FACE=11`/`TARGET_LOST=132`, но эти 132 обозначают отсутствие snapshot для replay, а не 132 фактических потери цели. 23/23 проверок ранее существовавшего координатора+replay PASS на Pi. Порог Face/Body по отрицательным людям не валидирован.
+
+**Motor-off live, 18:00:36:** `identity-preview.jsonl`, SHA-256 `6b9f570222c98647eeffeae3daef65dfc7cebeb3b49aa7b10fe788868e7b210e`: 18 результатов, 15 SFace embeddings, 3 no-face, Track IDs `:1` 12 / `:2` 1 / `:3` 5. OSNet при `:1→:2` медиана 0.73561 (8 срав.) и `:2→:3` 0.8717 (1 срав.): только гипотезы. Все 18 `LATE_DIAGNOSTIC`, 546.61–762.86 мс (медиана 625.605) до результата; `FaceAnchoredTarget` 18/18 `TARGET_UNAVAILABLE/STALE_OR_UNBOUND_RGB_MASK`. `identity_supported=false`, `motor_authorized=false` для всех. Параллельный Bridge summary: 112 camera cycles, 67 FOLLOW_ELIGIBLE / 45 PAUSE, 19 camera cycles >500 ms to decision. Возможная CPU-конкуренция пока **ГИПОТЕЗА**, не установленный профилированием факт.
+
+**Floor FOLLOW, 18:11:25:** с `SHADOW_IDENTITY_PREVIEW=0`, source `segmentation_mask`, `--execute --supervised-experimental --single-person-reacquire --max-segments 6 --segment-m .40`. Источник `bridge(20261119-151320).jsonl` SHA-256 `e48fa59526e2f882649156036f89537a425c943dbf1e73fbc3794615c24476e6`, 281 records. 6 forward segments, 3 PAUSE, 12 steer attempts, 10 HTTP 200/2 HTTP 409, ESP32 applied PWM steering (`last_steer_biased_drive_cycles=34`). ESP32 firmware `v4_2_uart_shadow_v8_short_forward_completion`. Итог `SEGMENT_LIMIT_REACHED`, финальный STOP accepted, `READY/STOPPED/PWM0/0/fault=null`. Не было Track ID reacquire (`single_person_reacquires=0`) и standalone edge TURN (`edge_turns_started=0`).
+
+**Физическое наблюдение оператора:** тележка ехала к человеку; человек сделал шаг налево относительно себя (направо в изображении камеры), тележка видимо сместилась/подрулила к нему. **ФАКТ: движение к человеку и коррекция вправо в координатах изображения подтверждены на полу.** Это не подтверждение отработки *обоих* направлений, стабильного расстояния остановки, person_001 Face/Body identity, бесконечного непрерывного follow или возвращения после долгой потери.
+
+**OPEN:** прерывистость свежих RGB/depth кадров (в floor UART логе 20 `SHADOW_POST_STATUS_FRESHNESS_REJECTED`, 12 `SHADOW_STALE_PAUSE_SUPPRESSED`); live identity >500ms. Вернуть Identity Worker в руление до измеренной латентности и калибровки ReID нельзя. Следующий MVP-шаг: supervised floor тест полного цикла loss → STOP → fresh re-entry, с `SHADOW_IDENTITY_PREVIEW=0` и независимым отключением приводов. Затем motor-off профилирование YuNet/SFace/OSNet и очереди.
+
+**Graphify:** последнее реальное `extract --code-only` выполнено 2026-11-16 на `db8097ea4239dcf45ef7598c831a45648d2498fd` (4,599 nodes / 13,658 edges / 300 communities). Это не граф новой 19-Nov Face/Body ветки. Любое пересоздание graph.json требует самостоятельного измеренного extraction; здесь Graphify не запускался.
+
+---
+
+## 2026-11-17: экспериментальная ветка и проверенный физический контур (FACT / OPEN)
+
+**Источник точного итогового checkpoint:** `docs/diagnostics/siee_status_20261117.md`, идентичный файл в восстановительной baseline-ветке и ветке v7. При восстановлении сравнивать со свежим `PROJECT_CONTEXT.md`; здесь записаны зависимости, результаты и ограничения для работы с Graphify и кодом. Не подменять этим подтверждённые калибровки и Data Contracts.
+
+**Ветки:** `codex/shadow-turtlesim-follow-20261111` остаётся назначенной исходной точкой восстановления. Код RGB Edge Recovery и timing replay находится в `codex/shadow-rgb-edge-recovery-20261117`. Её descendant `codex/shadow-short-segment-brake-v7-20261117` содержит актуальную v7 firmware и Python UART compatibility, но сама baseline-ветка 20261111 не получила скрытого слияния этих исполняемых изменений. После синхронизации документа обе ветки содержат этот журнал продолжения.
+
+**Физический FOLLOW/STEER:** `bridge(3).jsonl` (157 JSONL сообщений, операторское напольное испытание 17-Nov) содержит 6 моторных сегментов, 4 STEER, один идентификатор AR0234 `ar0234-audit-track:8144989e0438cf10:1`, последовательно измеренную экспериментальную person-depth от ~1.740 м до ~0.732 м. Оператор видел реальную смену ориентации у края RGB кадра уже после остановки движения вперёд. Но ни одного `/shadow-turn` в журнале нет; `shadow_turns_started=0`. Записывать физическое подруливание как успешный independent `RGB Edge Recovery TURN` запрещено без нового измерения.
+
+**ESP32 v5 короткий сегмент:** команда 0.042 м, начало BRAKING при 0.0466 м, финиш по энкодерам 0.0635 м, `STEERED_CENTER_LIMIT` после прежнего hard envelope 0.062 м. Fail-safe остановка PWM 0/0 не означает успешного follow standoff.
+
+**Edge Recovery software:** same-ID RGB edge hint + prior associated depth для одного bounded paused turn <=8°, 3.0 с maximum age **только для TURN**, fresh paired RGB/Depth mandatory before forward; different or reidentified ID refuses cached edge; 13/13 targeted tests PASS. Отдельный физический turn и post-turn continued follow OPEN.
+
+**ESP32 v7:** `firmware/esp32/traction_control_v4_2_uart_shadow_v7_short_forward_brake/` включает independent early brake на 0.100-м-и-короче steered-forward сегментах в STARTING, без увеличения hard wheel/center/heading limits. Четыре targeted tests PASS. Собрана/записана через ноутбук и Arduino IDE 2.3.11, `ESP32 Dev Module`, `/dev/ttyUSB0`: 508199 B flash, 72320 B globals, `Hash of data verified`. После подключения обратно к Pi через `/dev/ttyAMA0`: UART GET /status HTTP 200, `firmware_build_id=v4_2_uart_shadow_v7_short_forward_brake`, READY/fault=None/PWM0/0.
+
+**Сравнимые одиночные v7 тесты 0.042 м:** raised wheels: ранний trigger=26 counts при threshold=26, settled travel=0.0193 м, `PARTIAL_PROGRESS`, no fault. На полу: trigger=27/26, settled travel=0.0228 м, `PARTIAL_PROGRESS`, no fault. Это подтверждает раннее электрическое торможение, **но не завершение требуемого 42-мм движения**. В реально прошитой v7 `STEERED_SHORT_BRAKE_RESERVE_M=0.030f`; значение `0.017f` обсуждалось как **ГИПОТЕЗА для следующей ревизии**, не записано в бинарник и не тестировалось. Не считать прогноз ~35 мм физическим замером.
+
+**Обязательная проверка при продолжении:** следующее действие — отдельная, явно различимая ревизия для настройки short forward brake, Arduino IDE Verify/Upload по уже установленному маршруту (Pi scp → ноутбук → IDE), один поднятый и один напольный bounded test с журналом PWM, fault, final encoder counts и terminal `SUCCESS`/`PARTIAL_PROGRESS`. Только после повторно проверенного короткого сегмента можно возвращаться к отдельному `SHADOW_TURN` / fresh RGB-OV9281 pair / `RESUME`. Диапазон диагностической дальности 0.5–4.5 м, цель остановки 0.5 м от переднего борта, LiDAR D500 fusion ещё OPEN.
+
+**Graphify snapshot boundary:** приватная папка `Graphify_AST_db8097e_20261116` (`graph.json`, `graph.html`, `GRAPH_REPORT.md`) отражает только commit `db8097ea4239dcf45ef7598c831a45648d2498fd`, 4599 nodes / 13658 edges / 300 communities. Инкрементальная индексация исходников 17-Nov **не проводилась**; граф 16-Nov остаётся историческим, даже после сегодняшних правок Markdown. Не переписывать его `GRAPH_REPORT.md` как будто он построен по v7.
 
 ## 2026-11-16: ESP32 UART v2 Initial Bias and bilateral physical steering (FACT / OPEN)
 
