@@ -1,5 +1,7 @@
 # SIEE - Spatial Intelligence Evidence Engine
 
+**Latest active engineering checkpoint (2026-11-20):** [ESP32 v11 right-turn fault diagnostic and new-chat handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V11_TURN_FAULT_HANDOFF_20261120.md). Physical raised-wheel RIGHT 8° ended with `ENCODER_LIMIT_REACHED`; do not mistake diagnostics PASS for corrected brake control. Source changes still require local Pi Git reconciliation.
+
 Engineering architecture for robotic perception, spatial reasoning and decision support.
 
 ## Baseline Scope
