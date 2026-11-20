@@ -1,5 +1,7 @@
 # SIEE Project Context
 
+**Current active update (2026-11-20, late):** Physical ESP32 v11 raised-wheels RIGHT 8° diagnostic run ended in `BOUNDED_DISTANCE_LIMIT`, now unambiguously `fault_trigger=ENCODER_LIMIT_REACHED`. Brake request R/L 15/14 counts at 73 ms; fault snapshot 26/26; settled 28/27 against target 21/21 and limit 22/22; terminal FAULT, PWM0/0, STOP confirmed. New v11 diagnostic API works via Pi GPIO UART. Read [v11 handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V11_TURN_FAULT_HANDOFF_20261120.md) for exact logs, provenance, open brake-response cause and power-off requirement. This update supersedes the old *next step* for short edge turns but does not change prior successful FAST floor-follow facts. **The v11 source and helper changes remain uncommitted on Pi; this GitHub update documents results only.**
+
 **Snapshot date:** 2026-11-20 (FAST camera capture and supervised physical person following; previous sections preserved)
 **Purpose:** durable entry point for a human or AI agent continuing SIE work.  
 **Status:** The 20-Nov operator-supervised FAST floor test confirmed forward approach and operator-observed steering toward a person moving left and right. UART evidence records 19 START/RESUME, 41 STEER and 8 PAUSE, terminal READY with PWM 0/0 and no FAULT. The experimental camera-to-motion chain is verified for this bounded scenario, not accepted canonical Measurement, LiDAR fusion, independent trajectory accuracy or sustained unattended navigation. See 2026-11-20 update.
