@@ -1,5 +1,7 @@
 # SIEE project instructions for Codex
 
+**2026-11-20 active Shadow/ESP32 handoff:** Read [`docs/handoffs/SIEE_PERSON_FOLLOW_V11_TURN_FAULT_HANDOFF_20261120.md`](docs/handoffs/SIEE_PERSON_FOLLOW_V11_TURN_FAULT_HANDOFF_20261120.md) before further motor testing or Git reconciliation. v11 fault evidence is verified, brake response not fixed. Preserve local untracked/modified Pi files, and do not silently clear fault, flash or power motors.
+
 ## Scope
 
 This repository is the implementation workspace for SIE. The current cross-project state is recorded in `PROJECT_CONTEXT.md`; it must be read before an engineering task. The active implementation includes DECXIN OV9281 stereo, AR0234 RGB semantics, and ROS 2 integration on Raspberry Pi 5.
