@@ -37,8 +37,21 @@ int main(int argc,char **argv) {
     if(fmt.fmt.pix.width!=(unsigned)atoi(argv[2]) || fmt.fmt.pix.height!=(unsigned)atoi(argv[3]) || fmt.fmt.pix.pixelformat!=V4L2_PIX_FMT_MJPEG) {
         fprintf(stderr,"Current format differs from expected MJPEG mode; no format/controls changed.\n");goto done;
     }
-    struct v4l2_requestbuffers req={0};req.count=1;req.type=fmt.type;req.memory=V4L2_MEMORY_MMAP;
+    const char *buffer_env=getenv("SIE_V4L2_BUFFER_COUNT");
+    unsigned int requested_buffers=1;
+    if(buffer_env && strcmp(buffer_env,"1")!=0) {
+        if(strcmp(buffer_env,"4")!=0) {
+            fprintf(stderr,"Invalid V4L2 buffer count\\n");
+            goto done;
+        }
+        requested_buffers=4;
+    }
+    struct v4l2_requestbuffers req={0};req.count=requested_buffers;req.type=fmt.type;req.memory=V4L2_MEMORY_MMAP;
     if(call(fd,VIDIOC_REQBUFS,&req)<0 || req.count==0){perror("REQBUFS");goto done;}
+    if(requested_buffers==4 && req.count!=4) {
+        fprintf(stderr,"Four V4L2 buffers not allocated\\n");
+        goto done;
+    }
     count=req.count;maps=calloc(count,sizeof(*maps));lengths=calloc(count,sizeof(*lengths));
     if(!maps || !lengths){perror("allocate");goto done;}
     for(unsigned i=0;i<count;i++) {
@@ -50,7 +63,7 @@ int main(int argc,char **argv) {
     }
     enum v4l2_buf_type type=fmt.type;
     if(call(fd,VIDIOC_STREAMON,&type)<0){perror("STREAMON");goto done;}streaming=1;
-    printf("{\"kind\":\"buffers\",\"requested\":1,\"allocated\":%u}\n",count);fflush(stdout);
+    printf("{\"kind\":\"buffers\",\"requested\":%u,\"allocated\":%u}\n",requested_buffers,count);fflush(stdout);
     for(unsigned long long i=0;!stopping;i++) {
         struct pollfd pollfd={fd,POLLIN,0};int ready;
         do {ready=poll(&pollfd,1,2000);}while(ready<0 && errno==EINTR && !stopping);

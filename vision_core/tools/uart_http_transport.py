@@ -55,6 +55,8 @@ class UartHttp:
     def _fields(method: str, url: str):
         parsed = urlsplit(url)
         query = parse_qs(parsed.query, strict_parsing=True)
+        if parsed.path == '/status-compact' and method == 'GET' and not query:
+            return ['STATUS_COMPACT']
         if parsed.path == '/status' and method == 'GET' and not query:
             return ['STATUS']
         if parsed.path == '/stop' and method == 'POST' and not query:

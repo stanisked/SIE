@@ -6,8 +6,22 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 source /opt/ros/jazzy/setup.bash
 runtime=/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python
 segmenter_python=/home/elwis/dev_ws/runtime_envs/sie_seg_onnx_benchmark/bin/python
-model=/home/elwis/.local/state/sie/evidence/segmentation_input_size_20261015_123033/input_256x384/checkpoint.onnx
-report=/home/elwis/.local/state/sie/evidence/segmentation_input_size_20261015_123033/comparison.json
+case "${SHADOW_FAST_RUNTIME_PROFILE:-baseline}" in
+  baseline)
+    model=/home/elwis/.local/state/sie/evidence/segmentation_input_size_20261015_123033/input_256x384/checkpoint.onnx
+    report=/home/elwis/.local/state/sie/evidence/segmentation_input_size_20261015_123033/comparison.json
+    export SIE_V4L2_BUFFER_COUNT=1
+    ;;
+  fast_192x320_4buf)
+    model=/home/elwis/.local/state/sie/evidence/segmentation_input_192x320_20261016_130842/input_192x320/checkpoint.onnx
+    report=/home/elwis/.local/state/sie/evidence/segmentation_input_192x320_20261016_130842/comparison.json
+    export SIE_V4L2_BUFFER_COUNT=4
+    ;;
+  *)
+    echo "Unsupported SHADOW_FAST_RUNTIME_PROFILE" >&2
+    exit 2
+    ;;
+esac
 activation_profile=/home/elwis/dev_ws/runtime_artifacts/ar0234_ov9281_decision_chain_0p5_to_4p5m_v2/ar0234_ov9281_decision_chain_activation.json
 activation_profile_sha256=c835a304cc2758843747400c30f09a567b5ac74ebfd7908ea8ee14a013f519d9
 v3="${SHADOW_RGB_MODEL_PATH:-}"
