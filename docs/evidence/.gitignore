@@ -1,0 +1,4 @@
+# Raw experiment records and archives are stored privately.
+*.jsonl
+*.tar.gz
+*.zip
