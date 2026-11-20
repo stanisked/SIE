@@ -1,5 +1,7 @@
 # AI_CONTEXT.md
 
+**Current hardware handoff (2026-11-20):** For active ESP32 v11 bounded-turn diagnosis read [`docs/handoffs/SIEE_PERSON_FOLLOW_V11_TURN_FAULT_HANDOFF_20261120.md`](docs/handoffs/SIEE_PERSON_FOLLOW_V11_TURN_FAULT_HANDOFF_20261120.md) after `PROJECT_CONTEXT.md`. The latest physical raised-wheel turn latched `BOUNDED_DISTANCE_LIMIT` with `ENCODER_LIMIT_REACHED`; v11 is diagnostics only, not a validated motion fix. Pi local source has uncommitted changes and motor-power-off status after the test is not independently reconfirmed.
+
 # Spatial Intelligence Evidence Engine (SIEE)
 
 Version: 0.2
