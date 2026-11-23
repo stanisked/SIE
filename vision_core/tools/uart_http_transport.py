@@ -59,6 +59,8 @@ class UartHttp:
             return ['STATUS_COMPACT']
         if parsed.path == '/status' and method == 'GET' and not query:
             return ['STATUS']
+        if parsed.path == '/fault-diagnostics' and method == 'GET' and not query:
+            return ['FAULT_DIAGNOSTICS']
         if parsed.path == '/stop' and method == 'POST' and not query:
             return ['STOP']
         if parsed.path == '/move-forward-steered' and method == 'POST':

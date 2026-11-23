@@ -109,5 +109,25 @@ class ShadowSupervisorTests(unittest.TestCase):
         self.assertEqual(self.runner.observe(self.rgb, self.go).operation, "RESUME")
 
 
+    def test_fault_blocks_motion(self):
+        start = self.runner.observe(self.rgb, self.go)
+        self.confirm(start, "DRIVING", 170)
+
+        self.runner.reconcile(
+            boot_session_id="boot",
+            active_command_id=None,
+            last_command_id="shadow-one",
+            controller_state="FAULT",
+            right_pwm=0,
+            left_pwm=0,
+            fault_latched=True,
+        )
+
+        self.assertEqual(self.runner.state, "FAULT")
+        self.assertEqual(self.runner.track_id, "person-7")
+        self.assertIsNone(self.runner.pending)
+        self.assertIsNone(self.runner.observe(self.rgb, self.go))
+
+
 if __name__ == "__main__":
     unittest.main()
