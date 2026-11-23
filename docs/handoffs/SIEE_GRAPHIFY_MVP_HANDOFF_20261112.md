@@ -1,7 +1,7 @@
 # SIEE / Fast Shadow / Graphify: технический контекст и журнал продолжения
 
-**Версия документа:** 1.4  
-**Срез знаний:** 2026-11-20 (FAST camera capture and supervised physical person following; Graphify AST last extracted 2026-11-16/db8097e)
+**Версия документа:** 1.5  
+**Срез знаний:** 2026-11-23 (ESP32 v11-v13 brake evidence; Graphify AST last extracted 2026-11-16/db8097e)
 **Проект:** Spatial Intelligence Evidence Engine (SIEE; технические идентификаторы `sie` сохраняются)  
 **Историческая ветка восстановления:** `codex/shadow-turtlesim-follow-20261111`; **предыдущая ветка Face/Body:** `codex/siee-live-identity-preview-v1-20261119`; **текущая FAST MVP checkpoint:** `codex/siee-person-follow-mvp-20261120` (никакого неявного merge в main)  
 **Назначение:** передача накопленного инженерного контекста между ChatGPT, Codex и другими LLM; сохранение истории проверенных решений и экспериментов; использование Graphify для ускорения разработки мобильного MVP.  
@@ -17,6 +17,14 @@
 
 ---
 
+
+## 2026-11-23: ESP32 brake continuity dependencies (FACT / OPEN)
+
+**Current source commits:** v11 `b07fbd9c`, v12 `1de64385`, v13 `77067e47` in `codex/siee-person-follow-mvp-20261120`; no automatic merge to main. UART `vision_core/tools/uart_http_transport.py` → ESP32 `handleUartFrame()` / `handleShadowTurn()`; independent `steeredSafetyTask()` → `brakeMotorsWithTrace()` → `GET /fault-diagnostics`; main loop `updateMotion()` / `enforceBoundedEncoderLimit()` → `beginBoundedBraking()` / `updateBoundedBraking()`. v13 removes Coast prior to Brake in the bounded handoff, but remains FAULT on one raised-wheel 8° trial (R/L 15/13 at brake, 27/25 final; +12/+12, request-to-write 38 µs). v12 likewise FAULT (+13/+13, 37 µs); no material improvement proven. Read [current handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md) and [diagnostic report](docs/diagnostics/siee_esp32_brake_v11_v13_20261123.md). Do not infer actual TA6586 electrical outputs from software calls; operator has no oscilloscope. Proposed v14 encoder-time/mode instrumentation has NOT been implemented, built or tested. v13 archive/off-Pi backup and physical power-off after the trial require confirmation.
+
+**Graphify provenance:** this dependency description is from source inspection, not a new Graphify scan. The latest confirmed AST remains 2026-11-16 `db8097ea4239dcf45ef7598c831a45648d2498fd` (4599 nodes, 13658 edges, 300 communities). Existing FAST floor follow results and canonical Measurements remain separate.
+
+---
 
 ## 2026-11-20: FAST V4L2 and supervised moving-person floor checkpoint (ФАКТ / РЕШЕНИЕ / OPEN)
 

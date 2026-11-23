@@ -1,6 +1,6 @@
 # AI_CONTEXT.md
 
-**Current hardware handoff (2026-11-20):** For active ESP32 v11 bounded-turn diagnosis read [`docs/handoffs/SIEE_PERSON_FOLLOW_V11_TURN_FAULT_HANDOFF_20261120.md`](docs/handoffs/SIEE_PERSON_FOLLOW_V11_TURN_FAULT_HANDOFF_20261120.md) after `PROJECT_CONTEXT.md`. The latest physical raised-wheel turn latched `BOUNDED_DISTANCE_LIMIT` with `ENCODER_LIMIT_REACHED`; v11 is diagnostics only, not a validated motion fix. Pi local source has uncommitted changes and motor-power-off status after the test is not independently reconfirmed.
+**Current hardware checkpoint (2026-11-23):** ESP32 `v4_2_uart_shadow_v13_brake_continuity` was flashed, boot/read-only UART checked, and then tested in exactly one supervised raised-wheel RIGHT 8° experiment. Outcome: `ENCODER_LIMIT_REACHED` / latched `BOUNDED_DISTANCE_LIMIT` / terminal FAULT, PWM 0/0, STOP confirmed. Brake request R/L 15/13 counts, output-write commands completed after 38 µs, final R/L 27/25 against target 21/21 and hard limit 22/22. **v13 is not a validated braking fix.** Read [current v13 handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md); previous v11 handoff is historical. Operator has not yet reconfirmed physical motor-power OFF after the latest run; v13 raw evidence archive/off-Pi backup is not yet confirmed. No further motion, flash, FAULT reset or reboot is authorized by this document. A diagnostic v14 remains a proposal.
 
 # Spatial Intelligence Evidence Engine (SIEE)
 

@@ -1,5 +1,7 @@
 # SIEE | Autonomous Person Following MVP | Handoff 2026-11-20 (ESP32 v11 turn diagnostics)
 
+**Historical snapshot only, superseded 2026-11-23:** The claims below about uncommitted v11 sources and v12 as next action describe 20-Nov, not current GitHub status. v11/v12/v13 firmware is now committed and v13 was flashed; one v13 raised-wheel RIGHT 8° test still ended FAULT. Continue from [current v13 handoff](SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md) and [v11-v13 report](../diagnostics/siee_esp32_brake_v11_v13_20261123.md).
+
 ## Read this first
 This is a **new-chat continuation** of the 2026-11-20 supervised hardware test, not a change to approved SIEE Engineering Specifications or canonical Data Contracts. Use FACT / DECISION / HYPOTHESIS / OPEN. Read `AI_CONTEXT.md`, `PROJECT_CONTEXT.md`, `AGENTS.md`, relevant specifications, and this handoff. Keep previous FAST floor-follow evidence and the Face/Body identity worker findings separate.
 

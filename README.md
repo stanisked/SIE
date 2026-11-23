@@ -1,6 +1,6 @@
 # SIEE - Spatial Intelligence Evidence Engine
 
-**Latest active engineering checkpoint (2026-11-20):** [ESP32 v11 right-turn fault diagnostic and new-chat handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V11_TURN_FAULT_HANDOFF_20261120.md). Physical raised-wheel RIGHT 8° ended with `ENCODER_LIMIT_REACHED`; do not mistake diagnostics PASS for corrected brake control. Source changes still require local Pi Git reconciliation.
+**Current hardware checkpoint (2026-11-23):** ESP32 `v4_2_uart_shadow_v13_brake_continuity` was flashed, boot/read-only UART checked, and then tested in exactly one supervised raised-wheel RIGHT 8° experiment. Outcome: `ENCODER_LIMIT_REACHED` / latched `BOUNDED_DISTANCE_LIMIT` / terminal FAULT, PWM 0/0, STOP confirmed. Brake request R/L 15/13 counts, output-write commands completed after 38 µs, final R/L 27/25 against target 21/21 and hard limit 22/22. **v13 is not a validated braking fix.** Read [current v13 handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md); previous v11 handoff is historical. Operator has not yet reconfirmed physical motor-power OFF after the latest run; v13 raw evidence archive/off-Pi backup is not yet confirmed. No further motion, flash, FAULT reset or reboot is authorized by this document. A diagnostic v14 remains a proposal.
 
 Engineering architecture for robotic perception, spatial reasoning and decision support.
 
