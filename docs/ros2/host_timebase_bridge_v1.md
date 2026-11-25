@@ -315,6 +315,72 @@ diagnostic data into any approved contract. Read-only
 inspection of the existing private evidence can first
 confirm its exact recorded per-source fields.
 
+## Pi three-sensor rolling timing series (operator output, 2026-11-25)
+
+**FACT / Step 35:** Operator ran a read-only bounded ~3-second
+rolling metadata-only capture with concurrent
+`CLOCK_MONOTONIC ↔ CLOCK_REALTIME` bracketing. The test
+reported `SIEE_TIMING_SERIES_V1: CAPTURED_DIAGNOSTIC_ONLY`.
+Pi boot ID remained
+`07e5f3a5-3d20-470a-8e8b-ab30fa2a9b8a`.
+Reported bridge:
+`DIAGNOSTIC_BRIDGE_READY`,
+window `3011.644 ms`, empirical offset envelope
+`19260 ns` (19.260 µs).
+
+- AR0234 `SAMPLED: 33`, `VALID: 33`; all
+  `HOST_TIMEBASE_CONVERTED_DIAGNOSTIC_ONLY`.
+- OV9281 `SAMPLED: 55`, `VALID: 55`; all
+  `HOST_TIMEBASE_CONVERTED_DIAGNOSTIC_ONLY`.
+- LD19 `SCANS_RECEIVED: 17`,
+  `SCANS_IN_WINDOW: 16`.
+- Nearest LD19 minus AR0234, 33 comparisons:
+  signed median `+42.976 ms`, absolute P95
+  `579.121 ms`, absolute maximum `643.094 ms`.
+- Nearest LD19 minus OV9281, 55 comparisons:
+  signed median `+26.518 ms`, absolute P95
+  `562.628 ms`, absolute maximum `626.634 ms`.
+- Nearest OV9281 minus AR0234, 33 comparisons:
+  signed median `-15.509 ms`, absolute P95
+  `16.494 ms`, absolute maximum `16.495 ms`.
+- Measurement, World State and motor admission: disabled
+  by the diagnostic design. No image or range-array payloads
+  were written.
+
+**Private Pi evidence:**
+`/home/elwis/.local/state/sie/evidence/timing_series_v1_20261125T160558Z_1854.json`
+SHA-256
+`5b8418486283a99c6ddbd0da5069ac3c0279f16aaff25cdcff9153e3f612f51a`.
+The report hash matched the independent same-host `sha256sum`
+output.
+
+**IMPORTANT / Interpretation:** This is a successful **collection**
+test, not a passing temporal-alignment quality gate. Only
+16 LD19 header stamps fell within a roughly 3.0-second
+timebase window. An uninterrupted nominal 10-Hz publisher
+would contribute roughly 30; it is NOT established whether
+the mismatch comes from missing ROS publications,
+subscriber callback scheduling, the timing-series acquisition
+window, or gaps in publisher timestamp coverage. In particular,
+the very large nearest-neighbor LD19 absolute P95 values of
+~0.56–0.58 s MUST NOT be mistaken for camera/LiDAR
+synchronization or calibration error. The 19.260-µs bridge
+envelope pertains only to sampled host-clock mapping.
+The camera pairs are selected from latest-buffer snapshots
+and are not matched by hardware exposure trigger.
+
+**NEXT READ-ONLY AUDIT:** Inspect the private JSON
+`ld19_header_samples_ns`, `camera_samples` and `bridge`
+to compute LD19 consecutive-header deltas, max gap, coverage
+from the beginning/end of the bridge window and camera
+nearest-neighbor deltas **with a bounded overlap window**.
+Do not infer physical sensor lag from nearest pairs outside
+the actual LD19 coverage interval. Only if a real coverage
+gap is established should a subsequent live probe capture
+both LD19 header and subscriber receive clocks and
+publisher timing to distinguish the cause. Keep the
+running LD19 driver and motor state unchanged.
+
 ## Reproducible Pi test (no hardware access)
 
 Use an independent, clean, detached worktree at the latest
