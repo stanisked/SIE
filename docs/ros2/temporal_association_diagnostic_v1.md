@@ -69,6 +69,104 @@ bounds are experimental reproducibility parameters, not
 validated Sensor Fusion or motion acceptance thresholds.
 No temporal compensation is inferred from nearest-header deltas.
 
+## Step 43/44 replay and temporal freshness gap (Pi, 2026-11-25)
+
+Operator-reported SHA-verified Pi offline replay of the warmed session:
+44 RGB anchors, 44 unique matched Stereo frames, 44 diagnostic
+RGB↔LD19 ROS-header links referencing 30 unique LD19 messages,
+all without Measurement / World State / motor admission.
+Private association report:
+`/home/elwis/.local/state/sie/evidence/temporal_association_v1_20261125T163318Z_2125.json`,
+SHA-256
+`ad0864c74d8998d67ca8eee57bb8a462e0dc4620c048e9e0cb5ec8f0c0e7a213`
+verified by separate `sha256sum` on Pi.
+
+Step 44 offline audit confirmed 44 rows, 30 unique LD19
+evidence pointers and max LiDAR header reuse 2,
+`reference_frame=UNVERIFIED_IN_CAPTURE`,
+`confidence=null`, proper driver/ROS timestamp provenance,
+and all admission flags false. **Missing in this snapshot:**
+an explicit `age_ns` and a stale/future refusal at
+the time a downstream consumer evaluates the data.
+
+## Temporal Association Freshness v1: independent DRAFT evaluator
+
+A new **pure offline**, **explicit-time** evaluator is kept
+separate from the Step 43 matcher to preserve that verified
+historical association report byte-for-byte.
+`temporal_association_freshness_v1.py` requires a versioned
+diagnostic association report, its source host clock bridge,
+an explicit `evaluation_monotonic_ns`, source `boot_id`,
+and an explicit experimental `FreshnessTrialPolicy`.
+It returns each row's `age_ns` for RGB, Stereo and LD19
+**ROS header** separately, statuses/reasons for unavailable,
+stale and future timestamps, plus independent pair/header-link
+recency; it never uses the Stereo↔LD19 third edge as a gate.
+
+There are whole-evaluation refusals for a future/expired
+clock bridge, a changed boot ID, or monotonic evaluation
+rollback. The bridge's **own** max-age policy further caps
+the evaluation's trial holdover; a stale bridge cannot be
+used to fabricate current ages. No device or system clock
+is read inside the evaluator. All field and whole-report
+admission flags remain false.
+
+**Important:** The offline CLI's explicitly chosen evaluation
+timestamp is `bridge.last_sample_monotonic_ns + N ms`
+on the *original Pi boot*. It demonstrates **historical**
+freshness/refusal behavior. It does NOT assess whether
+the November 25 measurements are fresh *now*.
+A recent ROS LD19 conversion header still does not
+establish the age of any physical laser measurement.
+The ROS clock's `use_sim_time` has not been read through
+the running driver; cross-domain compatibility is provisional.
+The camera optical reference frame also remains unverified.
+These fields cannot authorize canonical SIE Measurements
+or motion.
+
+### Pi offline verification (pending)
+
+Refresh the existing clean isolated worktree from PR #13,
+compile both new modules, run synthetic tests, then replay
+the two SHA-verified private files. No camera, ROS or motor
+process is started.
+
+```bash
+set -e
+set +u
+WT="$HOME/dev_ws/sie_temporal_assoc_v1_20261125"
+test -d "$WT/.git" -o -f "$WT/.git"
+cd "$WT"
+test -z "$(git status --porcelain)" || { echo "WORKTREE_DIRTY: STOP"; exit 1; }
+git fetch origin codex/siee-ld19-observation-diagnostic-v0-20261125
+git switch --detach FETCH_HEAD
+export PYTHONPATH="$PWD/ros2/sie_ros2${PYTHONPATH:+:$PYTHONPATH}"
+python3 -m py_compile \
+  ros2/sie_ros2/sie_ros2/temporal_association_freshness_v1.py \
+  ros2/sie_ros2/sie_ros2/temporal_association_freshness_offline_v1.py \
+  ros2/sie_ros2/test/test_temporal_association_freshness_v1.py
+python3 -m pytest -q \
+  ros2/sie_ros2/test/test_temporal_association_diagnostic_v1.py \
+  ros2/sie_ros2/test/test_temporal_association_freshness_v1.py
+E="$HOME/.local/state/sie/evidence"
+python3 -m sie_ros2.temporal_association_freshness_offline_v1 \
+  --capture "$E/three_sensor_warmed_20261125T161626Z_2035.json" \
+  --expect-capture-sha256 6a12065b778f3e3476e8fab4286f542d0dfa6c7bbe9d79f227002817fe22f836 \
+  --associations "$E/temporal_association_v1_20261125T163318Z_2125.json" \
+  --expect-associations-sha256 ad0864c74d8998d67ca8eee57bb8a462e0dc4620c048e9e0cb5ec8f0c0e7a213 \
+  --evaluation-lag-ms 10 \
+  --output "$E/temporal_freshness_v1_$(date -u +%Y%m%dT%H%M%SZ)_$.json"
+```
+
+These are test-only 250ms per-source age limits and 1s
+bridge holdover bounds. Expect some earlier rows to be
+marked `SOURCE_STALE` because the historical replay
+evaluates all 44 frames **at one instant after a
+~3-second capture**, not at each frame's original
+arrival. This must NOT be interpreted as a camera
+failure. No synthetic test count or replay pass should
+be claimed until the Pi operator actually runs them.
+
 ## Files
 
 - `ros2/sie_ros2/sie_ros2/temporal_association_diagnostic_v1.py`:
