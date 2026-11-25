@@ -258,6 +258,51 @@ the same host, without changing any camera or LD19 driver and
 without motor power. Treat readings as a proposed host-clock
 bridge, not sensor fusion, until cross-modal evidence is tested.
 
+## Raspberry Pi host clock bridge diagnostic (operator-reported, 2026-11-25)
+
+**FACT / bounded host-clock sampling:** The operator executed a
+read-only Python script that bracketed each `CLOCK_REALTIME` sample
+with two `CLOCK_MONOTONIC` reads, using their midpoint to compute
+`offset_ns = realtime_ns - monotonic_midpoint_ns`.
+There were **200 samples** at nominal 10-ms spacing (~2 s);
+no camera, LD19 or motor capture was needed.
+
+Reported output:
+
+- `SAMPLES: 200`
+- `OFFSET_MEDIAN_NS: 1795611548984341504`
+- `OFFSET_SPAN_NS: 13601` (13.601 µs between observed extremes)
+- `OFFSET_FIRST_LAST_DELTA_NS: -417` (-0.417 µs)
+- `BRACKET_MEDIAN_NS: 982` (0.982 µs)
+- `BRACKET_MAX_NS: 18907` (18.907 µs)
+- `SIEE_HOST_CLOCK_BRIDGE: MEASURED`
+
+These readings **demonstrate a sampled mapping** between host wall
+and monotonic clocks on this Pi over the short observation window.
+The measured offset span is **not a validated clock-mapping
+uncertainty bound**, not a long-term drift estimate and not a
+camera/LD19 physical measurement-time error. Per-sample bracket
+durations provide a lower-level timing diagnostic; scheduling,
+clock adjustments, V4L2 timing semantics, and the LD19
+acquisition-to-ROS conversion interval have not been bounded.
+
+**OPEN / ROS clock check:** After the operator's
+`=== LD19 ROS CLOCK ===` label there was **no response output**.
+The earlier command had `timeout -s INT 5s ... || true`, which
+can suppress a nonzero timeout or CLI failure; it does NOT prove
+`use_sim_time=false` or even that the ROS node was available.
+Before comparing LD19 ROS stamps to host UTC, verify whether the
+`/siee_ld19` ROS node is still running and explicitly read
+its `use_sim_time` parameter with the exit status preserved.
+Do not promote `same_host_clock_domain_verified` until this
+has been checked and the test scenario is documented.
+
+**NEXT VERIFIABLE STEP:** Query the live node names and the
+LD19 `use_sim_time` parameter with a bounded CLI timeout that
+prints its exit status, without launching a second driver,
+enabling cameras, touching the external SDK or motor power.
+Keep PR #13 draft and all admission disabled.
+
 ## Engineering gates before any adoption
 
 1. Confirm actual driver revision, ROS `use_sim_time` and shared clock
