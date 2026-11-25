@@ -104,8 +104,38 @@ orientation. The `(-0.023, 0, 0.212) m` transform was verified as
 Z is based on the *centre of the optical window*, not an independently surveyed
 laser plane; RPY=0 is a first-order alignment, not a precision calibration.
 
-These observations predate this integrated launch change. The combined
-`enable_ld19:=true` launch has **not yet been exercised on the Pi**.
+### Integrated-launch acceptance, 2026-11-25 (operator evidence)
+
+The operator performed the **combined** `enable_ld19:=true` launch on the Pi,
+built from isolated worktree HEAD `8515f31dd9806a21993faffd7f89accaa2dcb1da`:
+
+- `python3 -m py_compile` on the changed launch and test: PASS.
+- `python3 -m pytest -q ros2/sie_ros2/test/test_ld19_launch.py`: 4/4 PASS.
+- `colcon build --packages-select sie_ros2 --symlink-install`: 1 package PASS.
+- Five processes started: three unchanged phase-1 contract nodes, LD19 driver
+  (`ldlidar node start is success` and `communication is normal`) and one
+  `static_transform_publisher`. Supervisor logged
+  `phase 1: actuator bridge disabled`.
+- On the Pi, the receiving `ros2 topic hz /sie/lidar/scan_raw` settled at
+  approximately 10.000 Hz in the provided short sample; transient intervals
+  0.000 to 0.433 s were recorded near startup.
+- The ROS 2 Lyrical laptop, connected by Tailscale/static peers, received
+  `/sie/lidar/scan_raw` at a final reported mean 9.779 Hz, with observed
+  intervals 0.089 to 0.201 s in that short sample.
+- Pi and laptop `tf2_echo base_link ld19_sensor` repeatedly returned translation
+  `[-0.023, 0, 0.212]` m and identity quaternion; an initial
+  `Invalid frame ID` message cleared when the static TF was discovered.
+
+**Acceptance:** integrated launch, raw scan publication and cross-device
+reception, and provisional TF are confirmed on the actual hardware.
+Prior manual-launch RViz2/physical X+ and Y+/Y- tests are separate evidence;
+RViz2 was not repeated with the new combined launch in the recorded run.
+No prolonged delivery/reliability benchmark, independent laser-plane survey,
+precision yaw calibration, collision-safe obstacle logic, fusion or odometry
+was demonstrated. The log confirms the software actuator bridge is disabled;
+physical motor-power disconnection was not independently re-confirmed in the
+submitted launch output.
+
 The raw `LaserScan` is diagnostic sensor evidence only. It is **not**
 an admitted SIE canonical Measurement/Fact/World State update, obstacle-safety
 decision, fused AR0234/OV9281 output, odometry, or SLAM result.
