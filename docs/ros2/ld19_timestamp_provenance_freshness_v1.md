@@ -137,6 +137,45 @@ python3 -m pytest -q ros2/sie_ros2/test/test_ld19_timestamp_policy_v1.py
 
 Source-level tests do not require live LiDAR or ROS graph activity.
 
+## Offline verification on Pi (operator-reported, 2026-11-25)
+
+**FACT:** The operator fetched exact draft branch HEAD
+`d2fdb70eb400fe335ddc0bcb95ea24b41792cc4f` into a new
+detached worktree
+`/home/elwis/dev_ws/sie_ld19_timestamp_v1_20261125`.
+The fetch/checkout reported the expected SHA. Python syntax checks
+on `ld19_timestamp_policy_v1.py` and
+`test_ld19_timestamp_policy_v1.py` succeeded (the shell continued
+under `set -e`).
+
+**FACT:** From that isolated worktree, the operator ran:
+
+```bash
+export PYTHONPATH="$PWD/ros2/sie_ros2${PYTHONPATH:+:$PYTHONPATH}"
+python3 -m pytest -q \
+  ros2/sie_ros2/test/test_ld19_timestamp_policy_v1.py \
+  ros2/sie_ros2/test/test_ld19_diagnostic_evidence.py
+```
+
+Output: `34 passed in 0.08s`,
+`SIEE_LD19_TIMESTAMP_V1: PASS`; Git status output contained
+no file modifications in the isolated worktree.
+The 34-test total covers **both** the new synthetic timestamp
+tests and the six previously verified v0 diagnostic adapter tests.
+No ROS graph, LiDAR hardware, physical clock-domain verification
+or motor run was part of this test.
+
+**NEXT:** Use the **existing private 30-scan JSONL** in a read-only,
+offline replay. Evaluation time must be anchored to the original
+per-record receipt time rather than the current wall clock;
+otherwise every historical record would trivially be stale.
+Keep `same_host_clock_domain_verified=False` because the v0
+journal contains no independent proof of its ROS time domain.
+Expect `CLOCK_DOMAIN_UNVERIFIED` for structurally valid,
+within-window records; do **not** report this as a timing-policy
+admission failure or enable a production threshold. No raw
+scene scan samples should be uploaded to public GitHub.
+
 ## Engineering gates before any adoption
 
 1. Confirm actual driver revision, ROS `use_sim_time` and shared clock
