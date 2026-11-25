@@ -381,6 +381,62 @@ both LD19 header and subscriber receive clocks and
 publisher timing to distinguish the cause. Keep the
 running LD19 driver and motor state unchanged.
 
+## LiDAR coverage audit and warmed ROS subscriber (operator output, 2026-11-25)
+
+**FACT / Step 36, read-only offline inspection:** The preserved
+three-sensor timestamp-series JSON had SHA-256
+`5b8418486283a99c6ddbd0da5069ac3c0279f16aaff25cdcff9153e3f612f51a`
+and the current Pi boot ID. The **16** LD19 header timestamps
+were continuous from **1423.055 ms after** the start of the
+3011.644-ms bridge window until **88.637 ms before** its end:
+coverage **1499.952 ms**, consecutive intervals
+median **99.999 ms**, max **100.047 ms**, **zero**
+intervals above 150 ms. Thus the previous ~0.6-second
+nearest-neighbor P95 values stemmed from comparing
+camera frames outside the interval covered by received
+LD19 headers; there is **no observed missing LD19 header
+inside this shorter coverage interval**.
+
+When restricted to the LD19-covered interval: AR0234,
+23/33 camera stamps in coverage, nearest-LD19
+absolute median 20.952 ms, P95 43.030 ms and max
+43.031 ms; OV9281, 38/55 in coverage, median 26.5345 ms,
+P95 37.492 ms and max 37.506 ms. All 61 in-window
+comparisons were within 50 ms, compatible with nearest
+timestamps from a nominal ~10 Hz ROS publication cycle.
+These are **nearest conversion-header matches**, not
+laser physical acquisition-time accuracy.
+
+**FACT / Step 37, independent subscriber test:** A
+separate ROS 2 `LaserScan` subscription (5+ second session)
+without camera concurrency received the first callback
+**8.086 ms** after subscription start. Following a
+3-message warmup, a subsequent **3.0-second** collection
+received **30** messages, header-stamp interval median
+**100.000 ms**, max **100.035 ms**, with **zero** gaps
+above 150 ms. Result:
+`SIEE_LD19_SUBSCRIPTION_CONTINUITY: PASS`.
+
+**CORRECTION:** It is inaccurate to conclude that the
+LD19 publication stream has missing scans merely from
+16 timestamps in a 3-second bridge window. Independently,
+the warmed ROS subscriber received 30 in 3 seconds.
+The ~1.4-second initial lack of LD19 timestamps in the
+concurrent test is still **unexplained**: it may concern
+thread scheduling, subscriber initialization, camera
+concurrency or initial window timing. The separate
+subscriber result does not establish a particular cause.
+
+**NEXT:** Start both native camera streams and the ROS
+subscription, verify their live activity, and then
+start the timebase window. Preserve **both LD19 header
+realtime timestamp and host callback receipt monotonic
+timestamp** per scan so that continuity and coverage
+during combined camera workload are independently
+measurable. Keep the session diagnostic only, write only
+metadata, and avoid changes to drivers, calibration and
+actuators.
+
 ## Reproducible Pi test (no hardware access)
 
 Use an independent, clean, detached worktree at the latest
