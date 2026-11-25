@@ -108,17 +108,41 @@ does not constitute a canonical SIE Observation validation.
   This checksum was reported by `sha256sum` on Pi; an independent
   off-Pi verification has not yet been reported.
 
-**OPEN:** Inter-record source timestamp ordering, time intervals and
-source-to-receive time deltas were **not evaluated** by the above check.
-No claim about exact scan frequency, packet-loss rate, laser-plane extrinsics
-or long-duration temporal stability follows from this short capture.
-No off-Pi evidence backup has been confirmed. Keep the raw journal private.
+**FACT / temporal audit (2026-11-25, same 30-record file):** The
+operator independently audited stored `payload.scan.header` time fields,
+record source timestamps, receive timestamps and angular metadata:
 
-**NEXT VERIFIABLE STEP:** Run a read-only audit of the existing JSONL to
-verify timestamp monotonicity, duplicate source stamps, per-record angular
-array consistency, and receive latency, without capturing a new scene or
-running motors. Any apparent time offset must be reported as an observation,
-not silently corrected.
+- `RECORDS: 30`; duplicate source stamps `0`; non-monotonic intervals `0`.
+- Consecutive source-header stamp intervals (29 differences): min
+  `99.987 ms`, median `99.999 ms`, max `100.029 ms`, mean `100.000 ms`.
+  Thus the source **header stamps** imply approximately 10 Hz over this
+  short, about 2.9-second interval, not a verified physical spin cadence.
+- `received_at_utc` minus ROS scan-header stamp: min `0.471 ms`,
+  median `0.519 ms`, max `0.803 ms`. This measures only the
+  timestamp difference as published/stored by this software stack;
+  it is **not** evidence of hardware laser acquisition-to-host latency.
+- `SOURCE_TIMESTAMP_MATCH: PASS`, when reconstructing ISO-8601 UTC
+  timestamps from scan header sec/nanosec.
+- `ANGLE_SPAN_ERROR_RAD_MAX: 0.0` when checking stored
+  `angle_max - angle_min - (N - 1) * angle_increment`. This proves
+  internal metadata consistency in the saved records, **not** an
+  independently calibrated physical beam bearing.
+- The operator reported `SIEE_LD19_TEMPORAL_AUDIT: COMPLETE`.
+
+**BOUNDARY / OPEN:** The LD19 driver's source code path that assigns
+`LaserScan.header.stamp` has **not yet been audited**. Its apparent 100-ms
+regularity might reflect scheduling or driver stamp generation, not
+independent LiDAR rotation timing. The sampled timestamp delta must not
+be used as full sensor latency or cross-modal synchronization uncertainty.
+Scan drops, true capture timestamps, long-duration transport stability,
+extrinsic precision and independently verified off-Pi file backup remain OPEN.
+Keep raw data private and the diagnostic contract non-authoritative.
+
+**NEXT VERIFIABLE STEP:** Inspect, read-only, the exact
+`ldlidar_stl_ros2` driver revision used on Pi to identify the assignment
+of `LaserScan.header.stamp` and whether it represents acquisition, SDK
+completion or ROS publish time. Do not change calibration or downstream
+admission on the basis of the short temporal audit.
 
 ## Open engineering work
 
