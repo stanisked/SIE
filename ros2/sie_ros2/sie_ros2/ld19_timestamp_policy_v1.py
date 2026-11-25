@@ -80,6 +80,10 @@ def _read_provenance(record: dict[str, Any]) -> tuple[int, int, str]:
         raise ValueError("unexpected reference_frame")
     if record.get("source_topic") != EXPECTED_TOPIC:
         raise ValueError("unexpected source_topic")
+    if record.get("source") != "ldlidar_stl_ros2":
+        raise ValueError("unexpected source")
+    if record.get("source_id") != EXPECTED_FRAME:
+        raise ValueError("unexpected source_id")
 
     admission = record.get("admission")
     if not isinstance(admission, dict) or any(
@@ -116,6 +120,12 @@ def _read_provenance(record: dict[str, Any]) -> tuple[int, int, str]:
         )
         if record["timestamp"] != expected_iso:
             raise ValueError("scan/header timestamp mismatch")
+        if record.get("cycle_id") != f"ld19-scan:{sec}:{nsec:09d}":
+            raise ValueError("source cycle_id mismatch")
+        if record.get("observation_id") != (
+            f"ld19-diagnostic:{sec}:{nsec:09d}:{digest[:12]}"
+        ):
+            raise ValueError("source observation_id mismatch")
         received_ns = _utc_ns(record["received_at_utc"])
     except (KeyError, TypeError, OverflowError, OSError) as exc:
         raise ValueError("invalid scan timestamp fields") from exc
