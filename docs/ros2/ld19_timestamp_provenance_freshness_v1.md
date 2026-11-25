@@ -176,6 +176,88 @@ within-window records; do **not** report this as a timing-policy
 admission failure or enable a production threshold. No raw
 scene scan samples should be uploaded to public GitHub.
 
+## Real 30-scan offline replay (operator-reported, 2026-11-25)
+
+**FACT:** The operator replayed the same archived private
+`ld19_diagnostic_v0_20261125T132230Z.jsonl`, using source HEAD
+`d2fdb70eb400fe335ddc0bcb95ea24b41792cc4f` in the
+isolated `sie_ld19_timestamp_v1_20261125` worktree.
+The replay rechecked the original full-file SHA-256
+`d647283c478600c02574a2a6ff3cea38ccbd662200dca3444b45a46df8e5d158`
+and the canonicalized scan SHA-256 for every record.
+
+Operator output:
+- `RECORDS: 30`
+- `FILE_SHA256: PASS`; `SCAN_SHA256: PASS`
+- `SOURCE_STAMPS_MONOTONIC: PASS`
+- `CLOCK_DOMAIN_VERIFIED: False`
+- `STATUS_COUNTS: {'CLOCK_DOMAIN_UNVERIFIED': 30}`
+- `SYNTHETIC_STALE_CHALLENGE: PASS`
+- `MEASUREMENT_ADMISSION: DISABLED`
+- `WORLD_STATE_UPDATE: DISABLED`
+- `MOTOR_CONTROL: DISABLED`
+- `SIEE_LD19_REAL_REPLAY_V1: PASS`
+
+The replay selected an **artificial** evaluation time of each stored
+receipt timestamp + 10 ms to test the historically recorded samples;
+this is **not** a measured acquisition/transport delay. Its
+250-ms receipt-age, 5-ms future-skew and 20-ms conversion-to-receipt
+limits are explicit **synthetic test values**, not authorized operating
+limits. With no independently verified same-host ROS/UTC clock domain,
+all 30 valid records correctly **failed closed** at
+`CLOCK_DOMAIN_UNVERIFIED`. This is the intended behavior, **not**
+a claim of 30 actual clock failures or inability of the LiDAR to scan.
+
+**No result establishes physical acquisition timestamps, camera/LiDAR
+synchronization, authorized freshness, validated lidar-only
+Measurement, or actuator safety.** No new scans or motion occurred.
+
+## Read-only camera clock-source inspection (source evidence, 2026-11-25)
+
+At the current PR branch, the native camera capture path is:
+- `vision_core/tools/stream_v4l2_mjpeg.c`: extracts
+  `v4l2_buffer.timestamp` into `driver_timestamp_s`, and samples
+  `CLOCK_MONOTONIC` after `VIDIOC_DQBUF` into
+  `host_dequeue_monotonic_s`. Its JSON has `sequence`,
+  `flags`, both timestamps and a copied immutable JPEG payload.
+- `ros2/sie_ros2/sie_ros2/latest_v4l2_capture.py`:
+  `validate_packet` requires the driver flags
+  `V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC` and
+  `V4L2_BUF_FLAG_TSTAMP_SRC_SOE` (driver-declared
+  start-of-exposure), and `driver_timestamp_s <=
+  host_dequeue_monotonic_s`. Native snapshots retain
+  driver sequence and metadata; pair skew is computed as
+  the difference between AR0234 and OV9281 V4L2
+  monotonic timestamps. The code explicitly declares
+  `physical_exposure_timing_independently_verified=False`.
+- `ar0234_ov9281_control_preview_node.py` uses native
+  `driver_timestamp_s` for its camera frame-time comparisons
+  while capturing a separate UTC `stamp` for the host cycle.
+  The less-specific standalone `ar0234_observation_node.py`
+  uses `datetime.now(timezone.utc)` after `capture.read()`;
+  do not conflate these two camera capture profiles.
+
+**Critical cross-sensor distinction:** the LD19 ROS
+`LaserScan.header.stamp` uses the ROS node clock (typically
+host wall/ROS time; simulation mode must be checked), while the
+native camera source timestamps are driver-declared
+`CLOCK_MONOTONIC` values. **These time values must not be
+subtracted directly**; doing so would compare different clock
+domains. A future adapter needs a measured, versioned
+`CLOCK_REALTIME ↔ CLOCK_MONOTONIC` mapping on the **same Pi**
+with a finite uncertainty bound (e.g., bracketing clock reads),
+clock-step/jump detection and explicit source/receive provenance.
+Such a bridge still cannot retroactively prove laser physical
+acquisition time; it remains diagnostic until evidence and a
+canonical Data Contract are reviewed.
+
+**NEXT VERIFIABLE STEP:** Use read-only Pi diagnostics to confirm
+`use_sim_time` for the running LiDAR ROS node and collect a short
+series of bracketed `CLOCK_REALTIME/CLOCK_MONOTONIC` pairs on
+the same host, without changing any camera or LD19 driver and
+without motor power. Treat readings as a proposed host-clock
+bridge, not sensor fusion, until cross-modal evidence is tested.
+
 ## Engineering gates before any adoption
 
 1. Confirm actual driver revision, ROS `use_sim_time` and shared clock
