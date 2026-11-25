@@ -286,22 +286,65 @@ durations provide a lower-level timing diagnostic; scheduling,
 clock adjustments, V4L2 timing semantics, and the LD19
 acquisition-to-ROS conversion interval have not been bounded.
 
-**OPEN / ROS clock check:** After the operator's
-`=== LD19 ROS CLOCK ===` label there was **no response output**.
-The earlier command had `timeout -s INT 5s ... || true`, which
-can suppress a nonzero timeout or CLI failure; it does NOT prove
-`use_sim_time=false` or even that the ROS node was available.
-Before comparing LD19 ROS stamps to host UTC, verify whether the
-`/siee_ld19` ROS node is still running and explicitly read
-its `use_sim_time` parameter with the exit status preserved.
-Do not promote `same_host_clock_domain_verified` until this
-has been checked and the test scenario is documented.
+**FACT / ROS graph and parameter-service diagnosis (2026-11-25):**
+The live Pi process list identified the LD19 publisher as PID `1282`,
+executable `~/siee_lidar_ws/install/ldlidar_stl_ros2/lib/ldlidar_stl_ros2/ldlidar_stl_ros2_node`,
+name `/siee_ld19`; the process remained alive for over an hour.
+`ros2 topic info /sie/lidar/scan_raw --verbose` found one
+`sensor_msgs/msg/LaserScan` publisher, with zero subscribers after
+the bounded diagnostic collector had exited.
 
-**NEXT VERIFIABLE STEP:** Query the live node names and the
-LD19 `use_sim_time` parameter with a bounded CLI timeout that
-prints its exit status, without launching a second driver,
-enabling cameras, touching the external SDK or motor power.
-Keep PR #13 draft and all admission disabled.
+The second bounded ROS discovery check returned:
+- `ROS_DOMAIN_ID=0`; `RMW_IMPLEMENTATION=default`;
+- `ros2 node list --no-daemon` listed
+  `/sie_navigation_contract`, `/sie_perception_contract`,
+  `/sie_supervisor_contract`, `/siee_ld19`,
+  `/siee_ld19_static_tf`; `NODE_LIST_EXIT_CODE=0`;
+- `ros2 service list -t` found all seven expected
+  `/siee_ld19` parameter services; exit code `0`;
+- `ros2 param get /siee_ld19 use_sim_time` had exit code `124`
+  (12-second timeout); **no parameter value was returned**;
+- the active `/tmp/launch_params_2hnhwcyf` had no explicit
+  `use_sim_time` entry (per operator grep).
+
+**FACT / source-level explanation:** The matching third-party
+`ldrobotSensorTeam/ldlidar_stl_ros2` `src/demo.cpp` at local
+checkout HEAD `bf668a89baf722a787dadc442860dcbf33a82f5a`
+calls `rclcpp::WallRate r(10)` (line 113), loops in
+`while (rclcpp::ok())` and `GetLaserScanData(...)`
+(lines 118-133), then calls `r.sleep()`. The file contains
+**no** `rclcpp::spin()`, `spin_some()` or executor spin
+for the created ROS node. This explains why graph-discoverable
+parameter services may time out: callback processing is not
+serviced by the publisher's foreground loop. No driver patch or
+restart was attempted.
+
+**CORRECTION / timing semantics:** The previously observed extremely
+stable ~100-ms ROS header-stamp intervals also track the explicit
+`WallRate(10)` publishing loop. They do not independently
+measure true LD19 rotation period, SDK accumulation frequency,
+laser hardware timestamp or scan drop rate.
+
+**OPEN:** Because the parameter service cannot be queried, the
+**runtime** `use_sim_time` value remains unverified. Its absence
+from launch overrides and the standard node-clock default are
+consistent with system-time operation but do not constitute a
+live parameter read. Similarly, the host clock bridge measurement
+does not prove the exact time from laser acquisition to ROS
+conversion. Keep `same_host_clock_domain_verified=False` in
+the diagnostic evaluator until a separately documented test
+establishes clock compatibility. Do not waste additional runs
+on the unchanged blocking parameter service.
+
+**NEXT VERIFIABLE STEP:** Build a separate, pure-Python experimental
+host timebase conversion helper with explicit
+`CLOCK_REALTIME` and `CLOCK_MONOTONIC` samples and uncertainty
+metadata; test jump/reorder/expired-bridge refusals. If a live
+ROS time sanity check is required, use a **read-only** subscriber
+to inspect scan header timestamps against host wall-clock time
+and keep the conclusion limited to consistency, not a parameter
+service confirmation. Do not change the working driver, cameras
+or motors.
 
 ## Engineering gates before any adoption
 
