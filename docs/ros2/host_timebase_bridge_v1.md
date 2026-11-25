@@ -194,6 +194,63 @@ boot MUST NOT be converted with this bridge. Respect the
 bridge's explicit expiry and extrapolation guards. Keep
 fusion/admission and motors disabled.
 
+## Pi camera metadata conversion check (operator output, 2026-11-25)
+
+**FACT:** Operator performed a bounded, cameras-only native V4L2
+metadata test after explicitly verifying `/dev/video0`
+AR0234 at 1920x1200 MJPEG/30 fps and restoring `/dev/video2`
+TSTC OV9281 at 2560x800 MJPEG/60 fps. Both cameras had
+no reported V4L2 device owner before start. The existing
+`stream_v4l2_mjpeg.c` native capture was compiled to a
+temporary executable. Both `LatestV4L2Capture` workers
+ran while 200 new host clock brackets were collected;
+subsequently the last live packet of each camera was
+selected. JPEG payloads were **not persisted**.
+
+Reported output:
+
+- `BOOT_ID: 07e5f3a5-3d20-470a-8e8b-ab30fa2a9b8a`
+  (matches the same-session Pi boot);
+- `BRIDGE_STATUS: DIAGNOSTIC_BRIDGE_READY`;
+- `OFFSET_NS: 1795619749801904074`;
+- `BRIDGE_ENVELOPE_NS: 3102` (3.102 µs observed);
+- `AR0234_FRAMES_RECEIVED: 17`;
+- `AR0234_TIMESTAMP_STATUS:
+  HOST_TIMEBASE_CONVERTED_DIAGNOSTIC_ONLY`;
+- `OV9281_FRAMES_RECEIVED: 40`;
+- `OV9281_TIMESTAMP_STATUS:
+  HOST_TIMEBASE_CONVERTED_DIAGNOSTIC_ONLY`;
+- `CAMERA_SNAPSHOT_SKEW_MS: 16.24`;
+- `SIEE_CAMERA_TIMEBASE_V1: PASS`.
+
+**Private metadata evidence (Pi only):**
+`/home/elwis/.local/state/sie/evidence/camera_timebase_v1_20261125T154936Z_1490.json`.
+SHA-256 `35442d72f2d78c59df3ea108e95ba002e2e20ff200579911467d36bf7934c52f`
+was emitted by the collector and reproduced independently
+by `sha256sum` on that file.
+
+The new offset differs by 121 ns from the earlier same-boot
+sample; this is a bounded observation, not a long-term drift
+guarantee. The native camera metadata was accepted by
+the diagnostic bridge under the **experimental** policy.
+The 16.24-ms pair skew is the difference between two selected
+driver-declared SOE timestamps, **not** verified hardware
+exposure synchronization nor camera calibration error.
+Frame receive counts do **not**, alone, establish frame loss
+or delivery frame rate.
+
+**LIMIT / NEXT:** The sample and bridge prove only a successful
+camera-to-host timestamp conversion for that bounded session.
+The `3102 ns` empirical envelope does not bound uncertainty
+of physical exposure timing, nor the LD19 laser's measurement
+time. The LD19 node was previously observed stopped after Pi
+restart, so there is no simultaneous triple-sensor evidence
+yet. Before a three-sensor capture, check the current LD19
+ROS process/serial port and restore its validated startup
+profile **without** connecting actuators. Keep Measurement,
+World State and motor admission disabled. No scene-image
+payload or raw private clock samples were uploaded to GitHub.
+
 ## Reproducible Pi test (no hardware access)
 
 Use an independent, clean, detached worktree at the latest
