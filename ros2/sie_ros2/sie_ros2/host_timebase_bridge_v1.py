@@ -54,6 +54,19 @@ def _median_int(values: list[int]) -> int:
     return (values[midpoint - 1] + values[midpoint]) // 2
 
 
+def _policy_limits(policy: HostBridgeTestPolicy) -> dict:
+    """Bind every threshold to the bridge, not just the human-readable ID."""
+    return {
+        field: getattr(policy, field)
+        for field in (
+            "max_bracket_ns", "max_sample_gap_ns", "max_offset_span_ns",
+            "max_consecutive_offset_jump_ns",
+            "max_between_window_offset_change_ns",
+            "max_age_ns", "max_extrapolation_ns", "max_future_skew_ns",
+        )
+    }
+
+
 def _boundary() -> dict:
     return {
         "diagnostic_only": True,
@@ -84,6 +97,7 @@ def make_host_timebase_bridge(
         **_boundary(),
         "schema_version": BRIDGE_SCHEMA,
         "policy_id": policy.policy_id,
+        "policy_limits": _policy_limits(policy),
         "boot_id": boot_id,
         "monotonic_clock": "CLOCK_MONOTONIC",
         "realtime_clock": "CLOCK_REALTIME",
@@ -149,7 +163,9 @@ def make_host_timebase_bridge(
                 or previous_bridge.get("schema_version") != BRIDGE_SCHEMA
                 or previous_bridge.get("status") != "DIAGNOSTIC_BRIDGE_READY"
                 or previous_bridge.get("policy_id") != policy.policy_id
-                or type(previous_bridge.get("offset_ns")) is not int):
+                or previous_bridge.get("policy_limits") != _policy_limits(policy)
+                or type(previous_bridge.get("offset_ns")) is not int
+                or type(previous_bridge.get("last_sample_monotonic_ns")) is not int):
             outcome["status"] = "INVALID_PREVIOUS_BRIDGE"
             return outcome
         if previous_bridge.get("boot_id") != boot_id:
@@ -214,6 +230,9 @@ def convert_monotonic_stamp(
         return result
     if bridge.get("boot_id") != boot_id:
         result["status"] = "BOOT_ID_MISMATCH"
+        return result
+    if bridge.get("policy_limits") != _policy_limits(policy):
+        result["status"] = "POLICY_LIMITS_MISMATCH"
         return result
 
     first = bridge.get("first_sample_monotonic_ns")
