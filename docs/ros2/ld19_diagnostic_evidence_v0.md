@@ -155,25 +155,64 @@ The matching `src/demo.cpp` excerpts show:
   ROS publishing function does **not** use this SDK stamp as the
   `LaserScan.header.stamp` field.
 
-**INTERPRETATION / LIMIT:** The observed 99.987–100.029-ms intervals
-therefore describe regularity of **ROS conversion-time clock samples**,
-not proven LD19 physical rotation or first-beam acquisition cadence.
-The 0.471–0.803-ms `received_at_utc - header.stamp` difference describes
-only time from that conversion clock sampling to the diagnostic subscriber
-clock capture (including software steps); it is **not** an independently
-validated sensor-exposure-to-observation latency. The exact SDK
-`get_timestamp_()` timebase, treatment of point timing, and
-time relationship with camera exposure remain OPEN. No correction factor
-or invented temporal offset is permitted. Scan drops, long-duration
-stability, extrinsic precision and independently verified off-Pi backup
-also remain OPEN. Keep raw data private; the draft remains
-`DIAGNOSTIC_ONLY_NOT_ADMITTED`.
+**FACT / SDK callback and ROS call-chain audit (2026-11-25,
+operator-provided source grep from same Pi checkout):**
 
-**NEXT VERIFIABLE STEP:** Read-only trace the SDK
-`get_timestamp_()` callback and the calling path into
-`ToLaserscanMessagePublish`, then design a versioned timestamp
-provenance policy for camera/LiDAR alignment; do not modify driver
-semantics or Measurement admission without separate review.
+- `src/demo.cpp:91` registers
+  `ldlidarnode->RegisterGetTimestampFunctional(std::bind(&GetSystemTimeStamp))`.
+  `src/demo.cpp:245-249` defines `GetSystemTimeStamp()` as
+  `std::chrono::system_clock::now()` cast to nanoseconds since epoch.
+  Thus SDK packet timestamps are **host system-clock nanoseconds**, not
+  independent hardware LiDAR timestamps.
+- `ldlidar_driver/src/core/ldlidar_driver.cpp:298-299` registers this
+  callback, then `...:84` forwards it to
+  `comm_pkg_->RegisterTimestampGetFunctional`;
+  `ldlidar_driver/src/dataprocess/lipkg.cpp:299-300` stores it in
+  `get_timestamp_`.
+- `lipkg.cpp:154-161` samples `get_timestamp_()` for the first and
+  each successive parsed packet; the code estimates a per-point timestamp
+  by interpolation between adjacent packet callback times
+  (`lipkg.cpp:176`). It does **not** prove actual laser-exposure
+  timing or hardware clock synchronization.
+- `src/demo.cpp:119-122` calls
+  `ldlidarnode->GetLaserScanData(laser_scan_points, 1500)`, where
+  `laser_scan_points` is a `Points2D`, then calls
+  `ToLaserscanMessagePublish`. This selects the
+  `GetLaserScanData(Points2D&)` overload
+  (`ldlidar_driver.cpp:240-249`), which reads the accumulated point array
+  from `LiPkg::GetLaserScanData(Points2D&)`
+  (`lipkg.cpp:281-286`).
+- The separate `GetLaserScanData(LaserScan&)` overload can copy
+  `recvpcd.front().stamp` to `dst.stamp` (`ldlidar_driver.cpp:263-274`)
+  but is **not used in the observed ROS publication path**.
+- As recorded above, `ToLaserscanMessagePublish` obtains
+  `node->now()` and writes it to `LaserScan.header.stamp`;
+  point timestamps are not exported in the published
+  `sensor_msgs/msg/LaserScan` message. `scan_time` and
+  `time_increment` describe a conversion-time-derived uniform spacing,
+  not independently observed point timing.
+
+**INTERPRETATION / LIMIT:** The observed 99.987–100.029-ms intervals
+describe the ROS conversion clock's cadence over a 2.9-second sample,
+**not** validated physical rotation or laser-acquisition cadence.
+The 0.471–0.803-ms `received_at_utc - header.stamp` describes
+software timing between conversion and diagnostic receipt, **not**
+the full latency from a laser measurement. The SDK timestamp callback
+timebase is now identified as the Pi host wall clock, but its relationship
+to ROS time when `use_sim_time` changes, the timing of UART packet
+receipt/parse and laser exposure, and any inter-camera offset have not
+been empirically measured. Do not infer a fixed temporal compensation
+factor. Packet loss, long-duration drift, extrinsic precision and
+off-Pi independently verified backup remain OPEN. Keep raw scan
+evidence private and the draft `DIAGNOSTIC_ONLY_NOT_ADMITTED`.
+
+**NEXT VERIFIABLE STEP:** Without touching the working third-party
+driver, define a versioned **timestamp provenance and freshness**
+contract distinguishing ROS conversion time, host packet-processing
+timestamps and unknown hardware acquisition time; use this
+distinction in future camera/LiDAR alignment checks. First test the
+contract with synthetic stale/reordered scans, then collect real
+cross-sensor evidence only after the contract boundaries are reviewed.
 
 ## Open engineering work
 
