@@ -42,7 +42,7 @@ not an approved Data Contract and must not become an inter-module API by
 accident. The `evidence_ids` field supports local source linking but does not
 claim a fully integrated Evidence Graph or calibration acceptance.
 
-## Pi read-only verification (not yet executed)
+## Pi read-only verification (executed on 2026-11-25; commands retained for reproducibility)
 
 Start with the existing integrated `enable_ld19:=true` launch from the
 previously verified PR #12, with drive power physically disconnected.
@@ -77,6 +77,48 @@ for sample records, check source timestamp/frame and status
 `DIAGNOSTIC_ONLY_NOT_ADMITTED`. Do not push raw scene scans to public GitHub;
 store source evidence in the private SIEE evidence archive, with checksums
 and a separately verified backup before claiming durable evidence.
+
+## Pi diagnostic capture evidence (2026-11-25, operator report)
+
+**FACT / input and run:** The operator ran the manual-only
+`ld19_diagnostic_evidence_node` against the existing
+`/sie/lidar/scan_raw` topic on Raspberry Pi 5. The collector logged
+`DIAGNOSTIC_ONLY`, `limit=30`, and `capture complete: 30 records`.
+This was the first reported physical scan capture using this adapter, and
+does not constitute a canonical SIE Observation validation.
+
+**FACT / operator-side verification output:**
+- Build and executable availability: `SIEE_LD19_ADAPTER_BUILD: PASS`,
+  with six unit tests passed in 0.03 s.
+- JSONL file:
+  `/home/elwis/.local/state/sie/evidence/ld19_diagnostic_v0_20261125T132230Z.jsonl`
+- `RECORDS: 30`; `UNIQUE_OBSERVATIONS: 30`.
+- `REFERENCE_FRAME: ld19_sensor`.
+- `VALID_FRACTION_MIN: 0.839`,
+  `VALID_FRACTION_MAX: 0.8608`. These are per-scan geometric validity
+  ratios, **not estimated confidence or safety reliability**.
+- `EVIDENCE_SHA256: PASS`: the operator recomputed each digest over
+  canonical JSON of its recorded `payload.scan`, verifying correspondence
+  between the persisted payload and stored digest.
+- `MEASUREMENT_ADMISSION: DISABLED`,
+  `WORLD_STATE_UPDATE: DISABLED`,
+  `MOTOR_CONTROL: DISABLED`.
+- Full JSONL file SHA-256:
+  `d647283c478600c02574a2a6ff3cea38ccbd662200dca3444b45a46df8e5d158`.
+  This checksum was reported by `sha256sum` on Pi; an independent
+  off-Pi verification has not yet been reported.
+
+**OPEN:** Inter-record source timestamp ordering, time intervals and
+source-to-receive time deltas were **not evaluated** by the above check.
+No claim about exact scan frequency, packet-loss rate, laser-plane extrinsics
+or long-duration temporal stability follows from this short capture.
+No off-Pi evidence backup has been confirmed. Keep the raw journal private.
+
+**NEXT VERIFIABLE STEP:** Run a read-only audit of the existing JSONL to
+verify timestamp monotonicity, duplicate source stamps, per-record angular
+array consistency, and receive latency, without capturing a new scene or
+running motors. Any apparent time offset must be reported as an observation,
+not silently corrected.
 
 ## Open engineering work
 
