@@ -251,6 +251,70 @@ profile **without** connecting actuators. Keep Measurement,
 World State and motor admission disabled. No scene-image
 payload or raw private clock samples were uploaded to GitHub.
 
+## Pi three-sensor clock coexistence check (operator output, 2026-11-25)
+
+**FACT / Step 33:** After the LD19 launch confirmed
+`ldlidar communication is normal`, the read-only test
+subscribed to `/sie/lidar/scan_raw` while both existing native
+camera captures ran and the collector sampled a new, same-boot
+`CLOCK_MONOTONIC ↔ CLOCK_REALTIME` bridge.
+
+Operator-reported output:
+
+- Pi boot ID: `07e5f3a5-3d20-470a-8e8b-ab30fa2a9b8a`;
+- LD19 topic `sensor_msgs/msg/LaserScan`: 1 publisher
+  before capture; ROS publisher received 20 scans during probe;
+- `BRIDGE_STATUS: DIAGNOSTIC_BRIDGE_READY`;
+- `BRIDGE_ENVELOPE_NS: 8176` (empirical host-clock
+  envelope 8.176 µs);
+- AR0234 `FRAMES: 20`,
+  `HOST_TIMEBASE_CONVERTED_DIAGNOSTIC_ONLY`;
+- OV9281 stereo `FRAMES: 44`,
+  `HOST_TIMEBASE_CONVERTED_DIAGNOSTIC_ONLY`;
+- Latest LD19 `frame_id: ld19_sensor`;
+- latest `LD19_ROS_TO_RECEIVE_MS: 0.761`;
+- `LD19_HEADER_MINUS_AR0234_MS: -19.894`;
+- `LD19_HEADER_MINUS_OV9281_MS: -52.131`;
+- `SIEE_THREE_SENSOR_TIMEBASE_V1: PASS_DIAGNOSTIC_ONLY`;
+- Measurement, World State update, motor control:
+  all `DISABLED`.
+
+**Private Pi evidence:**
+`/home/elwis/.local/state/sie/evidence/three_sensor_timebase_20261125T160050Z_1778.json`,
+SHA-256
+`dc13132790de917185a983fce08d1fadc3a67f2a140ecf82408be1902446e5cf`.
+The printed sampler digest and independent `sha256sum` match.
+
+**INTERPRETATION:** One bounded run demonstrated all three
+producers active in overlapping time, two camera
+driver-declared SOE monotonic stamps converted under the
+experimental same-boot host mapping, and a received LD19
+ROS LaserScan with realtime-like header stamp.
+
+**NOT ESTABLISHED:** The two negative LD19-header-minus-camera
+values describe the **last selected records**, not time
+synchronization accuracy, independent LiDAR acquisition
+latency, any common exposure trigger, or sensor-fusion
+acceptance. The test collected 20 LiDAR timestamps but saved
+only the last scan's timestamp and each camera's selected
+metadata; it is not a longitudinal correspondence/nearest-pair
+analysis. The differences also reflect serial camera
+snapshot selection and ROS callback scheduling. Do not
+derive a fixed physical timing correction from them.
+`8176 ns` is the empirical host clock bridge envelope,
+**not** a camera/LiDAR physical timing error bound.
+
+**NEXT VERIFIABLE TEST:** Collect a bounded *series* of
+source-stamped AR0234/OV9281 camera metadata and LD19
+conversion-header stamps, record clock brackets
+contemporaneously, then calculate nearest-timestamp
+pair distributions, age, reorder/missing-data and
+metadata provenance on the **same boot**, without
+saving image/scan payloads and without promoting
+diagnostic data into any approved contract. Read-only
+inspection of the existing private evidence can first
+confirm its exact recorded per-source fields.
+
 ## Reproducible Pi test (no hardware access)
 
 Use an independent, clean, detached worktree at the latest
