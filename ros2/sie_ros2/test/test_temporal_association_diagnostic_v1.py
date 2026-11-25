@@ -50,6 +50,9 @@ def evidence(*, rgb=None, stereo=None, lidar=None):
         lidar = [scan(60.236, 1), scan(250, 2)]
     return {
         "schema_version": "sie.three_sensor_warmed.v1.diagnostic",
+        "measurement_authorized": False,
+        "world_state_update_authorized": False,
+        "motor_control_authorized": False,
         "boot_id": "pi-boot-1",
         "bridge": {
             "boot_id": "pi-boot-1",
@@ -137,6 +140,7 @@ def test_reused_lidar_header_does_not_create_independent_measurements(policy):
 @pytest.mark.parametrize("mutation", [
     lambda x: x.update(schema_version="wrong"),
     lambda x: x["bridge"].update(boot_id="different-boot"),
+    lambda x: x.update(motor_control_authorized=True),
     lambda x: x["bridge"].update(status="BRIDGE_EXPIRED"),
     lambda x: x["bridge"].update(monotonic_clock="CLOCK_BOOTTIME"),
     lambda x: x["bridge"].update(first_sample_monotonic_ns=BASE + 400_000_000),
