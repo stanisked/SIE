@@ -17,6 +17,28 @@
 
 ---
 
+## 2026-11-25: Temporal Association three-sensor / Pi (ФАКТ / РЕШЕНИЕ / ОТКРЫТО)
+
+**Новый основной handoff для перехода между чатами:** [SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md](SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md). Он хранит полную последовательность шагов 29, 33–46, SHA256 первичных приватных Pi-артефактов, точное состояние Гитхаб веток и один следующий тест. Настоящий журнал Graphify остаётся историческим и **не заменяет** указанный handoff.
+
+**ФАКТ / Git:** рабочая диагностическая ветка `codex/siee-ld19-observation-diagnostic-v0-20261125` оформлена PR #13 `OPEN DRAFT` на `codex/siee-person-follow-mvp-20261120`, не слита с `main`. Последний известный Graphify AST от **2026-11-16** `db8097ea4239dcf45ef7598c831a45648d2498fd` (4599 узлов / 13658 рёбер / 300 сообществ); новый Graphify-скан НЕ производился. Не утверждать, что новые файлы появились в этом графе.
+
+**ФАКТ / поток:** у LD19 `LaserScan.header.stamp` является ROS-меткой конвертации/публикации, **не** физического времени сканирования. После прогрева подписки Pi получил 30/30 LD19 ROS заголовков и callbacks в интервале ~3.012с одновременно с AR0234 1920×1200 MJPG и OV9281 2560×800 MJPG. Same-boot Host Timebase Bridge диагностически сопоставил V4L2 MONOTONIC метки драйвера с host REALTIME. Оригинал `three_sensor_warmed_20261125T161626Z_2035.json` приватный на Pi, SHA256 `6a12065b778f3e3476e8fab4286f542d0dfa6c7bbe9d79f227002817fe22f836`.
+
+**ФАКТ / алгоритм:** при RGB-anchored replay 44/44 RGB-кадров имеют уникальные Stereo-метки и 44/44 независимые ссылки на 30 LD19 ROS заголовков; SHA derived `ad0864c74d8998d67ca8eee57bb8a462e0dc4620c048e9e0cb5ec8f0c0e7a213`. Результат обязательной тройки 43/44 был обусловлен избыточной проверкой Stereo↔LD19, не ошибкой пары RGB↔Stereo. Explicit-time историческая проверка свежести: 44 записи, из них 3 одновременно свежи в выбранный момент на 10мс после окна при *испытательном* пороге 250мс; SHA `65449331056ce5e2ad25c300c6403fb8ac6f4b7087db639452fc867bbea9b381`. Causal-availability аудит шаг 46 подтвердил 44/44 пары уже доступных кадров в момент получения RGB и 44/44 отдельных LiDAR-header links при 0мс ожидания. Плюс 20мс ожидания не добавили пары, а увеличили возраст. Эти 44/44 относятся к **сохранённым выбранным latest-V4L2 кадрам**, а не к live end-to-end YOLO циклу.
+
+**ФАКТ / зависимости нового исходного кода:** `ros2/sie_ros2/sie_ros2/host_timebase_bridge_v1.py` → `temporal_association_diagnostic_v1.py` (offline independent RGB↔Stereo and RGB↔LD19) → `temporal_association_freshness_v1.py` (явное время оценки, возраста, устаревшие/будущие метки, отказ при expired bridge). CLI `temporal_association_offline_probe_v1.py` и `temporal_association_freshness_offline_v1.py` используют приватные SHA-verified JSON. Потенциальное live подключение должно учитывать `latest_v4l2_capture.py` и `ar0234_ov9281_control_preview_node.py`, где уже есть разные семантики `select_latest_pair()` и `select_stereo_during_rgb()`; не заменять их без отдельного испытания. Это карта **по чтению исходников**, НЕ результат Graphify extraction.
+
+**РЕШЕНИЕ / proposal только диагностическое:** использовать RGB как temporal anchor для текущей цели и Stereo, LD19 привязывать отдельно по ROS *conversion/publication* времени; сохранять source/cycle/evidence, units/reference_frame только где подтверждены. `reference_frame=UNVERIFIED_IN_CAPTURE` у камер, `confidence=None`; сопоставление по времени не даёт метрического `Measurement`. Все `Measurement/World State/motor` admission false, пороги 25/50/250мс экспериментальные. Публичная ветка содержит summary/код/docs, приватные исходные данные остаются на Pi.
+
+**ОТКРЫТО:** live Shadow Timing Monitor (read-only), реальный receipt/processing/result-ready age, ROS clock `use_sim_time` в работающем драйвере, физическое laser acquisition timing, camera optical frame и extrinsic calibration applicability. **Отдельно** действует ESP32 v13 FAULT от 2026-11-23, питание приводов после него не подтверждено как OFF. Новая работа не должна запускать моторы/ESP32; проверить физическое питание до эксперимента.
+
+**Следующий проверяемый шаг:** один opt-in motor-off live Shadow Temporal Association monitor, записывающий receipt/selection/processing timestamps и причины отказов без изменения `Vision Core` target/depth/control и без разрешения UART команд; синхронно сверить SHA и статус private evidence в GitHub PR #13. Не запускать новую Graphify extraction и не обещать обновлённый граф без отдельной реальной операции.
+
+---
+
+
+
 
 ## 2026-11-23: ESP32 brake continuity dependencies (FACT / OPEN)
 
