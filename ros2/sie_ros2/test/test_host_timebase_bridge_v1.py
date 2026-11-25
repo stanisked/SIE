@@ -244,6 +244,28 @@ def test_reproducibility_no_hidden_now(policy):
     assert not any("authorized" in x and bool(y) for x, y in result.items())
 
 
+def test_changed_limits_same_policy_id_are_rejected(policy):
+    from dataclasses import replace
+    bridge = build(policy)
+    changed = replace(policy, max_extrapolation_ns=11_000_000)
+    assert convert(changed, bridge)["status"] == "POLICY_LIMITS_MISMATCH"
+    later = build(
+        changed, brackets(start=START + 1_000_000_000),
+        previous=bridge,
+    )
+    assert later["status"] == "INVALID_PREVIOUS_BRIDGE"
+
+
+def test_corrupt_previous_bridge_last_stamp_is_refused(policy):
+    bridge = build(policy)
+    bridge["last_sample_monotonic_ns"] = None
+    later = build(
+        policy, brackets(start=START + 1_000_000_000),
+        previous=bridge,
+    )
+    assert later["status"] == "INVALID_PREVIOUS_BRIDGE"
+
+
 def test_missing_boot_id_rejected(policy):
     with pytest.raises(ValueError):
         build(policy, boot="")
