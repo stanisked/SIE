@@ -33,6 +33,7 @@ setup(
     entry_points={
         "console_scripts": [
             "ar0234_observation_node = sie_ros2.ar0234_observation_node:main",
+            "ld19_diagnostic_evidence_node = sie_ros2.ld19_diagnostic_evidence_node:main",
             "ar0234_observation_validation_node = sie_ros2.ar0234_observation_validation_node:main",
             "ar0234_target_suitability_node = sie_ros2.ar0234_target_suitability_node:main",
             "ar0234_dynamic_target_tracker_node = sie_ros2.ar0234_dynamic_target_tracker_node:main",
