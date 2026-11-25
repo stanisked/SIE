@@ -215,7 +215,7 @@ def test_invalid_previous_bridge_refused(policy):
 
 def test_bad_bridge_and_tampered_payload_refused(policy):
     b = build(policy)
-    assert convert(policy, {"status": "NOT_READY"})["status"] == "BRIDGE_UNAVAILABLE"
+    assert convert(policy, {"status": "NOT_READY"}, source=START, now=START + 1)["status"] == "BRIDGE_UNAVAILABLE"
     tampered = deepcopy(b)
     tampered["offset_ns"] = "nan"
     assert convert(policy, tampered)["status"] == "INVALID_BRIDGE_FIELDS"
