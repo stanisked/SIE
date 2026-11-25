@@ -55,6 +55,11 @@ Pure Python module:
 Pure Python synthetic tests:
 `ros2/sie_ros2/test/test_host_timebase_bridge_v1.py`.
 
+Optional read-only Pi clock collector (no ROS / LiDAR / cameras):
+`ros2/sie_ros2/sie_ros2/host_timebase_clock_probe_v1.py`.
+Collector unit tests:
+`ros2/sie_ros2/test/test_host_timebase_clock_probe_v1.py`.
+
 The bridge consumes explicitly supplied bracketed samples:
 
 ```text
@@ -89,6 +94,10 @@ max bracket width, sample gap, observed offset span, consecutive
 offset jump, between-window offset change, bridge age,
 extrapolation and future stamp skew. Thresholds in tests are
 **arbitrary fixtures only**, not accepted SIEE runtime values.
+The bridge serializes every policy threshold as `policy_limits`;
+a later conversion or cross-window comparison refuses the same
+`policy_id` with different limits (`POLICY_LIMITS_MISMATCH` or
+`INVALID_PREVIOUS_BRIDGE`).
 
 A subsequent `convert_monotonic_stamp()` maps an input
 `CLOCK_MONOTONIC` timestamp to an estimated host
@@ -106,7 +115,7 @@ Refusal statuses include `INVALID_BRACKETS`,
 `BRIDGE_WINDOWS_OUT_OF_ORDER`, `BRIDGE_UNAVAILABLE`,
 `BOOT_ID_MISMATCH`, `BRIDGE_FROM_FUTURE`,
 `BRIDGE_EXPIRED`, `STAMP_FROM_FUTURE` and
-`STAMP_OUTSIDE_BRIDGE_WINDOW`.
+`STAMP_OUTSIDE_BRIDGE_WINDOW` and `POLICY_LIMITS_MISMATCH`.
 
 Every result, including success, carries
 `physical_acquisition_time=UNKNOWN`,
@@ -141,9 +150,32 @@ python3 -m py_compile \
   ros2/sie_ros2/test/test_host_timebase_bridge_v1.py
 python3 -m pytest -q \
   ros2/sie_ros2/test/test_host_timebase_bridge_v1.py \
+  ros2/sie_ros2/test/test_host_timebase_clock_probe_v1.py \
   ros2/sie_ros2/test/test_ld19_timestamp_policy_v1.py \
   ros2/sie_ros2/test/test_ld19_diagnostic_evidence.py
 ```
+
+### Optional new-boot Pi clock evidence (after synthetic PASS)
+
+```bash
+mkdir -p "$HOME/.local/state/sie/evidence"
+python3 -m sie_ros2.host_timebase_clock_probe_v1 \
+  --samples 200 --interval-ms 10 \
+  --output "$HOME/.local/state/sie/evidence/host_timebase_probe_v1_$(date -u +%Y%m%dT%H%M%SZ).json"
+```
+
+The collector reads `/proc/sys/kernel/random/boot_id`, then
+brackets 200 host clock readings with `CLOCK_MONOTONIC`
+and `CLOCK_REALTIME`. The result is an explicitly
+**experimental** clock mapping with integer-valued offsets,
+an observed bracket envelope and validation statuses.
+The JSON file is created with mode `0600` using exclusive
+create (never overwritten), and its SHA-256 is printed.
+Do **not** upload its raw samples to public GitHub.
+The fixed trial thresholds in this script are NOT approved
+SIEE runtime limits. If `BRIDGE_STATUS` is a refusal, that
+is a valid diagnostic outcome, not permission to force PASS.
+No ROS node or hardware driver is started.
 
 No active mapping should be claimed solely from the old
 200-sample offset after the Pi has powered down. The
