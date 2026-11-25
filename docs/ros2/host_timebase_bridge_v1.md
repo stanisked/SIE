@@ -147,7 +147,9 @@ cd /path/to/new/isolated/worktree
 export PYTHONPATH="$PWD/ros2/sie_ros2${PYTHONPATH:+:$PYTHONPATH}"
 python3 -m py_compile \
   ros2/sie_ros2/sie_ros2/host_timebase_bridge_v1.py \
-  ros2/sie_ros2/test/test_host_timebase_bridge_v1.py
+  ros2/sie_ros2/sie_ros2/host_timebase_clock_probe_v1.py \
+  ros2/sie_ros2/test/test_host_timebase_bridge_v1.py \
+  ros2/sie_ros2/test/test_host_timebase_clock_probe_v1.py
 python3 -m pytest -q \
   ros2/sie_ros2/test/test_host_timebase_bridge_v1.py \
   ros2/sie_ros2/test/test_host_timebase_clock_probe_v1.py \
