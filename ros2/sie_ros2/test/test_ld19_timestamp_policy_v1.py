@@ -1,7 +1,7 @@
 """Synthetic tests for LD19 timestamp policy draft: no ROS or hardware."""
 
 from copy import deepcopy
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import json
 
 import pytest
