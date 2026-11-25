@@ -5,6 +5,16 @@ Implementation is offline, pure Python, and has no ROS, camera, LiDAR, or
 motor runtime dependency. It replays a private `sie.three_sensor_warmed.v1.diagnostic`
 metadata snapshot. Source image and laser range-array payloads are not read.
 
+## Verified continuation: Steps 43–46, 2026-11-25
+
+**FACT:** The original source SHA256 `6a12065b778f3e3476e8fab4286f542d0dfa6c7bbe9d79f227002817fe22f836` was verified by Pi and the real pure-Python association replay produced `44/44` unique RGB↔Stereo links and `44/44` independent RGB↔LD19 ROS header links using 30 unique headers. Original offline association result SHA256 `ad0864c74d8998d67ca8eee57bb8a462e0dc4620c048e9e0cb5ec8f0c0e7a213`. Separate explicit-time freshness replay evaluated 44 historical rows at the **single** clock instant 10 ms after the bridge, marked 3 camera-pair links and 3 LD19-header links recent (250ms *trial* source age, not live uptime performance), SHA256 `65449331056ce5e2ad25c300c6403fb8ac6f4b7087db639452fc867bbea9b381`; ages explicit and all admission flags false. Detailed `pytest` count was not pasted, although the `set -e` test script completed.
+
+**FACT / Step 46 causal availability check:** On the selected latest-V4L2 metadata sequence, each of 44 RGB anchors could choose a Stereo packet **received no later than** the RGB receipt instant, and a separate ROS LD19 header whose callback had already arrived. Both independent relations passed trial checks for 44/44 anchors at wait 0ms, with 44 unique Stereo and 30 unique LD19. Camera stamp abs median 0.239ms/max 16.185ms; max per-pair camera age median 36.846ms/max 52.889ms. A simulated 20ms delay produced **no extra matches**, increased age median to 56.846ms/max 72.889ms. Historical selected packets only, not live YOLO/segmentation cycle latency, no proof of sensor physical synchronization.
+
+**DESIGN DECISION (diagnostic ONLY):** Prefer RGB-anchored **source-available** camera-pair matching, keep LD19's ROS conversion-header link independently recorded without a third-edge gate. Do not silently change existing `select_latest_pair()` or `select_stereo_during_rgb()` runtime policy; those workflows differ from the offline replay. Never promote these links to canonical Measurement/World State/motor. Live read-only Shadow integration is the next **unverified** step, not a completed test.
+
+**Newest new-chat continuation:** [SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md](../handoffs/SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md). PR #13 remains DRAFT, based on the 20-Nov person-follow branch, separate from the unresolved ESP32 v13 FAULT.
+
 ## Motivation: verified Step 42 edge case (Pi, 2026-11-25)
 
 Operator's SHA-verified Step 38 evidence contains 30 LD19 ROS header stamps.
@@ -124,7 +134,7 @@ The camera optical reference frame also remains unverified.
 These fields cannot authorize canonical SIE Measurements
 or motion.
 
-### Pi offline verification (pending)
+### Pi offline verification (historical command; operator replay completed 2026-11-25)
 
 Refresh the existing clean isolated worktree from PR #13,
 compile both new modules, run synthetic tests, then replay
@@ -164,8 +174,8 @@ marked `SOURCE_STALE` because the historical replay
 evaluates all 44 frames **at one instant after a
 ~3-second capture**, not at each frame's original
 arrival. This must NOT be interpreted as a camera
-failure. No synthetic test count or replay pass should
-be claimed until the Pi operator actually runs them.
+failure. The Pi operator ran this replay successfully and verified the private SHA-256,
+but no numeric pytest summary was pasted. Re-check source/boot/clock if rerunning.
 
 ## Files
 
@@ -179,7 +189,7 @@ be claimed until the Pi operator actually runs them.
   branches, LiDAR absence, reuse, evidence links, malformed source,
   trial policy and hard diagnostic boundaries.
 
-## Pi verification (operator to run, not yet executed)
+## Initial Pi verification command (historical, already completed 2026-11-25)
 
 Use an isolated worktree with current PR #13 head, not a modified
 running vision workspace. This is entirely offline; LD19 launch can
@@ -213,5 +223,7 @@ metadata:** `RGB_ANCHORS: 44`,
 `BOTH_DIAGNOSTIC_LINKS: 44`.
 These are trial associations, not canonical cross-sensor Measurements.
 
-No `PROJECT_CONTEXT.md` / Graphify handoff / camera calib / LD19
-third-party driver / motor code edits are made by this isolated PR.
+The separate coordinated 2026-11-25 handoff documentation update now adds
+summaries to `PROJECT_CONTEXT.md` and the Graphify handoff (no Graphify
+extraction). Camera calibration, LD19 third-party driver and motor code remain
+unchanged by these documentation updates.
