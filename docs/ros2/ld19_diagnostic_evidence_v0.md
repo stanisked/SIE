@@ -214,6 +214,20 @@ distinction in future camera/LiDAR alignment checks. First test the
 contract with synthetic stale/reordered scans, then collect real
 cross-sensor evidence only after the contract boundaries are reviewed.
 
+## Experimental timestamp policy v1 (DRAFT)
+
+The separately versioned diagnostic policy is described in
+[`ld19_timestamp_provenance_freshness_v1.md`](ld19_timestamp_provenance_freshness_v1.md).
+It distinguishes ROS conversion-header stamps from host receipt UTC,
+preserves an unknown physical acquisition time, fails closed for
+unverified clock domains, and tests stale, duplicated, reordered
+and future scan timestamps with explicit **test-only** thresholds.
+
+The policy has **no production activation**, is not an approved SIE
+Data Contract and never authorizes Measurement, World State or motor
+control. Its Python tests are separate from the already confirmed
+six v0 diagnostic adapter tests and remain pending real execution.
+
 ## Open engineering work
 
 1. Approve or adapt an LD19-specific **canonical Observation Data Contract**
