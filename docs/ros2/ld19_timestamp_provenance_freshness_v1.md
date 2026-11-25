@@ -346,6 +346,36 @@ and keep the conclusion limited to consistency, not a parameter
 service confirmation. Do not change the working driver, cameras
 or motors.
 
+## LD19 live clock consistency probe (operator result, 2026-11-25)
+
+**FACT:** A short, read-only `rclpy` subscriber on
+`/sie/lidar/scan_raw` received 5/5 `LaserScan` messages from
+the already-running LD19 driver. The subscriber sampled its Pi
+host `CLOCK_REALTIME` when handling each message, and reported
+`(receive_realtime_ns - header_stamp_ns)`:
+`0.864, 0.718, 0.660, 0.667, 0.632 ms`.
+Observed min `0.632 ms`, median `0.667 ms`, max `0.864 ms`,
+mean `0.7082 ms`. Final operator output:
+`SIEE_LD19_ROS_CLOCK_PROBE: COMPLETE`.
+
+**INTERPRETATION:** The live ROS header stamps were close to
+host realtime timestamps in this one bounded session, consistent
+with the source-level `node->now()` path. This does **not**
+directly read `use_sim_time`, prove exact ROS clock configuration,
+measure the LD19's physical acquisition-to-receipt latency,
+or validate synchronization with AR0234/OV9281.
+
+**NEXT STEP / implementation draft:** Independent diagnostic
+[Host Timebase Bridge v1](host_timebase_bridge_v1.md) now
+proposes an explicitly sampled
+`CLOCK_MONOTONIC ↔ CLOCK_REALTIME` mapping and bounded
+failure modes. This is NOT a calibrated fusion adapter, and
+does not change canonical Observation/Measurement contracts.
+Because the Pi was powered down between sessions, the old
+200-sample offset cannot be reused: new samples must carry
+the current boot ID. Synthetic bridge tests and
+new-boot read-only collection remain to be verified on Pi.
+
 ## Engineering gates before any adoption
 
 1. Confirm actual driver revision, ROS `use_sim_time` and shared clock
