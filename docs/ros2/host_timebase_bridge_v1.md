@@ -137,6 +137,63 @@ into the active ROS pipeline. Existing 34 PASS results belong
 to the separate LD19 timestamp policy v1 and v0 adapter tests.
 Do not claim this bridge v1's tests passed until actually run.
 
+## Pi verification, current boot (operator report, 2026-11-25)
+
+**FACT / offline validation:** Operator executed the four relevant
+Python test modules from the isolated timestamp v1 checkout,
+after `py_compile`. Final operator output:
+`SIEE_HOST_TIMEBASE_V1_TESTS: PASS`.
+No count or individual pytest trace was supplied, so this report
+does **not** assert a specific number of tests or independent CI PASS.
+
+**FACT / fresh-boot host clock samples:** The operator then invoked
+`sie_ros2.host_timebase_clock_probe_v1` with 200 bracketed
+`CLOCK_MONOTONIC / CLOCK_REALTIME` samples.
+The collector returned:
+
+- `SIEE_HOST_TIMEBASE_PROBE_V1: COMPLETE`;
+- `BOOT_ID: 07e5f3a5-3d20-470a-8e8b-ab30fa2a9b8a`;
+- `SAMPLES: 200`;
+- `BRIDGE_STATUS: DIAGNOSTIC_BRIDGE_READY`;
+- `OFFSET_NS: 1795619749801903953`;
+- `OBSERVED_SPAN_NS: 2574` (2.574 µs);
+- `EMPIRICAL_ENVELOPE_NS: 4963` (4.963 µs);
+- `PHYSICAL_ACQUISITION_TIME: UNKNOWN`;
+- `MEASUREMENT_ADMISSION: DISABLED`;
+- `WORLD_STATE_UPDATE: DISABLED`;
+- `MOTOR_CONTROL: DISABLED`;
+- `SIEE_HOST_TIMEBASE_V1_DIAGNOSTIC: COMPLETE`.
+
+**Private evidence location (Pi only):**
+`/home/elwis/.local/state/sie/evidence/host_timebase_v1_20261125T152802Z_1353.json`.
+The sampler printed SHA-256
+`84007fd71391d83c4d18cefb59bbc8ae791058c49c9d2ff0b926e752acad336e`;
+the operator's subsequent `sha256sum` command returned the
+same SHA-256 for this path. This verifies the local saved bytes
+against the same-session printed digest; **no off-Pi backup
+has yet been established**.
+
+**INTERPRETATION / LIMIT:** This sampled empirical bridge is
+associated with the Pi boot ID above, not the earlier boot's
+200-sample offset. The `4963 ns` empirical envelope refers to
+spread and bracket uncertainty of the sampled host clock
+mapping, **not** the uncertainty in laser acquisition time,
+physical V4L2 exposure, a future long-duration holdover,
+nor a guaranteed cross-sensor synchronization accuracy.
+The script's fixed trial limits are unapproved test policy,
+not runtime safety thresholds.
+
+**NEXT / camera input:** Before invoking camera devices,
+read-only inspect the current Pi ROS graph, V4L2 by-id
+device mapping and any existing camera capture processes.
+To compare AR0234/OV9281 driver-declared
+`CLOCK_MONOTONIC` stamps with LD19 ROS time, obtain
+new **same-boot** source metadata and a temporally adjacent
+host-clock bridge. Historical camera evidence from another
+boot MUST NOT be converted with this bridge. Respect the
+bridge's explicit expiry and extrapolation guards. Keep
+fusion/admission and motors disabled.
+
 ## Reproducible Pi test (no hardware access)
 
 Use an independent, clean, detached worktree at the latest
