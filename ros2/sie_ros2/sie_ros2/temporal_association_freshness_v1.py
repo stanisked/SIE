@@ -124,7 +124,7 @@ def evaluate_association_freshness(
         "status": refusal or "EVALUATED_DIAGNOSTIC_ONLY",
         "boot_id": boot_id,
         "policy_id": policy.policy_id,
-        "source_association_sha256": associations.get("source_evidence_sha256"),
+        "source_capture_sha256": associations.get("source_evidence_sha256"),
         "evaluation_monotonic_ns": evaluation_monotonic_ns,
         "evaluation_realtime_estimate_ns": None if refusal else evaluation_monotonic_ns + offset,
         "ros_clock_domain_independently_verified": False,
