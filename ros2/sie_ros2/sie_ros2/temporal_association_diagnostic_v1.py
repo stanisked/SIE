@@ -84,6 +84,12 @@ def associate_warmed_metadata(
         raise ValueError("source evidence SHA-256 required")
     if not isinstance(report, Mapping) or report.get("schema_version") != INPUT_SCHEMA:
         raise ValueError("unexpected evidence schema")
+    if any(report.get(flag) is not False for flag in (
+            "measurement_authorized",
+            "world_state_update_authorized",
+            "motor_control_authorized",
+    )):
+        raise ValueError("source file does not preserve diagnostic-only boundary")
     boot_id = report.get("boot_id")
     bridge = report.get("bridge")
     if not isinstance(boot_id, str) or not boot_id:
@@ -113,7 +119,9 @@ def associate_warmed_metadata(
             if not isinstance(row, Mapping):
                 raise ValueError("invalid frame record")
             stamp = _positive_int(row.get("driver_monotonic_ns"), "driver stamp")
-            sequence = _positive_int(row.get("sequence"), "V4L2 sequence")
+            sequence = row.get("sequence")
+            if type(sequence) is not int or not 0 <= sequence <= 0xffffffff:
+                raise ValueError("invalid V4L2 sequence")
             received = _positive_int(row.get("received_monotonic_ns"), "packet receipt")
             if received < stamp:
                 raise ValueError("V4L2 receipt before driver stamp")
