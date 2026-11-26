@@ -1028,6 +1028,108 @@ motor control. The principles above govern future architecture beyond
 these experiments. [Step 70 evidence](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26) ·
 [Step 71 handoff](docs/handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-71--three-sensor-semantic-spatial-diagnostic)
 
+## Knowledge Architecture Principles
+
+**DECISION — `OWNER_APPROVED`, 2026-11-26.** This freeze applies across
+the SIE architecture and its future development, including the current MVP.
+
+> **Knowledge in SIE is structured, justified, and applicable information about the physical world, its entities, properties, relationships, regularities, and interaction possibilities, enabling the system to interpret observations, understand situations, and make decisions.**
+
+Knowledge may originate from sensor observations, verified facts, approved
+domain knowledge, instructions, engineering specifications, and other
+authorized information sources. Knowledge supports interpretation and
+decision-making. Evidence remains necessary to establish claims about
+the physical world.
+
+### Conceptual definitions
+
+| Concept | Meaning | Question |
+| --- | --- | --- |
+| **Observation** | Information obtained from a specific source at a specific time. It remains source-bound and retains its provenance. | What do I observe? |
+| **Measurement** | A quantitative characterization of an observed property obtained through an identified method. It retains independent provenance, units, explicit reference frames, calibration identity, and applicable quality information. | How much? Where? How far? |
+| **Fact** | A statement about the physical world accepted by the system on the basis of sufficient evidence. It remains subject to validity, confidence, and temporal applicability, and can be revised as new evidence becomes available. | What has been established? |
+| **Knowledge** | Structured and justified information about entities, properties, relationships, regularities, and interaction possibilities. | What does this mean? |
+| **Intelligence** | The ability to interpret available knowledge, assess situations, identify missing knowledge, and make justified decisions about interactions with the physical world. | What should be done, and why? |
+
+These are conceptual distinctions. Existing Data Contracts and the
+canonical evidence chain govern engineering objects and their exchange.
+The list establishes no mandatory linear processing pipeline.
+
+### Categories of knowledge
+
+| Category | Scope and architectural boundary |
+| --- | --- |
+| **Situational Knowledge** | The current physical-world situation, including entities, positions, states, relationships, events, and environmental conditions. World State represents accepted modeled-world facts. |
+| **Domain Knowledge** | Types of entities, their properties, relationships, regularities, constraints, and interaction possibilities. The Knowledge Engine owns approved domain knowledge and rules. |
+| **Procedural Knowledge** | How actions, tasks, and interactions can be performed, including procedures, instructions, applicable methods, and action prerequisites. Existing responsibilities of the Knowledge Engine, Task Evaluator, Decision Engine, and executors apply. |
+| **Self-Knowledge** | The system's own capabilities, available sensors, physical characteristics, operational constraints, and technical state. Approved capability descriptions and current operational facts remain distinct. |
+
+These categories describe kinds of knowledge. Existing ownership and
+storage boundaries govern their representation. The categories do not
+assign all knowledge to a single module.
+
+### Knowledge and evidence
+
+Knowledge enables SIE to interpret independent observations, identify
+potential relationships between entities, form explanatory and testable
+hypotheses, evaluate the applicability of instructions, understand
+possible interactions, and recognize insufficient information.
+
+Domain knowledge can suggest a candidate association. Applicable evidence
+is required to establish a fact about a specific observed entity. For
+example, knowing that a person has legs and a torso does not establish
+that particular LiDAR reflections and a stereo torso observation concern
+the same person. Keep hypotheses, candidate associations, accepted facts,
+and approved rules distinct. Confidence must remain evidence-backed.
+
+### Knowledge sufficiency and acquisition
+
+> An intelligent system must be capable of identifying when its available knowledge is insufficient for a proposed task or interaction, determining what additional information is required, and selecting appropriate means to obtain that information.
+
+The conceptual cycle is:
+
+1. Observe.
+2. Interpret observations using applicable knowledge.
+3. Assess knowledge sufficiency relative to the current task.
+4. If sufficient, select an authorized action.
+5. If insufficient, identify the knowledge gap.
+6. Acquire additional information.
+7. Reassess the situation.
+8. Observe and evaluate the result of any executed action.
+
+Additional information can come from re-observation, another sensor, a
+safe change of observation position, approved knowledge sources, or
+clarification from a human. Information acquisition actions remain
+subject to authorization, capabilities, and independent safety
+constraints. If the necessary information cannot be obtained, select a
+safe alternative or refuse the interaction.
+
+**OPEN / implementation status.** The acquisition principle defines
+approved architectural behavior. Knowledge Engine and Active Perception
+mechanisms are outside this documentation freeze.
+
+### Consistency with approved architecture
+
+The [Fundamental Architecture Principles](#fundamental-architecture-principles)
+continue to apply. Deterministic and reproducible cycles, Challenge Before
+Acceptance, and independent collision avoidance and safety behavior
+remain in force. Collision avoidance and safety behavior do not depend
+on successful semantic understanding.
+
+Entity lifecycle, the Evidence Graph, and confidence requirements remain
+in force. The World State Manager is the sole writer of World State and
+accepts only verifiable Facts. The Decision Engine receives modeled-world
+facts only from World State and continues to use Knowledge Engine rules
+and Task Evaluator outputs under ARCH-006. Engineering knowledge remains
+separate from perception under ARCH-010. The Task Evaluator assesses
+tasks and outcomes. The Decision Engine retains decision responsibility.
+
+[Architecture Rules](docs/architecture/SIE_RULES.md) ·
+[Engineering Principles](docs/architecture/SIE_ENGINEERING_PRINCIPLES.md) ·
+[Data Model](docs/architecture/SIE_DATA_MODEL.md) ·
+[Spatial Model](docs/architecture/SIE_SPATIAL_MODEL.md) ·
+[Evidence Graph](docs/architecture/SIE_EVIDENCE_GRAPH.md)
+
 ## Current product direction
 
 The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIEE. **Canonical dynamic fusion diagnostics exclude mobile-base navigation and motor control.** A separate supervised bounded trial is recorded in the current checkpoint; it grants no autonomous or canonical motion admission. No output of the current dynamic fusion diagnostic may authorize motion.

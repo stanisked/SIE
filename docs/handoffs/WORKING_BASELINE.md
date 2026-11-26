@@ -9,6 +9,8 @@ into an approved Measurement.
 
 The [Fundamental Architecture Principles](../../PROJECT_CONTEXT.md#fundamental-architecture-principles) distinguish local surface correspondence from common entity identity. Use the checkpoints below as diagnostic evidence with their recorded limits.
 
+The [Knowledge Architecture Principles](../../PROJECT_CONTEXT.md#knowledge-architecture-principles) describe knowledge sufficiency and information acquisition.
+
 ## 2026-11-26: Step 70 local correspondence freeze
 
 **FACT / operator report** Step 67 and Step 68 yielded 377 coherent local

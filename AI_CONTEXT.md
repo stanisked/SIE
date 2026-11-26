@@ -93,6 +93,8 @@ If a conflict cannot be resolved from repository evidence, stop and report the e
 
 The owner-approved [Fundamental Architecture Principles](PROJECT_CONTEXT.md#fundamental-architecture-principles) apply across SIE, including future development. Follow the distinction between Surface-Level Association and Entity-Level Association when evaluating complementary source evidence.
 
+The owner-approved [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowledge-architecture-principles) define Knowledge, distinguish its categories, and describe how SIE identifies and fills a knowledge gap within the existing evidence and authorization boundaries.
+
 ## Mission
 
 Spatial Intelligence Evidence Engine (SIEE) is an engineering architecture for

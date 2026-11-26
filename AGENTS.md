@@ -76,6 +76,8 @@ Observations may come from physical sensors or trusted external engineering sour
 
 Apply the owner-approved [Fundamental Architecture Principles](PROJECT_CONTEXT.md#fundamental-architecture-principles) to each architecture and implementation task. Preserve source independence, the evidence needed for each association level, and independent safety behavior.
 
+Apply the [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowledge-architecture-principles) when documenting or reviewing interpretation and information acquisition. Preserve evidence requirements, existing module ownership, and authorization and safety gates.
+
 ## Canonical information flow
 
 ```text

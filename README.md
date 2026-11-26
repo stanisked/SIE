@@ -31,6 +31,8 @@ SIE transforms observations into calibrated measurements, evidence-backed world 
 
 The [Fundamental Architecture Principles](PROJECT_CONTEXT.md#fundamental-architecture-principles) describe how SIE integrates complementary knowledge into an entity-centric representation and uses it to guide interaction. They apply to the full architecture.
 
+The [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowledge-architecture-principles) define Knowledge and its categories and describe how SIE handles insufficient information.
+
 ## Engineering Principles
 
 - Geometry First - spatial reasoning begins with geometry and physical constraints.
