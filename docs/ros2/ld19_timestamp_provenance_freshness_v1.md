@@ -8,6 +8,22 @@ the driver source path inspected at
 The inspected third-party driver worktree has unrelated local logger changes.
 This version does **not** claim an exact installed binary/source hash.
 
+## Step 57 live clock evidence, 2026-11-26 (FACT / OPEN)
+
+**FACT / operator report** One observed local LD19 publisher produced 30
+strictly increasing headers compatible with host realtime in the observed
+session. The driver was launched with `use_sim_time:=false`. The runtime
+parameter query timed out, and the inspected source tree had local logger
+changes. The clock evidence JSON is
+`PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE`. Its supplied hash matches the
+attestation reference in every final journal cycle. See the
+[Step 57 evidence and binary provenance](../handoffs/SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26).
+
+**OPEN** Publisher uniqueness alone cannot establish publisher identity
+continuity. The compatibility finding is scoped to the observed publisher
+instance and host session. LD19 headers mark ROS conversion/publication.
+Physical laser acquisition time remains `UNKNOWN`.
+
 ## Reason for this policy
 
 The motor-off 30-scan archive passed JSONL digest validation and had

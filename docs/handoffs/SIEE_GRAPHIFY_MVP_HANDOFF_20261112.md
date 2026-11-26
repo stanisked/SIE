@@ -17,6 +17,19 @@
 
 ---
 
+## 2026-11-26: Step 57 diagnostic freeze (FACT / DECISION / OPEN)
+
+**FACT** The local November 16 `graph.json`, `GRAPH_REPORT.md` and
+`graph.html` matched their recorded SHA-256 values. The graph represents
+`db8097ea4239dcf45ef7598c831a45648d2498fd` with 4,599 nodes, 13,658 edges
+and 300 communities. Step 57 performed no extraction or indexing. Use the
+live monitor, Vision Core and ROS launch sources for current dependencies.
+
+**DECISION** `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE` closes the diagnostic
+timing milestone. **OPEN** The next source audit traces the spatial transform
+chain and calibration provenance. [Step 57 evidence](SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26) ·
+[Spatial Association v1](SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md).
+
 ## 2026-11-25: Temporal Association three-sensor / Pi (ФАКТ / РЕШЕНИЕ / ОТКРЫТО)
 
 **Новый основной handoff для перехода между чатами:** [SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md](SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md). Он хранит полную последовательность шагов 29, 33–46, SHA256 первичных приватных Pi-артефактов, точное состояние Гитхаб веток и один следующий тест. Настоящий журнал Graphify остаётся историческим и **не заменяет** указанный handoff.

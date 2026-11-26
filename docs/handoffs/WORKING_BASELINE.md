@@ -7,6 +7,18 @@ probe, steering-from-scratch task, or calibration change. The detailed reports
 and raw journals remain the evidence; this page does not promote diagnostics
 into an approved Measurement.
 
+## 2026-11-26: Live Three-Sensor Temporal Association (FACT / DECISION / OPEN)
+
+**FACT** The final journal was SHA-matched and independently recalculated.
+It contains 82/83 RGB–Stereo matches, all using the actual Vision Core
+stereo selection, and 80/83 RGB–LD19 header matches. Forty of 82
+publications met the experimental three-source 250 ms freshness limit.
+
+**DECISION** Freeze `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE`. Preserve the
+zero-added-wait camera selector and disabled admission flags. **OPEN**
+Common-frame geometry and spatial association remain to be validated.
+[Step 57 evidence](SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26) · [Spatial Association v1](SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md).
+
 ## 2026-11-23: current brake diagnostic boundary (FACT / OPEN)
 
 v13 `v4_2_uart_shadow_v13_brake_continuity` is flashed and Pi-UART verified; one raised-wheel RIGHT 8° trial still ended `ENCODER_LIMIT_REACHED` / FAULT, final PWM 0/0 and STOP confirmed. Trigger R/L 15/13, final 27/25 (+12/+12), software request-to-write 38 µs, goal 21/21 and hard limit 22/22. v11 and v12 also FAULT (+13/+13). `stopMotors()` before `brakeMotors()` was removed in v13 but it did NOT demonstrate sufficient braking. [Current handoff](SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md) / [comparison](../diagnostics/siee_esp32_brake_v11_v13_20261123.md). Motor power physically OFF after v13 is not reconfirmed; evidence archive/off-Pi copy pending; no oscilloscope. v14 only a diagnostic proposal; no new motor operations authorized.

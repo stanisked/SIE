@@ -4,6 +4,8 @@
 
 **Project:** Spatial Intelligence Evidence Engine (SIEE), repository `stanisked/SIE`. English is canonical for code/interfaces; historical `sie` technical identifiers are unchanged.
 
+**DECISION — current entry point:** [Step 57 diagnostic baseline freeze](#step-57-diagnostic-baseline-freeze-2026-11-26).
+
 **Source state checked 2026-11-25 (GitHub):**
 - PR **#13**, OPEN, DRAFT: https://github.com/stanisked/SIE/pull/13
 - PR head branch: `codex/siee-ld19-observation-diagnostic-v0-20261125`.
@@ -95,6 +97,115 @@ Existing live observation path, inspected on the PR branch:
 
 **FACT** Local verification on baseline `bdb29621d698d8e3192ef5fc6c0eeff59f6e2c97` plus this change passed 121 targeted tests and 2 subtests. The eight changed Python files compiled, the launcher passed Bash syntax validation, and the existing native helper compiled on the development host. No historical experiment, live sensor run or motor test was performed. The current publisher's ROS clock domain, live diagnostic overhead and sensor association yield remain unverified.
 
+## Step 57 diagnostic baseline freeze, 2026-11-26
+
+**DECISION** The project owner closed Live Three-Sensor Temporal Association at
+the diagnostic level on 2026-11-26 as
+`TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE`. Preserve the existing
+`latest_pair` camera selection, with new-RGB arrival triggering for the
+frozen run, and introduce no additional camera association wait. Preserve
+current AR0234 and OV9281 calibrations, segmentation, tracking, stereo depth,
+Vision Core processing and control-preview behavior. Preserve independent
+RGB–Stereo and RGB–LD19 associations and bounded asynchronous diagnostics.
+
+**FACT** Working branch `codex/siee-live-temporal-association-shadow-v1-20261125`.
+Monitor implementation `c2403f8b7b0771bc7c3c3858b05387714db90df5`.
+Deployment baseline `23dbfdb4a60fbdca8eec5480d9d19751a7e2c317`.
+Git ancestry and the one-line deployment correction were verified. The
+correction resolves `comparison.json` from the parent of the ONNX model
+directory. The implementation task reported 121 targeted tests and 2 subtests
+passing, compilation of 8 Python files, Bash syntax validation and a native
+V4L2 build. Step 57 independently reproduced the 121 tests, 2 subtests and Bash
+syntax validation on the deployment baseline. The previous compilation results
+remain prior evidence. No new sensor or motor experiment was run for Step 57.
+
+### Evidence inventory
+
+**FACT** The operator reports traction motor power was physically disconnected
+for these experiments. Pi evidence is private. The attempted read-only Pi
+connection could not reach the host. The final journal was available as a
+local copy and matched the recorded SHA-256.
+
+| Evidence | Original Pi path and SHA-256 | Verification |
+| --- | --- | --- |
+| First live integration | `/home/elwis/.local/state/sie/evidence/live_temporal_shadow_jHvElzbt/control-preview-23196e9a573d959e/temporal-association-shadow.jsonl` · `68bdd1210aa9acb60da3eca203ea8708c675dbbdc4bd7f3d5663d8c81aeed14e` | `PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE` |
+| LD19 clock evidence | `/home/elwis/.local/state/sie/evidence/ld19_live_clock_evidence_1795684354520643532.json` · `669ad80b115d4bfbeb2a576504147ed2cca801e495a5a458d00b0910e7dfb3c7` | `PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE`. The final journal references this digest. |
+| Final three-sensor journal | `/home/elwis/.local/state/sie/evidence/live_temporal_shadow_Vw2GO5LR/control-preview-480bb7d8aba07a4e/temporal-association-shadow.jsonl` · `0fad36deec285929166ca4679b7dad833aa09a89027f9abc8b08f9b2ef785938` | SHA-256 matched local copy `/home/kestabor/SHADOW_TESTS/temporal-association-shadow.jsonl`. Metrics recalculated from that copy. |
+
+**FACT / operator report** The first session had 50 cycles, 49 RGB–Stereo
+diagnostic matches, 49 cycles with LD19 candidates, an unverified LD19 clock
+domain, median RGB publication age about 312.9 ms and zero journal drops or
+monitor errors.
+
+**FACT / operator report** The clock session observed 30 unique, strictly
+increasing ROS headers from one local publisher. Header-to-callback receipt
+separation was 0.316446 / 0.3520755 / 0.796911 ms (min / median / max), median
+header interval 99.999741 ms and maximum bracket 2352 ns. Boot ID
+`a1702b2f-2b79-41d8-aa13-bfa13cb568d9` agrees with the final journal's
+`boot_id`. The inspected driver revision was
+`bf668a89baf722a787dadc442860dcbf33a82f5a` with local logger changes.
+The reported active binary SHA-256 was
+`b00b2aba235db265e7577c5fc080c86101ac0f1ba9fdf165d5b25ab9696b19be`.
+The driver uses `start_scan_time = node->now();` and
+`output.header.stamp = start_scan_time;`. Launch specified
+`use_sim_time:=false`. The runtime parameter query timed out. The empirical
+realtime compatibility observation applies to the observed publisher instance
+and host session. Publisher uniqueness alone does not establish identity continuity.
+
+### Recalculated final-journal metrics
+
+| Metric | Verified from SHA-matched journal |
+| --- | --- |
+| Rows and publication | 83 cycle rows and one session summary. 82 preview publications. |
+| Independent matches at RGB receipt | RGB–Stereo 82/83, RGB–LD19 header 80/83, both 80/83. |
+| Accepted absolute deltas | RGB–Stereo median 4.365 ms, max 15.661 ms. RGB–LD19 header median 34.4131855 ms, max 40.326383 ms. |
+| Actual camera selection | 82/82 accepted RGB–Stereo links selected the same stereo sequence as Vision Core. |
+| Journal | 83 written, zero drops and zero recorded write, evaluation, hook, clock or subscriber errors. |
+| Preview results | 41 `MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY`, 41 `TARGET_UNAVAILABLE`, one `CANCELLED_SHUTDOWN`. |
+| Publication rate and age | 4.05442 Hz over the first-to-last publisher-return interval. Median RGB age 252.260936 ms, masked-depth median 306.865836 ms. |
+| Three-source publication freshness | 40/82 published cycles had recent RGB, zero-wait stereo and zero-wait LD19 header at the experimental 250 ms limit. |
+
+**FACT** No material discrepancy with the supplied final-session metrics.
+The cancelled row has no publication timestamp and is included in the
+83-row association totals. The startup row refused both associations because
+the bridge was unavailable. Two further rows exceeded the RGB–LD19 delta
+limit. To recalculate, SHA-256 the journal, separate `cycle_id` rows from
+the `SESSION_SUMMARY`, count `MATCH_DIAGNOSTIC_ONLY` under `zero_wait`,
+and take the absolute `candidate_minus_rgb_ns` of matches only. Count
+`same_stereo_as_zero_wait` only for accepted RGB–Stereo links. Use non-null
+`endpoint_monotonic_ns.publication` for publication metrics and
+`(N - 1) / elapsed_seconds` for rate. Read RGB ages from
+`freshness_by_endpoint.publication.rgb.age_ns`, and require
+`RECENT_HOST_TIMESTAMP_DIAGNOSTIC_ONLY` in the publication entries
+`rgb`, `zero_wait_stereo` and `zero_wait_ld19_header` for the simultaneous
+freshness numerator.
+
+### Limits and continuation
+
+**FACT** Camera stamps are driver-declared exposure metadata. Physical camera
+exposure timing has no independent verification. The LD19 ROS header marks
+conversion/publication and physical laser acquisition time remains
+`UNKNOWN`. The 25 ms, 50 ms and 250 ms limits are experimental. All rows,
+including the summary, keep `measurement_authorized = false`,
+`world_state_update_authorized = false` and `motor_control_authorized = false`.
+
+**OPEN** End-to-end latency and the root cause of `TARGET_UNAVAILABLE`
+remain unresolved. Publication rate alone cannot establish faster full Vision
+Core processing. Temporal links establish no spatial correspondence. The
+camera-to-LiDAR extrinsic remains unverified. Session-local diagnostic
+references require separate admission to become canonical Evidence Graph IDs.
+
+**FACT** The existing Graphify AST artifacts `graph.json`, `GRAPH_REPORT.md`
+and `graph.html` locally matched the November 16 recorded hashes. Their
+source snapshot is `db8097ea4239dcf45ef7598c831a45648d2498fd` with 4,599
+nodes, 13,658 edges and 300 communities. No new graph extraction occurred.
+See the [Graphify provenance index](SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md).
+
+**DECISION** Reopen temporal experiments only for a new engineering question.
+The next entry point is the [SIEE Three-Sensor Spatial Association v1
+handoff](SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md).
+PR #13 and the MVP integration branch are outside the freeze.
+
 ## Historical continuation proposal, 2026-11-25
 
 **Implement and run an opt-in, read-only LIVE Temporal Association shadow monitor** alongside the *existing* RGB/OV9281 person-following preview and LD19 ROS topic. Ground the design in the current `LatestV4L2Capture` and `ar0234_ov9281_control_preview_node.py` source. It should record per-cycle input `sequence`, driver stamp, packet receipt monotonic, RGB/Stereo pair-selection time, ROS LD19 header conversion stamp and callback receipt time, observation/evidence source IDs, processing-result time, host same-boot bridge policy/status, ages and explicit refuse reasons. Compare zero-wait latest-available vs current fresh-stereo-during-RGB policy **as read-only diagnostics**, not by modifying the active target/depth/control choices. Keep the sensor calibration, physical motor-power OFF, `SHADOW_IDENTITY_PREVIEW=0` unless separately enabled for a diagnostic, and all admission bits false.
@@ -103,6 +214,6 @@ Before any live capture: inspect Pi runtime, actual ROS topics, camera owners, w
 
 **Do not merge PR #13 or promote Diagnostic → Measurement without separate approved review.**
 
-## New-chat starter (copy into ChatGPT)
+## Historical new-chat starter, 2026-11-25
 
 > Сью, продолжаем **SIEE | Three-Sensor Timebase + Temporal Association | Live Shadow Integration**. Для новых правок используем ветку `codex/siee-live-temporal-association-shadow-v1-20261125` (от контрольной точки PR #13, не main), а доказательства сверяем с веткой `codex/siee-ld19-observation-diagnostic-v0-20261125` и PR #13 DRAFT. Прочитай handoff `docs/handoffs/SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md`. Репозиторий `stanisked/SIE`, исходная диагностическая ветка `codex/siee-ld19-observation-diagnostic-v0-20261125`, PR #13 DRAFT (база `codex/siee-person-follow-mvp-20261120`). Прочитай `AI_CONTEXT.md`, `PROJECT_CONTEXT.md`, `AGENTS.md`, `docs/handoffs/WORKING_BASELINE.md`, Graphify-handoff и новый handoff, затем проверь актуальный GitHub HEAD и инструменты. Последний подтверждённый результат: шаг 46, `44/44` причинно-доступных RGB↔Stereo и `44/44` отдельных ссылок RGB↔LD19 ROS header на старых метаданных; `0ms` ожидание не ухудшило соответствия, `20ms` добавило возраст. Физическое время лазера НЕИЗВЕСТНО; код диагностический, `Measurement/World State/motors=DISABLED`. Последний независимый ESP32 v13 тест торможения закончился `FAULT`, питание приводов после этого не подтверждено как OFF. **Задача: подготовить и проверить один следующий шаг: read-only live Shadow Temporal Association monitor** без изменения существующей сегментации/глубины/управления. Не повторяй уже завершённые офлайн-тесты и не включай двигатели. Для любого вывода укажи ФАКТ/РЕШЕНИЕ/ГИПОТЕЗА, evidence и ограничение.
