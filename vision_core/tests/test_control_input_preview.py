@@ -20,8 +20,9 @@ sys.path.insert(0, str(ROOT / "ros2/sie_ros2/sie_ros2"))
 from latest_diagnostic_writer import LatestDiagnosticWriter
 from latest_v4l2_capture import freshness_report, LatestV4L2Capture, select_latest_pair, select_new_rgb, select_stereo_during_rgb
 from vision_core.person_localization.control_depth_quality_shadow import assess_control_depth
+from vision_core.person_localization.control_input_shadow import evaluate_control_input_shadow
 from approach_control_preview import approach_control_preview
-from vision_core.person_localization.diagnostic_instance_selection import select_instance
+from vision_core.person_localization.diagnostic_instance_selection import has_unique_eligible_instance_binding, select_instance
 
 
 def preview_node_class(ros_ok=True):
@@ -36,12 +37,25 @@ def preview_node_class(ros_ok=True):
              "String": SimpleNamespace, "encode": json.dumps,
              "validate_ar0234_observation": lambda v: v,
              "ar0234_temporal_target_candidate": lambda raw, **kw: raw,
+             "evaluate_control_input_shadow": evaluate_control_input_shadow,
+             "has_unique_eligible_instance_binding": has_unique_eligible_instance_binding,
              "LatestV4L2Capture":LatestV4L2Capture,"select_latest_pair":select_latest_pair,"select_new_rgb":select_new_rgb,"select_stereo_during_rgb":select_stereo_during_rgb,"freshness_report":freshness_report, "assess_control_depth":assess_control_depth, "approach_control_preview": approach_control_preview, "select_instance":select_instance}
     exec(compile(ast.fix_missing_locations(ast.Module(body=[cls], type_ignores=[])), str(path), "exec"), scope)
     return scope[cls.name]
 
 
 class ControlPreviewTests(unittest.TestCase):
+
+    def test_temporal_monitor_parameter_defaults_disabled(self):
+        path = ROOT / "ros2/sie_ros2/sie_ros2/ar0234_ov9281_control_preview_node.py"
+        declarations = [node for node in ast.walk(ast.parse(path.read_text()))
+                        if isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "declare_parameter"
+                        and node.args and isinstance(node.args[0], ast.Constant)
+                        and node.args[0].value == "preview_temporal_shadow_enabled"]
+        self.assertEqual(len(declarations), 1)
+        self.assertIs(ast.literal_eval(declarations[0].args[1]), False)
 
     def test_original_jpeg_read_preserves_packet_without_parent_decode(self):
         node=preview_node_class()()
@@ -147,6 +161,8 @@ class ControlPreviewTests(unittest.TestCase):
         node.max_pair_skew_ms = 80
         node.range_min_m, node.range_max_m, node._activated_range = .5, 4.5, [.5, 2.]
         node._confirmed_target_track = None
+        node._existing_static_gate = None
+        node._dynamic_shadow_diagnostic = False
         node.temporal_target_track_max_age_s = 5
         node.temporal_target_minimum_iou = .2
         node.temporal_target_maximum_center_displacement_relative = .75
@@ -244,7 +260,7 @@ class ControlPreviewTests(unittest.TestCase):
                    "truncated_left":False,"truncated_right":False,
                    "truncated_top":False,"truncated_bottom":False}
         single_calls=[]
-        def infer(cid,rgb):
+        def infer(cid,rgb,*,diagnostic_mask_hashes=False):
             single_calls.append("infer")
             return {"cycle_id":cid,"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY",
                     "instances":[candidate],"model_sha256":"a"*64,
@@ -357,7 +373,7 @@ class ControlPreviewTests(unittest.TestCase):
         # The SAME RGB request must already be running while frozen stereo is decoded.
         node._overlap_stereo_decode=True
         inference_started=threading.Event();stereo_decoded=threading.Event();inference_done=threading.Event()
-        def concurrent_infer(cid,rgb):
+        def concurrent_infer(cid,rgb,*,diagnostic_mask_hashes=False):
             inference_started.set()
             if not stereo_decoded.wait(2):raise RuntimeError('stereo decode did not overlap RGB')
             try:return infer(cid,rgb)
@@ -388,7 +404,7 @@ class ControlPreviewTests(unittest.TestCase):
         self.assertTrue(inference_done.is_set())
         self.assertIsNone(node._cached_stereo)
         node._read=native_read
-        node._mask_client.infer=lambda cid,rgb:{"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY","instances":[]}
+        node._mask_client.infer=lambda cid,rgb,**kwargs:{"status":"CURRENT_INSTANCES_DIAGNOSTIC_ONLY","instances":[]}
         # A later no-target cycle must not reuse the previous association.
         node.observer = SimpleNamespace(observe=lambda *args, **kw: {"disposition": "UNAVAILABLE", "reason": "NO_TARGET"})
         with ThreadPoolExecutor(max_workers=1) as worker:
@@ -456,21 +472,42 @@ class ControlPreviewTests(unittest.TestCase):
             frame,_=original_read('stereo')
             return frame,round(meta['driver_timestamp_s']*1e9)
         node._mask_client.infer_jpeg=staged_infer;node._read=staged_read
-        for value in ('ok','timeout','skew'):
-            mode['value']=value;entered.clear();arrived.clear();done.clear()
-            with ThreadPoolExecutor(max_workers=1) as worker:
-                node._perception_worker=worker
-                node._cycle()
-            self.assertTrue(done.is_set())
-            self.assertIsNone(node._cached_stereo)
-            self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
-            expected={'ok':'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY',
-                'timeout':'CAMERA_FRAME_UNAVAILABLE','skew':'PAIR_SKEW_EXCEEDED'}
-            self.assertEqual(messages[-1]['status'],expected[value])
-            if value=='ok':
-                frames=messages[-1]['frame_freshness']['frames']
-                self.assertEqual(frames['ar0234']['pair_selected_monotonic_s'],frames['ov9281']['pair_selected_monotonic_s'])
-                self.assertIn('capture_stereo_select_s',messages[-1]['foreground_timing_s'])
+        diagnostics=[]
+
+        def observe(cycle_id, status, selected, metadata, result_ready, published):
+            self.assertEqual(messages[-1]['cycle_id'], cycle_id)
+            self.assertEqual(messages[-1]['status'], status)
+            self.assertEqual(selected['ar0234']['sequence'], sequence['ar'])
+            self.assertLessEqual(result_ready, published)
+            if mode['value']=='timeout':
+                self.assertNotIn('ov9281', selected)
+                self.assertEqual(metadata['ov9281']['status'], 'STEREO_CAPTURE_UNAVAILABLE')
+            else:
+                self.assertEqual(selected['ov9281']['sequence'], sequence['ov'])
+                self.assertEqual(selected['ov9281']['pair_selected_monotonic_s'],
+                                 selected['ar0234']['pair_selected_monotonic_s'])
+            diagnostics.append(status)
+
+        expected={'ok':'MASKED_DEPTH_SHADOW_DIAGNOSTIC_ONLY',
+                  'timeout':'CAMERA_FRAME_UNAVAILABLE','skew':'PAIR_SKEW_EXCEEDED'}
+        for enabled in (False, True):
+            node._temporal_shadow=SimpleNamespace(submit=observe, hook_errors=0) if enabled else None
+            for value in ('ok','timeout','skew'):
+                mode['value']=value;entered.clear();arrived.clear();done.clear()
+                with ThreadPoolExecutor(max_workers=1) as worker:
+                    node._perception_worker=worker
+                    node._cycle()
+                self.assertTrue(done.is_set())
+                self.assertIsNone(node._cached_stereo)
+                self.assertEqual(messages[-1]['decision_preview']['status'],'STOP')
+                self.assertEqual(messages[-1]['status'],expected[value])
+                self.assertNotIn('temporal_shadow', messages[-1])
+                if value=='ok':
+                    frames=messages[-1]['frame_freshness']['frames']
+                    self.assertEqual(frames['ar0234']['pair_selected_monotonic_s'],frames['ov9281']['pair_selected_monotonic_s'])
+                    self.assertIn('capture_stereo_select_s',messages[-1]['foreground_timing_s'])
+            self.assertEqual(diagnostics, list(expected.values()) if enabled else [])
+        self.assertEqual(node._temporal_shadow.hook_errors, 0)
 
 
 

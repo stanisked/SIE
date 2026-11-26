@@ -54,6 +54,17 @@ def _no_admission(value):
     ))
 
 
+def classify_source_age(age_ns: int, max_age_ns: int, max_future_skew_ns: int) -> str:
+    """Shared trial freshness rule for a timestamp in an already comparable clock domain."""
+    if age_ns < -max_future_skew_ns:
+        return "STAMP_FROM_FUTURE"
+    if age_ns < 0:
+        return "FUTURE_WITHIN_TRIAL_SKEW"
+    if age_ns > max_age_ns:
+        return "SOURCE_STALE"
+    return "RECENT_HOST_TIMESTAMP_DIAGNOSTIC_ONLY"
+
+
 def evaluate_association_freshness(
     associations: Mapping,
     bridge: Mapping,
@@ -159,14 +170,7 @@ def evaluate_association_freshness(
             raise ValueError("source evidence link mismatch")
         timestamp = _int(ref.get("timestamp_ns"), "source timestamp")
         age = result["evaluation_realtime_estimate_ns"] - timestamp
-        if age < -policy.max_future_skew_ns:
-            status = "STAMP_FROM_FUTURE"
-        elif age < 0:
-            status = "FUTURE_WITHIN_TRIAL_SKEW"
-        elif age > max_age:
-            status = "SOURCE_STALE"
-        else:
-            status = "RECENT_HOST_TIMESTAMP_DIAGNOSTIC_ONLY"
+        status = classify_source_age(age, max_age, policy.max_future_skew_ns)
         return {"status": status, "age_ns": age}
 
     for row in rows:

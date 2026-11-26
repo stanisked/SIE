@@ -231,6 +231,16 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         self._fresh_stereo_during_rgb=bool(self.get_parameter("preview_fresh_stereo_during_rgb").value)
         if self._fresh_stereo_during_rgb and not (self._native_rgb_jpeg and self._native_rgb_trigger):
             raise ValueError("fresh stereo during segmentation requires original native JPEG and new RGB trigger")
+        self.declare_parameter("preview_temporal_shadow_enabled", False)
+        temporal_enabled = self.get_parameter("preview_temporal_shadow_enabled").value
+        self._temporal_shadow = None
+        capture_options = {}
+        if temporal_enabled:
+            if self._capture_backend != "latest_v4l2":
+                raise ValueError("temporal shadow requires native V4L2 metadata")
+            from .live_temporal_shadow_monitor import CAMERA_HISTORY_SIZE, LiveTemporalShadowMonitor
+            capture_options["metadata_history_size"] = CAMERA_HISTORY_SIZE
+            self.declare_parameter("preview_temporal_ld19_clock_evidence", "")
         self._last_capture_sequences={};self._native_capture_metadata={}
         if self._capture_backend=="latest_v4l2":
             if not self._target_crop or self._rgb_backend!="single_segmentation":
@@ -241,9 +251,9 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             if not executable.is_file():raise ValueError("compiled native capture executable required")
             self._native_capture_sha256=hashlib.sha256(executable.read_bytes()).hexdigest()
             self.ar_capture.release();self.stereo_capture.release()
-            self.ar_capture=LatestV4L2Capture(executable,self.ar_device,1920,1200)
+            self.ar_capture=LatestV4L2Capture(executable,self.ar_device,1920,1200,**capture_options)
             try:
-                self.stereo_capture=LatestV4L2Capture(executable,self.stereo_device,2560,800)
+                self.stereo_capture=LatestV4L2Capture(executable,self.stereo_device,2560,800,**capture_options)
                 self.ar_capture.snapshot();self.stereo_capture.snapshot()
             except BaseException:
                 self.ar_capture.release()
@@ -288,6 +298,13 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             from vision_core.person_localization.shadow_source_snapshot import LatestSourceSnapshotWriter
             self._source_snapshot_writer = LatestSourceSnapshotWriter(
                 self.evidence_dir / 'shadow-source-snapshots')
+        if temporal_enabled:
+            path = self._writer.directory / "temporal-association-shadow.jsonl"
+            self._temporal_shadow = LiveTemporalShadowMonitor(
+                path, self.run_id, {"ar0234": self.ar_capture, "ov9281": self.stereo_capture},
+                self.context, self.get_parameter("preview_temporal_ld19_clock_evidence").value,
+            )
+            self.get_logger().info(f"Temporal Association shadow metadata journal: {path}")
         self.get_logger().info(
             f"control input preview: mode={self._resolution_mode}; capture={self._capture_backend}; new_rgb_trigger={self._native_rgb_trigger}; decode_overlap={self._overlap_stereo_decode}; original_rgb_jpeg={self._native_rgb_jpeg}; fresh_stereo_during_rgb={self._fresh_stereo_during_rgb}; RGB={self._rgb_backend}; engine={engine}; deferred_local={self._defer_local}; local_every_n={self._local_every_n}; local_enabled={self._local_enabled}; target_crop={self._target_crop}; rgb_transport={self._rgb_transport}; fast_local={self._fast_local_consistency}; immediate publish; "
             "background compact journal; current mask/local diagnostics; optional bounded source snapshots; no Measurement or motor command"
@@ -409,6 +426,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         stamp = datetime.now(timezone.utc)
         cycle_id = f"ar0234-ov9281-control-preview-{self.run_id}-{self.sequence:08d}"
         rgb_future=None;rgb_async_times={};v3_future=None;v3_async_times={}
+        temporal_shadow = getattr(self, "_temporal_shadow", None)
+        temporal_selected = {} if temporal_shadow is not None else None
         if isinstance(self.ar_capture,LatestV4L2Capture):
             stage=time.monotonic()
             try:
@@ -417,6 +436,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 else:
                     self._selected_native_packets=select_latest_pair(self.ar_capture,self.stereo_capture,self._last_capture_sequences,wait_new_rgb=getattr(self,"_native_rgb_trigger",False))
                 self._last_capture_sequences.update({name:value[1]['sequence'] for name,value in self._selected_native_packets.items()})
+                if temporal_selected is not None:
+                    temporal_selected.update((name, packet[1]) for name, packet in self._selected_native_packets.items())
             except Exception as error:
                 self._native_capture_metadata={name:{"status":"PAIR_CAPTURE_UNAVAILABLE","reason":type(error).__name__,"detail":str(error)[:300]} for name in ('ar0234','ov9281')}
             foreground['capture_pair_select_s']=time.monotonic()-stage
@@ -446,6 +467,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 self._selected_native_packets['ov9281']=packet
                 self._native_capture_metadata['ar0234']=ar_metadata
                 self._last_capture_sequences['ov9281']=packet[1]['sequence']
+                if temporal_selected is not None:
+                    temporal_selected.update(ar0234=ar_metadata, ov9281=packet[1])
             except Exception as error:
                 self._native_capture_metadata['ov9281']={"status":"STEREO_CAPTURE_UNAVAILABLE",
                     "reason":type(error).__name__,"detail":str(error)[:300]}
@@ -999,11 +1022,22 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     'file':cycle_id+'.npz',
                     'mask_sha256':source_snapshot_payload['mask_sha256'],
                     'scope':'DIAGNOSTIC_ONLY; artifact presence verified after shutdown'}
+            temporal_ready = time.monotonic_ns() if temporal_shadow is not None else None
+            temporal_publication = None
             message = String()
             message.data = encode(audit)
             if rclpy.ok():
                 self.preview_publisher.publish(message)  # FIRST, before any journal disk write.
+                if temporal_shadow is not None:
+                    temporal_publication = time.monotonic_ns()
             self._writer.submit(audit)
+            if temporal_shadow is not None:
+                try:
+                    temporal_shadow.submit(cycle_id, audit["status"], temporal_selected,
+                                           self._native_capture_metadata, temporal_ready, temporal_publication)
+                except Exception as error:
+                    temporal_shadow.hook_errors += 1
+                    self._log_preview(f"TEMPORAL_SHADOW_HOOK_ERROR {type(error).__name__}")
             # Identity is a separate diagnostic side stream, after the
             # primary control-preview publish. Never feed its result into
             # camera target selection or the UART motor execution adapter.
@@ -1086,6 +1120,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             print(message, flush=True)
 
     def destroy_node(self):
+        temporal_shadow = getattr(self, "_temporal_shadow", None)
+        if temporal_shadow is not None:
+            closed = temporal_shadow.close()
+            self._log_preview(f"TEMPORAL_SHADOW_JOURNAL {temporal_shadow.counters()} closed={closed}")
         identity_worker=getattr(self,'_identity_worker',None)
         if identity_worker is not None:
             closed=identity_worker.close()

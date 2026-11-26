@@ -1,10 +1,23 @@
 """Continuously drain native V4L2 MJPEG stream, retain one immutable latest packet."""
+from collections import deque
 import json
 import math
 import subprocess
 import tempfile
 import threading
 import time
+from typing import NamedTuple
+
+
+class CameraTiming(NamedTuple):
+    sequence: int
+    driver_timestamp_s: float
+    host_dequeue_monotonic_s: float
+    host_packet_received_monotonic_s: float
+
+    @classmethod
+    def from_packet(cls, metadata):
+        return cls(*(metadata[key] for key in cls._fields))
 
 
 def read_exact(stream,size):
@@ -31,10 +44,14 @@ def validate_packet(metadata,width,height,previous_sequence=None):
 
 
 class LatestV4L2Capture:
-    def __init__(self,executable,device,width,height,timeout=5.):
+    def __init__(self,executable,device,width,height,timeout=5.,*,metadata_history_size=0):
+        if type(metadata_history_size) is not int or metadata_history_size < 0:
+            raise ValueError('metadata_history_size must be a nonnegative integer')
         self.width,self.height,self.timeout=width,height,timeout
         self.condition=threading.Condition();self.latest=None;self.error=None;self.closed=False
         self.format=None;self.buffers=None;self.received=0;self.replaced=0
+        self._metadata_history=deque(maxlen=metadata_history_size) if metadata_history_size else None
+        self._metadata_evicted_through_s=None
         self.stderr=tempfile.TemporaryFile()
         try:
             self.process=subprocess.Popen([str(executable),device,str(width),str(height)],
@@ -65,11 +82,20 @@ class LatestV4L2Capture:
                 with self.condition:
                     self.received+=1
                     if self.latest is not None:self.replaced+=1
+                    if self._metadata_history is not None:
+                        if len(self._metadata_history)==self._metadata_history.maxlen:
+                            self._metadata_evicted_through_s=self._metadata_history[0].host_packet_received_monotonic_s
+                        self._metadata_history.append(CameraTiming.from_packet(item))
                     self.latest=(payload,item);self.condition.notify_all()
         except Exception as error:
             with self.condition:
                 if not self.closed:self.error=f'{type(error).__name__}: {error}'
                 self.latest=None;self.condition.notify_all()
+
+    def timing_history(self):
+        """Copy bounded scalar metadata under the capture lock without waiting for a frame."""
+        with self.condition:
+            return tuple(self._metadata_history or ()),self._metadata_evicted_through_s
 
     def snapshot(self,after_sequence=None,*,not_before_received_s=None):
         deadline=time.monotonic()+self.timeout

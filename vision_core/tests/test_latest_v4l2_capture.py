@@ -116,11 +116,33 @@ class LatestCaptureTests(unittest.TestCase):
                 payload,info=capture.snapshot(3)
                 self.assertEqual(payload,b'new');self.assertEqual(info['sequence'],5)
                 self.assertEqual(info['received_count'],2)
+                self.assertEqual(capture.timing_history(), ((), None))
                 with self.assertRaises(TimeoutError):capture.snapshot(5)
                 with self.assertRaises(TimeoutError):capture.snapshot(3,not_before_received_s=info['host_packet_received_monotonic_s']+1)
             finally:capture.release()
             self.assertFalse(capture.thread.is_alive())
             with self.assertRaises(RuntimeError):capture.snapshot()
+
+    def test_opt_in_timing_history_keeps_no_jpegs_and_does_not_change_latest(self):
+        def line(value):return (json.dumps(value)+'\n').encode()
+        data=line({'kind':'format','width':2,'height':2,'fourcc':1196444237})+line({'kind':'buffers','allocated':1})
+        data+=b''.join(line(metadata(n))+bytes([n])*3 for n in (1,2,3,4))
+        stream=HeldStream(data)
+        with patch('latest_v4l2_capture.subprocess.Popen',return_value=FakeProcess(stream)):
+            capture=LatestV4L2Capture('fake','fake',2,2,timeout=.01,metadata_history_size=2)
+            try:
+                self.assertTrue(stream.drained.wait(1))
+                rows, evicted_through = capture.timing_history()
+                self.assertEqual([row.sequence for row in rows], [3, 4])
+                self.assertLessEqual(evicted_through, rows[0].host_packet_received_monotonic_s)
+                self.assertTrue(all(type(field) in (int, float) for row in rows for field in row))
+                payload, selected = capture.snapshot(2)
+                self.assertEqual(payload, bytes([4])*3)
+                self.assertEqual(selected['sequence'], 4)
+                with self.assertRaises(TimeoutError):capture.snapshot(4)
+            finally:
+                capture.release()
+
     def test_clock_sequence_error_and_size_refuse(self):
         validate_packet(metadata(5),2,2,3)
         for changes in ({'flags':0x2000},{'flags':0x12040},{'sequence':3},{'payload_bytes':0},
