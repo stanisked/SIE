@@ -1,0 +1,17 @@
+{
+  "schema_version": "sie.camera_lidar_optical_datum.v1",
+  "status": "ESTIMATED_DIAGNOSTIC_ONLY",
+  "source_frame": "physical_left_lens_front_rim_frame",
+  "destination_frame": "estimated_physical_left_optical_frame",
+  "reference_mechanical_profile": "camera_lidar_mechanical_geometry_v1",
+  "pitch_up_deg": 20.0,
+  "optical_center_to_rim_robot_forward_component_m": 0.0125,
+  "offset_direction_assumption": "ALONG_PHYSICAL_LEFT_OPTICAL_AXIS",
+  "provenance": "Historical 0.0125 m operator estimate, reviewed for Step 66 on 2026-11-26",
+  "uncertainty_m": null,
+  "confidence": null,
+  "extrinsic_independently_validated": false,
+  "measurement_authorized": false,
+  "world_state_update_authorized": false,
+  "motor_control_authorized": false
+}

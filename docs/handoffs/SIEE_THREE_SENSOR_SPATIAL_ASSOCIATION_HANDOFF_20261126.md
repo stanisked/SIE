@@ -72,3 +72,19 @@ refuses an optical-center transform. No physical validation was run.
 **OPEN** Independent common-surface validation, the optical-center offset
 and alignment uncertainties remain open. The Step 60 notes contain the
 proposed static validation design. Diagnostic admission boundaries still apply.
+
+## Steps 65–66 | Horizontal closure and joint static validation
+
+**DECISION** The project owner closed the horizontal mechanical stage as
+`MECHANICAL_HORIZONTAL_GEOMETRY_DIAGNOSTIC_COMPLETE`. Keep the Step 60
+mechanical geometry and retain the original T02 result and anomaly count.
+
+**FACT** The [Step 66 notes](../diagnostics/stereo_lidar_joint_static_v1.md)
+record operator-reported T01–T05 evidence and the standalone Pi procedure.
+The separate optical datum is explicitly estimated. The analysis reports
+infinite-plane agreement separately from finite-surface candidates and
+preserves missing or ambiguous returns.
+
+**OPEN** No Step 66 physical experiment has run. T02 background contamination
+remains a hypothesis. Diagnostic timing and spatial evidence do not admit
+an extrinsic, Measurement, World State update or motor control.
