@@ -1,0 +1,14 @@
+{
+  "schema_version": "sie.local_stereo_lidar_correspondence_policy.v1",
+  "policy_id": "local_stereo_lidar_correspondence_v1",
+  "status": "FROZEN_DIAGNOSTIC_TRIAL",
+  "neighborhood_radius_px": 7,
+  "anchor_radius_px": 3,
+  "minimum_component_points": 24,
+  "minimum_component_coverage": 0.35,
+  "minimum_competing_component_points": 8,
+  "neighbor_depth_step_floor_m": 0.035,
+  "neighbor_depth_step_fraction": 0.02,
+  "maximum_optical_depth_mad_m": 0.05,
+  "maximum_optical_depth_p05_p95_span_m": 0.15
+}

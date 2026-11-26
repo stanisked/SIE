@@ -88,3 +88,26 @@ preserves missing or ambiguous returns.
 **OPEN** No Step 66 physical experiment has run. T02 background contamination
 remains a hypothesis. Diagnostic timing and spatial evidence do not admit
 an extrinsic, Measurement, World State update or motor control.
+
+## Steps 67–69 | Global refusals and local replay
+
+**FACT / operator report** Uniform target Step 67 recorded 30 stereo frames
+and 80 scans, with 25 temporal matches, 5 temporal refusals, 24 planarity
+refusals and one grazing-plane refusal. Textured target Step 68 recorded 30
+frames and 79 scans, with 17 temporal matches, 13 temporal refusals and 17
+planarity refusals. Neither produced a Step 66 spatial comparison. Frame 15
+in Step 67 and frame 12 in Step 68 had 69.3016% and 86.2188% ROI support and
+global plane P95 of 90.917 and 84.311 mm, respectively. The polygons differed.
+These two frames do not describe all frames in either run.
+
+**DECISION** The project owner approved
+`LOCAL_STEREO_LIDAR_SPATIAL_CORRESPONDENCE` for separately judged local
+stereo surfaces, including non-planar targets. Keep the existing global
+method and its 40 mm P95 gate, the Step 66 timing and reconstruction, and
+the estimated +13.3022 mm optical datum. Use the frozen local trial policy
+and distinct replay outputs. [Policy, output and exact Pi replay commands](../diagnostics/stereo_lidar_local_correspondence_v1.md).
+
+**OPEN** `PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE` for the Step 67 and Step 68
+archives. No real-data replay or new acquisition occurred in Step 69.
+Projected coincidence and measured residuals do not establish target
+membership or authorize Measurement, World State, Decisions or motion.
