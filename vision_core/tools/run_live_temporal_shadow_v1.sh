@@ -25,6 +25,12 @@ case "${SIE_TEMPORAL_CAMERA_SELECTION:-latest_pair}" in
     ;;
   *) echo "Unsupported SIE_TEMPORAL_CAMERA_SELECTION" >&2; exit 2 ;;
 esac
+if [[ "${SIE_STEP71_SOURCE_EVIDENCE:-0}" == 1 ]]; then
+  if [[ "${SIE_TEMPORAL_CAMERA_SELECTION:-latest_pair}" != latest_pair ]]; then
+    echo 'Step 71 requires the existing latest-pair selector.' >&2; exit 2
+  fi
+  selection_args+=(-p preview_native_rgb_jpeg:=true)
+fi
 clock_args=()
 if [[ -n "${SIE_TEMPORAL_LD19_CLOCK_EVIDENCE:-}" ]]; then
   clock_args=(-p "preview_temporal_ld19_clock_evidence:=${SIE_TEMPORAL_LD19_CLOCK_EVIDENCE}")

@@ -1,6 +1,7 @@
 """Bounded runtime plumbing for the read-only temporal shadow side stream."""
 
 from collections import deque
+from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ from .host_timebase_bridge_v1 import make_host_timebase_bridge
 from .host_timebase_clock_probe_v1 import collect_host_clock_brackets
 from .ld19_timestamp_policy_v1 import EXPECTED_FRAME, EXPECTED_TOPIC, NANOSECONDS
 from .latest_v4l2_capture import CameraTiming
+from .ld19_diagnostic_evidence import make_ld19_diagnostic_record
 from .live_temporal_association_v1 import (
     BOUNDARY, BRIDGE_POLICY, SCHEMA, CycleTiming, ScanTiming, evaluate_cycle, nanoseconds,
 )
@@ -24,7 +26,7 @@ CLOCK_PERIOD_NS = 100_000_000
 
 
 class LiveTemporalShadowMonitor:
-    def __init__(self, path, session, cameras, context, ld19_clock_evidence):
+    def __init__(self, path, session, cameras, context, ld19_clock_evidence, *, archive_scans=False):
         self.path = path
         self.session = session
         self.cameras = cameras
@@ -35,6 +37,7 @@ class LiveTemporalShadowMonitor:
         self._journal_unavailable = threading.Event()
         self._history_lock = threading.Lock()
         self._scans = deque(maxlen=LD19_HISTORY_SIZE)
+        self._scan_payloads = deque(maxlen=LD19_HISTORY_SIZE) if archive_scans else None
         self._scan_evicted_through = None
         self._windows = deque(maxlen=CLOCK_HISTORY_SIZE)
         self._pending = queue.Queue(maxsize=JOURNAL_QUEUE_SIZE)
@@ -72,13 +75,15 @@ class LiveTemporalShadowMonitor:
         cameras = {name: camera.timing_history() for name, camera in self.cameras.items()}
         with self._history_lock:
             job = (cycle, cameras, tuple(self._scans), self._scan_evicted_through, tuple(self._windows))
+            payloads = tuple(self._scan_payloads) if self._scan_payloads is not None else None
         try:
-            self._pending.put_nowait(job)
+            self._pending.put_nowait((job, payloads))
         except queue.Full:
             self.dropped += 1
 
     def _on_scan(self, scan, node):
         received = time.monotonic_ns()
+        received_wall = time.time_ns() if self._scan_payloads is not None else None
         header = scan.header
         sec, nsec = header.stamp.sec, header.stamp.nanosec
         stamp = sec * NANOSECONDS + nsec
@@ -101,6 +106,11 @@ class LiveTemporalShadowMonitor:
                 self._receipt_sequence, stamp, received, header.frame_id[:128],
                 clock_status, source_status,
             ))
+            if self._scan_payloads is not None:
+                # Message ownership stays in this bounded side stream. Conversion
+                # and disk I/O occur only in the diagnostic writer thread.
+                payload = scan if 0 < len(scan.ranges) <= 5000 and len(scan.intensities) <= 5000 else None
+                self._scan_payloads.append((self._receipt_sequence, received_wall, payload))
 
     def _receive(self):
         # Run on its own executor so a camera/segmentation callback cannot
@@ -189,7 +199,7 @@ class LiveTemporalShadowMonitor:
     def _write_pending(self, stream):
         while not self._stop.is_set() or not self._pending.empty():
             try:
-                job = self._pending.get(timeout=.1)
+                job, payloads = self._pending.get(timeout=.1)
             except queue.Empty:
                 continue
             try:
@@ -201,6 +211,8 @@ class LiveTemporalShadowMonitor:
                 self.evaluation_errors += 1
                 self.last_journal_error = type(error).__name__
                 continue
+            if payloads is not None:
+                row["ld19_payload_archive"] = self._archive_scan(row, payloads)
             row["journal"] = self.counters()
             if not self._append(stream, row):
                 self._journal_unavailable.set()
@@ -210,6 +222,25 @@ class LiveTemporalShadowMonitor:
             **BOUNDARY, "schema_version": SCHEMA, "record_type": "SESSION_SUMMARY",
             "session_id": self.session, "boot_id": self.boot_id, "journal": self.counters(),
         })
+
+    @staticmethod
+    def _archive_scan(row, payloads):
+        link = row["zero_wait"]["rgb_ld19_ros_header"]
+        if link["status"] != "MATCH_DIAGNOSTIC_ONLY":
+            return {"status": "NO_TEMPORAL_LD19_MATCH"}
+        candidate = link["candidate"]
+        seq = candidate["receipt_sequence"]
+        for sequence, received_wall, scan in payloads:
+            if sequence == seq and scan is not None:
+                try:
+                    received_utc = datetime.fromtimestamp(received_wall / 1e9, timezone.utc).isoformat()
+                    record = make_ld19_diagnostic_record(scan, received_at_utc=received_utc)
+                except (ValueError, OverflowError, OSError) as error:
+                    return {"status": "LD19_PAYLOAD_REFUSED", "reason": str(error)}
+                return {"status": "SOURCE_BOUND_DIAGNOSTIC_PAYLOAD", "receipt_sequence": seq,
+                        "receipt_monotonic_ns": candidate["received_monotonic_ns"],
+                        "receipt_host_realtime_ns": received_wall, "record": record}
+        return {"status": "LD19_PAYLOAD_UNAVAILABLE"}
 
     def close(self):
         self._stop.set()

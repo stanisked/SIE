@@ -46,6 +46,16 @@ def preview_node_class(ros_ok=True):
 
 class ControlPreviewTests(unittest.TestCase):
 
+    def test_step71_jpeg_fingerprints_are_opt_in(self):
+        node = preview_node_class()()
+        node._native_rgb_jpeg = True
+        received = []
+        node._mask_client = SimpleNamespace(infer_jpeg=lambda *args, **kwargs: received.append(kwargs))
+        node._infer_current_segmentation("cycle", b"jpeg", {})
+        node._semantic_spatial_evidence = True
+        node._infer_current_segmentation("cycle", b"jpeg", {})
+        self.assertEqual(received, [{}, {"diagnostic_mask_hashes": True}])
+
     def test_temporal_monitor_parameter_defaults_disabled(self):
         path = ROOT / "ros2/sie_ros2/sie_ros2/ar0234_ov9281_control_preview_node.py"
         declarations = [node for node in ast.walk(ast.parse(path.read_text()))

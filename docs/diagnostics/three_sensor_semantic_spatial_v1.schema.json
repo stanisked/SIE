@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SIEE Three-Sensor Semantic Spatial v1 diagnostic cycle",
+  "description": "Private replay output row. Internal diagnostic contract with no canonical admission.",
+  "type": "object",
+  "required": [
+    "schema_version", "classification", "cycle_id", "sha256", "status", "confidence",
+    "physical_laser_acquisition_time", "physical_camera_exposure_time_independently_verified",
+    "extrinsic_independently_validated", "measurement_authorized",
+    "world_state_update_authorized", "decision_authorized", "motor_control_authorized"
+  ],
+  "properties": {
+    "schema_version": {"const": "sie.three_sensor_semantic_spatial.v1.diagnostic"},
+    "classification": {"const": "FACT"},
+    "cycle_id": {"type": "string", "minLength": 1},
+    "sha256": {
+      "type": "object",
+      "required": ["ar0234_intrinsic_sha256", "ov9281_stereo_sha256",
+        "ar0234_to_physical_left_extrinsic_sha256", "mechanical", "optical_datum",
+        "step69_policy_sha256", "step71_policy_sha256", "segmentation_model_sha256"],
+      "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+    },
+    "status": {"enum": ["DIAGNOSTIC_REFUSAL", "NO_LOCAL_CANDIDATES", "LOCAL_CANDIDATES_PRESENT"]},
+    "reason": {"type": "string"},
+    "physical_laser_acquisition_time": {"const": "UNKNOWN"},
+    "physical_camera_exposure_time_independently_verified": {"const": false},
+    "extrinsic_independently_validated": {"const": false},
+    "measurement_authorized": {"const": false},
+    "world_state_update_authorized": {"const": false},
+    "decision_authorized": {"const": false},
+    "motor_control_authorized": {"const": false},
+    "confidence": {"type": "null"},
+    "camera_snapshot": {"type": "object", "required": ["manifest_sha256", "npz_sha256", "rgb_jpeg_sha256", "stereo_jpeg_sha256"]},
+    "temporal": {"type": "object", "required": ["status", "rgb", "actual_stereo", "ld19", "rgb_stereo", "rgb_ld19", "stereo_ld19"]},
+    "semantic_target": {"type": "object", "required": ["observation_id", "track_id", "instance_index", "mask_sha256", "mask_coordinates"]},
+    "semantic_stereo": {"type": "object", "required": ["status"]},
+    "independent_global_plane": {"type": "object", "required": ["status"]},
+    "beams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["beam_index", "angle_rad", "range_m", "physical_target_membership", "status", "semantic_status"],
+        "properties": {
+          "beam_index": {"type": "integer", "minimum": 0},
+          "angle_rad": {"type": "number"},
+          "range_m": {"type": ["number", "string"]},
+          "physical_target_membership": {"const": "UNVERIFIED"},
+          "status": {"type": "string"},
+          "semantic_status": {"type": "string"},
+          "projected_rectified_left_px": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}},
+          "ld19_minus_stereo_optical_z_m": {"type": "number"},
+          "ld19_minus_stereo_longitudinal_m": {"type": "number"}
+        },
+        "if": {"properties": {"semantic_status": {"const": "THREE_SENSOR_LOCAL_CANDIDATE_DIAGNOSTIC_ONLY"}}},
+        "then": {"required": ["stereo_component_id", "projected_rectified_left_px", "selected_support_original_rgb_px",
+          "local_stereo", "ld19_minus_stereo_optical_z_m", "ld19_minus_stereo_longitudinal_m"]}
+      }
+    }
+  },
+  "if": {"properties": {"status": {"const": "DIAGNOSTIC_REFUSAL"}}},
+  "then": {"required": ["reason"]},
+  "else": {"required": ["camera_snapshot", "temporal", "semantic_target", "semantic_stereo",
+    "independent_global_plane", "ld19_raw_scan_sha256", "beams"]}
+}

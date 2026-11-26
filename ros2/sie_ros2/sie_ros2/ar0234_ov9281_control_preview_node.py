@@ -292,7 +292,12 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                 report_path=self.evidence_dir/"identity-preview.jsonl")
             self.get_logger().info(
                 "live identity diagnostic enabled; latest-wins; no face threshold, no identity action or motor authorization")
-        if os.environ.get('SIE_SHADOW_SOURCE_SNAPSHOTS') == '1':
+        self._semantic_spatial_evidence = os.environ.get('SIE_STEP71_SOURCE_EVIDENCE') == '1'
+        if self._semantic_spatial_evidence and not (
+                temporal_enabled and self._native_rgb_jpeg and not self._fresh_stereo_during_rgb
+                and self._shadow_segmentation_input and self._native_rgb_trigger):
+            raise ValueError('Step 71 evidence requires temporal shadow and native latest-pair mask preview')
+        if self._semantic_spatial_evidence or os.environ.get('SIE_SHADOW_SOURCE_SNAPSHOTS') == '1':
             if not self._shadow_fast_input or self._capture_backend != 'latest_v4l2':
                 raise ValueError('source snapshots require current fast Shadow native capture')
             from vision_core.person_localization.shadow_source_snapshot import LatestSourceSnapshotWriter
@@ -303,6 +308,7 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
             self._temporal_shadow = LiveTemporalShadowMonitor(
                 path, self.run_id, {"ar0234": self.ar_capture, "ov9281": self.stereo_capture},
                 self.context, self.get_parameter("preview_temporal_ld19_clock_evidence").value,
+                archive_scans=self._semantic_spatial_evidence,
             )
             self.get_logger().info(f"Temporal Association shadow metadata journal: {path}")
         self.get_logger().info(
@@ -315,6 +321,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
         try:
             if getattr(self,"_native_rgb_jpeg",False):
                 if not isinstance(ar,bytes):raise ValueError("original RGB JPEG bytes required")
+                if getattr(self, '_semantic_spatial_evidence', False):
+                    return self._mask_client.infer_jpeg(cycle_id, ar, diagnostic_mask_hashes=True)
                 return self._mask_client.infer_jpeg(cycle_id,ar)
             return self._mask_client.infer(cycle_id, ar,
                 diagnostic_mask_hashes=getattr(self, "_shadow_fast_input", False))
@@ -717,7 +725,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                         shape_result = client.evaluate_selected(cycle_id, current, cal,
                             candidate, self._ar_inner_roi(observation), [self.range_min_m,self.range_max_m],
                             segmentation, scale=scale,
-                            **({'source_snapshot':True,'snapshot_periodic':self.sequence%10==0,
+                            **({'source_snapshot':True,'snapshot_periodic':self.sequence % (
+                                3 if getattr(self, '_semantic_spatial_evidence', False) else 10) == 0,
                                 'snapshot_reacquire':self._confirmed_target_track is None}
                                if getattr(self,'_source_snapshot_writer',None) is not None else {}),
                             **({'identity_source':True}
@@ -1064,6 +1073,10 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                     self._source_snapshot_writer is not None):
                 try:
                     shape=audit.get('shape_diagnostic') or {}
+                    semantic_metadata = {}
+                    if getattr(self, '_semantic_spatial_evidence', False):
+                        from vision_core.stereo.three_sensor_semantic_spatial_v1 import semantic_snapshot_metadata
+                        semantic_metadata = {'step71_semantic': semantic_snapshot_metadata(audit, source_snapshot_payload)}
                     self._source_snapshot_writer.submit(cycle_id,
                         self._source_packets.get('ar0234'),self._source_packets.get('ov9281'),
                         source_snapshot_disparity,source_snapshot_lr,source_snapshot_cal,
@@ -1084,7 +1097,8 @@ class Ar0234Ov9281ControlPreviewNode(Ar0234Ov9281DynamicAssociationAuditNode):
                          'candidate_layer_front_geometry':shape.get('candidate_layer_front_geometry'),
                          'local_candidate_front_geometry':shape.get('local_candidate_front_geometry'),
                          'stable_candidate_front_geometry':shape.get('stable_candidate_front_geometry'),
-                         'stable_torso_core_front_geometry':shape.get('stable_torso_core_front_geometry')})
+                         'stable_torso_core_front_geometry':shape.get('stable_torso_core_front_geometry'),
+                         **semantic_metadata})
                 except Exception as error:
                     self._source_snapshot_failures += 1
                     self._log_preview(f'SOURCE_SNAPSHOT_REFUSED {cycle_id} {type(error).__name__}')

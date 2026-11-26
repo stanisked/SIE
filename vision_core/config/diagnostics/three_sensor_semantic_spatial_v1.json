@@ -1,0 +1,14 @@
+{
+  "schema_version": "sie.three_sensor_semantic_spatial_policy.v1",
+  "status": "DIAGNOSTIC_TRIAL_ONLY",
+  "mask_interior_margin_px": 2,
+  "minimum_stereo_component_points": 100,
+  "minimum_competing_component_fraction": 0.25,
+  "minimum_depth_layer_gap_m": 0.15,
+  "relative_depth_layer_gap": 0.04,
+  "require_unique_eligible_person": true,
+  "stereo_ld19_header_policy": "STEP66_EXISTING_50MS_TRIAL",
+  "rgb_anchor_policy": "STEP57_CAUSAL_ZERO_WAIT",
+  "local_stereo_policy_sha256": "f2c8947121035c5ea8b87a7581099654b41e639163fb889fd026439965f77624",
+  "mask_coordinate_system": "AR0234_DISTORTED_ORIGINAL_OR_EXPLICIT_AFFINE_MODEL_GRID"
+}

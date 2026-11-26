@@ -134,3 +134,23 @@ snapshot is an ancestor at `db8097ea4239dcf45ef7598c831a45648d2498fd`.
 It covers the earlier preview, instance-mask and torso-core code. It
 contains no Step 57 live temporal or Step 69 local Stereo–LiDAR modules.
 Current sources govern those dependencies. No graph extraction was run.
+
+## Step 71 | Three-sensor semantic spatial diagnostic
+
+**FACT** The diagnostic replays bounded source snapshots from the existing
+Shadow producer and reads the same Step 57 LD19 callback chosen by the
+causal comparison. It reconstructs full-resolution v7 stereo offline,
+projects through the calibrated AR0234 inverse transform and requires
+current track, mask, and unique visible stereo-component evidence before
+using the unchanged local Stereo–LiDAR policy.
+
+**DECISION** Preserve both RGB temporal links and independently screen the
+actual Stereo–LD19 header delta with the existing Step 66 50 ms trial.
+Keep ambiguous stereo support and untrimmed residuals in the diagnostic
+record. The [Step 71 guide](../diagnostics/three_sensor_semantic_spatial_v1.md)
+contains provenance, the scoped contract and exact Pi commands.
+
+**OPEN** The capture and replay path is software-verified with synthetic
+inputs. No physical run, target-membership verification or measured Pi
+overhead is available. The Step 70 freeze, diagnostic admission boundaries
+and separate ESP32 v13 fault still apply.
