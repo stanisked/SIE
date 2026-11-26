@@ -41,7 +41,7 @@ runtime=/home/elwis/dev_ws/runtime_envs/sie_mvp/bin/python
 segmenter_python=/home/elwis/dev_ws/runtime_envs/sie_seg_onnx_benchmark/bin/python
 model_dir=/home/elwis/.local/state/sie/evidence/segmentation_input_size_20261015_123033/input_256x384
 model="$model_dir/checkpoint.onnx"
-report="$model_dir/comparison.json"
+report="$(dirname "$model_dir")/comparison.json"
 artifacts=/home/elwis/dev_ws/runtime_artifacts
 activation="$artifacts/ar0234_ov9281_decision_chain_0p5_to_4p5m_v2/ar0234_ov9281_decision_chain_activation.json"
 for input in "$runtime" "$segmenter_python" "$model" "$report" "$activation"; do
