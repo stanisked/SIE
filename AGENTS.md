@@ -1,4 +1,4 @@
-# SIEE project instructions for Codex
+# SIE project instructions for Codex
 
 **DECISION — 2026-11-26:** The owner froze `STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`. Step 71 adds source-bound AR0234 semantics to the existing OV9281–LD19 diagnostic. Preserve the calibrated artifacts, existing diagnostic policies and disabled admission flags. [Step 70 local correspondence freeze](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26).
 
@@ -36,7 +36,7 @@ For every engineering task:
 
 Reading order does not change normative precedence. If documents disagree, use the precedence defined below.
 
-## Operator command: read-only SIEE memory restoration
+## Operator command: read-only engineering-memory restoration
 
 The exact command `восстанови память SIEE` requests a read-only recovery
 of engineering context in the current or a new chat. Read the latest
@@ -51,18 +51,17 @@ is incomplete, say so. This command does not change files, regenerate graphs,
 or run code, ROS, cameras or motors. Only the separate `обнови документ` /
 `обновить документ` commands authorize coordinated context writes.
 
-## SIEE project identity and purpose
+## SIE project identity and purpose
 
-The project name is **Spatial Intelligence Evidence Engine (SIEE)**. Its purpose
+**SIE** is short for **Spatial Intelligence Engine**, pronounced **SEE**. Its purpose
 is to turn heterogeneous observations of the physical world into a continuously
 updated, evidence-backed world model and to use that model for reliable
 engineering decisions and safe actions.
 
-Keep the established `sie` repository, Python, ROS 2, topic, schema, evidence,
-and artifact identifiers unchanged unless the user separately authorizes a
-versioned compatibility migration. Historic references to Spatial Intelligence
-Engine (SIE) refer to this project unless they explicitly identify a legacy
-technical artifact.
+Use SIE in current and future documentation. Preserve SIEE where it identifies
+the historical experimental stage in evidence and development records. Keep
+existing technical identifiers unchanged.
+[Canonical naming decision](PROJECT_CONTEXT.md#project-name-and-compatibility)
 
 The project follows this direction:
 

@@ -1,4 +1,4 @@
-# SIEE cart + Shadow: verified working baseline
+# SIE cart + Shadow: verified working baseline
 
 This is a short navigation map for the next engineering session. It records
 demonstrated results and their limits, with links to the detailed evidence.
@@ -6,6 +6,9 @@ Read it before proposing another latency optimization, straight-line motion
 probe, steering-from-scratch task, or calibration change. The detailed reports
 and raw journals remain the evidence; this page does not promote diagnostics
 into an approved Measurement.
+
+Earlier linked reports use SIEE for the experimental stage of the same project.
+[Canonical naming decision](../../PROJECT_CONTEXT.md#project-name-and-compatibility)
 
 The [Fundamental Architecture Principles](../../PROJECT_CONTEXT.md#fundamental-architecture-principles) distinguish local surface correspondence from common entity identity. Use the checkpoints below as diagnostic evidence with their recorded limits.
 

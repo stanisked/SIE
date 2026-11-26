@@ -1,4 +1,4 @@
-# SIEE - Spatial Intelligence Evidence Engine
+# SIE — Spatial Intelligence Engine
 
 **DECISION — 2026-11-26:** The owner froze `STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`. Step 71 adds source-bound AR0234 semantics to the existing OV9281–LD19 diagnostic. Preserve the calibrated artifacts, existing diagnostic policies and disabled admission flags. [Step 70 local correspondence freeze](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26).
 
@@ -19,9 +19,9 @@ For the active Raspberry Pi 5, ROS 2, AR0234 RGB-to-OV9281 stereo work, read
 project snapshot and is updated only after the user gives the command
 `обновить документ`.
 
-The project name is **Spatial Intelligence Evidence Engine (SIEE)**. Existing
-`sie` repository, package, ROS 2 topic, schema, and artifact identifiers remain
-unchanged for compatibility; the name update is not an API migration.
+**SIE**, pronounced **SEE**, is the name of the project, architecture, and future
+product. Historical records may use **SIEE** for an earlier experimental stage of
+the same project. [Canonical naming decision](PROJECT_CONTEXT.md#project-name-and-compatibility)
 
 ## Vision
 

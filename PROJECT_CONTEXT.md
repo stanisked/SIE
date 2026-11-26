@@ -1,4 +1,4 @@
-# SIEE Project Context
+# SIE Project Context
 
 **DECISION — 2026-11-26:** The owner froze `STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`. Step 71 adds source-bound AR0234 semantics to the existing OV9281–LD19 diagnostic. Preserve the calibrated artifacts, existing diagnostic policies and disabled admission flags. [Step 70 local correspondence freeze](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26).
 
@@ -900,14 +900,21 @@ A post-boot Tailscale/SSH timeout recovered on 2026-10-26. Mobile-network contro
 
 ## Project name and compatibility
 
-The project name is **Spatial Intelligence Evidence Engine (SIEE)**.
+**DECISION — `OWNER_APPROVED`, 2026-11-26.** **SIE** is the single canonical
+name of the project, architecture, and future product. The full name is
+**Spatial Intelligence Engine**, pronounced **SEE**. Use SIE in current and
+future architectural descriptions, development, and documentation.
 
-Existing technical identifiers remain unchanged for compatibility: repository
-history, Python packages, ROS 2 packages, topics such as `/sie/...`, and schema
-names such as `sie.*` continue to use `sie`. This naming decision does not rename
-or invalidate frozen contracts, calibration artifacts, evidence IDs, or prior
-reports. Historic wording `Spatial Intelligence Engine (SIE)` refers to the same
-project unless it explicitly names a legacy technical artifact.
+**SIEE** (Spatial Intelligence Evidence Engine) is the historical designation of
+an earlier experimental stage of SIE. It refers to the same project and
+architecture. Retain historical wording where it records evidence provenance,
+supports experimental reproducibility, or preserves development history.
+
+The freeze preserves existing branches, tags, packages, modules, files, ROS 2
+nodes and topics, schemas, calibration artifacts, evidence directories and IDs,
+and other runtime identifiers. Established names such as `/sie/...` and `sie.*`
+continue to use `sie`. Previously approved architecture principles remain in
+force.
 
 ## Read this first
 
@@ -921,9 +928,9 @@ Read in this order before changing SIE:
 
 If these sources conflict, use the precedence in `AI_CONTEXT.md`; do not guess.
 
-## What SIEE is
+## What SIE is
 
-SIEE, Spatial Intelligence Evidence Engine, is an evidence-based spatial-intelligence architecture for a construction object. It integrates project and BIM/CAD data, surveying, inspections, sensor observations, material and zone state, work records, and reports from admitted robotic complexes, machines, and mechanisms into a traceable model of the physical world. SIEE uses that model for safe engineering decisions and authorized actions. It is not a particular neural model, camera, ROS 2 package, or robot base.
+SIE is an evidence-based spatial-intelligence architecture for a construction object. It integrates project and BIM/CAD data, surveying, inspections, sensor observations, material and zone state, work records, and reports from admitted robotic complexes, machines, and mechanisms into a traceable model of the physical world. SIE uses that model for safe engineering decisions and authorized actions. It is not a particular neural model, camera, ROS 2 package, or robot base.
 
 Canonical flow:
 
@@ -1132,7 +1139,7 @@ tasks and outcomes. The Decision Engine retains decision responsibility.
 
 ## Current product direction
 
-The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIEE. **Canonical dynamic fusion diagnostics exclude mobile-base navigation and motor control.** A separate supervised bounded trial is recorded in the current checkpoint; it grants no autonomous or canonical motion admission. No output of the current dynamic fusion diagnostic may authorize motion.
+The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIE. **Canonical dynamic fusion diagnostics exclude mobile-base navigation and motor control.** A separate supervised bounded trial is recorded in the current checkpoint; it grants no autonomous or canonical motion admission. No output of the current dynamic fusion diagnostic may authorize motion.
 
 The intended, future operating model is:
 
@@ -1141,7 +1148,7 @@ BIM / project / schedule
 + surveying / inspections / sensors
 + material, zone, and quality state
 + reports from admitted robotic complexes, machines, and mechanisms
-  -> evidence-backed SIEE World State
+  -> evidence-backed SIE World State
   -> Task Evaluator and Knowledge Engine
   -> Decision Engine
   -> authorized action for a specific executor
@@ -1545,9 +1552,9 @@ This distinction is an engineering interpretation supported by the latest contro
 
 Recent external stereo-depth research reviewed during this work reinforced a useful hypothesis: high-precision stereo systems may need runtime calibration-health monitoring because heat, vibration, mechanical shifts, or impacts can degrade extrinsic alignment after nominal calibration.
 
-For SIEE, a future `Calibration Health Observation` is therefore a candidate concept, for example carrying epipolar residual, drift suspicion, confidence, timestamp, and state such as `VALID`, `SUSPECT`, or `BLOCKED`.
+For SIE, a future `Calibration Health Observation` is therefore a candidate concept, for example carrying epipolar residual, drift suspicion, confidence, timestamp, and state such as `VALID`, `SUSPECT`, or `BLOCKED`.
 
-This is **not an accepted architecture rule yet**. Do not implement online recalibration or add a new canonical object solely from vendor literature. First demonstrate an actual runtime calibration-drift failure mode in SIEE evidence.
+This is **not an accepted architecture rule yet**. Do not implement online recalibration or add a new canonical object solely from vendor literature. First demonstrate an actual runtime calibration-drift failure mode in SIE evidence.
 
 ## Current blockers and safety boundary
 
@@ -1615,7 +1622,7 @@ The immediate engineering goal remains reusable RGB semantics plus stereo geomet
 
 ## Active development stage
 
-SIEE is in **evidence-driven AR0234-to-OV9281 target-association validation**, before validated dynamic Measurement or autonomous camera-driven motion. A separate operator-supervised bounded trial exists, as recorded in the current checkpoint above; it does not promote diagnostic camera output to canonical motion admission. Pose-aware v7 depth evidence and unresolved startup disparity shifts remain recorded above; avoid repeating manual board series without a specific new decision they can resolve. Both v8 and v8b are rejected as replacements despite strong solver metrics. Active v7 remains unchanged. A narrow stationary-person semantic gate is confirmed at 2.5 to 4.2 m for the current 7° upward rigid camera-block pose, but its metric depth values remain provisional because no optical-frame-consistent physical validation has yet established its bounds above 1.5 m.
+SIE is in **evidence-driven AR0234-to-OV9281 target-association validation**, before validated dynamic Measurement or autonomous camera-driven motion. A separate operator-supervised bounded trial exists, as recorded in the current checkpoint above; it does not promote diagnostic camera output to canonical motion admission. Pose-aware v7 depth evidence and unresolved startup disparity shifts remain recorded above; avoid repeating manual board series without a specific new decision they can resolve. Both v8 and v8b are rejected as replacements despite strong solver metrics. Active v7 remains unchanged. A narrow stationary-person semantic gate is confirmed at 2.5 to 4.2 m for the current 7° upward rigid camera-block pose, but its metric depth values remain provisional because no optical-frame-consistent physical validation has yet established its bounds above 1.5 m.
 
 The architecture is accepted: AR0234 provides semantics; OV9281 provides geometry. The active uncertainty has three practical parts, with reproducible startup disparity drift now an explicit part of the first:
 
@@ -1677,6 +1684,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-26 | The owner froze SIE (Spatial Intelligence Engine, pronounced SEE) as the canonical project, architecture, and product name. SIEE remains the historical designation of the earlier experimental stage. |
 | 2026-11-14 | Registered the read-only command `восстанови память SIEE` for cross-chat engineering-context recovery. The command reads current primary sources and gives a cited continuation summary; it does not update documents, regenerate Graphify, or run Pi/hardware. This change is documentation-only. |
 | 2026-11-14 | Extended both equivalent operator commands (`обнови документ`, `обновить документ`) to update `PROJECT_CONTEXT.md` and `SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md` as one coordinated maintenance action. Both documents must match their respective original private Drive files; Graphify extraction remains manual. No new hardware, calibration, Measurement, or motion results claimed. |
 | 2026-11-13 | Recorded the reviewed 64-cycle motor-off Fast Shadow run: 64/64 `FOLLOW_ELIGIBLE`, including 33 current-frame local-surface decisions after whole-mask MAD refusal, one uninterrupted track ID and sub-0.5 s driver-declared age. Recorded the exact conditional v2 launcher correction and removal of the unused YOLO v3 dependency from the mask-only path. Kept calibration, canonical Measurement and motor authorization unchanged; the corrected launcher still requires a new Pi verification and physical robot-front comparison. |

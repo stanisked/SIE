@@ -6,7 +6,7 @@
 
 **Current hardware checkpoint (2026-11-23):** ESP32 `v4_2_uart_shadow_v13_brake_continuity` was flashed, boot/read-only UART checked, and then tested in exactly one supervised raised-wheel RIGHT 8° experiment. Outcome: `ENCODER_LIMIT_REACHED` / latched `BOUNDED_DISTANCE_LIMIT` / terminal FAULT, PWM 0/0, STOP confirmed. Brake request R/L 15/13 counts, output-write commands completed after 38 µs, final R/L 27/25 against target 21/21 and hard limit 22/22. **v13 is not a validated braking fix.** Read [current v13 handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md); previous v11 handoff is historical. Operator has not yet reconfirmed physical motor-power OFF after the latest run; v13 raw evidence archive/off-Pi backup is not yet confirmed. No further motion, flash, FAULT reset or reboot is authorized by this document. A diagnostic v14 remains a proposal.
 
-# Spatial Intelligence Evidence Engine (SIEE)
+# Spatial Intelligence Engine (SIE)
 
 Version: 0.2
 
@@ -70,12 +70,11 @@ instead of claiming a complete recovery.
 
 ## Project name and technical compatibility
 
-The human-facing project name is **Spatial Intelligence Evidence Engine (SIEE)**.
-Existing `sie` names in repository paths, Python and ROS 2 packages, topics,
-schemas, evidence IDs, calibration artifacts, and frozen documents remain stable
-technical identifiers. This name change does not authorize a code or API rename.
-Historical references to **Spatial Intelligence Engine (SIE)** refer to the same
-project unless they explicitly identify a legacy technical artifact.
+Use **SIE** (Spatial Intelligence Engine, pronounced **SEE**) for the project,
+architecture, and future product. **SIEE** designates an earlier experimental
+stage of the same project. Keep original names in evidence and reproducibility
+records and preserve existing technical identifiers.
+[Canonical naming decision](PROJECT_CONTEXT.md#project-name-and-compatibility)
 
 ## Normative precedence
 
@@ -97,8 +96,7 @@ The owner-approved [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowle
 
 ## Mission
 
-Spatial Intelligence Evidence Engine (SIEE) is an engineering architecture for
-Spatial Intelligence.
+SIE is an engineering architecture for Spatial Intelligence.
 
 Its purpose is to transform heterogeneous observations into a continuously evolving, evidence-backed understanding of the physical world and support reliable engineering decisions and safe actions.
 

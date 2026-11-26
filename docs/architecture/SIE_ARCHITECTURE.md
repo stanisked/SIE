@@ -14,6 +14,9 @@
 
 Spatial Intelligence Engine (SIE) is an engineering architecture for Spatial Intelligence.
 
+The name SIE (pronounced SEE) applies to the project, architecture, and future
+product. [Canonical naming decision](../../PROJECT_CONTEXT.md#project-name-and-compatibility)
+
 SIE integrates observations from heterogeneous information sources into a single, continuously evolving model of the physical world and uses that model to support reliable engineering decisions.
 
 SIE is designed for industrial robotics, construction, manufacturing, logistics and other domains where decisions must be based on measurable reality.

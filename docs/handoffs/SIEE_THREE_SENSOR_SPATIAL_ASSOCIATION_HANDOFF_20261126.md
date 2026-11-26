@@ -1,6 +1,6 @@
-# SIEE Three-Sensor Spatial Association v1 | Handoff 2026-11-26
+# SIE Three-Sensor Spatial Association v1 | Handoff 2026-11-26
 
-**DECISION** SIEE's objective is a unified evidence-backed system spanning
+**DECISION** SIE's objective is a unified evidence-backed system spanning
 AR0234 RGB semantics, OV9281 stereo depth, LD19 LiDAR, World State and robot
 control. The next stage is diagnostic spatial association. Its entry baseline
 is `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE` on
@@ -8,6 +8,9 @@ is `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE` on
 [Step 57 freeze](SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26)
 and Git baseline `23dbfdb4a60fbdca8eec5480d9d19751a7e2c317`.
 World State, Measurement and motor admission remain disabled.
+
+The handoff path and linked evidence retain their historical identifiers.
+[Canonical naming decision](../../PROJECT_CONTEXT.md#project-name-and-compatibility)
 
 **DECISION — architecture scope.** The [Fundamental Architecture Principles](../../PROJECT_CONTEXT.md#fundamental-architecture-principles) govern the use of complementary evidence from distinct surfaces. Step 70 and Step 71 retain their original diagnostic scope and evidence limits.
 
