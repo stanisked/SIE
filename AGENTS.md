@@ -74,6 +74,8 @@ SIE is not an LLM, VLM, VLA, computer-vision library, ROS 2 replacement, or gene
 
 Observations may come from physical sensors or trusted external engineering sources such as BIM/CAD data, PLC state, maps, and approved operator input. Their origin and authority must remain explicit.
 
+Apply the owner-approved [Fundamental Architecture Principles](PROJECT_CONTEXT.md#fundamental-architecture-principles) to each architecture and implementation task. Preserve source independence, the evidence needed for each association level, and independent safety behavior.
+
 ## Canonical information flow
 
 ```text

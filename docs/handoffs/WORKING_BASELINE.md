@@ -7,6 +7,8 @@ probe, steering-from-scratch task, or calibration change. The detailed reports
 and raw journals remain the evidence; this page does not promote diagnostics
 into an approved Measurement.
 
+The [Fundamental Architecture Principles](../../PROJECT_CONTEXT.md#fundamental-architecture-principles) distinguish local surface correspondence from common entity identity. Use the checkpoints below as diagnostic evidence with their recorded limits.
+
 ## 2026-11-26: Step 70 local correspondence freeze
 
 **FACT / operator report** Step 67 and Step 68 yielded 377 coherent local

@@ -9,6 +9,8 @@ is `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE` on
 and Git baseline `23dbfdb4a60fbdca8eec5480d9d19751a7e2c317`.
 World State, Measurement and motor admission remain disabled.
 
+**DECISION — architecture scope.** The [Fundamental Architecture Principles](../../PROJECT_CONTEXT.md#fundamental-architecture-principles) govern the use of complementary evidence from distinct surfaces. Step 70 and Step 71 retain their original diagnostic scope and evidence limits.
+
 ## Source and frame inventory
 
 - **FACT** The camera audit node projects AR0234 rays into physical-left and

@@ -29,6 +29,8 @@ Robots should reason about the physical world using measurable, verifiable, and 
 
 SIE transforms observations into calibrated measurements, evidence-backed world understanding, engineering decisions, and safe actions. Models and algorithms are replaceable implementation components, not sources of architectural authority.
 
+The [Fundamental Architecture Principles](PROJECT_CONTEXT.md#fundamental-architecture-principles) describe how SIE integrates complementary knowledge into an entity-centric representation and uses it to guide interaction. They apply to the full architecture.
+
 ## Engineering Principles
 
 - Geometry First - spatial reasoning begins with geometry and physical constraints.

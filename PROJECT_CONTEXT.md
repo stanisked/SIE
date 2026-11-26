@@ -946,6 +946,88 @@ Important invariants:
 - Models are replaceable. Data contracts and frame semantics are not.
 - Missing, stale, ambiguous, or low-quality evidence fails closed.
 
+## Fundamental Architecture Principles
+
+**DECISION — `OWNER_APPROVED`, 2026-11-26.** These principles apply to the
+entire SIE architecture and its future development, including the current MVP.
+
+> **SIE integrates independent knowledge about the physical world obtained from multiple sources, forms a coherent representation of its environment, and uses this representation to make decisions about how to interact with it.**
+
+1. **Knowledge over Sensor Data.** Integrating knowledge takes precedence
+   over directly fusing sensor data. Sensor fusion is an enabling mechanism
+   for Spatial Intelligence, the objective of SIE.
+2. **Sensor Independence.** Each sensor is an independent source of
+   information with its own capabilities and limitations.
+3. **Entity-Centric Representation.** An entity is the central element of
+   the physical-world representation. Individual measurements supply
+   evidence about entities.
+4. **Complementary Evidence.** Different sources can contribute
+   complementary knowledge about the same entity while observing
+   different physical surfaces.
+5. **Understanding Before Action.** The robot makes decisions based on its
+   knowledge of the situation, the current task, applicable instructions,
+   and its own capabilities.
+
+### Architectural consistency
+
+- **Data Contracts and provenance.** Modules exchange data through approved
+  Data Contracts. Observations stay bound to their sources. Measurements
+  remain independent quantitative results with explicit units and reference
+  frames, applicable calibration or method, and evidence provenance.
+  The Evidence Graph preserves links to the originating Observations.
+- **Entity lifecycle and World State.** Entities retain stable identity,
+  state, properties, and lifecycle. Only the World State Manager writes
+  World State, using verifiable Facts with source, timestamp, confidence,
+  and evidence links. An unverified hypothesis remains a hypothesis.
+- **Decision inputs and roles.** The Decision Engine consumes modeled-world
+  facts only from World State. It also uses approved Knowledge Engine
+  rules and Task Evaluator outputs as required by ARCH-006. The Knowledge
+  Engine owns domain knowledge, constraints, and approved rules. The
+  provisional Task Evaluator assesses task state and outcomes. Decision
+  responsibility stays with the Decision Engine.
+- **Verification and safety.** Preserve deterministic, reproducible cycles
+  and Challenge Before Acceptance. When the available evidence is
+  insufficient, acquire additional information or safely refuse the
+  interaction. Independent collision avoidance and safety behavior remain
+  in place regardless of semantic association or certainty.
+
+[Architecture Rules](docs/architecture/SIE_RULES.md) ·
+[Engineering Principles](docs/architecture/SIE_ENGINEERING_PRINCIPLES.md) ·
+[Spatial Model (ES-005)](docs/architecture/SIE_SPATIAL_MODEL.md) ·
+[Evidence Graph (ES-006)](docs/architecture/SIE_EVIDENCE_GRAPH.md)
+
+### Surface-Level Association and Entity-Level Association
+
+**Surface-Level Association** tests whether observations or measurements
+correspond to the same physical surface. It depends on applicable spatial,
+temporal, and evidence checks. **Entity-Level Association** tests whether
+source-bound evidence concerns the same entity. It can connect observations
+of different parts at different coordinates when the evidence supports
+common identity. A candidate at either level remains provisional until
+its claim is verifiable.
+
+### Practical MVP interpretation
+
+- **LD19** provides spatial geometry, obstacle observations, and mapping
+  inputs. An obstacle may require further semantic investigation before
+  choosing an interaction. Any independent collision-avoidance response
+  continues to apply without waiting for semantic identification.
+- **AR0234** provides semantic observations and target tracking.
+- **OV9281** provides depth and spatial structure.
+- These observations can complement each other. For example, LD19 may
+  observe a person's legs while camera evidence concerns the torso. The
+  coordinates can differ and still support an entity-level association
+  when common identity is established by evidence.
+
+**FACT / implementation status.** Step 70 freezes the reported local
+Stereo–LiDAR diagnostic results. Step 71 implements a three-sensor
+semantic spatial diagnostic and has synthetic verification. These
+checkpoints do not establish physical target membership, validate a
+camera–LiDAR extrinsic, or admit Measurement, World State updates, or
+motor control. The principles above govern future architecture beyond
+these experiments. [Step 70 evidence](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26) ·
+[Step 71 handoff](docs/handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-71--three-sensor-semantic-spatial-diagnostic)
+
 ## Current product direction
 
 The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIEE. **Canonical dynamic fusion diagnostics exclude mobile-base navigation and motor control.** A separate supervised bounded trial is recorded in the current checkpoint; it grants no autonomous or canonical motion admission. No output of the current dynamic fusion diagnostic may authorize motion.

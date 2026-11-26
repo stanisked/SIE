@@ -91,6 +91,8 @@ When repository artifacts disagree, use this order:
 
 If a conflict cannot be resolved from repository evidence, stop and report the exact conflicting statements. Never guess which contract was intended.
 
+The owner-approved [Fundamental Architecture Principles](PROJECT_CONTEXT.md#fundamental-architecture-principles) apply across SIE, including future development. Follow the distinction between Surface-Level Association and Entity-Level Association when evaluating complementary source evidence.
+
 ## Mission
 
 Spatial Intelligence Evidence Engine (SIEE) is an engineering architecture for
