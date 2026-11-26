@@ -1,0 +1,30 @@
+{
+  "schema_version": "sie.camera_lidar_mechanical_geometry.v1",
+  "profile_id": "camera_lidar_mechanical_geometry_v1",
+  "status": "OPERATOR_MECHANICAL_GEOMETRY_DIAGNOSTIC_ONLY",
+  "source_frame": "ld19_sensor",
+  "destination_frame": "physical_left_lens_front_rim_frame",
+  "source_axes": ["forward", "left", "up"],
+  "destination_axes": ["right", "down", "forward"],
+  "length_unit": "m",
+  "ld19_origin_from_rim_robot_aligned_m": [0.158, 0.030, 0.195],
+  "camera_pitch_up_deg": 20.0,
+  "ld19_scan_plane": "OPERATOR_CHECKED_HORIZONTAL",
+  "alignment_assumptions": {
+    "ld19_yaw": {"degrees": 0.0, "status": "PROVISIONAL"},
+    "camera_yaw": {"degrees": 0.0, "status": "UNVERIFIED_ASSUMPTION"},
+    "camera_roll": {"degrees": 0.0, "status": "UNVERIFIED_ASSUMPTION"}
+  },
+  "rim_to_optical_center_offset_m": null,
+  "measurement_uncertainty": null,
+  "confidence": null,
+  "operator_provenance": {
+    "reported_date": "2026-11-26",
+    "source": "Project operator, Step 60 geometry report",
+    "superseded_pitch_deg_for_this_profile": [10.0, 15.0]
+  },
+  "extrinsic_independently_validated": false,
+  "measurement_authorized": false,
+  "world_state_update_authorized": false,
+  "motor_control_authorized": false
+}

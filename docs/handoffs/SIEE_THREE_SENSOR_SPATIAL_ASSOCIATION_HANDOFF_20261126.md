@@ -61,3 +61,14 @@ Graph. Any calibration promotion, canonical Data Contract change, World
 State update or actuator authorization requires separate review. The ESP32
 v13 brake FAULT remains a separate blocker. This handoff adds no Spatial
 Association implementation.
+
+## Step 60 | Mechanical extrinsic v1
+
+**FACT** The 2026-11-26 operator geometry is recorded in the
+[Step 60 profile and transform notes](../diagnostics/camera_lidar_mechanical_geometry_v1.md).
+The pure transform terminates at the physical-left OV9281 lens rim and
+refuses an optical-center transform. No physical validation was run.
+
+**OPEN** Independent common-surface validation, the optical-center offset
+and alignment uncertainties remain open. The Step 60 notes contain the
+proposed static validation design. Diagnostic admission boundaries still apply.
