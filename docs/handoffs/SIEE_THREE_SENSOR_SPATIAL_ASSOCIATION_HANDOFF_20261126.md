@@ -111,3 +111,26 @@ and distinct replay outputs. [Policy, output and exact Pi replay commands](../di
 archives. No real-data replay or new acquisition occurred in Step 69.
 Projected coincidence and measured residuals do not establish target
 membership or authorize Measurement, World State, Decisions or motion.
+
+## Step 70 | Local stereo–LiDAR freeze
+
+**DECISION** On 2026-11-26 the owner approved
+`STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`.
+[Step 70 metrics and evidence index](../diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26)
+preserves both sessions and original hashes. Step 71 adds current AR0234
+semantic target ownership and track binding while retaining independent
+stereo and LD19 observations. The actuator fault remains a separate workstream.
+
+**FACT / operator report** All 42 matched frames across the two runs had
+local candidates, with 377 candidates and 39 ambiguous beams overall.
+The six Pi artifacts are `PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE`.
+No physical membership or combined accuracy is established.
+
+**FACT** GitHub PR #13 was checked as open draft, head
+`bdb29621d698d8e3192ef5fc6c0eeff59f6e2c97` and base
+`codex/siee-person-follow-mvp-20261120`. Its head and the Step 57 freeze
+are ancestors of the Step 70 starting HEAD. The verified local Graphify
+snapshot is an ancestor at `db8097ea4239dcf45ef7598c831a45648d2498fd`.
+It covers the earlier preview, instance-mask and torso-core code. It
+contains no Step 57 live temporal or Step 69 local Stereo–LiDAR modules.
+Current sources govern those dependencies. No graph extraction was run.

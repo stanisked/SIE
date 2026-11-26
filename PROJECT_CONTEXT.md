@@ -1,5 +1,7 @@
 # SIEE Project Context
 
+**DECISION — 2026-11-26:** The owner froze `STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`. Step 71 adds source-bound AR0234 semantics to the existing OV9281–LD19 diagnostic. Preserve the calibrated artifacts, existing diagnostic policies and disabled admission flags. [Step 70 local correspondence freeze](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26).
+
 **DECISION — current sensor checkpoint, 2026-11-26:** The owner closed Live Three-Sensor Temporal Association as `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE` on `codex/siee-live-temporal-association-shadow-v1-20261125`. Preserve `latest_pair`, zero added association wait, current calibrations, Vision Core processing and independent bounded diagnostics. Measurement, World State and motor admission remain disabled. Read the [Step 57 evidence and limits](docs/handoffs/SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26) and [Spatial Association v1 handoff](docs/handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md).
 
 **FACT** The final SHA-matched journal reproduced 82/83 RGB–Stereo, 80/83 RGB–LD19 header and 80/83 joint matches. All 82 accepted camera links agreed with Vision Core's actual stereo selection. Forty of 82 publications met experimental three-source freshness. The earlier first-live and LD19 clock files are `PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE`. The Graphify snapshot is still 2026-11-16 at `db8097ea4239dcf45ef7598c831a45648d2498fd`.

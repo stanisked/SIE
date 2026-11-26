@@ -155,3 +155,66 @@ runtime.
 **FACT** Local verification passed 157 targeted tests, including 29 Step 69
 cases. The three Python files compiled, the Pi replay commands passed Bash
 syntax validation, and the original Step 66 files are unchanged.
+
+## Step 70 freeze, 2026-11-26
+
+**DECISION** The owner approved
+`STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`.
+Continue with `THREE_SENSOR_SEMANTIC_SPATIAL_ASSOCIATION_V1` using
+source-bound AR0234 semantic evidence instead of the hand-marked polygon.
+Keep this local policy, the mechanical geometry, optical datum, matcher,
+LR consistency, temporal thresholds and the independent 40 mm global
+plane screen.
+
+**FACT / operator-reported Pi offline replay** Residual sign is LD19 minus
+local stereo median. The results are per session.
+
+| Metric | Step 67 uniform | Step 68 textured |
+| --- | ---: | ---: |
+| Captured stereo frames | 30 | 30 |
+| Temporal matches | 25 | 17 |
+| Temporal refusals | 5 | 13 |
+| Distinct compared LD19 scans | 25 | 17 |
+| Global plane refusals | 25 | 17 |
+| Frames with local candidates | 25 | 17 |
+| Beams inside target polygon | 328 | 221 |
+| Beams with usable local stereo | 324 | 221 |
+| Beams with sufficient support | 218 | 189 |
+| Coherent local candidates | 203 | 174 |
+| Ambiguous local surfaces | 20 | 19 |
+| Global disposition mismatches | 0 | 0 |
+| Verified archived stereo arrays | 25 | 17 |
+| Longitudinal median (mm) | +14.349338 | +24.429402 |
+| Longitudinal MAD (mm) | 23.987157 | 21.211243 |
+| Longitudinal P95 absolute (mm) | 87.017823 | 83.663491 |
+| Optical Z median (mm) | +12.371768 | +23.978198 |
+| Optical Z MAD (mm) | 23.898281 | 21.044955 |
+| Optical Z P95 absolute (mm) | 85.672200 | 82.280133 |
+
+**FACT / operator report** The runs total 377 coherent candidates, local
+candidates in 42/42 temporally matched frames, 42 distinct compared LD19
+scans, 39 ambiguous beams and zero global disposition mismatches. No
+calibration or parameter changes were reported. These are diagnostic
+candidates with unverified physical target membership. No combined
+residual quantile or physical accuracy estimate was calculated.
+
+**FACT / operator-supplied SHA-256** The private Pi root is
+`/home/elwis/.local/state/sie/evidence/`.
+
+| Replay directory | Artifact | Supplied SHA-256 |
+| --- | --- | --- |
+| `step69_from_step67_20261126T161455Z_1333_local` | `summary.json` | `9ab47a398a17657b65828f2e1c36ac60cb44b77330c3f12857503401a4a497a4` |
+| Same | `comparisons.jsonl` | `5b72cae88a54a9978ca5ae211f58c71e0caa5d632fcc157a3dbaed3ebdcd0355` |
+| Same | `replay-policy.json` | `438ddf0aa83f158b1c1a50f93a0fa95a29723376d659f4e2c844f736b4588c5f` |
+| `step69_from_step68_20261126T161455Z_1333_local` | `summary.json` | `c68a8e4edfcc12e6ffe25c7514e3e9472cf67d91fc5f03f39ae076faeb63a2df` |
+| Same | `comparisons.jsonl` | `4242db656fc88f37b1183f174978589cf30c0cc5a313040c61e4f5ed7db5ab8d` |
+| Same | `replay-policy.json` | `5b974cc1813bf889c46693490937e70ee6a93c41d3f9f10207a437369b8cbbdc` |
+
+**OPEN** `PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE`. The Pi was unreachable
+and the six private result files could not be independently hashed in this
+task. The packaged policy hash above was independently verified from Git.
+Physical LD19 acquisition time is `UNKNOWN`. Camera exposure time,
+physical target membership and the camera–LiDAR extrinsic remain
+independently unverified. The optical datum is an estimate with unknown
+uncertainty and confidence. Measurement, World State and motor admission
+remain disabled.

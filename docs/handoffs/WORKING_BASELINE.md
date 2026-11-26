@@ -7,6 +7,16 @@ probe, steering-from-scratch task, or calibration change. The detailed reports
 and raw journals remain the evidence; this page does not promote diagnostics
 into an approved Measurement.
 
+## 2026-11-26: Step 70 local correspondence freeze
+
+**FACT / operator report** Step 67 and Step 68 yielded 377 coherent local
+candidates across all 42 matched frames, with 39 ambiguous beams and zero
+global disposition mismatches. The private artifacts remain
+`PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE`.
+
+**DECISION** Freeze the diagnostic and continue to Step 71 source-bound
+semantic association. [Metrics and hashes](../diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26).
+
 ## 2026-11-26: Live Three-Sensor Temporal Association (FACT / DECISION / OPEN)
 
 **FACT** The final journal was SHA-matched and independently recalculated.
