@@ -1390,6 +1390,26 @@ Non-Self-Authorization, and Challenge Before Acceptance apply throughout.
 Existing knowledge ownership, evidence and World State admission requirements,
 and independent runtime safety govern any future implementation.
 
+## Task-Sufficient Accuracy over Component-Level Precision
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** Component accuracy must be
+sufficient for the system to accomplish its intended tasks. Use evidence
+from the intended task and operating conditions to assess sufficiency.
+Further precision improvement is justified when existing errors
+demonstrably limit system functionality, reliability, or safety.
+
+Evidence integrity, sensor independence, uncertainty disclosure, and
+existing safety and authorization requirements continue to apply.
+Record the metrics and operating conditions covered by an evaluation
+and identify what remains unverified.
+
+**DECISION — mobile MVP application.** Step 75.3d uses practical motor-off
+odometry validation against approximate, independent floor references.
+Defer the strict reference uncertainty audit unless it is needed to
+resolve a functional limitation. The original strict pilot retains its
+inconclusive result.
+[Step 75.3d decision and evidence](docs/diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-validation)
+
 ## Fundamental Architecture Baseline
 
 **DECISION — `OWNER_APPROVED`, 2026-11-27.** The fundamental architecture
@@ -1402,6 +1422,7 @@ name is SIE, Spatial Intelligence Engine, pronounced SEE.
 - [Responsible Autonomy and Decision Governance Principles](#responsible-autonomy-and-decision-governance-principles)
 - [Mission and Practical Intelligence Principles](#mission-and-practical-intelligence-principles)
 - [Experience, Learning and Controlled Evolution](#experience-learning-and-controlled-evolution)
+- [Task-Sufficient Accuracy over Component-Level Precision](#task-sufficient-accuracy-over-component-level-precision)
 
 ## MVP Continuation Checkpoint
 
@@ -2000,6 +2021,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-27 | Added the owner-approved Task-Sufficient Accuracy over Component-Level Precision principle and recorded its application to mobile MVP motor-off odometry validation. |
 | 2026-11-27 | Froze experience-based learning as an approved fundamental capability, indexed the architecture baseline, recorded the operator-reported Step 72 replay, and established the practical MVP continuation checkpoint with Step 73 proposed. |
 | 2026-11-27 | Froze the owner-approved SIE mission, purpose, and responsibility, the intended work categories, and the Practical Intelligence Principles for feasible execution and verified physical outcomes. |
 | 2026-11-27 | Froze the owner-approved Responsible Autonomy and Decision Governance Principles, including the priority hierarchy and conceptual separation of decision formation, admissibility validation, authorized execution, and runtime safety. |

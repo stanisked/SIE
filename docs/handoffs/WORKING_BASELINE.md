@@ -46,7 +46,13 @@ evidence record. Physical odometry accuracy and powered-motion telemetry
 remain unqualified. Wheel scale and track width remain provisional, and
 navigation admission remains false.
 [Step 75.3c results and limits](../diagnostics/wheel_odometry_v1.md#step-753c-motor-off-integration-closure) ·
-[Step 75.3d proposal, pending separate approval](../diagnostics/wheel_odometry_v1.md#step-753d-proposal-for-independent-physical-odometry-validation)
+[Step 75.3d practical protocol and original pilot](../diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-validation)
+
+**DECISION / FACT — Step 75.3d.** The owner approved practical motor-off
+odometry validation for the mobile MVP. The operator-reported strict
+pilot retains its `INCONCLUSIVE` result. The twelve-trial practical
+evaluation is pending physical evidence.
+[Current navigation checkpoint](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-753d-practical-validation-approved)
 
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately

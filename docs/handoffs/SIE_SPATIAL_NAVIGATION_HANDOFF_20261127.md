@@ -428,7 +428,20 @@ performance remain unqualified. Effective wheel scales and track width
 remain provisional. Navigation admission remains false. The earlier
 unexplained ESP32 boot ID change and the v13 braking defect remain open.
 
-**PROPOSAL — Step 75.3d.** Validate translation and heading with motor-off
-manual floor traverses and turns against independent position and heading
-references. Execution requires separate approval.
-[Proposed procedure](../diagnostics/wheel_odometry_v1.md#step-753d-proposal-for-independent-physical-odometry-validation)
+## Step 75.3d practical validation approved
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** Apply the task-sufficient
+accuracy principle to twelve motor-off manual floor trials. Use a tape
+measure and floor marks for straight travel and visual alignment against
+perpendicular floor lines for turns. Preserve approximate measurement
+provenance, identify unsupported comparisons, and keep the existing
+odometry parameters and telemetry continuity checks.
+[Canonical principle](../../PROJECT_CONTEXT.md#task-sufficient-accuracy-over-component-level-precision)
+
+**FACT — operator-reported.** The original strict forward pilot remains
+`INCONCLUSIVE`. The operator reported 1.000 m nominal travel from point A
+floor marks and 0.997826664 m odometry X. Independent lateral and heading
+accuracy were unverified. The strict reference uncertainty audit is
+deferred under the owner decision. Practical completion is pending new
+physical evidence, and navigation admission remains false.
+[Pilot evidence, practical targets and limits](../diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-validation)

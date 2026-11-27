@@ -272,6 +272,10 @@ remains open for Step 76. Navigation admission remains false.
 
 ## Step 75.3d proposal for independent physical odometry validation
 
+**HISTORICAL PROPOSAL.** This section records the original strict
+reference protocol. See the pilot evidence and current practical
+protocol below.
+
 **PROPOSAL — separate owner approval required.** Evaluate endpoint accuracy
 during slow manual floor motion with traction power physically disconnected.
 Use the existing configuration and the isolated diagnostic ROS graph.
@@ -305,3 +309,54 @@ scales and track width fixed through the validation. Evaluating any later
 parameter fit would require new reference trials. This experiment addresses
 motor-off endpoint accuracy on the tested surface. Powered accuracy,
 long-term drift, and navigation admission remain outside its scope.
+
+## Step 75.3d practical odometry validation
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** Use practical odometry
+validation for the current mobile MVP. Gate further precision work on a
+demonstrated task, reliability, or safety limitation. Defer the strict
+reference uncertainty audit unless needed to resolve a functional
+limitation.
+[Task-Sufficient Accuracy over Component-Level Precision](../../PROJECT_CONTEXT.md#task-sufficient-accuracy-over-component-level-precision)
+
+**FACT — operator-reported strict pilot, `INCONCLUSIVE`.** Evidence is at
+`/home/elwis/.local/state/sie/evidence/step75_3d_physical.6r5h5ng3`.
+The nominal physical translation was 1.000 m using independently measured
+floor marks for point A. Odometry reported X = 0.997826664 m,
+Y = −0.006262734 m, and yaw = +1.096717°. The operator reported 6,992
+matched ROS/UART samples, clean adapter shutdown, and all 16 evidence file
+checksums passing. Ordinary floor marks were used. Independent final
+heading and lateral displacement accuracy were unverified. The private
+artifacts were unavailable for independent inspection. Preserve the
+original pilot and its outcome.
+
+**DECISION — practical protocol.** With traction power physically
+disconnected, perform three manually pushed traverses in each straight
+direction and three manual turns in each rotational direction. The
+nominal guides are 1 m and 90°. Use tape and floor marks for actual
+straight travel and perpendicular floor lines with visual chassis
+alignment for approximate turn angle and direction. Report signed
+odometry X/Y/yaw in each trial's initial body frame. Use optional
+independent lateral, heading, and turn endpoint readings when available.
+Preserve all physical input as approximate operator evidence. Mark
+unsupported comparisons `UNVERIFIED` and retain the odometry reading.
+
+| Comparison | Practical target |
+| --- | --- |
+| Straight longitudinal error | Approximately within 5% of measured travel |
+| Straight lateral error | Approximately within 30 mm |
+| Straight heading error | Approximately within 3° |
+| Turn angle error | Approximately within 5° |
+| Turn endpoint position error | Approximately within 50 mm |
+| Telemetry continuity losses | Zero |
+
+Report each estimated deviation and incorrect direction. A missing
+primary floor reference or estimated target deviation calls for review.
+Incorrect direction, telemetry or safety refusal stops the session.
+After successful physical runs with supported primary comparisons, the
+collector can propose `PRACTICAL_ODOMETRY_VALIDATION_COMPLETE` for
+operator review. The status applies to the evaluated motor-off tests
+and the comparisons they support. Strict metrology, powered-motion
+performance, and navigation authorization remain open. Preserve firmware
+and fixed odometry settings, including the 0.25 s production UART timeout.
+The v13 braking defect remains open.
