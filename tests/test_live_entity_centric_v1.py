@@ -12,6 +12,7 @@ from sie_ros2.live_entity_centric_v1 import (
     CAMERA_SCHEMA, FRONT_FRAME, RECTIFIED_FRAME, RGB_FRAME, MASK_STATUS, TORSO_STATUS,
     camera_event, camera_view, obstacle_event,
 )
+from sie_ros2.live_temporal_association_v1 import FRESHNESS, PAIRING, RECENT
 from vision_core.person_localization.torso_core_geometry import TORSO_CORE_POLICY
 
 
@@ -130,9 +131,12 @@ def test_partial_camera_evidence(failure, expected):
         audit["dynamic_shadow_geometry_override"] = {"reason": "diagnostic fallback"}
     elif failure == "foreign_native_clock":
         audit["frame_freshness"]["frames"]["ov9281"]["flags"] = 0
-    row = view(audit, now)
+    row = view(audit, now + 250_000_000)
     assert row["semantic"]["status"] == "AVAILABLE"
     assert row["spatial"]["status"] == expected and row["provisional_entity"] is None
+    if failure == "delta":
+        assert row["spatial"]["reason"] == "ACTUAL_PAIR_TEMPORALLY_INCOMPATIBLE"
+        assert row["timing"]["actual_camera_pair"]["limit_ns"] == 25_000_000
     closed(row)
 
 
@@ -145,12 +149,14 @@ def test_target_loss_hold_and_reacquisition_have_no_cached_geometry():
     lost = camera_audit(now, cycle="cycle-2")
     lost["ar0234_dynamic_target"] = {"disposition": "HELD", "reason": "CURRENT_TARGET_UNAVAILABLE"}
     lost["shadow_rgb_continuity"] = {"status": "HELD", "track_id": "track-1"}
-    held = view(lost, now, stamps)
+    held = view(lost, now + 250_000_000, stamps)
     assert held["semantic"]["status"] == "UNAVAILABLE"
+    assert held["timing"]["ar0234"]["status"] == "AVAILABLE"
+    assert held["timing"]["ar0234"]["reference_age_status"] == "SOURCE_STALE"
     assert held["semantic"]["rgb_track_continuity"]["track_id"] == "track-1"
     assert "component" not in held["spatial"]
     assert held["provisional_entity"] is None
-    now += 100_000_000
+    now += 300_000_000
     reacquired = camera_audit(now, cycle="cycle-3", track="track-2")
     reacquired["shadow_rgb_reacquisition"] = {"status": "HELD_RGB_ID_REACQUIRED", "identity_only": True}
     current = view(reacquired, now, stamps)
@@ -158,19 +164,62 @@ def test_target_loss_hold_and_reacquisition_have_no_cached_geometry():
     assert current["provisional_entity"]["candidate_id"] != first["provisional_entity"]["candidate_id"]
 
 
+@pytest.mark.parametrize("age_ns,ref,expected", [
+    (249_999_999, RECENT, "AVAILABLE"),
+    (250_000_000, RECENT, "AVAILABLE"),
+    (350_000_000, "SOURCE_STALE", "AVAILABLE"),
+    (500_000_000, "SOURCE_STALE", "AVAILABLE"),
+    (500_000_001, "SOURCE_STALE", "STALE"),
+])
+def test_camera_freshness_v2_keeps_step57_reference(age_ns, ref, expected):
+    stamp_ns = 9_940_000_000
+    audit = camera_audit(10_000_000_000, offset_ms=0)
+    row = view(audit, stamp_ns + age_ns)
+    for key, seq in (("ar0234", 10), ("ov9281", 20)):
+        packet = row["timing"][key]
+        assert packet["age_ns"] == age_ns
+        assert packet["source_timestamp_ns"] == stamp_ns and packet["sequence"] == seq
+        assert packet["reference_max_age_ns"] == 250_000_000
+        assert packet["reference_age_status"] == ref
+        assert packet["status"] == expected
+    assert row["semantic"]["status"] == row["spatial"]["status"] == expected
+    assert bool(row["provisional_entity"]) == (expected == "AVAILABLE")
+    closed(row)
+
+
+@pytest.mark.parametrize("future", [False, True])
+def test_invalid_and_future_camera_timestamps_still_fail_closed(future):
+    now = 10_000_000_000
+    audit = camera_audit(now)
+    rgb = audit["frame_freshness"]["frames"]["ar0234"]
+    if future:
+        rgb.update(driver_timestamp_s=10.001, host_packet_received_monotonic_s=10.002,
+                   pair_selected_monotonic_s=10.003)
+    else:
+        rgb["driver_timestamp_s"] = "invalid"
+    row = view(audit, now)
+    assert row["semantic"]["status"] == "REJECTED"
+    assert row["semantic"]["reason"] == ("PAIR_SELECTION_AHEAD_OF_HOST" if future
+                                          else "V4L2_CLOCK_OR_PACKET_UNVERIFIED")
+    assert "reference_age_status" not in row["timing"]["ar0234"]
+    assert row["provisional_entity"] is None
+    closed(row)
+
+
 def test_stale_duplicate_and_later_camera_packets():
     now = 10_000_000_000
     old = camera_audit(now)
-    stale = view(old, now + 250_000_000)
+    stale = view(old, now + 500_000_000)
     assert stale["semantic"]["status"] == "STALE"
     assert stale["semantic"]["observation"]["observation_state"] == "STALE"
     assert stale["provisional_entity"] is None and stale["producer"]["spatial_status"] == "AVAILABLE"
     stamps = {}
     assert view(old, now, stamps)["provisional_entity"]
-    reused = view(deepcopy(old), now + 5_000_000, stamps)
+    reused = view(deepcopy(old), now + 250_000_000, stamps)
     assert reused["semantic"]["status"] == "REUSED" and reused["provisional_entity"] is None
-    newer = camera_audit(now + 70_000_000, cycle="cycle-2")
-    assert view(newer, now + 70_000_000, stamps)["provisional_entity"]
+    assert reused["timing"]["ar0234"]["reference_age_status"] == "SOURCE_STALE"
+    newer = camera_audit(now + 300_000_000, cycle="cycle-2")
+    assert view(newer, now + 300_000_000, stamps)["provisional_entity"]
 
 
 def test_ld19_remains_independent_during_slow_camera_and_replaces_pending(tmp_path):
@@ -233,14 +282,17 @@ def test_ld19_only_duplicates_and_stale_host_receipt(tmp_path):
     now = 10_000_000_000
     session = DiagnosticSession(tmp_path / "ld", "enabled", lambda data: data, lambda data: data, clock=lambda: now)
     try:
-        first, *_ = session.ld19_adapter(laser(5), now - 300_000_000, 1, 1_800_000_000_000_000_000)
+        boundary, *_ = session.ld19_adapter(laser(4), now - 250_000_000, 1, 1_800_000_000_000_000_000)
+        assert boundary["ld19"]["status"] == "AVAILABLE"
+        assert "camera_freshness_policy" not in boundary
+        first, *_ = session.ld19_adapter(laser(5), now - 250_000_001, 2, 1_800_000_000_000_000_000)
         assert first["ld19"]["status"] == "STALE"
         assert first["ld19"]["observation"]["timing"]["header_age_ns"] is None
-        repeated, *_ = session.ld19_adapter(laser(5), now, 2, 1_800_000_000_000_000_000)
+        repeated, *_ = session.ld19_adapter(laser(5), now, 3, 1_800_000_000_000_000_000)
         assert repeated["ld19"]["status"] == "REUSED" and "observation" not in repeated["ld19"]
         bad = laser(6)
         bad.header.frame_id = "wrong"
-        refused, *_ = session.ld19_adapter(bad, now, 3, 1_800_000_000_000_000_000)
+        refused, *_ = session.ld19_adapter(bad, now, 4, 1_800_000_000_000_000_000)
         assert refused["ld19"]["status"] == "REJECTED"
         assert obstacle_event(first["ld19"])["camera_ld19_timing"]["status"] == "NOT_EVALUATED_INDEPENDENT_STREAMS"
     finally:
@@ -254,7 +306,7 @@ def test_baseline_and_enabled_receive_same_sources_with_no_baseline_publications
         session = DiagnosticSession(tmp_path / mode, mode, lambda data: data, lambda data: data,
                                     publish_camera=out.append, publish_ld19=out.append, clock=lambda: now)
         try:
-            source = camera_audit(now)
+            source = camera_audit(now - 240_000_000)
             previous = deepcopy(source)
             session.camera.submit(source)
             session.ld19.submit(laser(1))
@@ -263,6 +315,19 @@ def test_baseline_and_enabled_receive_same_sources_with_no_baseline_publications
         assert source == previous
     assert baseline_out == [] and len(enabled_out) == 2
     base, enabled = [json.loads((tmp_path / mode / "summary.json").read_text()) for mode in ("baseline", "enabled")]
+    camera_policy = {"policy_id": "live-entity-camera-freshness-v2-500ms-TRIAL", "max_age_ns": 500_000_000,
+                     "reference_policy_id": "live-shadow-source-freshness-v1-TRIAL"}
+    assert FRESHNESS.max_rgb_age_ns == FRESHNESS.max_stereo_age_ns == FRESHNESS.max_ld19_ros_header_age_ns == 250_000_000
+    assert PAIRING.max_rgb_stereo_delta_ns == 25_000_000
+    for mode, summary in (("baseline", base), ("enabled", enabled)):
+        row = json.loads((tmp_path / mode / "camera/events.jsonl").read_text())
+        assert row["camera_freshness_policy"] == summary["camera_freshness_policy"] == camera_policy
+        assert summary["timing_policy_ids"]["freshness"] == FRESHNESS.policy_id
+        assert row["source_timing"]["ar0234"]["age_ns"] == 300_000_000
+        assert row["source_timing"]["ar0234"]["status"] == "AVAILABLE"
+        assert row["source_timing"]["ar0234"]["reference_age_status"] == "SOURCE_STALE"
+        assert summary["camera"]["dispositions"]["rgb_reference_age:SOURCE_STALE"] == 1
+        closed(row)
     for lane in ("camera", "ld19"):
         assert base[lane]["input"] == enabled[lane]["input"]
         assert base[lane]["rates"]["ros_output"]["count"] == 0

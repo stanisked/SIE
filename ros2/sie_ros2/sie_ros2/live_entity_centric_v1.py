@@ -12,6 +12,11 @@ from vision_core.stereo.entity_centric_diagnostic_v1 import BOUNDARY, evidence, 
 
 SCHEMA = "sie.live_entity_centric.v1.diagnostic"
 POLICY = "live-entity-centric-v1-TRIAL"
+CAMERA_FRESHNESS_POLICY = {
+    "policy_id": "live-entity-camera-freshness-v2-500ms-TRIAL",
+    "max_age_ns": 500_000_000,
+    "reference_policy_id": FRESHNESS.policy_id,
+}
 CAMERA_INPUT = "/sie/diagnostics/ar0234_ov9281/temporal_shadow_preview"
 CAMERA_SCHEMA = "sie.ar0234_ov9281.control_input_preview.v1"
 CAMERA_OUTPUT = "/sie/diagnostics/entity_centric/camera"
@@ -50,14 +55,17 @@ def packet_timing(frame, source, now_ns, previous_stamp):
             or not 0 < stamp <= receipt <= selection):
         return evidence("REJECTED", "V4L2_CLOCK_OR_PACKET_UNVERIFIED", **provenance)
     stamp_ns, receipt_ns, selection_ns = map(nanoseconds, (stamp, receipt, selection))
+    age_ns = now_ns - stamp_ns
     provenance.update(source_timestamp_ns=stamp_ns, packet_received_monotonic_ns=receipt_ns,
-                      pair_selected_monotonic_ns=selection_ns, age_ns=now_ns - stamp_ns)
+                      pair_selected_monotonic_ns=selection_ns, age_ns=age_ns)
     if selection_ns > now_ns:
         return evidence("REJECTED", "PAIR_SELECTION_AHEAD_OF_HOST", **provenance)
+    reference_limit = FRESHNESS.max_rgb_age_ns if source == "ar0234" else FRESHNESS.max_stereo_age_ns
+    reference_status = classify_source_age(age_ns, reference_limit, FRESHNESS.max_future_skew_ns)
+    provenance.update(reference_max_age_ns=reference_limit, reference_age_status=reference_status)
     if previous_stamp is not None and stamp_ns <= previous_stamp:
         return evidence("REUSED", "DUPLICATE_OR_REVERSED_SOURCE_STAMP", **provenance)
-    limit = FRESHNESS.max_rgb_age_ns if source == "ar0234" else FRESHNESS.max_stereo_age_ns
-    age = classify_source_age(now_ns - stamp_ns, limit, FRESHNESS.max_future_skew_ns)
+    age = classify_source_age(age_ns, CAMERA_FRESHNESS_POLICY["max_age_ns"], FRESHNESS.max_future_skew_ns)
     status = "AVAILABLE" if age == RECENT else ("STALE" if age == "SOURCE_STALE" else "REJECTED")
     return evidence(status, age, **provenance)
 

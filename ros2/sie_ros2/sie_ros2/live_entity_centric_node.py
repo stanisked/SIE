@@ -12,7 +12,7 @@ import time
 
 from .latest_diagnostic_writer import LatestDiagnosticWriter
 from .live_entity_centric_v1 import (
-    BOUNDARY, CAMERA_INPUT, CAMERA_OUTPUT, LD19_OUTPUT, POLICY, SCHEMA,
+    BOUNDARY, CAMERA_FRESHNESS_POLICY, CAMERA_INPUT, CAMERA_OUTPUT, LD19_OUTPUT, POLICY, SCHEMA,
     camera_event, camera_view, evidence, obstacle_event, scan_view,
 )
 from .ld19_diagnostic_evidence import SOURCE_TOPIC
@@ -136,11 +136,11 @@ class DiagnosticSession:
         cycle, semantic, spatial, timing, producer, now = camera_view(audit, self.clock, self.camera_stamps)
         if self.enable:
             row = camera_event(cycle, semantic, spatial)
-            row["source_timing"] = timing
         else:
             row = {**BOUNDARY, "cycle_id": cycle, "semantic_status": semantic["status"],
                    "spatial_status": spatial["status"]}
-        row.update(stream="camera", mode=self.mode, producer=producer)
+        row.update(stream="camera", mode=self.mode, producer=producer, source_timing=timing,
+                   camera_freshness_policy=CAMERA_FRESHNESS_POLICY)
         rgb, stereo = timing["ar0234"], timing["ov9281"]
         rates = {}
         if producer["rgb_inference_completed"] and rgb["status"] in ("AVAILABLE", "STALE"):
@@ -156,6 +156,8 @@ class DiagnosticSession:
             ages[f"{key}_packet_receipt_to_preview"] = None if packet_receipt is None else now - packet_receipt
         statuses = (f"semantic:{semantic['status']}", f"spatial:{spatial['status']}",
                     f"rgb_packet:{rgb['status']}", f"stereo_packet:{stereo['status']}",
+                    f"rgb_reference_age:{rgb.get('reference_age_status', 'UNASSESSED')}",
+                    f"stereo_reference_age:{stereo.get('reference_age_status', 'UNASSESSED')}",
                     f"camera_pair:{timing['actual_camera_pair']['status']}")
         return row, now, rates, statuses, ages
 
@@ -187,6 +189,7 @@ class DiagnosticSession:
         summary = {**BOUNDARY, "schema_version": SCHEMA, "policy_id": POLICY, "mode": self.mode,
                    "camera": self.camera.report(), "ld19": self.ld19.report(),
                    "timing_policy_ids": {"pairing": PAIRING.policy_id, "freshness": FRESHNESS.policy_id},
+                   "camera_freshness_policy": CAMERA_FRESHNESS_POLICY,
                    "pending_capacity_per_stream": 1, "same_host_camera_required": True,
                    "ld19_header_age_at_publication": "UNKNOWN"}
         with (self.directory / "summary.json").open("x", encoding="utf-8") as stream:

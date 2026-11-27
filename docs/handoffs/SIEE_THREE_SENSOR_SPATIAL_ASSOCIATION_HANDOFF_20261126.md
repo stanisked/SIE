@@ -316,7 +316,65 @@ scans. Baseline advertised neither diagnostic output. Enabled published
 replacements. The November 16 Graphify snapshot at `db8097ea` predates
 these paths, so current source files governed implementation.
 
-**OPEN.** The prepared Pi trials are a 30-second static-person trial
-and a subsequent moving-person trial, with comparable baseline and enabled
-runs. Live Pi performance and physical validation remain open. The ESP32
-v13 braking fault remains a separate actuator blocker.
+## Steps 74.2 and 74.3 — Static Pi diagnostics
+
+**FACT / operator report, 2026-11-27.** The original 250 ms companion
+screen classified all 115 working camera observations `STALE`. Both
+trials retained coherent masked depth throughout their working camera
+cycles. The operator reported maximum driver-declared ages below 500 ms.
+
+| Metric | Step 74.2 Static Baseline | Step 74.3 Static Enabled |
+| --- | ---: | ---: |
+| Working camera cycles | 49 | 66 |
+| Coherent masked depth | 49/49 | 66/66 |
+| RGB producer Hz | 2.993832 | 3.271951 |
+| RGB–Stereo spatial producer Hz | 2.993817 | 3.271847 |
+| LD19 callbacks | 309 | 307 |
+| LD19 callback Hz | 9.903604 | — |
+| LD19 obstacle updates | — | 307 |
+| LD19 obstacle update Hz | — | 9.871155 |
+| Camera observations classified `STALE` | 49/49 | 66/66 |
+| Camera diagnostic publications | — | 66 |
+| Provisional entity candidates | — | 0 |
+| Mean camera callback-to-preview, approx. ms | 1.003 | 1.108 |
+| Mean LD19 callback-to-preview, approx. ms | 0.714 | 4.443 |
+| Maximum LD19 callback-to-preview, ms | — | 51.128 |
+| Pending replacements | 0 | 0 |
+| Processing and publication errors | 0 | 0 |
+
+The operator reported the baseline directory
+`/home/elwis/.local/state/sie/evidence/live_entity_baseline_vmzor4IV`
+and enabled directory
+`/home/elwis/.local/state/sie/evidence/live_entity_enabled_OG20l4Ps`.
+
+| Artifact | Baseline reported SHA-256 | Enabled reported SHA-256 |
+| --- | --- | --- |
+| `preview/summary.json` | `cb1b0d99dd77374159d374e43630658b446acb5e9d9dc904249defbab1f13373` | `d1e3727824aa13f569135d12a6d91fcd0ba624c485de22a499ed14170ce05338` |
+| `preview/camera/events.jsonl` | `da24f4ba8e7b561a3eb2fd1f2f31d36971b2128f3e0f7c3938f018b508412d7d` | `939cec6d8f38bfdf6d19c4be03689a0f8ef8b6fde1f2100c8d71874bc97f4362` |
+| `preview/ld19/events.jsonl` | `9063b0067af5388c8947f5cb44b2acac52a7954b5ebe544f63b8eb569dbe82b5` | `68624f9e60d9f0ecaeda740faaec1ec3ce29339ede8fe7f7229e7647525eb121` |
+
+**FACT / interpretation of operator report.** Step 74.3 partially passed.
+Independent live LD19 diagnostic processing passed on the Pi. Camera
+freshness blocked provisional entities. No camera throughput degradation
+was observed in this single comparison. A throughput improvement and
+physical camera exposure and laser acquisition timing remain unverified.
+The underlying artifacts were unavailable locally for independent review.
+
+## Step 74.3a — Diagnostic camera freshness policy v2
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** Apply the inclusive 500 ms
+`live-entity-camera-freshness-v2-500ms-TRIAL` to AR0234 and OV9281 in the
+opt-in companion's baseline and enabled modes. Retain the original 250 ms
+camera age reference explicitly in both modes. Preserve the Step 57
+policy, 25 ms RGB–Stereo skew, 250 ms LD19 local receipt screen, and all
+existing admission, authorization, and safety boundaries. This is a
+diagnostic trial policy only.
+
+**FACT / software verification.** 295 targeted tests and seven subtests
+passed. The companion reports the applied policy and reference dispositions
+in both modes. The 500 ms boundary, stale and future data, held and reused
+observations, and the unchanged Step 57 and LD19 limits were exercised.
+
+**OPEN.** Step 74 remains open pending the 30-second Static Enabled retest
+with v2. The ESP32 v13 braking fault remains a separate actuator blocker.
+[Pinned-worktree deployment and validation commands](../diagnostics/live_entity_centric_integration_v1.md#raspberry-pi-deployment-and-validation-commands)
