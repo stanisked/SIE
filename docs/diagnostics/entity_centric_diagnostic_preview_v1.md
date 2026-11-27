@@ -155,3 +155,10 @@ Pi replay produced 17 provisional camera entity candidates and 52 independent
 LD19 observations. LD19 entity membership remained unresolved. The reported
 counts are per-cycle evidence dispositions.
 [Step 73.4 results, limits, and hashes](../handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-734--offline-entity-integration-complete)
+
+## Step 74 live companion
+
+The [Step 74 live diagnostic](live_entity_centric_integration_v1.md) reuses
+the source-local Step 73 integration and adds separate ROS observers for
+the existing camera audit and LD19 scan. Step 73 replay behavior and its
+full-resolution spatial semantics remain unchanged.

@@ -294,3 +294,29 @@ acquisition time remains `UNKNOWN`, and physical camera exposure timing
 is independently unverified. These results are operator-reported. LD19
 membership, live performance, independent safety, and autonomous
 navigation remain unvalidated. The ESP32 v13 braking fault is separate.
+
+## Step 74 — Live entity-centric integration v1
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** Use a separate opt-in diagnostic
+companion for the existing perception pipeline. Retain two independent
+latest-wins paths for camera entities and LD19 obstacles.
+
+**FACT.** The companion consumes the live camera audit and LD19 LaserScan.
+It preserves the live spatial estimate's method and datum, with no
+additional camera capture, inference, tracker, stereo reconstruction,
+or cross-sensor wait. Camera target loss leaves LD19 observations
+independent. The isolated String topics have disabled admission and
+execution flags. [Interface, evidence, and exact Pi commands](../diagnostics/live_entity_centric_integration_v1.md)
+
+**FACT / software verification.** 247 targeted tests and seven subtests
+passed, including 16 Step 74 cases. The localhost ROS 2 Lyrical smoke test
+used only generated data. Both modes received 20 camera audits and 60
+scans. Baseline advertised neither diagnostic output. Enabled published
+20 camera entities and 60 independent obstacle updates with zero pending
+replacements. The November 16 Graphify snapshot at `db8097ea` predates
+these paths, so current source files governed implementation.
+
+**OPEN.** The prepared Pi trials are a 30-second static-person trial
+and a subsequent moving-person trial, with comparable baseline and enabled
+runs. Live Pi performance and physical validation remain open. The ESP32
+v13 braking fault remains a separate actuator blocker.
