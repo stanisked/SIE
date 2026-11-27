@@ -20,6 +20,11 @@ Use the [Mission and Practical Intelligence Principles](../../PROJECT_CONTEXT.md
 
 ## 2026-11-27: MVP continuation checkpoint
 
+**DECISION — 2026-11-27.** Close the offline entity integration stage as
+`ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately
+opt-in Step 74 live diagnostic with existing admission and safety boundaries.
+[Step 73.4 Pi results and evidence limits](SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-734--offline-entity-integration-complete)
+
 **DECISION.** The owner closed the fundamental architecture discussion phase
 for the current MVP and approved returning to practical MVP development.
 [Fundamental Architecture Baseline](../../PROJECT_CONTEXT.md#fundamental-architecture-baseline)

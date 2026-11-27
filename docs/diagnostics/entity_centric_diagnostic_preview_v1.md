@@ -146,3 +146,12 @@ SSH attempt failed authentication. No primary-data replay or independent
 check of those hashes was performed here. LD19 physical target membership
 remains unverified. Physical validation is a separate step. The ESP32 v13
 braking fault remains a separate actuator blocker.
+
+## Step 73 closure
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.**
+`ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. The operator's Step 73.4
+Pi replay produced 17 provisional camera entity candidates and 52 independent
+LD19 observations. LD19 entity membership remained unresolved. The reported
+counts are per-cycle evidence dispositions.
+[Step 73.4 results, limits, and hashes](../handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-734--offline-entity-integration-complete)

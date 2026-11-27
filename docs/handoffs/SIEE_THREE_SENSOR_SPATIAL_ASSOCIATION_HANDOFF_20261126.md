@@ -240,3 +240,57 @@ replay was performed. The Graphify report and graph hash were checked
 against the 2026-11-16 `db8097ea` snapshot. That snapshot predates Step 71
 and Step 73.3, so current sources governed implementation. The ESP32 v13
 braking fault remains a separate actuator blocker.
+
+## Step 73.4 — Offline entity integration complete
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.**
+`ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Continue to the opt-in live
+diagnostic in Step 74.
+
+**FACT / operator report.** The Raspberry Pi 5 deployment HEAD was
+`1862677368308b2d4d2a2de72a0d817bdb8dfdd5`. Git preflight and all three
+Step 72 replay evidence hash checks passed.
+
+| Metric | Reported value |
+| --- | ---: |
+| Source cycles | 54 |
+| Diagnostic rows | 54 |
+| Camera snapshots | 18 |
+| Current semantic candidates | 53 |
+| Spatial evidence | 17 |
+| Provisional entity candidates | 17 |
+| Independent LD19 obstacle observations | 52 |
+| Unique LD19 scans | 52 |
+| Valid LD19 return instances | 22290 |
+| LD19 entity associations | 0 |
+| `ENTITY_MEMBERSHIP_UNRESOLVED` | 17 |
+| Association unavailable | 37 |
+| Surface-Level `NO_CANDIDATES` | 15 |
+| Surface-Level `REJECTED` | 39 |
+| Spatial snapshot unavailable | 36 |
+| Actual camera pair not bound at zero wait | 1 |
+| Standalone LD19 records | 0 |
+| Offline wall time | 36902156068 ns |
+
+The 36 unavailable spatial rows reflect bounded recording coverage. The
+17 provisional candidates are per-cycle results with physical identity
+unresolved. The offline wall time includes input reads, reconstruction,
+and output writes. Live latency remains unmeasured.
+
+The operator reported the evidence directory
+`/home/elwis/.local/state/sie/evidence/live_temporal_shadow_iWIjW8zB_step73_20261127T082006Z_1318`
+and these SHA-256 digests.
+
+| Artifact | Operator-reported SHA-256 |
+| --- | --- |
+| `summary.json` | `0524a558609c5d5192dbbdfe6df801165979dc06e37a3d57c7cd3babdd22b405` |
+| `cycles.jsonl` | `e809651628e155e9b4c54ed1f49fef089c278f8cc01d28ad683b97695803b166` |
+| `processing_cost.json` | `70d0b213e41267dfd80d0efc4f4dc68c682aa3524c78ad9f367c26cc97805a76` |
+| Source temporal journal | `deee8832f29c5c8761c8811a3b9042430c397a338355b752881a99cd1b3b9eff` |
+
+The recorded policy was `entity-centric-preview-v1-TRIAL`. The operator
+reported all admission and authorization flags false. Physical laser
+acquisition time remains `UNKNOWN`, and physical camera exposure timing
+is independently unverified. These results are operator-reported. LD19
+membership, live performance, independent safety, and autonomous
+navigation remain unvalidated. The ESP32 v13 braking fault is separate.
