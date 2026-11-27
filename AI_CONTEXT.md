@@ -94,6 +94,8 @@ The owner-approved [Fundamental Architecture Principles](PROJECT_CONTEXT.md#fund
 
 The owner-approved [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowledge-architecture-principles) define Knowledge, distinguish its categories, and describe how SIE identifies and fills a knowledge gap within the existing evidence and authorization boundaries.
 
+The owner-approved [Responsible Autonomy and Decision Governance Principles](PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) define how safety, binding constraints, authorization, and human oversight govern autonomous decisions. Apply them within the existing ARCH-006 responsibilities and runtime safety boundaries.
+
 ## Mission
 
 SIE is an engineering architecture for Spatial Intelligence.

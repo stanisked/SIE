@@ -14,6 +14,8 @@ The [Fundamental Architecture Principles](../../PROJECT_CONTEXT.md#fundamental-a
 
 The [Knowledge Architecture Principles](../../PROJECT_CONTEXT.md#knowledge-architecture-principles) describe knowledge sufficiency and information acquisition.
 
+The [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) govern future decision and execution designs. Any supervised trial remains subject to its recorded authorization and safety boundaries.
+
 ## 2026-11-26: Step 70 local correspondence freeze
 
 **FACT / operator report** Step 67 and Step 68 yielded 377 coherent local

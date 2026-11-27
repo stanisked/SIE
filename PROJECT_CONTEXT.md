@@ -1137,6 +1137,101 @@ tasks and outcomes. The Decision Engine retains decision responsibility.
 [Spatial Model](docs/architecture/SIE_SPATIAL_MODEL.md) ·
 [Evidence Graph](docs/architecture/SIE_EVIDENCE_GRAPH.md)
 
+## Responsible Autonomy and Decision Governance Principles
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** These requirements apply across
+the SIE architecture and to all future products, robotic platforms, executors,
+and autonomous systems operating under SIE.
+
+> **SIE possesses autonomy in selecting means to achieve assigned goals, but does not possess unrestricted authority to determine the admissibility of its own actions. Every decision must comply with human safety requirements, ethical and legal norms, social and cultural context, established authorization boundaries, and preserve human oversight.**
+
+### Eight fundamental principles
+
+1. **Human Safety First.** Human life, health, and physical integrity take
+   precedence over task completion and optimization.
+2. **Ethics by Design.** Integrate ethical and legal constraints into the
+   architecture as binding requirements. Respect human dignity, rights,
+   freedom, and privacy.
+3. **Cultural and Social Awareness.** Account for applicable social norms,
+   cultural context, and individual preferences. Human rights and mandatory
+   safety requirements remain binding across cultural contexts. Appearance,
+   presumed nationality, or ethnicity alone are insufficient evidence of an
+   individual's cultural preferences. When preferences are unknown, behave
+   respectfully and neutrally or ask for clarification.
+4. **Bounded Autonomy.** Autonomous decision-making and execution remain within
+   explicitly established authorization boundaries. Intelligence is the ability
+   to understand a situation and reason about what to do. Autonomy is the ability
+   to select means to achieve assigned goals. Authority defines which actions are
+   permitted. An action requires authorization even when the system is capable
+   of performing it.
+5. **Independent Decision Validation.** Evaluate the admissibility of a
+   proposed decision independently of the mechanism that generates it.
+   Mandatory validation requirements apply regardless of the goal. `APPROVE`,
+   `REVIEW`, and `REJECT` describe conceptual outcomes only.
+6. **Human Oversight.** Through established authorization mechanisms,
+   authorized humans can stop execution, cancel tasks, restrict permissions,
+   inspect decision rationale, and modify applicable instructions. SIE must
+   comply with authorized shutdown, keep its actions visible to authorized
+   oversight, and respect human intervention as a requirement throughout
+   execution.
+7. **Accountability and Explainability.** Make decisions justifiable,
+   traceable, and available for review. Preserve relevant facts, evidence
+   references, applicable rules, authorization context, and decision rationale.
+8. **Non-Self-Authorization.** Any expansion of authority requires established
+   authorization. SIE must preserve oversight, independent validation, and
+   mandatory constraints while pursuing an objective.
+
+### Decision priority hierarchy
+
+1. Human Safety.
+2. Ethical and Legal Compliance.
+3. Social and Cultural Context.
+4. Authority and Authorization.
+5. Task and Goal.
+6. Efficiency and Optimization.
+
+Lower-priority objectives are admissible only within mandatory higher-priority
+constraints. Apply all independently binding legal, ethical, and authorization
+requirements regardless of their position in this hierarchy.
+
+### Conceptual decision governance
+
+- **Decision formation.** Under [ARCH-006](docs/architecture/SIE_RULES.md#arch-006),
+  the Decision Engine retains responsibility for forming decisions using
+  modeled-world facts from World State, Knowledge Engine rules, and Task
+  Evaluator outputs.
+- **Independent admissibility validation.** The proposed decision is assessed
+  against applicable mandatory constraints independently of its formation.
+- **Authorized execution.** Execution proceeds within established permissions,
+  subject to the applicable validation and safety requirements.
+- **Independent runtime safety and interruption.** Collision avoidance and
+  emergency safety behavior operate independently of successful semantic
+  interpretation and Decision Engine approval.
+
+Unresolved conflicts, missing authorization, or insufficient knowledge require
+clarification, additional evidence, a safe alternative, or refusal as appropriate.
+The [Knowledge Architecture Principles](#knowledge-architecture-principles)
+govern information acquisition. The [Evidence Graph](docs/architecture/SIE_EVIDENCE_GRAPH.md)
+preserves decision traceability. The engineering solution selection order in
+[ES-003](docs/architecture/SIE_ENGINEERING_PRINCIPLES.md#8-engineering-decision-order)
+continues to apply within these governance requirements.
+
+**Implementation status.** The separation and validation outcomes above are
+approved architectural concepts. Implementation and experimental validation of
+Independent Decision Validation are outside this freeze. Existing software
+ownership, interfaces, Data Contracts, runtime states, authorization, and
+admission paths retain their approved definitions and behavior.
+
+### Knowledge Architecture integration
+
+**PROPOSAL.** Ethical, Social and Cultural Knowledge is a proposed subject
+area within Domain Knowledge. It may cover applicable ethical constraints,
+legal requirements, social norms, cultural context, communication rules, and
+interaction preferences. The four approved knowledge categories and the
+Knowledge Engine boundary under [ARCH-010](docs/architecture/SIE_RULES.md#arch-010)
+still apply. Keep approved general knowledge distinct from verified situational
+facts about a specific person, including that person's preferences.
+
 ## Current product direction
 
 The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIE. **Canonical dynamic fusion diagnostics exclude mobile-base navigation and motor control.** A separate supervised bounded trial is recorded in the current checkpoint; it grants no autonomous or canonical motion admission. No output of the current dynamic fusion diagnostic may authorize motion.
@@ -1684,6 +1779,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-27 | Froze the owner-approved Responsible Autonomy and Decision Governance Principles, including the priority hierarchy and conceptual separation of decision formation, admissibility validation, authorized execution, and runtime safety. |
 | 2026-11-26 | The owner froze SIE (Spatial Intelligence Engine, pronounced SEE) as the canonical project, architecture, and product name. SIEE remains the historical designation of the earlier experimental stage. |
 | 2026-11-14 | Registered the read-only command `восстанови память SIEE` for cross-chat engineering-context recovery. The command reads current primary sources and gives a cited continuation summary; it does not update documents, regenerate Graphify, or run Pi/hardware. This change is documentation-only. |
 | 2026-11-14 | Extended both equivalent operator commands (`обнови документ`, `обновить документ`) to update `PROJECT_CONTEXT.md` and `SIEE_GRAPHIFY_MVP_HANDOFF_20261112.md` as one coordinated maintenance action. Both documents must match their respective original private Drive files; Graphify extraction remains manual. No new hardware, calibration, Measurement, or motion results claimed. |

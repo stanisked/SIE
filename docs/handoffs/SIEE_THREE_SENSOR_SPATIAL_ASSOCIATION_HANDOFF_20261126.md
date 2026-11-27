@@ -16,6 +16,8 @@ The handoff path and linked evidence retain their historical identifiers.
 
 For distinguishing candidate associations from established facts and determining when further information is needed, see the [Knowledge Architecture Principles](../../PROJECT_CONTEXT.md#knowledge-architecture-principles).
 
+Use the [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) when reviewing any future proposal to use this diagnostic evidence in a decision or execution path.
+
 ## Source and frame inventory
 
 - **FACT** The camera audit node projects AR0234 rays into physical-left and

@@ -21,6 +21,8 @@ SIE integrates observations from heterogeneous information sources into a single
 
 SIE is designed for industrial robotics, construction, manufacturing, logistics and other domains where decisions must be based on measurable reality.
 
+The [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) distinguish decision formation under ARCH-006, independent admissibility validation, authorized execution, and independent runtime safety and interruption.
+
 ---
 
 # 2. What SIE is

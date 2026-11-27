@@ -77,6 +77,8 @@ Apply the owner-approved [Fundamental Architecture Principles](PROJECT_CONTEXT.m
 
 Apply the [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowledge-architecture-principles) when documenting or reviewing interpretation and information acquisition. Preserve evidence requirements, existing module ownership, and authorization and safety gates.
 
+Apply the [Responsible Autonomy and Decision Governance Principles](PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) when reviewing proposed decisions and execution paths. Check authorization and human oversight, and preserve independent runtime safety.
+
 ## Canonical information flow
 
 ```text

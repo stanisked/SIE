@@ -33,6 +33,8 @@ The [Fundamental Architecture Principles](PROJECT_CONTEXT.md#fundamental-archite
 
 The [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowledge-architecture-principles) define Knowledge and its categories and describe how SIE handles insufficient information.
 
+The [Responsible Autonomy and Decision Governance Principles](PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) establish the safety, authorization, and human oversight requirements for how SIE pursues assigned goals.
+
 ## Engineering Principles
 
 - Geometry First - spatial reasoning begins with geometry and physical constraints.
