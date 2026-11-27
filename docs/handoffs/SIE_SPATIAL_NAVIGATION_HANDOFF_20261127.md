@@ -404,7 +404,31 @@ or calibration artifacts changed.
 validator. Unavailable intervals preserve the prior pose with an explicit
 discontinuity. Accepted odometry and TF share the ROS receipt stamp.
 UART ownership and navigation admission remain separate from the
-actuator path. [Implementation and proposed motor-off smoke check](../diagnostics/wheel_odometry_v1.md)
+actuator path. [Implementation and software verification](../diagnostics/wheel_odometry_v1.md)
 
-**OPEN.** Pi deployment, loaded odometry validation, and Step 75.3d require
-separate approval. The v13 braking defect remains open for Step 76.
+## Step 75.3c motor-off ROS wheel odometry qualified
+
+**DECISION — OWNER_APPROVED INTEGRATION, 2026-11-27.** Step 75.3c closes as
+`ROS_WHEEL_ODOMETRY_MOTOR_OFF_QUALIFIED`. The implementation commit is
+`e9820ad66442b9f5539b6a8f14b768d2447797ae`.
+
+**FACT — operator-reported Step 75.3c.1 integration.** The initial attempt
+remains `BLOCKED` after a UART STATUS timeout before adapter launch. UART
+recovered and the retry passed using the verified existing deployment on
+Pi 5 with ROS 2 Jazzy and ESP32 boot `5144699EFD0B1E9B`. The initial
+timeout and the boot change from `E41B90553131A237` have unverified physical
+causes. The 32-second retry included 290 matching steady-state odometry/TF
+pairs with stable stationary counts, zero pose and twist extrema, and about
+9.09 Hz output. The adapter shut down cleanly and released UART. The operator
+reported that all 14 retry evidence file checksums passed.
+[Both attempts, timing, and evidence provenance](../diagnostics/wheel_odometry_v1.md#step-753c-motor-off-integration-closure)
+
+**OPEN.** Physical odometry accuracy and powered-motion telemetry
+performance remain unqualified. Effective wheel scales and track width
+remain provisional. Navigation admission remains false. The earlier
+unexplained ESP32 boot ID change and the v13 braking defect remain open.
+
+**PROPOSAL — Step 75.3d.** Validate translation and heading with motor-off
+manual floor traverses and turns against independent position and heading
+references. Execution requires separate approval.
+[Proposed procedure](../diagnostics/wheel_odometry_v1.md#step-753d-proposal-for-independent-physical-odometry-validation)

@@ -28,7 +28,7 @@ LD19 obstacle updates. These are diagnostic results under the 500 ms camera
 trial policy. Admission and execution boundaries remain in force.
 [Step 74.5 results, checksums, and limits](SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-745--live-entity-centric-diagnostic-integration-complete)
 
-**DECISION — OWNER_APPROVED, 2026-11-27.** Step 75.2 is complete as `NAVIGATION_PREFLIGHT_COMPLETE_ODOMETRY_IMPLEMENTATION_REQUIRED`. Start Step 75.3a, software-only independent cumulative signed wheel encoder telemetry, preserving v13 command-local counters, braking and safety. Pi preflight found the sole LD19 publisher, no visible odom/TF/map, and no visible Nav2 or SLAM Toolbox. Saved v13 evidence confirms signed command-local pairs, not continuous timestamped odometry. No flash, reset, motion or admission changes are authorized. [Current navigation handoff and next task](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-752-closure-and-step-753-owner-decision-2026-11-27)
+**DECISION — OWNER_APPROVED, 2026-11-27.** Step 75.2 is complete as `NAVIGATION_PREFLIGHT_COMPLETE_ODOMETRY_IMPLEMENTATION_REQUIRED`. Start Step 75.3a, software-only independent cumulative signed wheel encoder telemetry, preserving v13 command-local counters, braking and safety. Pi preflight found the sole LD19 publisher, no visible odom/TF/map, and no visible Nav2 or SLAM Toolbox. Saved v13 evidence confirms signed command-local pairs, not continuous timestamped odometry. No flash, reset, motion or admission changes are authorized by that decision. [Step 75.2 closure and original Step 75.3 decision](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-752-closure-and-step-753-owner-decision-2026-11-27)
 
 **DECISION — OWNER_CONFIRMED.** Step 75.3b is closed as
 `WHEEL_ENCODER_TELEMETRY_QUALIFIED_MOTOR_OFF`. v15 is the deployed diagnostic
@@ -38,12 +38,15 @@ manual trials remain part of the evidence. The v13 braking defect remains
 open. Loaded wheel scale and odometry accuracy remain unverified.
 [Step 75.3b results and limits](../diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure)
 
-**DECISION / FACT — Step 75.3c software.** The standalone ROS 2 adapter
-implements v15 read-only wheel odometry and configurable `odom → base_link`.
-The provisional effective diameters are distinct from the measured physical
-diameters. Pi deployment, physical odometry validation, and navigation
-admission remain outside this software step.
-[Step 75.3c implementation and verification](../diagnostics/wheel_odometry_v1.md)
+**DECISION — OWNER_APPROVED INTEGRATION.** Step 75.3c is closed as
+`ROS_WHEEL_ODOMETRY_MOTOR_OFF_QUALIFIED`. The operator reported a stationary
+Pi 5/Jazzy retry pass with 290 matching steady-state odometry/TF pairs and
+zero pose and twist extrema. The first attempt remains `BLOCKED` in the
+evidence record. Physical odometry accuracy and powered-motion telemetry
+remain unqualified. Wheel scale and track width remain provisional, and
+navigation admission remains false.
+[Step 75.3c results and limits](../diagnostics/wheel_odometry_v1.md#step-753c-motor-off-integration-closure) ·
+[Step 75.3d proposal, pending separate approval](../diagnostics/wheel_odometry_v1.md#step-753d-proposal-for-independent-physical-odometry-validation)
 
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately

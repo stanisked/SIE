@@ -151,14 +151,16 @@ python3 -m py_compile ros2/sie_ros2/{setup.py,launch/wheel_odometry.launch.py,si
 git diff --check
 ```
 
-**OPEN.** The private Pi evidence files were unavailable locally and the
-read-only SSH probe timed out. No physical-log replay, Jazzy runtime test,
-Pi deployment, or hardware test was performed.
+**FACT — software verification scope.** The private Pi evidence files were
+unavailable locally and the read-only SSH probe timed out. Software
+verification ended before physical-log replay, Jazzy runtime testing, or Pi
+deployment. The subsequent Pi integration is recorded below.
 
-## Proposed motor-off integration verification
+## Motor-off integration verification procedure
 
-**PROPOSAL — separate authorization required.** On Pi 5, confirm physical
-traction power is disconnected and keep both wheels stationary. Stop
+**FACT — original smoke-check procedure.** Under separate authorization on
+Pi 5, confirm physical traction power is disconnected and keep both wheels
+stationary. Stop
 motion runners and independent UART readers. Keep the ROS graph isolated
 from other dynamic TF or odometry publishers. Use a new evidence directory.
 The repo checkout supplies the existing firmware codec on `PYTHONPATH`.
@@ -191,6 +193,115 @@ shows the first baseline and the actual sample intervals. Stop the adapter
 and hash the evidence. No flash, reset, manual movement, or fault clearing
 is needed for this smoke check.
 
-**OPEN.** Step 75.3d physical odometry validation requires separate approval.
-The earlier unexplained ESP32 boot ID change remains open. The v13 braking
-defect remains open for Step 76.
+## Step 75.3c motor-off integration closure
+
+**DECISION — OWNER_APPROVED INTEGRATION, 2026-11-27.** Close Step 75.3c as
+`ROS_WHEEL_ODOMETRY_MOTOR_OFF_QUALIFIED` based on the Step 75.3c.1
+stationary integration retry with traction power physically disconnected.
+The implementation was `e9820ad66442b9f5539b6a8f14b768d2447797ae` on
+Raspberry Pi 5, Ubuntu 24.04.5 LTS, and ROS 2 Jazzy, with firmware
+`v4_2_uart_shadow_v15_cumulative_encoder_telemetry`.
+
+**FACT — operator-reported initial attempt, BLOCKED.** Evidence remains at
+`/home/elwis/.local/state/sie/evidence/step75_3c_1_integration.4sj1ufww`.
+Jazzy dependency checks and the build passed. The UART STATUS request timed
+out before the adapter launched. The operator reported Pi battery depletion
+and shutdown. UART subsequently recovered, and the observed ESP32 boot ID
+changed from `E41B90553131A237` to `5144699EFD0B1E9B`. The precise physical
+cause of the boot change and initial timeout remains unverified.
+
+**FACT — operator-reported retry, PASS.** Evidence is at
+`/home/elwis/.local/state/sie/evidence/step75_3c_1_integration.0mm3614j`.
+Deployment mode was `VERIFIED_REUSE`. The retry used boot
+`5144699EFD0B1E9B`. The private Pi artifacts and their SHA-256 digests
+below were reported by the operator and were unavailable for independent
+inspection.
+
+| Qualification metric | Reported result |
+| --- | --- |
+| Qualification window | 32 s |
+| ROS header span | 31.789687958 s |
+| Matching steady-state odometry/TF pairs | 290 |
+| Steady-state encoder samples | 290 |
+| Total decoded encoder samples | 347 |
+| Total UART attempts | 348 |
+| Journal dispositions | `BASELINE` 1, `FIRMWARE_VERIFIED_AWAITING_SAMPLE` 1, `VALID` 346 |
+| Total subscriber messages | 301 odometry, 301 TF, 303 diagnostics |
+| Refusals | None |
+| Stationary cumulative encoder totals | Right −27 ticks, left −17 ticks |
+| Pose extrema | X, Y, and yaw all zero |
+| Twist extrema | Linear and angular all zero |
+
+| Measured stream | Rate (Hz) |
+| --- | ---: |
+| ESP32 samples | 9.091194781490616 |
+| Odometry | 9.090998325677871 |
+| TF | 9.090998325677871 |
+| UART polling | 9.090911839630218 |
+
+| Measured interval | Median (ms) | Maximum (ms) |
+| --- | ---: | ---: |
+| UART request to host receipt | 38.327366 | 39.169264 |
+| Host UART receipt to odometry subscriber | 1.429258 | 1.961948 |
+| Host UART receipt to TF subscriber | 2.1818625 | 2.801756 |
+
+These latencies describe host transactions and message delivery. The physical
+measurement epoch relative to the host and hardware clock synchronization
+remain unverified.
+
+**FACT — operator-reported shutdown and integrity.** Shutdown was
+`SIGINT_CLEAN` with adapter exit code 0. Publishers were removed and no
+UART owners remained. The operator reported that all 14 evidence file
+checksums passed.
+
+| Primary evidence file | Operator-reported SHA-256 |
+| --- | --- |
+| `qualification.json` | `74159e644f6d3dc89e0d11223a4a9a684b3778092d45fff68ce5c1606dfaa312` |
+| `wheel_odometry.jsonl` | `1b13e97f2b18252ba1642583724011171cc6980e7a75270a4569ae4724825107` |
+| `odometry_samples.jsonl` | `d3a7ce5e1bba1a604782f2e00cd17a8b22110b575577ac2193a86028fa527e93` |
+| `tf_samples.jsonl` | `eb60a32ba399d3a57003869707f092ea9e850af7c388285e0147c4de84338ce5` |
+| `diagnostics.jsonl` | `b87e82e6679839f0930c835458fbbde23d1860416887d71891cd1aa06e83ccad` |
+
+**OPEN.** Physical displacement, heading accuracy, and powered-motion
+telemetry performance remain unqualified. The physical wheel diameters are
+0.068 m on both sides. The effective diameters of 0.0646 m right and 0.0652 m
+left and the 0.290 m track width remain provisional for odometry. The earlier
+unexplained ESP32 change from `3BBA9D5615754514` to `BCC97F6E304A8459`
+remains open, separately from the boot change above. The v13 braking defect
+remains open for Step 76. Navigation admission remains false.
+
+## Step 75.3d proposal for independent physical odometry validation
+
+**PROPOSAL — separate owner approval required.** Evaluate endpoint accuracy
+during slow manual floor motion with traction power physically disconnected.
+Use the existing configuration and the isolated diagnostic ROS graph.
+Keep motion runners disabled and log the firmware identity, boot ID,
+configuration, ROS graph, continuity, and stationary samples before and
+after each trial. Stop and preserve evidence on an unexpected boot ID,
+continuity loss, controller fault, or loss of a physical reference.
+
+1. On a level floor, lay out orthogonal axes using a tape measure and floor
+   marks. Use two fixed chassis marks with a measured baseline to determine
+   heading, and measure their offsets to the drive-axle midpoint used for
+   the comparison. Mark the floor projections before and after each trial.
+   Repeat static reference readings to estimate position and heading
+   uncertainty from marker placement, projection, and measurement resolution.
+2. Repeat slow manual forward and backward straight traverses of about 1 m,
+   and repeat slow manual left and right turns of about 90 degrees. Use the
+   floor marks to guide the operator. Record the actual endpoint position
+   and heading in each trial, including translation during turns. Record
+   the floor surface, visible slip, and handling disturbances alongside
+   the reference measurements.
+3. Use each trial's stationary start to align odometry and the physical
+   reference. Compare signed longitudinal and lateral displacement and
+   wrapped signed heading change against the independently measured
+   endpoints. Report per-trial signed errors and repeatability with the
+   reference uncertainty. Preserve floor measurements, trial markers, ROS
+   odometry and TF, encoder journals, and rejected trials with reasons and
+   checksums.
+
+Agree on trial counts and accuracy criteria before execution. Keep wheel
+scales and track width fixed through the validation. Evaluating any later
+parameter fit would require new reference trials. This experiment addresses
+motor-off endpoint accuracy on the tested surface. Powered accuracy,
+long-term drift, and navigation admission remain outside its scope.

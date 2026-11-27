@@ -40,7 +40,7 @@ The [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowledge-architectur
 
 The [Responsible Autonomy and Decision Governance Principles](PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) establish the safety, authorization, and human oversight requirements for how SIE pursues assigned goals.
 
-The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) indexes the approved principles, including experience-based learning. The [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) describes the mobile platform objective. The [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-753b--motor-off-wheel-encoder-telemetry-qualified) records the current navigation checkpoint.
+The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) indexes the approved principles, including experience-based learning. The [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) describes the mobile platform objective. The [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-753c-motor-off-ros-wheel-odometry-qualified) records the current navigation checkpoint.
 
 ## Engineering Principles
 
