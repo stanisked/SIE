@@ -28,6 +28,9 @@ LD19 obstacle updates. These are diagnostic results under the 500 ms camera
 trial policy. Admission and execution boundaries remain in force.
 [Step 74.5 results, checksums, and limits](SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-745--live-entity-centric-diagnostic-integration-complete)
 
+**PROPOSAL.** Step 75.2 is the read-only Pi navigation and odometry-input
+preflight. [Step 75.1 audit and preflight commands](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-752-exact-read-only-pi-preflight)
+
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately
 opt-in Step 74 live diagnostic with existing admission and safety boundaries.

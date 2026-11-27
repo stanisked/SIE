@@ -449,3 +449,6 @@ reference remained unsatisfied. Physical acquisition synchronization, LD19
 entity membership, complete target pose, navigation safety, and motion
 authorization remain unverified. All admission and execution authorization
 flags remain false. The ESP32 v13 braking fault remains a separate blocker.
+
+Step 75.1 records the source audit and the proposed read-only Step 75.2
+preflight. [Spatial Navigation handoff](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md)
