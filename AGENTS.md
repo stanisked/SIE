@@ -53,10 +53,9 @@ or run code, ROS, cameras or motors. Only the separate `обнови докум�
 
 ## SIE project identity and purpose
 
-**SIE** is short for **Spatial Intelligence Engine**, pronounced **SEE**. Its purpose
-is to turn heterogeneous observations of the physical world into a continuously
-updated, evidence-backed world model and to use that model for reliable
-engineering decisions and safe actions.
+**SIE** is short for **Spatial Intelligence Engine**, pronounced **SEE**. SIE turns
+heterogeneous observations of the physical world into a continuously updated,
+evidence-backed world model for reliable engineering decisions and safe actions.
 
 Use SIE in current and future documentation. Preserve SIEE where it identifies
 the historical experimental stage in evidence and development records. Keep
@@ -78,6 +77,8 @@ Apply the owner-approved [Fundamental Architecture Principles](PROJECT_CONTEXT.m
 Apply the [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowledge-architecture-principles) when documenting or reviewing interpretation and information acquisition. Preserve evidence requirements, existing module ownership, and authorization and safety gates.
 
 Apply the [Responsible Autonomy and Decision Governance Principles](PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) when reviewing proposed decisions and execution paths. Check authorization and human oversight, and preserve independent runtime safety.
+
+Apply the [Mission and Practical Intelligence Principles](PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles) when assessing task feasibility and execution alternatives. Distinguish verified executor capabilities from intended ones, and use physical evidence to assess completion.
 
 ## Canonical information flow
 

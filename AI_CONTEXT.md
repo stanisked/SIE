@@ -98,9 +98,11 @@ The owner-approved [Responsible Autonomy and Decision Governance Principles](PRO
 
 ## Mission
 
+SIE's mission is to protect humans and extend human capabilities through spatial intelligence. Assess alternative ways to achieve assigned goals against verified executor capabilities, safety, and authorization, and verify physical outcomes with evidence. [Mission and Practical Intelligence Principles](PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles)
+
 SIE is an engineering architecture for Spatial Intelligence.
 
-Its purpose is to transform heterogeneous observations into a continuously evolving, evidence-backed understanding of the physical world and support reliable engineering decisions and safe actions.
+SIE transforms heterogeneous observations into a continuously evolving, evidence-backed understanding of the physical world to support reliable engineering decisions and safe actions.
 
 ## Identity
 

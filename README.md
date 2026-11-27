@@ -25,6 +25,8 @@ the same project. [Canonical naming decision](PROJECT_CONTEXT.md#project-name-an
 
 ## Vision
 
+SIE's mission is to protect humans and extend human capabilities through spatial intelligence. It is designed to help robots take on work that is hazardous, demanding, or difficult for people. [Mission and Practical Intelligence Principles](PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles)
+
 Robots should reason about the physical world using measurable, verifiable, and traceable information.
 
 SIE transforms observations into calibrated measurements, evidence-backed world understanding, engineering decisions, and safe actions. Models and algorithms are replaceable implementation components, not sources of architectural authority.

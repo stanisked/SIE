@@ -1232,6 +1232,106 @@ Knowledge Engine boundary under [ARCH-010](docs/architecture/SIE_RULES.md#arch-0
 still apply. Keep approved general knowledge distinct from verified situational
 facts about a specific person, including that person's preferences.
 
+## Mission and Practical Intelligence Principles
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.**
+
+> **SIE is designed to enable intelligent, responsible, and practically feasible interaction of robotic systems with the physical world, primarily to perform tasks that are hazardous, potentially hazardous, physically demanding, or difficult for humans to accomplish.**
+
+### Mission, purpose, and responsibility
+
+- **Mission.** Protect humans and extend human capabilities through spatial intelligence.
+- **Purpose.** Understand the physical world and find practical ways to act within it.
+- **Responsibility.** Remain within established ethical, safety, and authorization boundaries.
+
+### Target work categories
+
+- Hazardous Work.
+- Potentially Hazardous Work.
+- Physically Demanding Work.
+- Human-Limited Work.
+- Precision and Repetitive Work.
+
+These categories describe intended applications. Implementation and experimental
+validation must establish the capabilities available for each application.
+
+### Seven fundamental principles
+
+1. **Human Work Substitution.** Enable robotic systems to substitute for
+   humans in hazardous, physically demanding, and difficult work to protect
+   people and extend their capabilities.
+2. **Practical Feasibility First.** Prioritize feasible, admissible, and
+   justified solutions. Optimize within the requirements for successful,
+   responsible task execution.
+3. **Goal-Oriented Persistence.** When an execution method fails or becomes
+   unavailable, actively seek another admissible, feasible way to achieve
+   the assigned goal. Keep the search within authorization, available
+   resources, safety constraints, and physical feasibility. A goal may
+   remain unachievable within those limits.
+4. **Adaptive Problem Solving.** Adapt execution methods to changing physical
+   conditions, new observations, revised facts, and available capabilities.
+   Reassess decisions when their assumptions or execution conditions change.
+5. **Capability-Aware Decision.** Select solutions using the relevant
+   executor's actual capabilities, operational state, limitations, and
+   authorization. Distinguish theoretical capabilities from those currently
+   available and verified.
+6. **Risk Differentiation.** Distinguish risks to humans, the environment,
+   infrastructure, equipment, and robotic executors. Operation in a hazardous
+   environment can be admissible with appropriate capabilities, authorization,
+   operational readiness, and acceptable risk. Human Safety First and all
+   independently binding ethical, legal, environmental, and authorization
+   requirements remain in force.
+7. **Outcome Verification.** Verify the physical outcome of an executed action
+   against the assigned task and expected result. Command transmission and
+   executor acknowledgement alone are insufficient evidence of physical task
+   completion. Preserve evidence-backed re-observation, outcome assessment,
+   and applicable World State update requirements.
+
+### Practical decision behavior
+
+The following describes conceptual decision behavior within existing governance:
+
+1. Understand the assigned goal.
+2. Assess the current situation.
+3. Identify feasible execution alternatives.
+4. Evaluate applicable constraints and authorization.
+5. Independently validate decision admissibility.
+6. Execute an authorized solution.
+7. Observe and verify the physical outcome.
+8. Adapt or reassess when execution conditions change.
+
+An obstacle or failed method may call for an alternative route, an authorized
+manipulation, another capable executor, additional information, or human
+clarification. When no admissible and feasible solution can be established,
+report the limitation, request appropriate assistance, or safely refuse
+execution. Mandatory constraints apply to every alternative.
+
+### Architectural consistency
+
+The [Fundamental Architecture Principles](#fundamental-architecture-principles)
+govern evidence-backed understanding. The
+[Knowledge Architecture Principles](#knowledge-architecture-principles)
+govern the assessment of knowledge sufficiency and acquisition of additional
+information. The
+[Responsible Autonomy and Decision Governance Principles](#responsible-autonomy-and-decision-governance-principles)
+continue to govern Human Safety First, Independent Decision Validation,
+Independent Runtime Safety, Human Oversight, and Non-Self-Authorization.
+
+Under [ARCH-006](docs/architecture/SIE_RULES.md#arch-006), the Decision Engine
+retains decision responsibility and uses modeled-world facts from World State,
+Knowledge Engine rules, and Task Evaluator outputs. The Knowledge Engine
+and Task Evaluator retain their existing boundaries. Outcome evidence remains
+traceable through the [Evidence Graph](docs/architecture/SIE_EVIDENCE_GRAPH.md).
+The World State Manager alone writes World State, and updates require verifiable
+facts that satisfy existing admission requirements.
+[Challenge Before Acceptance](docs/architecture/SIE_ENGINEERING_PRINCIPLES.md#7-principle-ep-005)
+continues to apply.
+
+**Implementation status.** This freeze records architectural intent and
+conceptual behavior. Existing implementation and experimental checkpoints
+establish the verified functionality. Module ownership, interfaces, Data
+Contracts, runtime behavior, and admission paths retain their approved scope.
+
 ## Current product direction
 
 The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIE. **Canonical dynamic fusion diagnostics exclude mobile-base navigation and motor control.** A separate supervised bounded trial is recorded in the current checkpoint; it grants no autonomous or canonical motion admission. No output of the current dynamic fusion diagnostic may authorize motion.
@@ -1779,6 +1879,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-27 | Froze the owner-approved SIE mission, purpose, and responsibility, the intended work categories, and the Practical Intelligence Principles for feasible execution and verified physical outcomes. |
 | 2026-11-27 | Froze the owner-approved Responsible Autonomy and Decision Governance Principles, including the priority hierarchy and conceptual separation of decision formation, admissibility validation, authorized execution, and runtime safety. |
 | 2026-11-26 | The owner froze SIE (Spatial Intelligence Engine, pronounced SEE) as the canonical project, architecture, and product name. SIEE remains the historical designation of the earlier experimental stage. |
 | 2026-11-14 | Registered the read-only command `восстанови память SIEE` for cross-chat engineering-context recovery. The command reads current primary sources and gives a cited continuation summary; it does not update documents, regenerate Graphify, or run Pi/hardware. This change is documentation-only. |

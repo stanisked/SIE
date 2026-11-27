@@ -21,6 +21,8 @@ SIE integrates observations from heterogeneous information sources into a single
 
 SIE is designed for industrial robotics, construction, manufacturing, logistics and other domains where decisions must be based on measurable reality.
 
+SIE's mission is to protect humans and extend human capabilities through spatial intelligence. The architecture is designed for practical interaction with the physical world within established ethical, safety, and authorization boundaries. [Mission and Practical Intelligence Principles](../../PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles)
+
 The [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) distinguish decision formation under ARCH-006, independent admissibility validation, authorized execution, and independent runtime safety and interruption.
 
 ---

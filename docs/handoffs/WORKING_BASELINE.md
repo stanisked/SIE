@@ -16,6 +16,8 @@ The [Knowledge Architecture Principles](../../PROJECT_CONTEXT.md#knowledge-archi
 
 The [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) govern future decision and execution designs. Any supervised trial remains subject to its recorded authorization and safety boundaries.
 
+Use the [Mission and Practical Intelligence Principles](../../PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles) when evaluating a proposed next step against demonstrated executor capabilities and the available evidence of physical outcomes.
+
 ## 2026-11-26: Step 70 local correspondence freeze
 
 **FACT / operator report** Step 67 and Step 68 yielded 377 coherent local

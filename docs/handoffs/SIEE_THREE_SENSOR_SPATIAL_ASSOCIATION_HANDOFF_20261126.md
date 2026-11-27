@@ -18,6 +18,8 @@ For distinguishing candidate associations from established facts and determining
 
 Use the [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) when reviewing any future proposal to use this diagnostic evidence in a decision or execution path.
 
+The [Mission and Practical Intelligence Principles](../../PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles) require verified executor capabilities and evidence of physical outcomes for future task execution.
+
 ## Source and frame inventory
 
 - **FACT** The camera audit node projects AR0234 rays into physical-left and
