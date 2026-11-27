@@ -30,12 +30,13 @@ trial policy. Admission and execution boundaries remain in force.
 
 **DECISION — OWNER_APPROVED, 2026-11-27.** Step 75.2 is complete as `NAVIGATION_PREFLIGHT_COMPLETE_ODOMETRY_IMPLEMENTATION_REQUIRED`. Start Step 75.3a, software-only independent cumulative signed wheel encoder telemetry, preserving v13 command-local counters, braking and safety. Pi preflight found the sole LD19 publisher, no visible odom/TF/map, and no visible Nav2 or SLAM Toolbox. Saved v13 evidence confirms signed command-local pairs, not continuous timestamped odometry. No flash, reset, motion or admission changes are authorized. [Current navigation handoff and next task](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-752-closure-and-step-753-owner-decision-2026-11-27)
 
-**FACT / OPEN.** Step 75.3a adds a separately built v15 cumulative encoder
-diagnostic and an offline codec. The deployed v13 source and braking fault
-remain unchanged. Step 75.3b starts with motor-power disconnection verification
-and the v13 evidence archive. Physical telemetry qualification, flash and
-reboot are outside Step 75.3a.
-[Step 75.3a verification and Step 75.3b plan](../diagnostics/wheel_encoder_telemetry_v1.md)
+**DECISION — OWNER_CONFIRMED.** Step 75.3b is closed as
+`WHEEL_ENCODER_TELEMETRY_QUALIFIED_MOTOR_OFF`. v15 is the deployed diagnostic
+build. The operator reported stationary, four-direction manual rotation,
+and boot-boundary passes with traction power disconnected. The two failed
+manual trials remain part of the evidence. The v13 braking defect remains
+open. Loaded wheel scale and odometry accuracy remain unverified.
+[Step 75.3b results and limits](../diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure)
 
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately
@@ -80,9 +81,9 @@ zero-added-wait camera selector and disabled admission flags. **OPEN**
 Common-frame geometry and spatial association remain to be validated.
 [Step 57 evidence](SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26) · [Spatial Association v1](SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md).
 
-## 2026-11-23: current brake diagnostic boundary (FACT / OPEN)
+## 2026-11-23: v13 brake diagnostic checkpoint (FACT / OPEN)
 
-v13 `v4_2_uart_shadow_v13_brake_continuity` is flashed and Pi-UART verified; one raised-wheel RIGHT 8° trial still ended `ENCODER_LIMIT_REACHED` / FAULT, final PWM 0/0 and STOP confirmed. Trigger R/L 15/13, final 27/25 (+12/+12), software request-to-write 38 µs, goal 21/21 and hard limit 22/22. v11 and v12 also FAULT (+13/+13). `stopMotors()` before `brakeMotors()` was removed in v13 but it did NOT demonstrate sufficient braking. [Current handoff](SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md) / [comparison](../diagnostics/siee_esp32_brake_v11_v13_20261123.md). Motor power physically OFF after v13 is not reconfirmed; evidence archive/off-Pi copy pending; no oscilloscope. v14 only a diagnostic proposal; no new motor operations authorized.
+v13 `v4_2_uart_shadow_v13_brake_continuity` was flashed and Pi-UART verified. One raised-wheel RIGHT 8° trial still ended `ENCODER_LIMIT_REACHED` / FAULT, final PWM 0/0 and STOP confirmed. Trigger R/L 15/13, final 27/25 (+12/+12), software request-to-write 38 µs, goal 21/21 and hard limit 22/22. v11 and v12 also FAULT (+13/+13). `stopMotors()` before `brakeMotors()` was removed in v13 but it did NOT demonstrate sufficient braking. [Current handoff](SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md) / [comparison](../diagnostics/siee_esp32_brake_v11_v13_20261123.md). At this historical checkpoint, motor power OFF and the off-Pi archive had not yet been confirmed. Both were confirmed for Step 75.3b. No oscilloscope was available. v14 only a diagnostic proposal; no new motor operations authorized.
 
 ## 2026-11-16: ESP32 UART v2 initial-bias and physical bilateral steering (FACT / OPEN)
 

@@ -4,7 +4,10 @@
 
 **FACT / DECISION — sensor checkpoint, 2026-11-26:** Live AR0234/OV9281/LD19 Temporal Association is frozen as `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE`. The journal confirms independent camera and LD19 ROS header timing associations. Measurement, World State and motor admission remain disabled. Read the [Step 57 evidence and limits](docs/handoffs/SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26) and [Spatial Association v1 handoff](docs/handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md).
 
-**Current hardware checkpoint (2026-11-23):** ESP32 `v4_2_uart_shadow_v13_brake_continuity` was flashed, boot/read-only UART checked, and then tested in exactly one supervised raised-wheel RIGHT 8° experiment. Outcome: `ENCODER_LIMIT_REACHED` / latched `BOUNDED_DISTANCE_LIMIT` / terminal FAULT, PWM 0/0, STOP confirmed. Brake request R/L 15/13 counts, output-write commands completed after 38 µs, final R/L 27/25 against target 21/21 and hard limit 22/22. **v13 is not a validated braking fix.** Read [current v13 handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md); previous v11 handoff is historical. Operator has not yet reconfirmed physical motor-power OFF after the latest run; v13 raw evidence archive/off-Pi backup is not yet confirmed. No further motion, flash, FAULT reset or reboot is authorized by this document. A diagnostic v14 remains a proposal.
+**FACT / DECISION — hardware checkpoint.** Deployed ESP32 v15 passed
+the owner-confirmed motor-off wheel encoder telemetry qualification. The
+v13 short-turn braking fault remains open.
+[Step 75.3b closure](docs/diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure) · [v13 brake evidence](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md)
 
 Engineering architecture for robotic perception, spatial reasoning and decision support.
 
@@ -37,7 +40,7 @@ The [Knowledge Architecture Principles](PROJECT_CONTEXT.md#knowledge-architectur
 
 The [Responsible Autonomy and Decision Governance Principles](PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) establish the safety, authorization, and human oversight requirements for how SIE pursues assigned goals.
 
-The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) indexes the approved principles, including experience-based learning. The [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) describes the mobile platform objective and proposed next step.
+The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) indexes the approved principles, including experience-based learning. The [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) describes the mobile platform objective. The [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-753b--motor-off-wheel-encoder-telemetry-qualified) records the current navigation checkpoint.
 
 ## Engineering Principles
 

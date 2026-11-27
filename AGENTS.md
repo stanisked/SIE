@@ -4,7 +4,13 @@
 
 **DECISION — sensor baseline, 2026-11-26:** Preserve the diagnostic freeze `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE`, the current `latest_pair` selection with zero added association wait, the independent RGB–Stereo and RGB–LD19 links, and all existing calibration and Vision Core behavior. For new work, read the [Step 57 evidence and limits](docs/handoffs/SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26) and [Spatial Association v1 handoff](docs/handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md). Keep all admission flags false. The ESP32 v13 brake FAULT remains a separate blocker.
 
-**Current hardware checkpoint (2026-11-23):** ESP32 `v4_2_uart_shadow_v13_brake_continuity` was flashed, boot/read-only UART checked, and then tested in exactly one supervised raised-wheel RIGHT 8° experiment. Outcome: `ENCODER_LIMIT_REACHED` / latched `BOUNDED_DISTANCE_LIMIT` / terminal FAULT, PWM 0/0, STOP confirmed. Brake request R/L 15/13 counts, output-write commands completed after 38 µs, final R/L 27/25 against target 21/21 and hard limit 22/22. **v13 is not a validated braking fix.** Read [current v13 handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md); previous v11 handoff is historical. Operator has not yet reconfirmed physical motor-power OFF after the latest run; v13 raw evidence archive/off-Pi backup is not yet confirmed. No further motion, flash, FAULT reset or reboot is authorized by this document. A diagnostic v14 remains a proposal.
+**FACT / DECISION — hardware checkpoint.** ESP32 v15 is deployed with
+Step 75.3b closed as `WHEEL_ENCODER_TELEMETRY_QUALIFIED_MOTOR_OFF`. Traction
+power disconnection and v13 evidence backups were confirmed for that
+qualification. The v13 `BOUNDED_DISTANCE_LIMIT / ENCODER_LIMIT_REACHED`
+fault remains open. Motion, flash, fault acknowledgement, and reboot each
+require their existing separate authorization.
+[Step 75.3b results and limits](docs/diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure) · [v13 brake evidence](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md)
 
 ## Scope
 
@@ -80,7 +86,7 @@ Apply the [Responsible Autonomy and Decision Governance Principles](PROJECT_CONT
 
 Apply the [Mission and Practical Intelligence Principles](PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles) when assessing task feasibility and execution alternatives. Distinguish verified executor capabilities from intended ones, and use physical evidence to assess completion.
 
-Apply the [Experience, Learning and Controlled Evolution principle](PROJECT_CONTEXT.md#experience-learning-and-controlled-evolution) with the existing evidence, validation, and authorization rules. Its detailed learning mechanisms require implementation-level approval. Use the [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) to identify the next engineering proposal.
+Apply the [Experience, Learning and Controlled Evolution principle](PROJECT_CONTEXT.md#experience-learning-and-controlled-evolution) with the existing evidence, validation, and authorization rules. Its detailed learning mechanisms require implementation-level approval. Use the [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) for the project objective and the [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-753b--motor-off-wheel-encoder-telemetry-qualified) for the current navigation checkpoint.
 
 ## Canonical information flow
 

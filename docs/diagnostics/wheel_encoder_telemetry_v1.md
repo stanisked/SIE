@@ -215,8 +215,9 @@ python3 -m py_compile firmware/esp32/{tools/wheel_encoder_telemetry_v1.py,tests/
 git diff --check
 ```
 
-**OPEN — NOT RUN.** No flash, reboot, UART device access, fault
-acknowledgement, wiring change, or motor test. The v13
+**FACT — Step 75.3a software-only boundary.** That step involved no flash,
+reboot, UART device access, fault acknowledgement, wiring change, or motor
+test. The v13
 `BOUNDED_DISTANCE_LIMIT / ENCODER_LIMIT_REACHED` fault remains open. Static
 equivalence of the bounded motion code and a compatible build do not
 qualify its runtime latency or braking.
@@ -224,7 +225,9 @@ qualify its runtime latency or braking.
 
 ## Step 75.3b motor-off qualification plan
 
-**OPEN.** This is a future procedure. Before any flash or reboot, obtain
+**PROCEDURE.** Step 75.3b results are recorded in the
+[closure below](#step-753b-motor-off-qualification-closure). Before any
+flash or reboot, obtain
 physical confirmation from the operator that traction motor power is
 disconnected independently of software PWM, STOP or fault status. Record
 who checked it, when and what was disconnected. Keep motion launchers
@@ -286,3 +289,121 @@ No oscilloscope is available. The procedure can qualify observed software
 telemetry continuity in those motor-off conditions. It cannot establish
 electrical transitions, ISR service latency, maximum loss-free pulse rate,
 loaded scale or navigation accuracy, or braking performance.
+
+## Step 75.3b motor-off qualification closure
+
+**DECISION — OWNER_CONFIRMED.** Close Step 75.3b as
+`WHEEL_ENCODER_TELEMETRY_QUALIFIED_MOTOR_OFF`. The closure covers the
+motor-off stationary, manual polarity and independence, and boot boundary
+qualification under the tested conditions.
+
+### Deployment and evidence preservation
+
+**FACT.** Deployed firmware
+`v4_2_uart_shadow_v15_cumulative_encoder_telemetry` was built from
+`abfdde4ada5de1fe92b88196e113de32615805b5`. Application SHA-256
+`7e666c121770651738b49f9a7f6fa97003f0dd1da31db16afd8b6662378b9ac0`.
+The upload log records verification of all four flash regions.
+The operator confirmed physical traction power disconnection and verified
+local and independent external v13 backups. The external v13 archive
+SHA-256 is
+`fb3f661f38cc5e0001635507d9e18e5cb3d6db8478c658df4b0f897a6f4c37cd`.
+
+**FACT — operator-reported UART2 verification.** Read-only `STATUS`
+verified v15 on deployment boot `3BBA9D5615754514`, with `READY`, PWM
+0/0, null active command and fault, both fault and safety latches false,
+and remote stop pending false.
+
+### Qualification results
+
+**FACT — operator-reported telemetry.** The five completed telemetry trials
+are listed below. The initial stationary invocation had a boot-ID mismatch
+and decoded zero samples.
+
+| Trial | Decoded | Accepted | Result |
+| --- | ---: | ---: | --- |
+| Stationary | 20 | 20 | PASS |
+| Manual rotation attempt 1 | 288 | 287 | FAIL |
+| Manual rotation attempt 2 | 1,308 | 1,307 | FAIL |
+| Manual rotation attempt 3 | 720 | 720 | PASS |
+| Boot continuity boundary | 40 | 40 | PASS |
+| **Total** | **2,376** | **2,374** | |
+
+The stationary trial held totals at R = +2 and L = −23 ticks. The median
+ESP32 sample interval was 100,998 µs, approximately 10 Hz under the
+tested conditions.
+
+| Failed manual trial | Stationary phase | Sequence | Measured delta, ticks |
+| --- | --- | ---: | --- |
+| Attempt 1 | `stationary_before_right_forward` | 308 | R +2 |
+| Attempt 2 | `stationary_before_left_backward` | 1,616 | L −1 |
+
+Both samples had valid consecutive telemetry. The nonzero delta during
+the stationary phase tripped the phase contract and the collector refused
+the sample. Both trials remain FAIL and their evidence is retained.
+
+**FACT — operator explanation.** The owner confirmed accidental wheel
+rotation or contact before the `GO` prompt in both failures. The telemetry
+records the count changes and their phases. The physical cause is
+operator-reported.
+
+**FACT — successful manual rotation.** Right forward +214 ticks, right
+backward −211 ticks, left forward +208 ticks, and left backward −208
+ticks. The opposite wheel remained unchanged in each rotation. Both
+20-sample stationary baselines passed. The trials qualify the observed
+polarity and independent accumulation. Manual angular displacement was
+not independently measured and the results justify no calibration change.
+
+### Sequence coverage and boot boundary
+
+| Boot session ID | Trial | Sequence range |
+| --- | --- | --- |
+| `BCC97F6E304A8459` | Stationary | 1–20 |
+| `BCC97F6E304A8459` | Manual attempt 1 | 21–308 |
+| `BCC97F6E304A8459` | Manual attempt 2 | 309–1616 |
+| `BCC97F6E304A8459` | Manual attempt 3 | 1617–2336 |
+| `BCC97F6E304A8459` | Pre-reboot | 2337–2356 |
+| `E41B90553131A237` | Post-reboot | 1–20 |
+
+**FACT — operator-reported boot boundary.** The authorized reset separated
+the two qualification epochs. Pre-reboot stationary totals were R = 145,
+L = 199 ticks. Post-reboot totals were R = 0, L = 0 ticks. The first new-boot
+sample was classified as `REBOOT_BASELINE`. The production continuity
+validator rejected offline replay of a preserved old-boot sample as
+`RETIRED_BOOT`. No count or clock delta was computed across the reset.
+
+The ranges are contiguous over the full recorded sequence space in each
+epoch, including the two decoded but refused manual samples. Physical
+motion between collector sessions remains unobserved.
+
+**OPEN.** The earlier change from deployment boot `3BBA9D5615754514` to
+`BCC97F6E304A8459` remains unexplained. The stationary collector refused
+the mismatch before acquiring encoder samples. Two subsequent `STATUS`
+checks confirmed the new boot before the stationary retry. The later
+authorized reset established `E41B90553131A237` as a separate event.
+
+### Private evidence index and limits
+
+**FACT — operator-reported evidence.** The root is
+`/home/elwis/.local/state/sie/evidence/`. The operator reported SHA-256
+verification PASS for all five completed telemetry trial evidence sets,
+including the failed manual trials. The private Pi artifacts were not
+independently inspected for this documentation update.
+
+| Subdirectory | Record |
+| --- | --- |
+| `step75_3b_2_status.iTKYlv` | Deployment UART2 STATUS |
+| `step75_3b_3_stationary.h5fmrlc5` | Initial stationary invocation refused on boot ID mismatch |
+| `step75_3b_2_status.AISJ6J` | STATUS recheck of `BCC97F6E304A8459` |
+| `step75_3b_2_status.1C8TPq` | Independent STATUS recheck of `BCC97F6E304A8459` |
+| `step75_3b_3_stationary._mbx2u8y` | Stationary PASS |
+| `step75_3b_4_manual.n_ay9tu1` | Manual attempt 1 FAIL |
+| `step75_3b_4_manual.r9kvpag4` | Manual attempt 2 FAIL |
+| `step75_3b_4_manual.sixarbde` | Manual attempt 3 PASS |
+| `step75_3b_5_boot.57bhi8pv` | Boot continuity boundary PASS |
+
+**OPEN.** Loaded wheel scale, odometry accuracy, pulse-loss limits,
+braking performance, and navigation safety remain unverified. The v13
+`BOUNDED_DISTANCE_LIMIT / ENCODER_LIMIT_REACHED` fault remains open.
+The closure does not authorize powered motion or change calibration,
+Measurement, World State, or execution admission.

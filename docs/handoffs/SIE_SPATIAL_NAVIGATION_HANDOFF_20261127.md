@@ -362,9 +362,31 @@ publication from the existing GPIO callbacks. The v13 directory, motion
 runners, and admission boundaries are unchanged.
 [Protocol, firmware audit, and verification](../diagnostics/wheel_encoder_telemetry_v1.md)
 
-**OPEN — Step 75.3b.** Start with physical verification that motor power is
+**PROCEDURE — Step 75.3b.** Start with physical verification that motor power is
 disconnected and SHA-256 verification of archived v13 fault evidence.
 Any flash or reboot is a separately authorized action. Qualify the candidate
 using stationary reads and manual rotations with motor power off before
 considering an odometry adapter. The v13 braking fault remains open.
 [Motor-off qualification plan](../diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-plan)
+
+## Step 75.3b — Motor-off wheel encoder telemetry qualified
+
+**DECISION — OWNER_CONFIRMED.**
+`WHEEL_ENCODER_TELEMETRY_QUALIFIED_MOTOR_OFF`. Step 75.3b is closed.
+
+**FACT — operator-reported qualification.** v15 was deployed and checked on
+UART2 with physical traction power disconnected and v13 evidence preserved.
+Stationary and boot-boundary trials passed. The successful manual run
+passed all four polarity and independent-wheel checks. The two earlier
+manual trials remain FAIL because telemetry recorded a wheel-count change
+in each stationary phase. The operator confirmed premature wheel movement
+or contact separately. Across the five completed trials, 2,374 of 2,376
+decoded samples were accepted. The authorized reset produced a new
+`REBOOT_BASELINE` at sequence 1 and offline replay of old-boot evidence
+returned `RETIRED_BOOT`.
+[Detailed results, sequence ranges, and private evidence index](../diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure)
+
+**OPEN.** The earlier unexpected boot ID change is unresolved. The v13
+braking defect and loaded wheel scale and odometry validation remain open.
+Step 75.3c is the ROS odometry adapter and TF authority stage in the existing
+plan. This closure adds no implementation or execution authorization.

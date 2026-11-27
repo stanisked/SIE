@@ -1,12 +1,16 @@
 # AI_CONTEXT.md
 
-**DECISION — 2026-11-27.** The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) is complete for the current MVP. For the next engineering task, start with the [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint), which links the operator-reported Step 72 replay and proposed Step 73.
+**DECISION — 2026-11-27.** The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) is complete for the current MVP. The [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) describes the project objective and the earlier Step 73 proposal. The [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-753b--motor-off-wheel-encoder-telemetry-qualified) records the current navigation checkpoint.
 
 **DECISION — 2026-11-26:** The owner froze `STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`. Step 71 adds source-bound AR0234 semantics to the existing OV9281–LD19 diagnostic. Preserve the calibrated artifacts, existing diagnostic policies and disabled admission flags. [Step 70 local correspondence freeze](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26).
 
 **FACT / DECISION — sensor checkpoint, 2026-11-26:** The owner closed Live Three-Sensor Temporal Association as `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE`. A SHA-matched Pi journal copy verified 82/83 RGB–Stereo and 80/83 independent RGB–LD19 conversion-header matches, including 80/83 joint matches. All 82 accepted camera matches agreed with Vision Core selection. The two earlier primary files are unavailable locally. For the next stage and remaining clock, latency and spatial limits, read the [Step 57 evidence and limits](docs/handoffs/SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26) and [Spatial Association v1 handoff](docs/handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md). All three admission flags remain false.
 
-**Current hardware checkpoint (2026-11-23):** ESP32 `v4_2_uart_shadow_v13_brake_continuity` was flashed, boot/read-only UART checked, and then tested in exactly one supervised raised-wheel RIGHT 8° experiment. Outcome: `ENCODER_LIMIT_REACHED` / latched `BOUNDED_DISTANCE_LIMIT` / terminal FAULT, PWM 0/0, STOP confirmed. Brake request R/L 15/13 counts, output-write commands completed after 38 µs, final R/L 27/25 against target 21/21 and hard limit 22/22. **v13 is not a validated braking fix.** Read [current v13 handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md); previous v11 handoff is historical. Operator has not yet reconfirmed physical motor-power OFF after the latest run; v13 raw evidence archive/off-Pi backup is not yet confirmed. No further motion, flash, FAULT reset or reboot is authorized by this document. A diagnostic v14 remains a proposal.
+**FACT / DECISION — hardware checkpoint.** ESP32 v15 is deployed with
+Step 75.3b closed as `WHEEL_ENCODER_TELEMETRY_QUALIFIED_MOTOR_OFF`. The
+operator confirmed traction power disconnection and verified v13 evidence
+backups. The v13 braking fault remains open. Step 75.3c has not started.
+[Step 75.3b results and limits](docs/diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure) · [v13 brake evidence](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md)
 
 # Spatial Intelligence Engine (SIE)
 
