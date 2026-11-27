@@ -32,6 +32,14 @@ The first runtime adapter will publish the existing JSONL evidence as
 the legacy fusion runtime still has laptop-specific paths and an archived AR0234
 v3 binding which must be refactored to v5 before being connected.
 
+## Standalone wheel odometry diagnostic
+
+`wheel_odometry.launch.py` is a separate read-only v15 UART launch. It
+publishes `/odom`, diagnostics, and an opt-in `odom → base_link` transform.
+See the [Step 75.3c guide](../../docs/diagnostics/wheel_odometry_v1.md)
+for parameter provenance, exclusive ownership, continuity and the proposed
+motor-off procedure.
+
 ## Optional STL-19P / LD19 raw sensor bring-up (2026-11-25)
 
 `sie_pipeline.launch.py` now has an **opt-in, motor-off** LD19 extension.

@@ -390,3 +390,21 @@ returned `RETIRED_BOOT`.
 braking defect and loaded wheel scale and odometry validation remain open.
 Step 75.3c is the ROS odometry adapter and TF authority stage in the existing
 plan. This closure adds no implementation or execution authorization.
+
+## Step 75.3c — ROS 2 wheel odometry software
+
+**DECISION — OWNER_APPROVED.** Implement a standalone ROS 2 wheel odometry
+adapter and one configurable `odom → base_link` authority. Both physical
+wheel diameters were measured at 0.068 m. The kinematic model separately
+uses provisional effective diameters 0.0646 m right and 0.0652 m left,
+205/206 counts per revolution and 0.290 m track width. No firmware constants
+or calibration artifacts changed.
+
+**FACT.** The software uses the v15 codec and production boot continuity
+validator. Unavailable intervals preserve the prior pose with an explicit
+discontinuity. Accepted odometry and TF share the ROS receipt stamp.
+UART ownership and navigation admission remain separate from the
+actuator path. [Implementation and proposed motor-off smoke check](../diagnostics/wheel_odometry_v1.md)
+
+**OPEN.** Pi deployment, loaded odometry validation, and Step 75.3d require
+separate approval. The v13 braking defect remains open for Step 76.

@@ -14,12 +14,14 @@ setup(
             [
                 "launch/sie_pipeline.launch.py",
                 "launch/sie_pipeline_supervised_mvp.launch.py",
+                "launch/wheel_odometry.launch.py",
             ],
         ),
         (
             "share/" + package_name + "/config",
             [
                 "config/sie_pipeline.yaml",
+                "config/wheel_odometry_v1.yaml",
                 "config/bounded_forward_supervised_mvp_v1.json",
             ],
         ),
@@ -43,6 +45,7 @@ setup(
             "perception_jsonl_bridge = sie_ros2.jsonl_perception_bridge:main",
             "navigation_contract_node = sie_ros2.navigation_node:main",
             "supervisor_contract_node = sie_ros2.supervisor_node:main",
+            "wheel_odometry_node = sie_ros2.wheel_odometry_node:main",
         ],
     },
 )

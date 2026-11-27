@@ -9,8 +9,8 @@
 **FACT / DECISION — hardware checkpoint.** ESP32 v15 is deployed with
 Step 75.3b closed as `WHEEL_ENCODER_TELEMETRY_QUALIFIED_MOTOR_OFF`. The
 operator confirmed traction power disconnection and verified v13 evidence
-backups. The v13 braking fault remains open. Step 75.3c has not started.
-[Step 75.3b results and limits](docs/diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure) · [v13 brake evidence](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md)
+backups. The v13 braking fault remains open. Step 75.3c implements a standalone diagnostic adapter. Physical validation requires separate approval.
+[Step 75.3b results and limits](docs/diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure) · [Step 75.3c adapter](docs/diagnostics/wheel_odometry_v1.md) · [v13 brake evidence](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md)
 
 # Spatial Intelligence Engine (SIE)
 

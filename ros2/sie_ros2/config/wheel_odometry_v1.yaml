@@ -1,0 +1,23 @@
+sie_wheel_odometry:
+  ros__parameters:
+    physical_right_wheel_diameter_m: 0.068
+    physical_left_wheel_diameter_m: 0.068
+    effective_right_wheel_diameter_m: 0.0646
+    effective_left_wheel_diameter_m: 0.0652
+    right_encoder_ticks_per_rev: 205
+    left_encoder_ticks_per_rev: 206
+    track_width_m: 0.290
+    acquisition_hz: 10.0
+    uart_timeout_s: 0.25
+    max_host_age_s: 0.35
+    max_sample_interval_s: 0.35
+    max_ros_offset_step_s: 0.05
+    pose_xy_variance: 0.01
+    pose_yaw_variance: 0.025
+    twist_linear_variance: 0.04
+    twist_angular_variance: 0.10
+    unobserved_variance: 1000000.0
+    xy_variance_per_wheel_meter: 0.01
+    yaw_variance_per_radian: 0.025
+    discontinuity_xy_variance: 0.25
+    discontinuity_yaw_variance: 0.25

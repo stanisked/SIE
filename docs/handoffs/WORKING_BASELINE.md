@@ -38,6 +38,13 @@ manual trials remain part of the evidence. The v13 braking defect remains
 open. Loaded wheel scale and odometry accuracy remain unverified.
 [Step 75.3b results and limits](../diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure)
 
+**DECISION / FACT — Step 75.3c software.** The standalone ROS 2 adapter
+implements v15 read-only wheel odometry and configurable `odom → base_link`.
+The provisional effective diameters are distinct from the measured physical
+diameters. Pi deployment, physical odometry validation, and navigation
+admission remain outside this software step.
+[Step 75.3c implementation and verification](../diagnostics/wheel_odometry_v1.md)
+
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately
 opt-in Step 74 live diagnostic with existing admission and safety boundaries.
