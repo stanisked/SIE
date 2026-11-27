@@ -352,3 +352,19 @@ physical scale explicitly. Step 75.2 ends at this evidence report.
 **DECISION — OWNER_APPROVED.** Step 75.2 closes as `NAVIGATION_PREFLIGHT_COMPLETE_ODOMETRY_IMPLEMENTATION_REQUIRED`. Start Step 75.3 Continuous Wheel Odometry. Preserve the existing motor-control and command-local counter semantics. Add an independent boot-scoped signed cumulative encoder telemetry path; calculate navigation pose on Pi, not ESP32. Physical forward-positive signs must be independent of command direction. Proposed fields: boot_session_id, sample_sequence, sample_monotonic_us, right_total_signed_ticks, left_total_signed_ticks, controller_state, fault_latched. Use a coherent count-pair/time snapshot; explicit version, reset/overflow semantics and fault provenance. Avoid changes to braking, actuator logic, limits, and safety. Qualify ISR/critical-section overhead; do not assert timing neutrality without evidence.
 
 **NEXT — Step 75.3a, software implementation only.** Inspect v13 firmware and existing UART framing, compact/full status compatibility, ISR synchronization, and boot identity. Preserve v13 unchanged; create a separately versioned derivative with minimal read-only odometry telemetry, preferably opt-in. Test signed increments/decrements, command-local resets without cumulative reset, idle/coast pulses, reboot identity, sequence/time monotonicity, rollover or explicit invalidation, coherent snapshots, CRC/framing and existing motion/safety regressions. Compile if toolchain available; report unrun checks honestly. No flash/reset, hardware commands, motor operation, fault clearing, or authorization changes. No invented sample rates or validated wheel scale. Document deployment and motor-off validation plan, not execution. Subsequent steps: 75.3b telemetry qualification; 75.3c ROS Odometry adapter and one TF authority; 75.3d independent physical validation under separate approval. Frame/footprint qualification, camera base-relative target and SLAM/Nav2 remain open. Step 74 stays closed; no perception/calibration repetition without new defect evidence. PR #13 untouched.
+
+## Step 75.3a — Continuous wheel encoder telemetry software
+
+**FACT.** Candidate `v4_2_uart_shadow_v15_cumulative_encoder_telemetry`
+adds the read-only `WHEEL_ENCODERS_V1` exchange and an offline host validator.
+A coherent count pair and ESP32 sample time use lock-free, revision-checked
+publication from the existing GPIO callbacks. The v13 directory, motion
+runners, and admission boundaries are unchanged.
+[Protocol, firmware audit, and verification](../diagnostics/wheel_encoder_telemetry_v1.md)
+
+**OPEN — Step 75.3b.** Start with physical verification that motor power is
+disconnected and SHA-256 verification of archived v13 fault evidence.
+Any flash or reboot is a separately authorized action. Qualify the candidate
+using stationary reads and manual rotations with motor power off before
+considering an odometry adapter. The v13 braking fault remains open.
+[Motor-off qualification plan](../diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-plan)

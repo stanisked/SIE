@@ -30,6 +30,13 @@ trial policy. Admission and execution boundaries remain in force.
 
 **DECISION — OWNER_APPROVED, 2026-11-27.** Step 75.2 is complete as `NAVIGATION_PREFLIGHT_COMPLETE_ODOMETRY_IMPLEMENTATION_REQUIRED`. Start Step 75.3a, software-only independent cumulative signed wheel encoder telemetry, preserving v13 command-local counters, braking and safety. Pi preflight found the sole LD19 publisher, no visible odom/TF/map, and no visible Nav2 or SLAM Toolbox. Saved v13 evidence confirms signed command-local pairs, not continuous timestamped odometry. No flash, reset, motion or admission changes are authorized. [Current navigation handoff and next task](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-752-closure-and-step-753-owner-decision-2026-11-27)
 
+**FACT / OPEN.** Step 75.3a adds a separately built v15 cumulative encoder
+diagnostic and an offline codec. The deployed v13 source and braking fault
+remain unchanged. Step 75.3b starts with motor-power disconnection verification
+and the v13 evidence archive. Physical telemetry qualification, flash and
+reboot are outside Step 75.3a.
+[Step 75.3a verification and Step 75.3b plan](../diagnostics/wheel_encoder_telemetry_v1.md)
+
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately
 opt-in Step 74 live diagnostic with existing admission and safety boundaries.
