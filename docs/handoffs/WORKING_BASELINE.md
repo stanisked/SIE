@@ -20,6 +20,14 @@ Use the [Mission and Practical Intelligence Principles](../../PROJECT_CONTEXT.md
 
 ## 2026-11-27: MVP continuation checkpoint
 
+**DECISION — 2026-11-27.** Close Step 74 as
+`LIVE_ENTITY_CENTRIC_DIAGNOSTIC_INTEGRATION_COMPLETE` and start Step 75,
+ROS 2 Spatial Navigation Integration. The operator reported 61 static and
+68 moving provisional camera entity updates, with 302 and 315 independent
+LD19 obstacle updates. These are diagnostic results under the 500 ms camera
+trial policy. Admission and execution boundaries remain in force.
+[Step 74.5 results, checksums, and limits](SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-745--live-entity-centric-diagnostic-integration-complete)
+
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately
 opt-in Step 74 live diagnostic with existing admission and safety boundaries.

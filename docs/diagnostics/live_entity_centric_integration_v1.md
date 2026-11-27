@@ -151,10 +151,24 @@ throughput degradation. A throughput improvement remains unproven.
 **DECISION — `OWNER_APPROVED`, 2026-11-27.** Use the separate 500 ms diagnostic
 camera trial only in the opt-in Step 74 companion. Physical camera exposure
 and laser acquisition timing remain unverified. Motion safety continues to
-use its existing requirements. Step 74 remains open pending a new physical
-diagnostic trial with the v2 policy.
+use its existing requirements.
+
+## Step 74.5 closure
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.**
+`LIVE_ENTITY_CENTRIC_DIAGNOSTIC_INTEGRATION_COMPLETE`. The operator reported
+61/61 static and 68/68 moving provisional camera entity updates, plus 302
+and 315 independent LD19 obstacle updates. Stable Torso Core supplied
+all 129 partial longitudinal known terms. Whole-mask MAD refused 21 of
+those cycles, and the original 250 ms camera age reference remained
+unsatisfied. The results close the diagnostic stage under the 500 ms
+trial policy. Navigation safety and motion authorization remain open.
+[Step 74.5 full results and operator checksum verification](../handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-745--live-entity-centric-diagnostic-integration-complete)
 
 ## Raspberry Pi deployment and validation commands
+
+This is the recorded diagnostic procedure. Step 75 begins with the
+navigation architecture audit.
 
 Prepare the cart with traction motor power physically disconnected. Leave
 the unresolved ESP32 v13 fault, firmware, and authorization state alone.

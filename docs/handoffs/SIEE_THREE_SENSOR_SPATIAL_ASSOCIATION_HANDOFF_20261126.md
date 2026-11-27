@@ -378,3 +378,74 @@ observations, and the unchanged Step 57 and LD19 limits were exercised.
 **OPEN.** Step 74 remains open pending the 30-second Static Enabled retest
 with v2. The ESP32 v13 braking fault remains a separate actuator blocker.
 [Pinned-worktree deployment and validation commands](../diagnostics/live_entity_centric_integration_v1.md#raspberry-pi-deployment-and-validation-commands)
+
+## Step 74.5 — Live entity-centric diagnostic integration complete
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.**
+`LIVE_ENTITY_CENTRIC_DIAGNOSTIC_INTEGRATION_COMPLETE`. The owner closed Step 74
+after successful static and moving diagnostic trials and opened Step 75, ROS 2
+Spatial Navigation Integration. Preserve the demonstrated perception baseline.
+Repeat perception or calibration work only for newly identified defect evidence.
+
+**FACT / operator report.** Raspberry Pi 5 implementation
+`35e103d700a8d764241f08c9eb770dd51b8983dc`, with camera diagnostic policy
+`live-entity-camera-freshness-v2-500ms-TRIAL`.
+
+| Metric | Static Enabled V2 | Moving Enabled V2 |
+| --- | ---: | ---: |
+| Working camera cycles | 61 | 68 |
+| Current semantic observations | 61/61 | 68/68 |
+| Available spatial observations | 61/61 | 68/68 |
+| Provisional entity updates | 61 | 68 |
+| Actual compatible RGB–Stereo pairs | 61/61 | 68/68 |
+| Unique producer track IDs | 1 | 1 |
+| Missing track IDs | 0 | 0 |
+| Track changes | 0 | 0 |
+| Stable Torso Core method | 61/61 | 68/68 |
+| Coherent masked depth | 56 | 52 |
+| `DEPTH_MAD_EXCEEDED` | 5 | 16 |
+| Independent LD19 obstacle updates | 302 | 315 |
+| RGB producer Hz | 3.030629 | 3.389866 |
+| Entity preview Hz | 3.040273 | 3.398196 |
+| LD19 obstacle update Hz | 9.901484 | 9.843111 |
+| Mean camera callback-to-preview, approx. ms | 1.103 | 1.180 |
+| Mean LD19 callback-to-preview, approx. ms | 5.149 | 4.509 |
+| Pending replacements | 0 | 0 |
+| Processing and publishing errors | 0 | 0 |
+
+The static track was `ar0234-audit-track:cdf3ad8b49bd10a6:1` and the moving
+track was `ar0234-audit-track:f3f5e4498816cc76:1`. Those IDs are session-local.
+The moving run reported a masked-depth candidate range of approximately
+1.534–3.395 m, including values from `DEPTH_MAD_EXCEEDED` cycles. Physical
+trajectory and Metric Measurement remain unverified.
+
+The operator reported the static directory
+`/home/elwis/.local/state/sie/evidence/live_entity_enabled_e3MiJTtG`
+and moving directory
+`/home/elwis/.local/state/sie/evidence/live_entity_enabled_yilFcNEC`.
+
+| Artifact | Static reported SHA-256 | Moving reported SHA-256 |
+| --- | --- | --- |
+| `preview/summary.json` | `f22f245e0db6a8407eaabc2d539730e61938c38d02f9873e52344bdafd282825` | `2615681b9ed48d89ace763d66f7baf47f1928d2adb7d89682bf91c170c457bb4` |
+| `preview/camera/events.jsonl` | `1fd4c4a037260f30a2fa5e0702830ee89cf82f71c53c340a8b0add69432c5215` | `7d791b5a000bdc31fd95704661b949796149c4dd1042c92304ebb084a9ac9d4a` |
+| `preview/ld19/events.jsonl` | `c2a879050dc4e01468e477ef00f2bc31cbf5ffe5ac435afe6dedace62f3e1142` | `39fe9bf161ed71f2851eaec41e0c93869242b237d923ae02cc53af47bd542f4b` |
+
+**FACT / operator checksum verification.** All six reported checksum
+entries per trial passed, including the original temporal association
+journal. The primary files were unavailable for independent inspection
+during this audit.
+
+All 129 available spatial observations used
+`STABLE_TORSO_CORE_FRONT_DIAGNOSTIC_ONLY`. Whole-mask depth was coherent
+in 108 and failed its MAD criterion in 21. The independently evaluated
+torso-core result remains a partial longitudinal known term. Its available
+fields do not establish a complete front range or 3D pose.
+
+Within the reported conditions, the trials demonstrated concurrent camera
+and independent LD19 processing, continuous session-local target tracking,
+source-bound spatial evidence, independent obstacle geometry, and bounded
+asynchronous diagnostic publication on Pi 5. The original 250 ms camera
+reference remained unsatisfied. Physical acquisition synchronization, LD19
+entity membership, complete target pose, navigation safety, and motion
+authorization remain unverified. All admission and execution authorization
+flags remain false. The ESP32 v13 braking fault remains a separate blocker.
