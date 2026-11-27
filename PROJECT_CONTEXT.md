@@ -1,12 +1,14 @@
 # SIE Project Context
 
+**DECISION — 2026-11-27.** The owner closed the fundamental architecture discussion phase for the current MVP and approved the return to practical MVP development. The proposed next engineering step is [Step 73 — Entity-Centric Knowledge Integration for MVP](#step-73--entity-centric-knowledge-integration-for-mvp), starting from the [Step 72 operator-reported evidence](docs/handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-72--operator-reported-three-sensor-replay). The [Fundamental Architecture Baseline](#fundamental-architecture-baseline) indexes the approved principles.
+
 **DECISION — 2026-11-26:** The owner froze `STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`. Step 71 adds source-bound AR0234 semantics to the existing OV9281–LD19 diagnostic. Preserve the calibrated artifacts, existing diagnostic policies and disabled admission flags. [Step 70 local correspondence freeze](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26).
 
 **DECISION — current sensor checkpoint, 2026-11-26:** The owner closed Live Three-Sensor Temporal Association as `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE` on `codex/siee-live-temporal-association-shadow-v1-20261125`. Preserve `latest_pair`, zero added association wait, current calibrations, Vision Core processing and independent bounded diagnostics. Measurement, World State and motor admission remain disabled. Read the [Step 57 evidence and limits](docs/handoffs/SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26) and [Spatial Association v1 handoff](docs/handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md).
 
 **FACT** The final SHA-matched journal reproduced 82/83 RGB–Stereo, 80/83 RGB–LD19 header and 80/83 joint matches. All 82 accepted camera links agreed with Vision Core's actual stereo selection. Forty of 82 publications met experimental three-source freshness. The earlier first-live and LD19 clock files are `PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE`. The Graphify snapshot is still 2026-11-16 at `db8097ea4239dcf45ef7598c831a45648d2498fd`.
 
-**OPEN** Runtime `use_sim_time`, end-to-end latency, the cause of `TARGET_UNAVAILABLE` and the camera-to-LiDAR extrinsic remain unverified. Physical laser acquisition time remains `UNKNOWN`. The next stage begins with a read-only frame and calibration inventory. The 2026-11-23 ESP32 v13 fault remains an independent blocker.
+**OPEN** Runtime `use_sim_time`, end-to-end latency, the cause of `TARGET_UNAVAILABLE` and the camera-to-LiDAR extrinsic remain unverified. Physical laser acquisition time remains `UNKNOWN`. At the temporal checkpoint, the handoff called for a read-only frame and calibration inventory. The 2026-11-23 ESP32 v13 fault remains an independent blocker.
 
 ## 2026-11-25: Historical three-sensor timebase and RGB-anchored association checkpoint (FACT / DECISION / OPEN)
 
@@ -1332,6 +1334,121 @@ conceptual behavior. Existing implementation and experimental checkpoints
 establish the verified functionality. Module ownership, interfaces, Data
 Contracts, runtime behavior, and admission paths retain their approved scope.
 
+## Experience, Learning and Controlled Evolution
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** Learning from experience is a
+fundamental capability of SIE.
+
+> **SIE continuously evolves by acquiring, analyzing, and validating its own and collective experience of interacting with the physical world, improving its knowledge and task execution capabilities while preserving fundamental architectural principles, safety requirements, ethical norms, and established authorization boundaries.**
+
+**Experience** is the documented history of interactions with the physical
+world, including initial conditions, decisions, actions, expected and actual
+outcomes, and supporting evidence.
+
+### Proposed principles for experience-based learning
+
+**PROPOSAL.** These nine principles describe a detailed interpretation of the
+approved capability. The details and mechanisms require implementation-level
+approval before adoption.
+
+1. **Continuous Learning.** Acquire and analyze documented experience over time.
+2. **Evidence-Based Experience.** Preserve the evidence and provenance needed
+   to reconstruct an interaction and assess its outcome.
+3. **Learning from Success and Failure.** Examine successful, unsuccessful,
+   and inconclusive outcomes against expectations and initial conditions.
+4. **Knowledge Validation.** Validate findings before accepting them as verified
+   knowledge.
+5. **Controlled Adaptation.** Validate adaptations against the explicitly
+   established limits of the task, executor, and operating conditions.
+6. **Governed Evolution.** Use established approval procedures for changes
+   to architecture, executable code, models, permissions, or safety-critical
+   behavior.
+7. **Collective Learning.** Evaluate experience from other authorized sources
+   with its provenance and conditions of use.
+8. **Knowledge Applicability.** Reassess verified knowledge against the current
+   environment and the specific executor's capabilities before reuse.
+9. **Learning Traceability.** Preserve versioned links from experience and
+   supporting evidence to validation and any accepted or revoked knowledge.
+
+### Learning boundaries
+
+| Boundary | Meaning |
+| --- | --- |
+| **Autonomous Learning** | Acquire experience and reuse applicable verified knowledge within existing permissions. |
+| **Controlled Adaptation** | Apply validated adaptations within explicitly established limits. |
+| **Governed Evolution** | Obtain authorization for changes to architecture, executable code, models, permissions, or safety-critical behavior. |
+
+Accept findings from experience as verified knowledge only after validation.
+Prior success still requires a current safety and applicability assessment.
+Preserve provenance, applicability conditions, versioning, validation, and the
+ability to revoke invalid knowledge.
+Apply executor-specific capability checks and assess current environmental
+conditions before using collective experience.
+
+Human Safety First, Independent Decision Validation, Human Oversight,
+Non-Self-Authorization, and Challenge Before Acceptance apply throughout.
+Existing knowledge ownership, evidence and World State admission requirements,
+and independent runtime safety govern any future implementation.
+
+## Fundamental Architecture Baseline
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** The fundamental architecture
+discussion phase is complete for the current MVP. Evidence-driven revisions
+remain possible through established owner approval procedures. The canonical
+name is SIE, Spatial Intelligence Engine, pronounced SEE.
+
+- [Fundamental Architecture Principles](#fundamental-architecture-principles)
+- [Knowledge Architecture Principles](#knowledge-architecture-principles)
+- [Responsible Autonomy and Decision Governance Principles](#responsible-autonomy-and-decision-governance-principles)
+- [Mission and Practical Intelligence Principles](#mission-and-practical-intelligence-principles)
+- [Experience, Learning and Controlled Evolution](#experience-learning-and-controlled-evolution)
+
+## MVP Continuation Checkpoint
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** Resume practical MVP development.
+The immediate objective is a functional mobile robotic platform demonstrating
+the essential SIE perception–decision–action–feedback cycle. Priorities are
+AR0234 semantics and target continuity, OV9281 spatial depth, LD19 obstacle
+observations and mapping, complementary sensor knowledge, practical entity
+representation, unified ROS 2 navigation and motion control, safe execution,
+and physical outcome verification. Navigation and motion are MVP development
+objectives subject to existing safety and authorization gates.
+
+Common entity identity may be supported by complementary evidence about
+different physical surfaces. Each source's observations retain their provenance
+and applicability limits. Full autonomous learning, collective intelligence,
+general-purpose reasoning, and complete industrial automation remain long-term
+capabilities outside the immediate MVP scope.
+
+**FACT / operator report.** The Step 72 replay on 2026-11-26 reported 53/53
+coherent RGB–Stereo masked-depth diagnostic cycles and zero coherent
+three-sensor Surface-Level candidates. The full counts and reported hashes
+are recorded in the [Step 72 handoff](docs/handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-72--operator-reported-three-sensor-replay).
+The primary artifacts were unavailable locally. The absence of same-surface
+candidates leaves the physical membership of LD19 reflections in the observed
+person unverified.
+
+### Step 73 — Entity-Centric Knowledge Integration for MVP
+
+**PROPOSAL.** Begin with a read-only review of the existing Step 72 evidence
+and independent LD19 and camera observations. Identify the minimum integration
+needed to support obstacle detection, semantic understanding, and spatial
+knowledge for subsequent safe navigation decisions. Specify how LD19 obstacle
+and mapping evidence, AR0234 semantic and track evidence, and OV9281 spatial
+evidence can support a practical entity representation while retaining source
+provenance. Keep tentative entity associations separate from Surface-Level
+correspondence and accepted facts. Record missing or ambiguous evidence and
+the conditions for additional information or safe refusal.
+
+The proposed step is a diagnostic design and evidence review. Existing Data
+Contracts, calibration, runtime, and Measurement, World State, and motor
+admission boundaries govern continuation.
+
+**OPEN / separate actuator blocker.** The ESP32 v13 braking fault remains
+unresolved after the supervised raised-wheel trial latched
+`BOUNDED_DISTANCE_LIMIT`. Reset, reflash, and motor operation require separate
+operator authorization. [v13 brake continuity handoff](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md)
+
 ## Current product direction
 
 The long-term product is a construction-object spatial intelligence system: it maintains an evidence-backed spatial state of the project and coordinates data and authorized actions for admitted robotic complexes, machines, and mechanisms. A mobile base that follows a semantic target is one future executor and validation scenario, not the definition or boundary of SIE. **Canonical dynamic fusion diagnostics exclude mobile-base navigation and motor control.** A separate supervised bounded trial is recorded in the current checkpoint; it grants no autonomous or canonical motion admission. No output of the current dynamic fusion diagnostic may authorize motion.
@@ -1817,6 +1934,10 @@ The immediate engineering goal remains reusable RGB semantics plus stereo geomet
 
 ## Active development stage
 
+This section records the RGB–Stereo validation workstream. The current
+cross-sensor engineering proposal is in the
+[MVP Continuation Checkpoint](#mvp-continuation-checkpoint).
+
 SIE is in **evidence-driven AR0234-to-OV9281 target-association validation**, before validated dynamic Measurement or autonomous camera-driven motion. A separate operator-supervised bounded trial exists, as recorded in the current checkpoint above; it does not promote diagnostic camera output to canonical motion admission. Pose-aware v7 depth evidence and unresolved startup disparity shifts remain recorded above; avoid repeating manual board series without a specific new decision they can resolve. Both v8 and v8b are rejected as replacements despite strong solver metrics. Active v7 remains unchanged. A narrow stationary-person semantic gate is confirmed at 2.5 to 4.2 m for the current 7° upward rigid camera-block pose, but its metric depth values remain provisional because no optical-frame-consistent physical validation has yet established its bounds above 1.5 m.
 
 The architecture is accepted: AR0234 provides semantics; OV9281 provides geometry. The active uncertainty has three practical parts, with reproducible startup disparity drift now an explicit part of the first:
@@ -1879,6 +2000,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-27 | Froze experience-based learning as an approved fundamental capability, indexed the architecture baseline, recorded the operator-reported Step 72 replay, and established the practical MVP continuation checkpoint with Step 73 proposed. |
 | 2026-11-27 | Froze the owner-approved SIE mission, purpose, and responsibility, the intended work categories, and the Practical Intelligence Principles for feasible execution and verified physical outcomes. |
 | 2026-11-27 | Froze the owner-approved Responsible Autonomy and Decision Governance Principles, including the priority hierarchy and conceptual separation of decision formation, admissibility validation, authorized execution, and runtime safety. |
 | 2026-11-26 | The owner froze SIE (Spatial Intelligence Engine, pronounced SEE) as the canonical project, architecture, and product name. SIEE remains the historical designation of the earlier experimental stage. |

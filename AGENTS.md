@@ -80,6 +80,8 @@ Apply the [Responsible Autonomy and Decision Governance Principles](PROJECT_CONT
 
 Apply the [Mission and Practical Intelligence Principles](PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles) when assessing task feasibility and execution alternatives. Distinguish verified executor capabilities from intended ones, and use physical evidence to assess completion.
 
+Apply the [Experience, Learning and Controlled Evolution principle](PROJECT_CONTEXT.md#experience-learning-and-controlled-evolution) with the existing evidence, validation, and authorization rules. Its detailed learning mechanisms require implementation-level approval. Use the [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) to identify the next engineering proposal.
+
 ## Canonical information flow
 
 ```text

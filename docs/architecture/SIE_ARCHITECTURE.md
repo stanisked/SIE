@@ -25,6 +25,8 @@ SIE's mission is to protect humans and extend human capabilities through spatial
 
 The [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) distinguish decision formation under ARCH-006, independent admissibility validation, authorized execution, and independent runtime safety and interruption.
 
+The [Fundamental Architecture Baseline](../../PROJECT_CONTEXT.md#fundamental-architecture-baseline) consolidates the owner-approved principles for the current MVP. It includes [Experience, Learning and Controlled Evolution](../../PROJECT_CONTEXT.md#experience-learning-and-controlled-evolution), with implementation details subject to approval.
+
 ---
 
 # 2. What SIE is

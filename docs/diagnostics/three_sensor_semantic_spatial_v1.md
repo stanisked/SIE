@@ -153,7 +153,10 @@ result="${run}_step71_$(date -u +%Y%m%dT%H%M%SZ)_$$"
 "$runtime" -m json.tool "$result/summary.json"
 ```
 
-**OPEN** No Step 71 physical run or measured live overhead is available.
+**OPEN** Physical-run evidence and measured live overhead were unavailable
+at the Step 71 implementation checkpoint. The later
+[Step 72 replay results](../handoffs/SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-72--operator-reported-three-sensor-replay)
+are operator-reported and await independent verification.
 The LD19 header is a conversion stamp and its acquisition time remains
 `UNKNOWN`. Camera exposure, physical target membership and the
 camera–LiDAR extrinsic remain independently unverified. The optical datum

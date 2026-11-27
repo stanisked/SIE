@@ -18,6 +18,24 @@ The [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONT
 
 Use the [Mission and Practical Intelligence Principles](../../PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles) when evaluating a proposed next step against demonstrated executor capabilities and the available evidence of physical outcomes.
 
+## 2026-11-27: MVP continuation checkpoint
+
+**DECISION.** The owner closed the fundamental architecture discussion phase
+for the current MVP and approved returning to practical MVP development.
+[Fundamental Architecture Baseline](../../PROJECT_CONTEXT.md#fundamental-architecture-baseline)
+
+**FACT / operator report.** Step 72 reported 53/53 coherent RGB–Stereo
+masked-depth cycles and zero coherent three-sensor Surface-Level candidates.
+The primary artifacts were unavailable locally. Physical LD19 target
+membership remains unverified.
+[Step 72 counts, hashes, and limitations](SIEE_THREE_SENSOR_SPATIAL_ASSOCIATION_HANDOFF_20261126.md#step-72--operator-reported-three-sensor-replay)
+
+**PROPOSAL.** Review Step 72 and independent sensor observations to define
+the minimum integration for complementary entity evidence.
+[Step 73 — Entity-Centric Knowledge Integration for MVP](../../PROJECT_CONTEXT.md#step-73--entity-centric-knowledge-integration-for-mvp)
+
+**OPEN.** The ESP32 v13 brake fault remains a separate actuator blocker.
+
 ## 2026-11-26: Step 70 local correspondence freeze
 
 **FACT / operator report** Step 67 and Step 68 yielded 377 coherent local
@@ -95,6 +113,9 @@ current target confirmation and 3D association. The COCO segmentation model
 and the Shadow RGB v3 detector also have different provenance.
 
 ## Next implementation boundary
+
+This section records the November 2026 Fast Shadow checkpoint. The current
+engineering proposal is indexed in the [MVP continuation checkpoint](#2026-11-27-mvp-continuation-checkpoint).
 
 The local candidate now uses the optimized capture, matching and mask-depth
 path for the Shadow stream. It binds a same-pixel v3 detection to one COCO

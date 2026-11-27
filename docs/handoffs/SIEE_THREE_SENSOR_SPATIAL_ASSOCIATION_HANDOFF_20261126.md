@@ -2,8 +2,8 @@
 
 **DECISION** SIE's objective is a unified evidence-backed system spanning
 AR0234 RGB semantics, OV9281 stereo depth, LD19 LiDAR, World State and robot
-control. The next stage is diagnostic spatial association. Its entry baseline
-is `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE` on
+control. The spatial association stage began with diagnostic work. Its entry
+baseline is `TEMPORAL_ASSOCIATION_DIAGNOSTIC_COMPLETE` on
 `codex/siee-live-temporal-association-shadow-v1-20261125`. Start with the
 [Step 57 freeze](SIEE_TEMPORAL_ASSOCIATION_HANDOFF_20261125.md#step-57-diagnostic-baseline-freeze-2026-11-26)
 and Git baseline `23dbfdb4a60fbdca8eec5480d9d19751a7e2c317`.
@@ -19,6 +19,8 @@ For distinguishing candidate associations from established facts and determining
 Use the [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONTEXT.md#responsible-autonomy-and-decision-governance-principles) when reviewing any future proposal to use this diagnostic evidence in a decision or execution path.
 
 The [Mission and Practical Intelligence Principles](../../PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles) require verified executor capabilities and evidence of physical outcomes for future task execution.
+
+The [Fundamental Architecture Baseline](../../PROJECT_CONTEXT.md#fundamental-architecture-baseline) indexes the owner-approved principles. For continuation, start with the [Step 72 replay report](#step-72--operator-reported-three-sensor-replay) and the [Step 73 proposal](../../PROJECT_CONTEXT.md#step-73--entity-centric-knowledge-integration-for-mvp).
 
 ## Source and frame inventory
 
@@ -161,7 +163,50 @@ Keep ambiguous stereo support and untrimmed residuals in the diagnostic
 record. The [Step 71 guide](../diagnostics/three_sensor_semantic_spatial_v1.md)
 contains provenance, the scoped contract and exact Pi commands.
 
-**OPEN** The capture and replay path is software-verified with synthetic
-inputs. No physical run, target-membership verification or measured Pi
-overhead is available. The Step 70 freeze, diagnostic admission boundaries
-and separate ESP32 v13 fault still apply.
+**FACT / Step 71 implementation checkpoint.** The capture and replay path
+was software-verified with synthetic inputs. Physical-run evidence, target
+membership verification, and measured Pi overhead were unavailable at that
+checkpoint. The Step 70 freeze, diagnostic admission boundaries, and separate
+ESP32 v13 fault still apply.
+
+## Step 72 — Operator-reported three-sensor replay
+
+**FACT / operator report, 2026-11-26.** The owner reported these experimental
+diagnostic results from the Step 71 capture and replay path.
+
+| Metric | Reported value |
+| --- | ---: |
+| Journal cycles | 54 |
+| Working cycles | 53 |
+| Coherent RGB–Stereo masked-depth diagnostic cycles | 53/53 |
+| Completed source snapshots | 18/18 |
+| Snapshots with three-source timing diagnostic acceptance | 15/18 |
+| Coherent three-sensor Surface-Level candidates | 0 |
+| Beam instances projected outside the selected RGB–Stereo component | 944 |
+| Journal write or evaluation errors | 0 reported |
+
+The operator reported the replay evidence at
+`/home/elwis/.local/state/sie/evidence/live_temporal_shadow_iWIjW8zB_step71_20261126T171308Z_1333`.
+
+| Artifact | Operator-reported SHA-256 |
+| --- | --- |
+| `summary.json` | `73a8b0cdd801020c50778df93d38b56bf9f693e6e342e29d8df7ba08bd539b61` |
+| `cycles.jsonl` | `08bb65b49454c57131682faf77b8f6ada16e510f7fbe9c84ef7428c60d917655` |
+| `policy.json` | `164cfb4c452d33f14f30aca55b42cf68e6a5c23d580d7d159074322f4f76115b` |
+
+**OPEN.** The primary artifacts are `PRIMARY_EVIDENCE_NOT_LOCALLY_AVAILABLE`.
+The counts and hashes retain their operator-reported status. The zero
+Surface-Level candidates describe the result under the selected component
+and diagnostic correspondence policy. A claim of sensor failure would require
+separate evidence. Physical membership of LD19 reflections in the observed
+person remains unverified. Entity-Level Association can use complementary
+observations of different physical surfaces when evidence supports common
+identity. The diagnostic admission boundaries remain in force.
+
+**PROPOSAL.** Begin Step 73 with these results and independent LD19 and camera
+observations. Establish the minimum evidence integration needed for practical
+entity representation and subsequent safe navigation design.
+[Step 73 — Entity-Centric Knowledge Integration for MVP](../../PROJECT_CONTEXT.md#step-73--entity-centric-knowledge-integration-for-mvp)
+
+**OPEN / separate actuator blocker.** ESP32 v13 still has the unresolved brake
+fault documented in the [v13 handoff](SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md).
