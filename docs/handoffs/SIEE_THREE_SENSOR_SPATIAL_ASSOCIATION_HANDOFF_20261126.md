@@ -210,3 +210,33 @@ entity representation and subsequent safe navigation design.
 
 **OPEN / separate actuator blocker.** ESP32 v13 still has the unresolved brake
 fault documented in the [v13 handoff](SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md).
+
+## Step 73.3 — Entity-Centric Diagnostic Preview v1
+
+**DECISION — `OWNER_APPROVED`, 2026-11-27.** Preview complementary sensor
+evidence offline under `entity-centric-preview-v1-TRIAL`. Keep LD19 obstacle
+evidence independent of the AR0234 and OV9281 candidate. Surface-Level
+correspondence is optional context.
+
+**FACT.** The preview uses the Step 57 timing journal and Step 71 camera
+snapshots, plus existing camera audit or LD19 diagnostic records where
+available. One current RGB observation and its unique stereo component can
+support a provisional entity. LD19 membership remains unlinked. Existing
+runtime, calibration, and admission paths remain unchanged.
+[Design and exact Pi replay commands](../diagnostics/entity_centric_diagnostic_preview_v1.md)
+
+**FACT / software verification.** 211 targeted tests and five subtests
+passed, including 17 preview tests. The synthetic replay produced a camera
+entity with zero Surface-Level candidates and retained independent LD19
+observations. Diagnostic rows and summaries were byte-identical on replay.
+
+**FACT / operator report.** The operator verified the three recorded Step 72
+replay hashes on the Pi in Step 73.1 and identified
+`step73_entity_integration_evidence_20261127.tar.gz`.
+
+**OPEN.** The archive was unavailable locally, and the documented Pi SSH
+endpoint rejected authentication. No new physical run or primary-data
+replay was performed. The Graphify report and graph hash were checked
+against the 2026-11-16 `db8097ea` snapshot. That snapshot predates Step 71
+and Step 73.3, so current sources governed implementation. The ESP32 v13
+braking fault remains a separate actuator blocker.

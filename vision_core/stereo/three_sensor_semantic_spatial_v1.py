@@ -113,6 +113,14 @@ def bind_semantic_target(manifest, mask):
             "torso_only": torso is not None}
 
 
+def camera_packet_matches(source, packet, source_id):
+    """Match archived snapshot timing to the selected packet in the journal."""
+    return bool(packet and source.get("source_id") == source_id
+                and source.get("sequence") == packet.get("sequence")
+                and source.get("timestamp_ns") == nanoseconds(packet.get("driver_timestamp_s"))
+                and source.get("received_monotonic_ns") == nanoseconds(packet.get("host_packet_received_monotonic_s")))
+
+
 def temporal_eligibility(temporal, frame_freshness):
     """Preserve independent Step 57 dispositions and screen the actual third edge."""
     rows = (frame_freshness or {}).get("frames") or {}
@@ -124,9 +132,7 @@ def temporal_eligibility(temporal, frame_freshness):
                "rgb_stereo": a, "rgb_ld19": b, "stereo_ld19": {"status": "UNAVAILABLE"}}
     for name, source in (("ar0234", rgb), ("ov9281", stereo)):
         packet = rows.get(name) or {}
-        if (not packet or source.get("source_id") != name or source.get("sequence") != packet.get("sequence")
-                or source.get("timestamp_ns") != nanoseconds(packet.get("driver_timestamp_s"))
-                or source.get("received_monotonic_ns") != nanoseconds(packet.get("host_packet_received_monotonic_s"))):
+        if not camera_packet_matches(source, packet, name):
             return details | {"status": "CAMERA_PACKET_BINDING_MISMATCH"}
     if temporal.get("association_policy") != asdict(PAIRING) or temporal.get("freshness_policy") != asdict(FRESHNESS):
         return details | {"status": "STEP57_TEMPORAL_POLICY_MISMATCH"}

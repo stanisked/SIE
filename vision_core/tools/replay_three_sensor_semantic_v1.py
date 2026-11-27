@@ -42,7 +42,7 @@ def verify_sha(path, expected):
     return actual
 
 
-def load_inputs(ar_path, stereo_path, activation_path):
+def load_camera_inputs(ar_path, stereo_path, activation_path):
     from analyze_ar0234_stereo_component_ambiguity import load_calibrations
 
     verify_sha(activation_path, ACTIVATION_SHA256)
@@ -56,6 +56,16 @@ def load_inputs(ar_path, stereo_path, activation_path):
     calibration = joint.load_calibration(stereo_path.read_bytes())
     calibration.update(load_calibrations(ar_path, stereo_path, extrinsic_path))
     validate_rotation(calibration["R"])
+    policy_path = joint.CONFIG / POLICY_FILE
+    verify_sha(policy_path, POLICY_SHA256)
+    policy = json.loads(policy_path.read_text())
+    if policy["local_stereo_policy_sha256"] != local_replay.POLICY_SHA256:
+        raise ValueError("STEP69_POLICY_BINDING_MISMATCH")
+    return calibration, policy
+
+
+def load_inputs(ar_path, stereo_path, activation_path):
+    calibration, policy = load_camera_inputs(ar_path, stereo_path, activation_path)
     profiles = []
     for key, filename in (("mechanical", "camera_lidar_mechanical_geometry_v1.json"),
                           ("optical_datum", "camera_lidar_optical_datum_v1.json")):
@@ -64,11 +74,6 @@ def load_inputs(ar_path, stereo_path, activation_path):
         profiles.append(json.loads(path.read_text()))
     rotation, translation, axial = estimated_ld19_transform(*profiles)
     _, local_policy = local_replay.frozen_policy()
-    policy_path = joint.CONFIG / POLICY_FILE
-    verify_sha(policy_path, POLICY_SHA256)
-    policy = json.loads(policy_path.read_text())
-    if policy["local_stereo_policy_sha256"] != local_replay.POLICY_SHA256:
-        raise ValueError("STEP69_POLICY_BINDING_MISMATCH")
     return calibration, rotation, translation, axial, local_policy, policy
 
 
@@ -115,9 +120,17 @@ def scan_payload(row, identity):
     return raw, digest
 
 
-def replay(run, output, inputs, model_hash):
+def reconstruct_snapshot(jpeg, maps, calibration):
+    """Use the existing offline rectification, SGBM7, LR check and metric grid."""
     from compare_shadow_saved_stereo_matcher import lr_pair
 
+    left, right = joint.rectify_jpeg(jpeg, maps)
+    disparity, lr, _ = lr_pair(left, right, "sgbm7")
+    grid = stereo_grid(disparity, lr, calibration["Q"], calibration["R1"], np.ones_like(lr))
+    return disparity, lr, grid
+
+
+def replay(run, output, inputs, model_hash):
     calibration, rotation, translation, axial, local_policy, policy = inputs
     journals = sorted(run.glob("control-preview-*/temporal-association-shadow.jsonl"))
     if len(journals) != 1:
@@ -180,9 +193,7 @@ def replay(run, output, inputs, model_hash):
                 row["ld19_raw_scan_sha256"] = digest
                 row["ld19_callback_receipt_host_realtime_ns"] = cycles[cycle]["ld19_payload_archive"].get(
                     "receipt_host_realtime_ns")
-                left, right = joint.rectify_jpeg(jpeg, maps)
-                disparity, lr, _ = lr_pair(left, right, "sgbm7")
-                grid = stereo_grid(disparity, lr, calibration["Q"], calibration["R1"], np.ones_like(lr))
+                disparity, lr, grid = reconstruct_snapshot(jpeg, maps, calibration)
                 report = associate_cycle(disparity, lr, grid, mask, bound, raw, calibration,
                                          rotation, translation, axial, local_policy, policy)
                 row.update(report)
