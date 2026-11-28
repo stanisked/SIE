@@ -445,3 +445,59 @@ accuracy were unverified. The strict reference uncertainty audit is
 deferred under the owner decision. Practical completion is pending new
 physical evidence, and navigation admission remains false.
 [Pilot evidence, practical targets and limits](../diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-validation)
+
+## Step 75.4 Robot Geometry and Footprint
+
+**FACT — Step 75.3d evidence boundary, 2026-11-28.** The motor-off run
+completed twelve trials. The recorded result remains `FAIL`. A verified
+copy of the 16-file evidence set was replayed independently. The collector
+fix reconciled 10,043 triplets through the end of the journal, accounting
+separately for 13 startup exclusions, one firmware STATUS and one encoder
+baseline. All 24 trial endpoints matched and all twelve poses replayed.
+The three backward trials still exceeded the practical longitudinal
+target. Lateral displacement,
+straight heading, and turn endpoint accuracy remain unverified. This
+evidence leaves navigation admission disabled.
+
+**FACT — geometry inventory.** The qualified motor-off adapter supplies
+one diagnostic `odom → base_link` authority. Its modeled axle midpoint
+provides the planar origin for the wheel integration. The installed
+chassis datum, its height, and the chassis ground envelope still require
+a survey. The 0.290 m configured track width and wheel diameters are
+odometry inputs. The optional LD19 static transform remains provisional,
+and the camera lens-rim profiles describe separate mechanical datums.
+[Odometry profile](../../ros2/sie_ros2/config/wheel_odometry_v1.yaml) ·
+[Frames and datums](#frames-and-datums)
+
+### Static survey inputs
+
+**PROPOSAL.** Establish a task-sufficient geometry record for the current
+mobile cart in its normal MVP configuration. Collect the stationary
+measurements below with traction power physically disconnected. Record
+the mount and payload configuration, instrument resolution, approximate
+uncertainty, and photos or a sketch showing the reference points. Use
+metres and explicit frame directions. Record unavailable quantities as
+unknown.
+
+| Item | Measurement or review |
+| --- | --- |
+| Candidate body datum | Locate the centres of both drive-wheel axes and mark their midpoint and its ground projection. Verify X forward, Y left, Z up, and measure the midpoint height above the level floor. Verify whether this datum can represent the existing `base_link` origin without changing the odometry interpretation. |
+| Ground envelope | From the marked ground projection, measure front, rear, left and right outer extents. Include wheels, bumpers and fixed protruding equipment in the tested configuration. Record asymmetric or additional corners where needed to enclose the measured plan-view silhouette. Identify which equipment was installed for the survey. |
+| LD19 origin and axes | Locate the scan origin and plane using the installed unit and mount reference. Record X/Y/Z relative to the candidate body datum, scan-plane height, and orientation and uncertainty where observable. Review the provisional zero angles against this survey. |
+| Existing transform ownership | Record the expected parent, child, and sole publisher for each proposed edge. Verify the measured footprint can be expressed in the established frame before proposing any additional ground-projection frame. |
+
+Derive the smallest checked footprint that encloses the measured hardware
+for this configuration. Keep physical dimensions distinct from any later
+inflation or stopping allowance. Check corner order, units, axis signs,
+origin inclusion, and conservative coverage against the measured outline.
+Check the LD19 mounting transform independently using the chosen datum
+and known directions before proposing a static TF update. A transform
+whose origin or orientation is unknown remains pending.
+[ES-005 Spatial Model](../architecture/SIE_SPATIAL_MODEL.md)
+
+**OPEN — exit evidence.** A reviewed dimensional record, source-bound
+footprint, datum drawing, and disposition of the provisional LD19
+transform are pending. Step 75.4 begins with documented geometry. TF
+activation and navigation integration follow their existing approvals.
+Powered motion qualification, backward odometry review, and the v13
+braking defect remain open.

@@ -52,7 +52,14 @@ navigation admission remains false.
 odometry validation for the mobile MVP. The operator-reported strict
 pilot retains its `INCONCLUSIVE` result. The twelve-trial practical
 evaluation is pending physical evidence.
-[Current navigation checkpoint](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-753d-practical-validation-approved)
+[Step 75.3d practical validation decision](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-753d-practical-validation-approved)
+
+**FACT / NEXT — Step 75.4.** The completed Step 75.3d run retains its
+`FAIL`. Offline reconciliation matched all post-startup triplets and
+confirmed all trial endpoints. Backward odometry accuracy remains
+unresolved. The next work is the stationary survey of the cart's body
+datum, footprint, and LD19 mounting geometry.
+[Step 75.4 geometry and footprint](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-754-robot-geometry-and-footprint)
 
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately
