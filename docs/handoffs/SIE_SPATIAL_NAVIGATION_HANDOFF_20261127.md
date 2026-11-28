@@ -438,13 +438,17 @@ provenance, identify unsupported comparisons, and keep the existing
 odometry parameters and telemetry continuity checks.
 [Canonical principle](../../PROJECT_CONTEXT.md#task-sufficient-accuracy-over-component-level-precision)
 
-**FACT — operator-reported.** The original strict forward pilot remains
-`INCONCLUSIVE`. The operator reported 1.000 m nominal travel from point A
-floor marks and 0.997826664 m odometry X. Independent lateral and heading
-accuracy were unverified. The strict reference uncertainty audit is
-deferred under the owner decision. Practical completion is pending new
-physical evidence, and navigation admission remains false.
-[Pilot evidence, practical targets and limits](../diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-validation)
+**DECISION — OWNER_CONFIRMED, 2026-11-28.** Close Step 75.3d as
+`PRACTICAL_ODOMETRY_VALIDATION_COMPLETE_WITH_LIMITATIONS`. The original
+strict pilot retains `INCONCLUSIVE`. The completed twelve-trial run
+retains `FAIL`. The offline collector fix reconciled 10,043 triplets,
+and independent replay recovered the original twelve poses and all 24
+endpoints. The three backward trials exceeded the practical
+longitudinal target. The operator confirmed physical deviation. The
+probable rear swivel caster contribution remains a hypothesis.
+Powered-motion accuracy and backward-motion limits remain open.
+Navigation admission stays off.
+[Step 75.3d closure and evidence](../diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-closure)
 
 ## Step 75.4 Robot Geometry and Footprint
 
@@ -454,56 +458,80 @@ the existing frame and capability boundaries when assessing what its
 hardware supports for the MVP.
 [Hardware Independence and Capability-Aware Adaptation](../../PROJECT_CONTEXT.md#hardware-independence-and-capability-aware-adaptation)
 
-**FACT — Step 75.3d evidence boundary, 2026-11-28.** The motor-off run
-completed twelve trials. The recorded result remains `FAIL`. A verified
-copy of the 16-file evidence set was replayed independently. The collector
-fix reconciled 10,043 triplets through the end of the journal, accounting
-separately for 13 startup exclusions, one firmware STATUS and one encoder
-baseline. All 24 trial endpoints matched and all twelve poses replayed.
-The three backward trials still exceeded the practical longitudinal
-target. Lateral displacement,
-straight heading, and turn endpoint accuracy remain unverified. This
-evidence leaves navigation admission disabled.
+**FACT — operator survey, 2026-11-28.** The drive-wheel axle midpoint is
+0.035 m above the floor. The wheel-inclusive physical envelope extends
+0.034 m forward, 0.2645 m rearward and 0.160 m to either side of this
+datum, giving 0.2985 × 0.320 m. The earlier chassis-front measurement
+was 0.0255 m. Width was measured at the outermost drive-wheel edges.
+The LD19 scan plane is horizontal and 0.222 m above the floor. The
+operator's correction places the scan centre 25 mm behind the axle.
+The candidate `base_link → ld19_sensor` transform is [−0.025, 0.000,
+0.187] m with nominal zero RPY. The 2026-11-25 orientation evidence is
+retained for the same mount and driver configuration.
 
-**FACT — geometry inventory.** The qualified motor-off adapter supplies
-one diagnostic `odom → base_link` authority. Its modeled axle midpoint
-provides the planar origin for the wheel integration. The installed
-chassis datum, its height, and the chassis ground envelope still require
-a survey. The 0.290 m configured track width and wheel diameters are
-odometry inputs. The optional LD19 static transform remains provisional,
-and the camera lens-rim profiles describe separate mechanical datums.
-[Odometry profile](../../ros2/sie_ros2/config/wheel_odometry_v1.yaml) ·
-[Frames and datums](#frames-and-datums)
+**PROPOSAL — diagnostic frame ownership.** The existing wheel adapter owns
+`odom → base_link` when its TF output is enabled. The XY kinematics and
+Z = 0 output are compatible with an axle-centred `base_link` when
+`odom` is defined at initial axle height. One separate static publisher
+owns the candidate LD19 edge in an isolated test graph. The historical
+provisional transform remains available in its existing optional launch
+and is excluded from that test graph.
 
-### Static survey inputs
+**FACT — coverage limit.** The operator reports that photographs show
+the installed equipment and rear caster within the candidate. The full
+caster swivel envelope was visually assessed and has no independent
+measurement.
 
-**PROPOSAL.** Establish a task-sufficient geometry record for the current
-mobile cart in its normal MVP configuration. Collect the stationary
-measurements below with traction power physically disconnected. Record
-the mount and payload configuration, instrument resolution, approximate
-uncertainty, and photos or a sketch showing the reference points. Use
-metres and explicit frame directions. Record unavailable quantities as
-unknown.
+**DECISION — 2026-11-28.** Step 75.4 closes as
+`ROBOT_GEOMETRY_AND_FOOTPRINT_MOTOR_OFF_QUALIFIED`. Both Pi trials passed
+isolated static TF and retain their original `BLOCKED` results. The
+first had no active LD19 publisher, and the second was blocked by a
+parameter read timeout. The reported launch arguments of the running
+driver match the historical orientation baseline. The operator confirmed
+unchanged hardware, mount, and driver implementation. The observed topic,
+frame, and scan span support reusing the qualitative orientation evidence
+for this configuration. The parameter-service timeout remains unexplained.
+[Profile, provenance, and qualification limits](../diagnostics/robot_geometry_footprint_v1.md#pi-qualification-evidence)
 
-| Item | Measurement or review |
-| --- | --- |
-| Candidate body datum | Locate the centres of both drive-wheel axes and mark their midpoint and its ground projection. Verify X forward, Y left, Z up, and measure the midpoint height above the level floor. Verify whether this datum can represent the existing `base_link` origin without changing the odometry interpretation. |
-| Ground envelope | From the marked ground projection, measure front, rear, left and right outer extents. Include wheels, bumpers and fixed protruding equipment in the tested configuration. Record asymmetric or additional corners where needed to enclose the measured plan-view silhouette. Identify which equipment was installed for the survey. |
-| LD19 origin and axes | Locate the scan origin and plane using the installed unit and mount reference. Record X/Y/Z relative to the candidate body datum, scan-plane height, and orientation and uncertainty where observable. Review the provisional zero angles against this survey. |
-| Existing transform ownership | Record the expected parent, child, and sole publisher for each proposed edge. Verify the measured footprint can be expressed in the established frame before proposing any additional ground-projection frame. |
+## Step 75.5 SLAM Toolbox integration
 
-Derive the smallest checked footprint that encloses the measured hardware
-for this configuration. Keep physical dimensions distinct from any later
-inflation or stopping allowance. Check corner order, units, axis signs,
-origin inclusion, and conservative coverage against the measured outline.
-Check the LD19 mounting transform independently using the chosen datum
-and known directions before proposing a static TF update. A transform
-whose origin or orientation is unknown remains pending.
-[ES-005 Spatial Model](../architecture/SIE_SPATIAL_MODEL.md)
+**PROPOSAL — minimum motor-off integration.** Use the qualified cart
+geometry for the diagnostic mapping setup. Keep navigation admission
+false, powered motion disabled, and existing safety boundaries in force.
+The v13 braking defect and backward odometry limitations remain open.
 
-**OPEN — exit evidence.** A reviewed dimensional record, source-bound
-footprint, datum drawing, and disposition of the provisional LD19
-transform are pending. Step 75.4 begins with documented geometry. TF
-activation and navigation integration follow their existing approvals.
-Powered motion qualification, backward odometry review, and the v13
-braking defect remain open.
+1. **Preflight.** Inventory the Pi's Jazzy package and installed SLAM
+   Toolbox version, for example with `ros2 pkg prefix slam_toolbox` and
+   `dpkg-query -W ros-jazzy-slam-toolbox`. The package was absent in the
+   Step 75.2 survey. Verify current availability and launch arguments
+   before proposing dependency changes. Inventory scan QoS, clocks and
+   TF publishers in the intended diagnostic graph.
+2. **Configure one mapper.** Prepare a separate opt-in async mapping
+   profile from the installed Jazzy defaults. Set `scan_topic` to
+   `/sie/lidar/scan_raw`, `base_frame` to `base_link`, `odom_frame` to
+   `odom`, and `map_frame` to `map`. Use `online_async_launch.py`
+   with `slam_params_file` and an explicit `use_sim_time` consistent
+   across the diagnostic graph. The launch's default simulation clock
+   needs an explicit `false` for live host-clock scans.
+   [Jazzy launch](https://github.com/SteveMacenski/slam_toolbox/blob/jazzy/launch/online_async_launch.py) ·
+   [Jazzy mapping configuration](https://github.com/SteveMacenski/slam_toolbox/blob/jazzy/config/mapper_params_online_async.yaml)
+3. **Verify frame ownership at scan time.** Keep one wheel odometry
+   authority for `odom → base_link`, one qualified static publisher
+   for `base_link → ld19_sensor`, and SLAM Toolbox as the only
+   `map → odom` authority. Exclude the historical provisional LD19 TF
+   from this graph. In replay, exclude recorded map transforms and any
+   duplicate child-frame authority. Verify `odom → ld19_sensor` at
+   each selected LaserScan header timestamp and report lookup misses
+   and dropped scans. Preserve header provenance and keep physical
+   LD19 acquisition time unknown.
+4. **Check an isolated map.** Begin with an existing usable recording
+   or synthetic scan and odometry fixtures. Confirm the mapper
+   reaches active state, consumes valid scans, publishes one occupancy
+   grid on `/map` with frame `map`, and broadcasts the sole
+   `map → odom` edge. Record the package version, profile, source
+   inputs, TF inventory, and map or pose-graph output. Check refusal
+   or nonproduction of a map with missing TF. A separately authorized
+   stationary motor-off Pi smoke test can check the live input chain.
+   Mapping accuracy and navigation authorization require their own
+   evidence.
+   [Jazzy interfaces and pose-graph API](https://github.com/SteveMacenski/slam_toolbox/blob/jazzy/README.md#api)

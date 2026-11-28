@@ -1407,8 +1407,9 @@ and identify what remains unverified.
 odometry validation against approximate, independent floor references.
 Defer the strict reference uncertainty audit unless it is needed to
 resolve a functional limitation. The original strict pilot retains its
-inconclusive result.
-[Step 75.3d decision and evidence](docs/diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-validation)
+inconclusive result. The practical stage closed with limitations.
+Backward-motion accuracy remains unresolved.
+[Step 75.3d closure and retained evidence](docs/diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-closure)
 
 ## Hardware Independence and Capability-Aware Adaptation
 
@@ -1481,10 +1482,20 @@ and applicability limits. Full autonomous learning, collective intelligence,
 general-purpose reasoning, and complete industrial automation remain long-term
 capabilities outside the immediate MVP scope.
 
-**NEXT — Step 75.4.** Record the body datum, physical footprint, and LD19
-mounting geometry of the current cart as platform-specific evidence for
-navigation review.
-[Robot Geometry and Footprint](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-754-robot-geometry-and-footprint)
+**DECISION — Step 75.4, 2026-11-28.** Close as
+`ROBOT_GEOMETRY_AND_FOOTPRINT_MOTOR_OFF_QUALIFIED` for the surveyed cart
+and isolated static TF. The wheel-inclusive footprint is axle-centred, with
+visually assessed rear caster coverage. Both Pi runs retain their
+`BLOCKED` verdicts and passing static TF checks. The operator-reported
+driver launch arguments and live scan metadata support reuse of the
+qualitative LD19 orientation evidence for the unchanged setup. Runtime
+parameter readback and the live odometry-to-scan TF chain remain
+unverified. Navigation admission and powered motion remain disabled.
+[Step 75.4 evidence and applicability limits](docs/diagnostics/robot_geometry_footprint_v1.md#pi-qualification-evidence)
+
+**NEXT — Step 75.5.** Prepare isolated SLAM Toolbox mapping and verify
+TF availability at scan timestamps.
+[Step 75.5 minimum integration plan](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755-slam-toolbox-integration)
 
 **FACT / operator report.** The Step 72 replay on 2026-11-26 reported 53/53
 coherent RGB–Stereo masked-depth diagnostic cycles and zero coherent
@@ -2066,6 +2077,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-28 | Closed Step 75.4 for practical motor-off geometry and isolated static TF, preserved both blocked Pi runs and their applicability limits, and recorded the Step 75.5 SLAM Toolbox plan. |
 | 2026-11-28 | Recorded the owner-approved Hardware Independence and Capability-Aware Adaptation principle, indexed it in the Fundamental Architecture Baseline, and linked Step 75.4 Robot Geometry and Footprint. |
 | 2026-11-27 | Added the owner-approved Task-Sufficient Accuracy over Component-Level Precision principle and recorded its application to mobile MVP motor-off odometry validation. |
 | 2026-11-27 | Froze experience-based learning as an approved fundamental capability, indexed the architecture baseline, recorded the operator-reported Step 72 replay, and established the practical MVP continuation checkpoint with Step 73 proposed. |

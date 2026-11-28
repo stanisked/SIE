@@ -86,7 +86,7 @@ Apply the [Responsible Autonomy and Decision Governance Principles](PROJECT_CONT
 
 Apply the [Mission and Practical Intelligence Principles](PROJECT_CONTEXT.md#mission-and-practical-intelligence-principles) when assessing task feasibility and execution alternatives. Distinguish verified executor capabilities from intended ones, and use physical evidence to assess completion.
 
-Apply the [Experience, Learning and Controlled Evolution principle](PROJECT_CONTEXT.md#experience-learning-and-controlled-evolution) with the existing evidence, validation, and authorization rules. Its detailed learning mechanisms require implementation-level approval. Use the [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) for the project objective and the [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-754-robot-geometry-and-footprint) for the current navigation checkpoint.
+Apply the [Experience, Learning and Controlled Evolution principle](PROJECT_CONTEXT.md#experience-learning-and-controlled-evolution) with the existing evidence, validation, and authorization rules. Its detailed learning mechanisms require implementation-level approval. Use the [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) for the project objective and the [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755-slam-toolbox-integration) for the current navigation checkpoint.
 
 Apply [Task-Sufficient Accuracy over Component-Level Precision](PROJECT_CONTEXT.md#task-sufficient-accuracy-over-component-level-precision) when evaluating component performance. Tie sufficiency to the intended task and preserve independent evidence, uncertainty, and safety gates.
 

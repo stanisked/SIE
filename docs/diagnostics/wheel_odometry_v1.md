@@ -360,3 +360,37 @@ and the comparisons they support. Strict metrology, powered-motion
 performance, and navigation authorization remain open. Preserve firmware
 and fixed odometry settings, including the 0.25 s production UART timeout.
 The v13 braking defect remains open.
+
+## Step 75.3d practical odometry closure
+
+**DECISION — OWNER_CONFIRMED, 2026-11-28.** Close Step 75.3d as
+`PRACTICAL_ODOMETRY_VALIDATION_COMPLETE_WITH_LIMITATIONS`.
+
+**FACT — retained results.** The original strict pilot remains
+`INCONCLUSIVE`. The completed twelve-trial motor-off run retains its
+`FAIL` and `FINAL_EVIDENCE:UNMATCHED_ROS_OR_UART:odom`. It is recorded in
+`/home/elwis/.local/state/sie/evidence/step75_3d_practical_boot_retry.nkl3_3vk`.
+The 16 file checksums passed. The manifest SHA-256 is
+`d7535b8406663cfa1fd46a2f200960411d7beb194c2066293a8428ffc3ed6bfa`.
+Offline finalization drained the unread journal tail and produced
+`RECONCILED` with 10,043 matched UART/odometry/TF triplets. It accounted
+separately for 13 startup exclusions, one firmware STATUS record, and
+one encoder baseline. The independent replay reproduced all twelve
+trial poses and all 24 endpoints. The offline result applies to
+evidence reconciliation.
+
+**FACT — physical limits.** All three forward and all six rotation trials
+were practically consistent for their supported comparisons. Backward
+trials 2, 4 and 6 exceeded the approximate longitudinal target by
+reporting absolute errors of 6.02%, 9.24%, and 21.07%. Raw right/left
+encoder deltas were −925/−990, −892/−1010, and −770/−960 ticks. The
+operator confirmed physical deviation during backward motion. Independent
+lateral displacement, straight heading, and rotation endpoint accuracy
+remain unverified.
+
+**HYPOTHESIS — rear caster.** The rear swivel caster probably contributed
+to the observed backward deviation. The evidence does not isolate its
+contribution from wheel slip, other mechanical effects, or encoder
+measurement error. Preserve the wheel parameters. Powered operation and
+navigation admission remain disabled, and the v13 braking defect remains
+open. [Step 75.4 Robot Geometry and Footprint](robot_geometry_footprint_v1.md)

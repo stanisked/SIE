@@ -48,18 +48,27 @@ navigation admission remains false.
 [Step 75.3c results and limits](../diagnostics/wheel_odometry_v1.md#step-753c-motor-off-integration-closure) ·
 [Step 75.3d practical protocol and original pilot](../diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-validation)
 
-**DECISION / FACT — Step 75.3d.** The owner approved practical motor-off
-odometry validation for the mobile MVP. The operator-reported strict
-pilot retains its `INCONCLUSIVE` result. The twelve-trial practical
-evaluation is pending physical evidence.
-[Step 75.3d practical validation decision](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-753d-practical-validation-approved)
+**DECISION / FACT — Step 75.3d.** The owner closed practical motor-off
+validation as `PRACTICAL_ODOMETRY_VALIDATION_COMPLETE_WITH_LIMITATIONS`.
+The strict pilot retains `INCONCLUSIVE`. The completed twelve-trial run
+retains `FAIL`, and offline reconciliation is recorded separately as
+`RECONCILED`. The operator confirmed backward physical deviation.
+The probable rear swivel caster contribution remains a hypothesis.
+[Step 75.3d closure and limits](../diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-closure)
 
-**FACT / NEXT — Step 75.4.** The completed Step 75.3d run retains its
-`FAIL`. Offline reconciliation matched all post-startup triplets and
-confirmed all trial endpoints. Backward odometry accuracy remains
-unresolved. The next work is the stationary survey of the cart's body
-datum, footprint, and LD19 mounting geometry.
-[Step 75.4 geometry and footprint](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-754-robot-geometry-and-footprint)
+**DECISION / FACT — Step 75.4.** Close as
+`ROBOT_GEOMETRY_AND_FOOTPRINT_MOTOR_OFF_QUALIFIED` for the surveyed cart.
+The 0.2985 m by 0.320 m wheel-inclusive footprint has visual support
+for caster coverage. Both Pi runs passed isolated static TF and retain
+their `BLOCKED` verdicts. The operator-reported launch arguments and scan
+metadata support reuse of the qualitative LD19 orientation evidence.
+Runtime parameter-service readback remains unverified.
+[Pi qualification evidence](../diagnostics/robot_geometry_footprint_v1.md#pi-qualification-evidence)
+
+**NEXT — Step 75.5.** Prepare isolated SLAM Toolbox mapping and verify
+the scan-time TF chain before assessing map output. Navigation admission
+and powered motion remain disabled.
+[Step 75.5 minimum integration plan](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755-slam-toolbox-integration)
 
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately

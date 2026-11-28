@@ -37,8 +37,8 @@ v3 binding which must be refactored to v5 before being connected.
 `wheel_odometry.launch.py` is a separate read-only v15 UART launch. It
 publishes `/odom`, diagnostics, and an opt-in `odom → base_link` transform.
 See the [Step 75.3c guide](../../docs/diagnostics/wheel_odometry_v1.md)
-for parameter provenance, exclusive ownership, continuity and the proposed
-motor-off procedure.
+for parameter provenance, exclusive ownership, continuity and motor-off
+qualification.
 
 ## Optional STL-19P / LD19 raw sensor bring-up (2026-11-25)
 
@@ -138,6 +138,12 @@ built from isolated worktree HEAD `8515f31dd9806a21993faffd7f89accaa2dcb1da`:
 reception, and provisional TF are confirmed on the actual hardware.
 Prior manual-launch RViz2/physical X+ and Y+/Y- tests are separate evidence;
 RViz2 was not repeated with the new combined launch in the recorded run.
+
+Step 75.4 separately qualified the axle-centred LD19 transform for the
+surveyed cart and isolated motor-off TF graph. That graph uses one static
+publisher. The optional integrated launch still uses the historical
+provisional transform.
+[Step 75.4 evidence and limits](../../docs/diagnostics/robot_geometry_footprint_v1.md#pi-qualification-evidence)
 No prolonged delivery/reliability benchmark, independent laser-plane survey,
 precision yaw calibration, collision-safe obstacle logic, fusion or odometry
 was demonstrated. The log confirms the software actuator bridge is disabled;

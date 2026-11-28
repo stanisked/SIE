@@ -1,6 +1,6 @@
 # AI_CONTEXT.md
 
-**DECISION — 2026-11-27.** The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) is complete for the current MVP. The [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) describes the project objective and the earlier Step 73 proposal. The [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-754-robot-geometry-and-footprint) records the current navigation checkpoint.
+**DECISION — 2026-11-27.** The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) is complete for the current MVP. The [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) describes the project objective and the earlier Step 73 proposal. The [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755-slam-toolbox-integration) records the current navigation checkpoint.
 
 **DECISION — 2026-11-26:** The owner froze `STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`. Step 71 adds source-bound AR0234 semantics to the existing OV9281–LD19 diagnostic. Preserve the calibrated artifacts, existing diagnostic policies and disabled admission flags. [Step 70 local correspondence freeze](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26).
 
@@ -15,7 +15,16 @@ odometry accuracy and the v13 braking fault remain open. Navigation
 admission remains false.
 [Step 75.3b results and limits](docs/diagnostics/wheel_encoder_telemetry_v1.md#step-753b-motor-off-qualification-closure) · [Step 75.3c results and limits](docs/diagnostics/wheel_odometry_v1.md#step-753c-motor-off-integration-closure) · [v13 brake evidence](docs/handoffs/SIEE_PERSON_FOLLOW_V13_BRAKE_CONTINUITY_HANDOFF_20261123.md)
 
-**DECISION — 2026-11-27.** Step 75.3d uses practical motor-off odometry validation. The original strict pilot remains inconclusive. The practical evaluation is pending physical evidence.
+**DECISION — 2026-11-28.** Step 75.3d is closed as
+`PRACTICAL_ODOMETRY_VALIDATION_COMPLETE_WITH_LIMITATIONS`. The completed run
+retains its `FAIL`, and the separate offline result is `RECONCILED`.
+Backward accuracy remains limited. Step 75.4 is closed as
+`ROBOT_GEOMETRY_AND_FOOTPRINT_MOTOR_OFF_QUALIFIED` for the surveyed cart
+and isolated static TF. Applicability relies on operator-reported launch
+arguments and scan metadata. Rear caster coverage is visually assessed
+and runtime parameter readback remains unverified.
+[Step 75.3d closure](docs/diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-closure) ·
+[Step 75.4 qualification](docs/diagnostics/robot_geometry_footprint_v1.md#pi-qualification-evidence)
 [Task-Sufficient Accuracy over Component-Level Precision](PROJECT_CONTEXT.md#task-sufficient-accuracy-over-component-level-precision)
 
 **DECISION — 2026-11-28.** Adapt to the available platform's verified

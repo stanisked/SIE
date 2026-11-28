@@ -1,0 +1,69 @@
+{
+  "schema_version": "sie.diagnostic.robot_geometry_footprint.v1",
+  "profile_id": "robot_geometry_footprint_v1",
+  "platform": "current_mobile_cart",
+  "status": "ROBOT_GEOMETRY_AND_FOOTPRINT_MOTOR_OFF_QUALIFIED",
+  "length_unit": "m",
+  "angle_unit": "rad",
+  "qualification": {
+    "reviewed_date": "2026-11-28",
+    "scope": "Practical motor-off geometry for the surveyed cart and isolated static TF",
+    "evidence_basis": "Operator-reported Pi tests, scan metadata, and running LD19 process launch arguments",
+    "runtime_parameter_service_verified": false,
+    "live_odom_to_ld19_chain_qualified": false
+  },
+  "provenance": {
+    "source": "Project operator, Step 75.4 static survey",
+    "reported_date": "2026-11-28",
+    "measurement_uncertainty": null,
+    "original_chassis_front_x_m": 0.0255,
+    "physical_drive_wheel_diameter_m": 0.068,
+    "width_measured_between": "outermost_drive_wheel_edges",
+    "photo_evidence": "Operator confirmed front and side photographs show the drive wheels extending beyond the aluminium chassis."
+  },
+  "body_datum": {
+    "candidate_frame_id": "base_link",
+    "origin": "drive_wheel_axle_midpoint",
+    "axes_xyz": ["forward", "left", "up"],
+    "floor_plane_z_m": -0.035,
+    "axle_height_above_floor_m": 0.035,
+    "frame_status": "AXLE_DATUM_COMPATIBLE_WITH_ODOM_AT_INITIAL_AXLE_HEIGHT"
+  },
+  "physical_footprint": {
+    "frame_id": "base_link",
+    "projection": "XY",
+    "vertex_order": "counterclockwise",
+    "front_x_m": 0.034,
+    "rear_x_m": -0.2645,
+    "left_y_m": 0.160,
+    "right_y_m": -0.160,
+    "reported_overall_length_m": 0.2985,
+    "reported_overall_width_m": 0.320,
+    "vertices_xy_m": [[0.034, 0.160], [-0.2645, 0.160], [-0.2645, -0.160], [0.034, -0.160]],
+    "coverage_status": "OPERATOR_VISUAL_ASSESSMENT",
+    "coverage_limit": "Installed equipment and rear caster appear within the rectangle in operator photographs. The full caster swivel envelope was visually assessed and has no independent measurement."
+  },
+  "ld19_mount": {
+    "scan_plane_height_above_floor_m": 0.222,
+    "scan_plane_level_status": "OPERATOR_CONFIRMED_HORIZONTAL",
+    "orientation_evidence": {
+      "reported_date": "2026-11-25",
+      "target_distance_approx_m": 0.815,
+      "forward_axis": "positive_x",
+      "left_axis": "positive_y",
+      "right_axis": "negative_y",
+      "status": "QUALITATIVE_MVP_ALIGNMENT"
+    },
+    "candidate_static_tf": {
+      "parent_frame_id": "base_link",
+      "child_frame_id": "ld19_sensor",
+      "translation_xyz_m": [-0.025, 0.000, 0.187],
+      "rpy_rad": [0.0, 0.0, 0.0],
+      "orientation_status": "PRACTICAL_NOMINAL",
+      "proposed_diagnostic_authority_node": "sie_step754_ld19_candidate_tf",
+      "runtime_enabled": false
+    }
+  },
+  "navigation_admitted": false,
+  "powered_motion_authorized": false
+}
