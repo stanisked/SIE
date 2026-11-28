@@ -27,6 +27,13 @@ The [Responsible Autonomy and Decision Governance Principles](../../PROJECT_CONT
 
 The [Fundamental Architecture Baseline](../../PROJECT_CONTEXT.md#fundamental-architecture-baseline) consolidates the owner-approved principles for the current MVP. It includes [Experience, Learning and Controlled Evolution](../../PROJECT_CONTEXT.md#experience-learning-and-controlled-evolution), with implementation details subject to approval.
 
+Hardware Independence and Capability-Aware Adaptation applies the existing
+contract, knowledge, and decision roles across physical platforms. Use
+verified platform capabilities and operational state when assessing feasible
+strategies. Keep evidence admission and execution authorization in their
+existing paths.
+[Owner-approved principle](../../PROJECT_CONTEXT.md#hardware-independence-and-capability-aware-adaptation)
+
 ---
 
 # 2. What SIE is

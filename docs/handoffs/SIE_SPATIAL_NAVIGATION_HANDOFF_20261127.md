@@ -448,6 +448,12 @@ physical evidence, and navigation admission remains false.
 
 ## Step 75.4 Robot Geometry and Footprint
 
+**DECISION — architecture application, 2026-11-28.** Treat the body datum,
+footprint and installed sensor geometry as evidence about this cart. Use
+the existing frame and capability boundaries when assessing what its
+hardware supports for the MVP.
+[Hardware Independence and Capability-Aware Adaptation](../../PROJECT_CONTEXT.md#hardware-independence-and-capability-aware-adaptation)
+
 **FACT — Step 75.3d evidence boundary, 2026-11-28.** The motor-off run
 completed twelve trials. The recorded result remains `FAIL`. A verified
 copy of the 16-file evidence set was replayed independently. The collector

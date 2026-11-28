@@ -1410,6 +1410,45 @@ resolve a functional limitation. The original strict pilot retains its
 inconclusive result.
 [Step 75.3d decision and evidence](docs/diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-validation)
 
+## Hardware Independence and Capability-Aware Adaptation
+
+**DECISION — OWNER_APPROVED, 2026-11-28.**
+
+> We are not building intelligence for a particular robot. We are building intelligence capable of operating across different robots and technical systems.
+>
+> SIE must remain independent of any specific physical embodiment, adapting its perception, reasoning, planning and execution to the verified capabilities, limitations, operational state and authorized interfaces of available hardware.
+>
+> SIE must:
+> - Understand the capabilities and limitations of available sensors, actuators and technical systems.
+> - Adapt its decisions and execution strategies to actual hardware capabilities.
+> - Select alternative execution strategies when available resources are limited.
+> - Reassess task feasibility when hardware capabilities or operational conditions change.
+> - Refuse execution when available capabilities are insufficient for safe and authorized task completion.
+>
+> Hardware-specific implementations must not dictate the fundamental architecture of SIE.
+>
+> Hardware independence does not imply unrestricted access, self-authorization, or the assumption of unverified capabilities.
+>
+> Data Contracts, Roles and Capabilities, Sensor Independence, Challenge Before Acceptance, Task-Sufficient Accuracy, and existing safety and authorization principles remain applicable.
+
+### Consistency with existing architecture
+
+Use existing Data Contracts and capability qualification for platform-specific
+evidence. Self-Knowledge keeps approved capability descriptions distinct
+from current operating facts. The World State Manager admits applicable
+facts through its existing evidence rules. Retain each sensor's provenance
+and limits.
+[Knowledge Architecture Principles](#knowledge-architecture-principles) ·
+[Existing actuator capability contract](sie_core/contracts/actuator_capability.py) ·
+[World State admission rule](docs/architecture/SIE_RULES.md#arch-004)
+
+Apply [ARCH-006](docs/architecture/SIE_RULES.md#arch-006) when selecting or
+reassessing an execution strategy. Decision formation, independent
+admissibility validation, authorized execution, and independent runtime
+safety retain their existing roles.
+[Responsible Autonomy and Decision Governance Principles](#responsible-autonomy-and-decision-governance-principles) ·
+[Task-Sufficient Accuracy over Component-Level Precision](#task-sufficient-accuracy-over-component-level-precision)
+
 ## Fundamental Architecture Baseline
 
 **DECISION — `OWNER_APPROVED`, 2026-11-27.** The fundamental architecture
@@ -1423,6 +1462,7 @@ name is SIE, Spatial Intelligence Engine, pronounced SEE.
 - [Mission and Practical Intelligence Principles](#mission-and-practical-intelligence-principles)
 - [Experience, Learning and Controlled Evolution](#experience-learning-and-controlled-evolution)
 - [Task-Sufficient Accuracy over Component-Level Precision](#task-sufficient-accuracy-over-component-level-precision)
+- [Hardware Independence and Capability-Aware Adaptation](#hardware-independence-and-capability-aware-adaptation)
 
 ## MVP Continuation Checkpoint
 
@@ -1440,6 +1480,11 @@ different physical surfaces. Each source's observations retain their provenance
 and applicability limits. Full autonomous learning, collective intelligence,
 general-purpose reasoning, and complete industrial automation remain long-term
 capabilities outside the immediate MVP scope.
+
+**NEXT — Step 75.4.** Record the body datum, physical footprint, and LD19
+mounting geometry of the current cart as platform-specific evidence for
+navigation review.
+[Robot Geometry and Footprint](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-754-robot-geometry-and-footprint)
 
 **FACT / operator report.** The Step 72 replay on 2026-11-26 reported 53/53
 coherent RGB–Stereo masked-depth diagnostic cycles and zero coherent
@@ -2021,6 +2066,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-28 | Recorded the owner-approved Hardware Independence and Capability-Aware Adaptation principle, indexed it in the Fundamental Architecture Baseline, and linked Step 75.4 Robot Geometry and Footprint. |
 | 2026-11-27 | Added the owner-approved Task-Sufficient Accuracy over Component-Level Precision principle and recorded its application to mobile MVP motor-off odometry validation. |
 | 2026-11-27 | Froze experience-based learning as an approved fundamental capability, indexed the architecture baseline, recorded the operator-reported Step 72 replay, and established the practical MVP continuation checkpoint with Step 73 proposed. |
 | 2026-11-27 | Froze the owner-approved SIE mission, purpose, and responsibility, the intended work categories, and the Practical Intelligence Principles for feasible execution and verified physical outcomes. |

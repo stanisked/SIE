@@ -44,6 +44,11 @@ The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architect
 
 Use [Task-Sufficient Accuracy over Component-Level Precision](PROJECT_CONTEXT.md#task-sufficient-accuracy-over-component-level-precision) to evaluate whether component accuracy is sufficient for the intended task.
 
+Hardware Independence and Capability-Aware Adaptation sets a design
+requirement for operating across platforms using verified capabilities
+and authorized interfaces.
+[Owner-approved principle](PROJECT_CONTEXT.md#hardware-independence-and-capability-aware-adaptation)
+
 ## Engineering Principles
 
 - Geometry First - spatial reasoning begins with geometry and physical constraints.

@@ -18,6 +18,12 @@ admission remains false.
 **DECISION — 2026-11-27.** Step 75.3d uses practical motor-off odometry validation. The original strict pilot remains inconclusive. The practical evaluation is pending physical evidence.
 [Task-Sufficient Accuracy over Component-Level Precision](PROJECT_CONTEXT.md#task-sufficient-accuracy-over-component-level-precision)
 
+**DECISION — 2026-11-28.** Adapt to the available platform's verified
+capabilities, current state, and authorized interfaces. Use the existing
+evidence, decision, and execution boundaries when selecting alternatives
+or refusing a task.
+[Hardware Independence and Capability-Aware Adaptation](PROJECT_CONTEXT.md#hardware-independence-and-capability-aware-adaptation)
+
 # Spatial Intelligence Engine (SIE)
 
 Version: 0.2

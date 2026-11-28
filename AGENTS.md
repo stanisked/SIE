@@ -90,6 +90,8 @@ Apply the [Experience, Learning and Controlled Evolution principle](PROJECT_CONT
 
 Apply [Task-Sufficient Accuracy over Component-Level Precision](PROJECT_CONTEXT.md#task-sufficient-accuracy-over-component-level-precision) when evaluating component performance. Tie sufficiency to the intended task and preserve independent evidence, uncertainty, and safety gates.
 
+Apply [Hardware Independence and Capability-Aware Adaptation](PROJECT_CONTEXT.md#hardware-independence-and-capability-aware-adaptation) when working across sensors, actuators, or platforms. Use the existing contracts to verify capability and current availability. Preserve World State admission, independent safety, and execution authorization when considering alternatives.
+
 ## Canonical information flow
 
 ```text
