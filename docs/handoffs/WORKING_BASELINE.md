@@ -65,10 +65,17 @@ metadata support reuse of the qualitative LD19 orientation evidence.
 Runtime parameter-service readback remains unverified.
 [Pi qualification evidence](../diagnostics/robot_geometry_footprint_v1.md#pi-qualification-evidence)
 
-**NEXT — Step 75.5.** Prepare isolated SLAM Toolbox mapping and verify
-the scan-time TF chain before assessing map output. Navigation admission
-and powered motion remain disabled.
-[Step 75.5 minimum integration plan](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755-slam-toolbox-integration)
+**DECISION / FACT — Step 75.5a.** Close as
+`SLAM_TOOLBOX_SYNTHETIC_INTEGRATION_QUALIFIED`. The operator-reported
+Jazzy retry passed mapping, message-level TF attribution and the
+missing-TF negative case with synthetic inputs. Original trial verdicts
+are preserved.
+[Step 75.5a evidence and limits](../diagnostics/slam_toolbox_step75_5a_jazzy_attribution.md#pi-synthetic-qualification-closure)
+
+**NEXT — Step 75.5b.** A stationary live motor-off run is prepared for
+separate authorization. Live scan-time TF and UART release remain
+unverified. Navigation admission and powered motion remain disabled.
+[Step 75.5b live plan](SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755b-stationary-live-motor-off-slam)
 
 **DECISION — 2026-11-27.** Close the offline entity integration stage as
 `ENTITY_CENTRIC_OFFLINE_INTEGRATION_COMPLETE`. Proceed to the separately

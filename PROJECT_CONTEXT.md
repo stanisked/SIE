@@ -1493,9 +1493,19 @@ parameter readback and the live odometry-to-scan TF chain remain
 unverified. Navigation admission and powered motion remain disabled.
 [Step 75.4 evidence and applicability limits](docs/diagnostics/robot_geometry_footprint_v1.md#pi-qualification-evidence)
 
-**NEXT — Step 75.5.** Prepare isolated SLAM Toolbox mapping and verify
-TF availability at scan timestamps.
-[Step 75.5 minimum integration plan](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755-slam-toolbox-integration)
+**DECISION — Step 75.5a, 2026-11-28.** Close as
+`SLAM_TOOLBOX_SYNTHETIC_INTEGRATION_QUALIFIED`. The operator-reported
+Pi Jazzy retry verified actual SLAM Toolbox 2.8.5 map publication with
+synthetic inputs, scan-time input TF and one message-attributed
+publisher per required edge. The missing-TF negative case produced no
+map or poses. The original trial verdicts are preserved.
+[Step 75.5a qualification and limits](docs/diagnostics/slam_toolbox_step75_5a_jazzy_attribution.md#pi-synthetic-qualification-closure)
+
+**NEXT — Step 75.5b.** Use the prepared stationary motor-off diagnostic
+with the existing LD19 and wheel adapter once the live run is authorized.
+Live scan-time TF, UART release, physical mapping and mapping accuracy
+remain unverified. Navigation admission and powered motion remain disabled.
+[Step 75.5b plan](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755b-stationary-live-motor-off-slam)
 
 **FACT / operator report.** The Step 72 replay on 2026-11-26 reported 53/53
 coherent RGB–Stereo masked-depth diagnostic cycles and zero coherent
@@ -2077,6 +2087,7 @@ This remains a proposed operational MVP. The later separate supervised trial doe
 
 | Date | Change |
 | --- | --- |
+| 2026-11-28 | Closed Step 75.5a synthetic SLAM Toolbox integration and recorded the stationary motor-off Step 75.5b plan. |
 | 2026-11-28 | Closed Step 75.4 for practical motor-off geometry and isolated static TF, preserved both blocked Pi runs and their applicability limits, and recorded the Step 75.5 SLAM Toolbox plan. |
 | 2026-11-28 | Recorded the owner-approved Hardware Independence and Capability-Aware Adaptation principle, indexed it in the Fundamental Architecture Baseline, and linked Step 75.4 Robot Geometry and Footprint. |
 | 2026-11-27 | Added the owner-approved Task-Sufficient Accuracy over Component-Level Precision principle and recorded its application to mobile MVP motor-off odometry validation. |

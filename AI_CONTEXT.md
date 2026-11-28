@@ -1,6 +1,6 @@
 # AI_CONTEXT.md
 
-**DECISION — 2026-11-27.** The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) is complete for the current MVP. The [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) describes the project objective and the earlier Step 73 proposal. The [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755-slam-toolbox-integration) records the current navigation checkpoint.
+**DECISION — 2026-11-27.** The [Fundamental Architecture Baseline](PROJECT_CONTEXT.md#fundamental-architecture-baseline) is complete for the current MVP. The [MVP Continuation Checkpoint](PROJECT_CONTEXT.md#mvp-continuation-checkpoint) describes the project objective and the earlier Step 73 proposal. The [spatial navigation handoff](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755b-stationary-live-motor-off-slam) records the current navigation checkpoint.
 
 **DECISION — 2026-11-26:** The owner froze `STEREO_LIDAR_LOCAL_SPATIAL_CORRESPONDENCE_DIAGNOSTIC_COMPLETE`. Step 71 adds source-bound AR0234 semantics to the existing OV9281–LD19 diagnostic. Preserve the calibrated artifacts, existing diagnostic policies and disabled admission flags. [Step 70 local correspondence freeze](docs/diagnostics/stereo_lidar_local_correspondence_v1.md#step-70-freeze-2026-11-26).
 
@@ -26,6 +26,14 @@ and runtime parameter readback remains unverified.
 [Step 75.3d closure](docs/diagnostics/wheel_odometry_v1.md#step-753d-practical-odometry-closure) ·
 [Step 75.4 qualification](docs/diagnostics/robot_geometry_footprint_v1.md#pi-qualification-evidence)
 [Task-Sufficient Accuracy over Component-Level Precision](PROJECT_CONTEXT.md#task-sufficient-accuracy-over-component-level-precision)
+
+**DECISION — 2026-11-28.** Step 75.5a is closed as
+`SLAM_TOOLBOX_SYNTHETIC_INTEGRATION_QUALIFIED`. Pi Jazzy mapping and TF
+publisher attribution were demonstrated with synthetic inputs. Step 75.5b
+is the prepared stationary live motor-off smoke test. Live TF continuity,
+UART release and physical mapping remain unverified.
+[Step 75.5a closure](docs/diagnostics/slam_toolbox_step75_5a_jazzy_attribution.md#pi-synthetic-qualification-closure) ·
+[Step 75.5b live plan](docs/handoffs/SIE_SPATIAL_NAVIGATION_HANDOFF_20261127.md#step-755b-stationary-live-motor-off-slam)
 
 **DECISION — 2026-11-28.** Adapt to the available platform's verified
 capabilities, current state, and authorized interfaces. Use the existing

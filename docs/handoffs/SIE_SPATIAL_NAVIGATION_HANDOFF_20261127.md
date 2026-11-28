@@ -535,3 +535,28 @@ The v13 braking defect and backward odometry limitations remain open.
    Mapping accuracy and navigation authorization require their own
    evidence.
    [Jazzy interfaces and pose-graph API](https://github.com/SteveMacenski/slam_toolbox/blob/jazzy/README.md#api)
+
+### Step 75.5a isolated mapper
+
+**DECISION — 2026-11-28.** Close as
+`SLAM_TOOLBOX_SYNTHETIC_INTEGRATION_QUALIFIED`. The operator-reported
+Jazzy retry produced maps and scan-stamped poses with synthetic inputs,
+verified input TF at 64/64 scan stamps and attributed all three edges
+to one message-level GID each. The 15 full-chain misses preceded the
+first attributed mapper transform. Withheld wheel TF produced no map
+or mapper poses. Preserve the original trial dispositions and keep
+navigation admission and powered motion disabled.
+[Step 75.5a evidence and applicability](../diagnostics/slam_toolbox_step75_5a_jazzy_attribution.md#pi-synthetic-qualification-closure)
+
+### Step 75.5b stationary live motor-off SLAM
+
+**PROPOSAL — prepared for separate authorization.** Confirm physical
+traction power disconnection and stationary wheels, verify the current
+v15 boot and safe STATUS, then use the qualified LD19 and wheel adapter
+in localhost-only domain 178. Check the input chain at original scan
+timestamps over the 30-second diagnostic window. Preserve startup
+misses, steady-state scan-time misses, actual map and pose output,
+message-level TF authorities, and diagnostic shutdown and UART release.
+Record the result for independent review. Physical mapping and mapping
+accuracy remain unverified. The v13 braking defect remains open.
+[Step 75.5b setup and launcher](../diagnostics/slam_toolbox_step75_5a.md#step-755b-stationary-live-motor-off-runbook)

@@ -1,0 +1,14 @@
+# Overlay on the installed SLAM Toolbox async mapping defaults.
+slam_toolbox:
+  ros__parameters:
+    mode: mapping
+    map_frame: map
+    odom_frame: odom
+    base_frame: base_link
+    scan_topic: /sie/lidar/scan_raw
+    use_sim_time: false
+    restamp_tf: false
+    scan_queue_size: 1
+    throttle_scans: 1
+    enable_interactive_mode: false
+    use_map_saver: false
